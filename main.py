@@ -1,7 +1,7 @@
 """Vercel entrypoint for the source-layout FastAPI application."""
 
-import sys
 from pathlib import Path
+import sys
 
 
 SOURCE_ROOT = Path(__file__).parent / "src"
