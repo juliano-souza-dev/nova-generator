@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07100c">
+  <title>Revisar Word by Word · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.47">
+</head>
+<body data-page="word-review">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Media and Subtitle Generator">
+      <span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span>
+    </a>
+    <div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip" id="topState">Word by Word</span></div>
+  </header>
+
+  <nav class="flow-nav" aria-label="Etapas da Alpha 1.39">
+    <a href="/"><span>01</span><b>Fonte YouTube</b></a>
+    <a href="/config" data-gated="config"><span>02</span><b>Configuração</b></a>
+    <a href="/wave" data-gated="wave"><span>03</span><b>Mini Wave Editor</b></a>
+    <a href="/process" data-gated="process"><span>04</span><b>Processar mídia</b></a>
+    <a href="/external-ai" data-gated="external-ai"><span>05</span><b>IA Externa</b></a>
+    <a href="/cue-review" data-gated="cue-review"><span>06</span><b>Revisar cues</b></a>
+    <a href="/word-review" class="active"><span>07</span><b>Word by Word</b></a>
+    <a href="/cue-timing" data-gated="cue-timing"><span>08</span><b>Cue Timing</b></a>
+    <a href="/word-timing" data-gated="word-timing"><span>09</span><b>WbW Time</b></a>
+  </nav>
+
+  <main class="word-review-page-shell">
+    <aside class="word-review-sidebar" aria-label="Progresso por cue">
+      <header class="cue-sidebar-head">
+        <div><span class="mini-kicker">TODAS AS CUES</span><h1>Words</h1></div>
+        <span id="wordReviewProgress" class="cue-review-progress">0/0</span>
+      </header>
+      <div class="cue-review-counts"><span><b id="wordAcceptedCount">0</b> aceitas</span><span><b id="wordPendingCount">0</b> pendentes</span></div>
+      <div id="wordCueList" class="word-cue-list" aria-live="polite"></div>
+    </aside>
+
+    <section class="word-review-main">
+      <header class="word-review-head">
+        <div>
+          <span class="mini-kicker">ETAPA 07 · VALIDAÇÃO WORD BY WORD</span>
+          <h1 id="wordReviewTitle">Cue — · Word —</h1>
+          <p id="wordCueContext">Revise cada word e sua tradução. Uma word aparece por vez.</p>
+        </div>
+        <span id="wordReviewStatusChip" class="stage-chip">PENDENTE</span>
+      </header>
+
+      <section class="word-review-player" aria-label="Player de apoio">
+        <video id="wordReviewVideo" src="/media/process/output/scene_video.mp4" controls preload="metadata" playsinline></video>
+        <div>
+          <span class="mini-kicker">APOIO VISUAL E AUDITIVO</span>
+          <p>Consulte livremente o vídeo. O player não muda ao navegar entre words ou cues.</p>
+          <span class="cue-review-shortcuts"><kbd>Espaço</kbd> word/grupo <kbd>Shift+Espaço</kbd> contínuo do ponto atual</span>
+        </div>
+      </section>
+
+      <div id="wordStrip" class="word-strip" aria-label="Words da cue atual"></div>
+
+      <div class="word-review-meta">
+        <span id="wordTiming">00:00.000 → 00:00.000</span>
+        <span id="wordGroupInfo" class="word-group-info" hidden></span>
+      </div>
+
+      <section class="word-unit-structure" aria-label="Estrutura WbW da cue">
+        <header><div><span class="mini-kicker">UNIDADES WbW DA CUE</span><small>Agrupar/desagrupar não cria uma nova cue.</small></div></header>
+        <div id="wordUnitEditor" class="word-unit-editor"></div>
+        <div class="word-group-actions">
+          <button id="groupWordPrevious" class="btn btn-outline btn-sm" type="button">← Agrupar com anterior</button>
+          <button id="ungroupWord" class="btn btn-outline btn-sm" type="button">Desagrupar unidade</button>
+          <button id="groupWordNext" class="btn btn-outline btn-sm" type="button">Agrupar com próxima →</button>
+        </div>
+      </section>
+
+      <div class="word-review-boxes">
+        <label class="cue-text-box word-text-box">
+          <span><b>EN</b> Word</span>
+          <textarea id="wordEnglish" rows="4" spellcheck="true" aria-label="Word em inglês"></textarea>
+        </label>
+        <label class="cue-text-box word-text-box">
+          <span><b>PT</b> <span id="wordPtLabel">Tradução</span></span>
+          <textarea id="wordPortuguese" rows="4" spellcheck="true" aria-label="Tradução da word em português"></textarea>
+        </label>
+      </div>
+
+      <div id="wordReviewMessage" class="inline-status"></div>
+      <div class="word-review-actions">
+        <span class="cue-review-shortcuts"><kbd>G</kbd> salvar e avançar</span>
+        <button id="saveWordReview" class="btn btn-primary btn-lg" type="button">Salvar e próxima →</button>
+      </div>
+
+      <section id="wordReviewComplete" class="cue-review-complete" hidden>
+        <span class="complete-check">✓</span>
+        <div><span class="mini-kicker">REVISÃO CONCLUÍDA</span><h2>100% das words foram validadas</h2><p>Todas as words de todas as cues e suas traduções foram aprovadas nesta etapa.</p></div>
+        <button id="wordReviewNext" class="btn btn-primary btn-lg" type="button" disabled>Continuar para Cue Timing →</button>
+      </section>
+    </section>
+  </main>
+
+  <script src="/static/app.js?v=alpha-1.81" defer></script>
+<script src="/static/mobile.js?v=alpha-1.75" defer></script></body>
+</html>

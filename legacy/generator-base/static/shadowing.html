@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07100c">
+  <title>Shadowing · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.40">
+</head>
+<body data-page="shadowing">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Media and Subtitle Generator"><span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span></a>
+    <div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip" id="topState">Shadowing</span></div>
+  </header>
+  <nav class="flow-nav" aria-label="Etapas da Alpha 1.39">
+    <a href="/"><span>01</span><b>Fonte YouTube</b></a>
+    <a href="/config"><span>02</span><b>Configuração</b></a>
+    <a href="/wave"><span>03</span><b>Mini Wave Editor</b></a>
+    <a href="/process"><span>04</span><b>Processar mídia</b></a>
+    <a href="/external-ai"><span>05</span><b>IA Externa</b></a>
+    <a href="/cue-review"><span>06</span><b>Revisar cues</b></a>
+    <a href="/word-review"><span>07</span><b>Word by Word</b></a>
+    <a href="/cue-timing"><span>08</span><b>Cue Timing</b></a>
+    <a href="/word-timing"><span>09</span><b>WbW Time</b></a>
+    <a href="/shadowing" class="active"><span>10</span><b>Shadowing</b></a>
+    
+    
+    
+  </nav>
+
+  <main class="shadowing-shell"><section id="musicShadowingChoice" class="panel" hidden style="padding:18px"><label><input id="musicShadowingEnabled" type="checkbox" checked> Usar Shadowing nesta música</label><p>Desmarque para seguir aos materiais e ao TikTok Media. As revisões e os ajustes de Shadowing serão preservados.</p><p id="musicShadowingChoiceStatus" role="status"></p></section>
+    <section class="shadowing-main">
+      <header class="shadowing-head">
+        <div><span class="mini-kicker">ETAPA 10 · SHADOWING</span><h1>Escolha o que ouvir e onde repetir</h1><p><b>IN/OUT</b> delimitam o conteúdo incluído. Áreas escurecidas são <b>cortes</b>. Uma <b>PAUSA</b> apenas interrompe para você repetir: não remove áudio. Em cada trecho, o conteúdo após a última PAUSA é descartado. Trechos sem pausas não entram na reprodução.</p></div>
+        <span id="shadowingStatus" class="stage-chip">EDITANDO</span>
+      </header>
+
+      <div class="shadowing-grid">
+        <section class="shadowing-video-column">
+          <div class="column-kicker">VÍDEO · CENA APROVADA</div>
+          <div class="video-shell shadowing-video-shell">
+            <video id="shadowingVideo" controls preload="metadata" playsinline></video>
+            <div id="shadowingSubtitleOverlay" class="cue-timing-subtitle-overlay shadowing-subtitle-overlay" hidden aria-hidden="true">
+              <div id="shadowingSubtitleEn" class="cue-timing-subtitle-en"></div>
+              <div id="shadowingSubtitlePt" class="cue-timing-subtitle-pt"></div>
+            </div>
+          </div>
+          <div class="shadowing-summary-card">
+            <div><span>TRECHO SELECIONADO</span><b id="shadowingBlockStart">—</b></div>
+            <div><span>TEMPO TOTAL ESCOLHIDO</span><b id="shadowingEndMode">00:00.000</b></div>
+            <div><span>BLOCOS DE PRÁTICA</span><b id="shadowingBlockCount">0</b></div>
+          </div>
+        </section>
+
+        <section class="shadowing-wave-column">
+          <div class="column-kicker">TRECHOS INDEPENDENTES · START / END / PAUSAS</div>
+          <div class="wave-editor-body">
+            <div class="cue-timing-media-tools">
+              <label class="cue-wave-zoom"><span>ZOOM</span><input id="shadowingWaveZoom" type="range" min="1" max="8" step="1" value="1"><b id="shadowingWaveZoomValue">1×</b></label>
+              <button id="shadowingCenter" class="btn btn-outline btn-sm" type="button">Centralizar bloco</button>
+              <label class="cue-video-speed"><span>VELOCIDADE</span><select id="shadowingSpeed" class="text-field"><option value="0.75">.75×</option><option value="0.85">.85×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option></select></label>
+            </div>
+            <div class="wave-head"><span>CLIQUE NA WAVEFORM PARA POSICIONAR O PLAYHEAD</span><span id="shadowingPlayhead">00:00:00.000</span></div>
+            <div id="shadowingWaveStage" class="wave-editor-stage shadowing-wave-stage" tabindex="0" data-wave-height="196" aria-label="Wave Editor do Shadowing"><canvas id="shadowingWaveCanvas"></canvas></div>
+            <div class="wave-legend shadowing-wave-legend"><span><i class="shadow-pause-dot"></i>Verde · trecho incluído</span><span>Escuro · corte</span><span><i class="shadow-end-dot"></i>Amarelo · pausa interna</span><span><i class="play"></i>PLAYHEAD</span></div>
+          </div>
+
+          <div class="range-grid cue-timing-range-grid shadowing-selected-range">
+            <label class="range-selector range-selector-in"><span>IN · TRECHO SELECIONADO</span><input id="shadowingIn" class="range-time" value="00:00.000"></label><div class="range-arrow">→</div>
+            <label class="range-selector range-selector-out"><span>OUT · TRECHO SELECIONADO</span><input id="shadowingOut" class="range-time" value="00:00.000"></label><div class="duration-box"><span>DURAÇÃO</span><b id="shadowingSelectedDuration">--</b></div>
+          </div>
+
+          <div class="shadowing-marker-actions">
+            <button id="shadowingNewSegment" class="btn btn-primary" type="button">+ Novo trecho no playhead</button>
+            <button id="shadowingSetStart" class="btn btn-outline" type="button">IN = playhead (A)</button>
+            <button id="shadowingSetEnd" class="btn btn-outline" type="button">OUT = playhead (S)</button>
+            <button id="shadowingAddPause" class="btn btn-outline" type="button">+ PAUSA no trecho</button>
+            <button id="shadowingRemove" class="btn btn-outline" type="button">Excluir trecho</button>
+            <button id="shadowingTestSelected" class="btn btn-primary" type="button">▶ Testar trecho selecionado e pausas</button>
+          </div>
+          <div id="shadowingSegmentsList" class="shadowing-segments-list"></div>
+          <div class="shortcuts shadowing-shortcuts"><span>Crie quantos trechos quiser</span><span><kbd>A</kbd> IN do trecho ativo</span><span><kbd>S</kbd> OUT do trecho ativo</span><span><kbd>G</kbd> pausa no trecho ativo</span><span>As pausas pertencem somente ao trecho selecionado</span></div>
+          <div id="shadowingMessage" class="inline-status"></div>
+        </section>
+      </div>
+
+      <section class="shadowing-blocks-panel">
+        <header><div><span class="mini-kicker">BLOCOS GERADOS</span><h2 id="shadowingBlocksTitle">1 bloco · vídeo completo</h2></div><span id="shadowingAutosave" class="stage-chip ready">AUTO-SAVE</span></header>
+        <div id="shadowingBlocksList" class="shadowing-blocks-list"></div>
+      </section>
+
+      <div class="shadowing-actions"><a class="btn btn-outline" href="/word-timing">← WbW Time</a><button id="shadowingFinalize" class="btn btn-primary btn-lg" type="button">Pré-visualizar e finalizar →</button></div>
+      <section id="shadowingComplete" class="cue-review-complete" hidden><span class="complete-check">✓</span><div><span class="mini-kicker">ETAPA CONCLUÍDA</span><h2>Shadowing salvo</h2><p>Os blocos, tempos de pausa e término da cena foram persistidos em <code>shadowing.json</code>.</p></div><a class="btn btn-primary btn-lg" href="/materials-external">Revisar materiais →</a></section>
+    </section>
+  </main>
+
+
+  <dialog id="shadowingPreviewDialog" class="app-dialog shadowing-preview-dialog">
+    <div class="dialog-panel shadowing-preview-panel">
+      <div class="dialog-head">
+        <div><span class="mini-kicker">PREVIEW · COMO NO HUB</span><h2 id="shadowingPreviewTitle">Preview do Shadowing</h2></div>
+        <button id="shadowingPreviewCloseX" class="dialog-x" type="button" aria-label="Fechar">×</button>
+      </div>
+      <p>Teste os valores atuais do editor: IN → áudio → pausas para repetir → fim na última pausa do trecho. Abrir este teste não salva; o rascunho continua com salvamento automático.</p>
+      <div class="video-shell shadowing-preview-video-shell">
+        <video id="shadowingPreviewVideo" preload="metadata" playsinline></video>
+        <div id="shadowingPreviewSubtitleOverlay" class="cue-timing-subtitle-overlay shadowing-subtitle-overlay" hidden aria-hidden="true">
+          <div id="shadowingPreviewSubtitleEn" class="cue-timing-subtitle-en"></div>
+          <div id="shadowingPreviewSubtitlePt" class="cue-timing-subtitle-pt"></div>
+        </div>
+        <div id="shadowingPreviewPause" class="shadowing-preview-pause" hidden aria-hidden="true">
+          <span id="shadowingPreviewPauseLabel">PAUSA · REPITA</span>
+          <div id="shadowingPreviewPauseEn" class="shadowing-preview-pause-en"></div>
+          <div id="shadowingPreviewPausePt" class="shadowing-preview-pause-pt"></div>
+          <small id="shadowingPreviewPauseTime"></small>
+        </div>
+      </div>
+      <div class="shadowing-preview-meta">
+        <span id="shadowingPreviewPhase">Pronto para reproduzir.</span>
+        <b id="shadowingPreviewProgress">0/0</b>
+      </div>
+      <div class="dialog-actions shadowing-preview-actions">
+        <button id="shadowingPreviewClose" class="btn btn-outline" type="button">Voltar e editar</button>
+        <button id="shadowingPreviewReplay" class="btn btn-outline" type="button">Reproduzir novamente</button>
+        <button id="shadowingPreviewApprove" class="btn btn-primary" type="button" disabled>Assista ao preview completo</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="/static/wave_editor.js?v=alpha-1.65" defer></script>
+  <script src="/static/shadowing.js?v=alpha-1.90" defer></script>
+<script src="/static/mobile.js?v=alpha-1.75" defer></script><script src="/static/music_shadowing.js?v=1" defer></script></body>
+</html>

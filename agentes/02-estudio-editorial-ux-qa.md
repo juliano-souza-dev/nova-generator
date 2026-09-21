@@ -6,6 +6,7 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 
 ## Responsabilidades
 
+- Transformar os fluxos e testes correspondentes de `legacy/generator-base/` em fixtures de caracterização antes de substituí-los.
 - Definir o modelo editorial: texto literal do cue separado de tokens e timings de palavra.
 - Projetar edição unificada de texto, cue e palavra com waveform/timeline, atalhos, zoom, navegação e desfazer/refazer.
 - Especificar split, merge e reconciliação de palavras com IDs estáveis e proveniência.
@@ -25,4 +26,3 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Split/merge preservam rastreabilidade e permitem desfazer.
 - O operador conclui a revisão com menos trocas de tela e recebe avisos claros, nunca correções ocultas.
 - Regressões de texto e timing possuem fixtures bloqueadoras de release.
-

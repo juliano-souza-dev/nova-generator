@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07100c">
+  <title>IA Externa · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.39">
+</head>
+<body data-page="external-ai">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Media and Subtitle Generator">
+      <span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span>
+    </a>
+    <div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip" id="topState">IA externa</span></div>
+  </header>
+
+  <nav class="flow-nav" aria-label="Etapas da Alpha 1.39">
+    <a href="/"><span>01</span><b>Fonte YouTube</b></a>
+    <a href="/config"><span>02</span><b>Configuração</b></a>
+    <a href="/wave"><span>03</span><b>Mini Wave Editor</b></a>
+    <a href="/process"><span>04</span><b>Processar mídia</b></a>
+    <a href="/external-ai" class="active"><span>05</span><b>IA Externa</b></a>
+    <a href="/cue-review" data-gated="cue-review"><span>06</span><b>Revisar cues</b></a>
+    <a href="/word-review" data-gated="word-review"><span>07</span><b>Word by Word</b></a>
+    <a href="/cue-timing" data-gated="cue-timing"><span>08</span><b>Cue Timing</b></a>
+    <a href="/word-timing" data-gated="word-timing"><span>09</span><b>WbW Time</b></a>
+  </nav>
+
+  <main class="external-page-shell">
+    <section class="external-download-panel">
+      <header class="external-section-head">
+        <div><span class="mini-kicker">ETAPA 05 · ÚNICA IDA À IA EXTERNA</span><h1>Análise completa em uma única vez</h1><p>O pacote reúne áudio, canônico e contrato para gerar cues, Word by Word, candidatos de Connected Speech e cards Anki. Depois deste retorno, todo o fluxo é local e humano.</p></div>
+        <span id="externalStageChip" class="stage-chip">PREPARANDO</span>
+      </header>
+      <div id="externalPrepareError" class="process-error" hidden></div>
+      <div id="externalArtifacts" class="external-artifact-grid">
+        <div class="artifact-empty"><b>Preparando pacote…</b><span>Gerando JSON canônico, instruções e ZIP.</span></div>
+      </div>
+      <div class="external-contract-note">
+        <b>Contrato one-pass 2.0</b>
+        <span>A IA preenche <code>cues[]</code> e <code>generator_materials</code>. O Generator vincula tudo ao snapshot e reconcilia os candidatos depois das revisões, evitando aplicar dados obsoletos.</span>
+      </div>
+    </section>
+
+    <section class="external-return-panel">
+      <header class="external-section-head compact">
+        <div><span class="mini-kicker">RETORNO ÚNICO</span><h2>JSON completo processado pela IA</h2><p>Arraste o único JSON retornado. O Generator valida cues, traduções, Word by Word, Connected Speech e Anki antes de liberar as revisões.</p></div>
+      </header>
+      <input id="externalFileInput" type="file" accept="application/json,.json" hidden>
+      <div id="externalDropZone" class="external-drop-zone" role="button" tabindex="0" aria-label="Arraste ou selecione o JSON retornado pela IA externa">
+        <span class="drop-icon">⇩</span>
+        <b id="externalDropTitle">Arraste o JSON aqui</b>
+        <span id="externalDropSubtitle">ou clique para selecionar um arquivo .json</span>
+      </div>
+      <div id="externalValidationError" class="external-validation-error" hidden></div>
+      <div id="externalValidationSuccess" class="external-validation-success" hidden>
+        <div class="validated-icon">✓</div>
+        <div>
+          <span class="mini-kicker">JSON VALIDADO</span>
+          <h3 id="externalValidatedFile">Retorno da IA</h3>
+          <p id="externalValidatedSummary">—</p>
+        </div>
+      </div>
+      <div class="stage-actions external-actions">
+        <a class="btn btn-outline btn-link" href="/process">← Voltar ao processamento</a>
+        <button id="externalNext" class="btn btn-primary btn-lg" type="button" disabled>Revisar cues →</button>
+      </div>
+    </section>
+  </main>
+  <script src="/static/app.js?v=alpha-1.39" defer></script>
+<script src="/static/mobile.js?v=alpha-1.74" defer></script></body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07100c">
+  <title>Processar mídia · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.48">
+</head>
+<body data-page="process">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Media and Subtitle Generator">
+      <span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span>
+    </a>
+    <div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip" id="topState">processando</span></div>
+  </header>
+
+  <nav class="flow-nav" aria-label="Etapas da Alpha 1.39">
+    <a href="/"><span>01</span><b>Fonte YouTube</b></a>
+    <a href="/config" data-gated="config"><span>02</span><b>Configuração</b></a>
+    <a href="/wave" data-gated="wave"><span>03</span><b>Mini Wave Editor</b></a>
+    <a href="/process" class="active"><span>04</span><b>Processar mídia</b></a>
+    <a href="/external-ai" data-gated="external-ai"><span>05</span><b>IA Externa</b></a>
+    <a href="/cue-review" data-gated="cue-review"><span>06</span><b>Revisar cues</b></a>
+    <a href="/word-review" data-gated="word-review"><span>07</span><b>Word by Word</b></a>
+    <a href="/cue-timing" data-gated="cue-timing"><span>08</span><b>Cue Timing</b></a>
+    <a href="/word-timing" data-gated="word-timing"><span>09</span><b>WbW Time</b></a>
+  </nav>
+
+  <main class="process-page-shell">
+    <div class="process-grid">
+      <section class="process-pane log-pane" aria-label="Logs do processamento">
+        <header class="process-pane-head">
+          <div><span class="mini-kicker">PROCESSAMENTO</span><h1>Logs</h1></div>
+          <span id="processStageChip" class="stage-chip">PROCESSANDO</span>
+        </header>
+        <div class="process-progress">
+          <div><span id="processMessage">Iniciando processamento…</span><strong id="processPercent">0%</strong></div>
+          <div class="progress-track"><i id="processBar"></i></div>
+        </div>
+        <div id="processError" class="process-error" hidden></div>
+        <div id="processLogs" class="process-logs" aria-live="polite"><div class="log-empty">Aguardando o primeiro evento do pipeline…</div></div>
+      </section>
+
+      <section class="process-pane artifact-pane" aria-label="Arquivos gerados">
+        <header class="process-pane-head">
+          <div><span class="mini-kicker">RESULTADO</span><h1>Arquivos</h1></div>
+          <span class="stage-chip ready">DOWNLOAD</span>
+        </header>
+        <div class="artifact-note">Cada arquivo aparece assim que fica pronto. Clique diretamente no arquivo para baixar.</div>
+        <div id="artifactList" class="artifact-list">
+          <div class="artifact-empty"><b>Nenhum arquivo disponível ainda.</b><span>Os arquivos aparecem aqui assim que cada etapa termina.</span></div>
+        </div>
+      </section>
+    </div>
+    <div class="process-next-wrap">
+      <button id="processAgain" class="btn btn-outline" type="button" hidden>Processar novamente</button>
+      <a id="processNext" class="btn btn-primary btn-lg btn-link" href="/external-ai" hidden>Continuar →</a>
+    </div>
+  </main>
+  <script src="/static/app.js?v=alpha-1.83" defer></script>
+<script src="/static/mobile.js?v=alpha-1.74" defer></script></body>
+</html>

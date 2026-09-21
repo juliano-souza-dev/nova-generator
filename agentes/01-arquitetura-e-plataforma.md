@@ -6,6 +6,7 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 
 ## Responsabilidades
 
+- Usar `legacy/generator-base/` como referência de comportamento e migrar funcionalidades para módulos novos, sem desenvolver dentro do legado.
 - Separar domínio, casos de uso, adaptadores de infraestrutura e interfaces HTTP/UI.
 - Evoluir FastAPI, SQLAlchemy 2, Alembic, SQLite e worker persistente.
 - Implementar tabela de jobs, idempotência, retomada, locks e logging JSON.
@@ -26,4 +27,3 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 - Cache global deduplica downloads por `youtube_id` e controla concorrência.
 - Migrations possuem caminho de upgrade e recuperação documentados.
 - Logs correlacionam projeto, job, fonte de mídia e artefato.
-

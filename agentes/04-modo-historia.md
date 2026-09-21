@@ -6,6 +6,7 @@ Manter uma produção independente de histórias didáticas, recebida como ZIP d
 
 ## Responsabilidades
 
+- Consultar fluxos equivalentes em `legacy/generator-base/` e preservar comportamentos aprovados por meio de fixtures antes da migração.
 - Validar estrutura do ZIP, paths seguros, JSON, imagens, cues, traduções e marcações didáticas.
 - Processar `important_word`, `structure` e `phrasal_verb` como dados explícitos ligados ao texto.
 - Permitir escolher perfil de voz existente ou sintetizar uma nova voz dentro do fluxo de História.
@@ -24,4 +25,3 @@ Manter uma produção independente de histórias didáticas, recebida como ZIP d
 - Cada cue exportado tem texto, tradução, highlights e timing rastreáveis.
 - A narração e o vídeo podem ser renderizados parcialmente após uma correção localizada.
 - A importação no iHub aceita a fixture produzida sem edição manual.
-

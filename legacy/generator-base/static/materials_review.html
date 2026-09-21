@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#07100c">
+  <title>Revisão · Anki · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.39">
+</head>
+<body data-page="materials-review">
+<header class="topbar"><a class="brand" href="/"><span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span></a><div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip">Revisão · materiais</span></div></header>
+<nav class="flow-nav" aria-label="Etapas da Alpha 1.39">
+  <a href="/"><span>01</span><b>Fonte YouTube</b></a><a href="/config"><span>02</span><b>Configuração</b></a><a href="/wave"><span>03</span><b>Mini Wave Editor</b></a><a href="/process"><span>04</span><b>Processar mídia</b></a><a href="/external-ai"><span>05</span><b>IA Externa</b></a><a href="/cue-review"><span>06</span><b>Revisar cues</b></a><a href="/word-review"><span>07</span><b>Word by Word</b></a><a href="/cue-timing"><span>08</span><b>Cue Timing</b></a><a href="/word-timing"><span>09</span><b>WbW Time</b></a><a href="/shadowing"><span>10</span><b>Shadowing</b></a><a href="/materials-external"><span>14</span><b>IA Externa · Materiais</b></a><a class="active" href="/materials-review"><span>15</span><b>Revisão Anki</b></a><a href="/materials-final"><span>16</span><b>TTS + Gerar finais</b></a>
+</nav>
+<main class="page-shell materials-review-shell">
+  <header class="page-hero"><div><span class="eyebrow">ETAPA 15 · REVISÃO HUMANA</span><h1>Revisar cards Anki</h1><p>Revise, edite, aprove ou recuse os cards antes da geração dos materiais finais.</p></div><div class="hero-badge">REVISÃO HUMANA</div></header>
+  <section class="panel stage-panel">
+    <div class="panel-head"><div class="stage-title"><span class="stage-number">15</span><div><h2>Revisão do Anki</h2><p>Confira cada card e sua mini aula antes da geração final.</p></div></div><span id="reviewChip" class="stage-chip">CARREGANDO</span></div>
+    <div id="reviewSummary" class="materials-review-summary"></div>
+    <div class="review-tabs"><button type="button" class="active" data-tab="anki">Anki</button></div>
+    <div id="reviewError" class="notice error" hidden></div>
+    <section id="ankiReviewPanel" class="review-tab-panel"><div id="ankiReviewList" class="materials-review-list"></div></section>
+    <div class="stage-actions"><a class="btn btn-outline btn-link" href="/materials-external">← IA Externa · Materiais</a><span id="reviewSaveState" class="review-save-state">Salvo</span><button id="reviewFinalize" class="btn btn-primary btn-lg" type="button">Aprovar revisão e gerar TTS/finais →</button></div>
+  </section>
+</main>
+<script src="/static/materials_review.js?v=alpha-1.83" defer></script>
+<script src="/static/mobile.js?v=alpha-1.74" defer></script></body></html>

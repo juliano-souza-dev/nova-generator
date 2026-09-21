@@ -1,0 +1,80 @@
+# Python environments and bytecode
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.so
+
+# Test, coverage and type-checker caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Packaging/build output
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Runtime data: user projects, downloaded media and generated artifacts
+workspace/
+projects/
+settings/
+tmp/
+.tools/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+cookies.txt
+cookies*.txt
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Runtime output and downloaded/generated media
+*.log
+*.pid
+*.sqlite
+*.sqlite3
+*.db
+*.mp3
+*.wav
+*.m4a
+*.aac
+*.flac
+*.mp4
+*.mkv
+*.webm
+*.mov
+*.zip
+*.apkg
+mobile_access_qr.png
+
+# Editors and operating-system metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local backup files
+*.bak
+*.backup
+*.tmp
+
+# Video editor: local media, independent drafts and exports
+editor_workspace/

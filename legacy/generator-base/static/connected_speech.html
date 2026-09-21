@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07100c">
+  <title>Connected Speech · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.39">
+</head>
+<body data-page="connected-speech">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Media and Subtitle Generator"><span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span></a>
+    <div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip" id="topState">Connected Speech</span></div>
+  </header>
+
+  <nav class="flow-nav" aria-label="Etapas da Alpha 1.39">
+    <a href="/"><span>01</span><b>Fonte YouTube</b></a>
+    <a href="/config"><span>02</span><b>Configuração</b></a>
+    <a href="/wave"><span>03</span><b>Mini Wave Editor</b></a>
+    <a href="/process"><span>04</span><b>Processar mídia</b></a>
+    <a href="/external-ai"><span>05</span><b>IA Externa</b></a>
+    <a href="/cue-review"><span>06</span><b>Revisar cues</b></a>
+    <a href="/word-review"><span>07</span><b>Word by Word</b></a>
+    <a href="/cue-timing"><span>08</span><b>Cue Timing</b></a>
+    <a href="/word-timing"><span>09</span><b>WbW Time</b></a>
+    <a href="/shadowing"><span>10</span><b>Shadowing</b></a>
+    
+    
+    
+  </nav>
+
+  <main class="external-page-shell connected-speech-shell">
+    <section class="external-download-panel">
+      <header class="external-section-head">
+        <div>
+          <span class="mini-kicker">ETAPA 11 · CONNECTED SPEECH · IA EXTERNA</span>
+          <h1>Pacote para análise da fala</h1>
+          <p>O Generator envia o canônico atual, o mesmo áudio da cena e o intervalo exato em que a IA deve trabalhar. Nenhum timing já aprovado é recalculado nesta etapa.</p>
+        </div>
+        <span id="connectedStageChip" class="stage-chip">PREPARANDO</span>
+      </header>
+
+      <div id="connectedPrepareError" class="process-error" hidden></div>
+
+      <div class="connected-scope-summary">
+        <div><span>IN LOCAL</span><b id="connectedStart">—</b></div>
+        <div><span>OUT LOCAL</span><b id="connectedEnd">—</b></div>
+        <div><span>CANÔNICO</span><b>ATUAL</b></div>
+        <div><span>ÁUDIO</span><b>MESMO WAV</b></div>
+      </div>
+
+      <div id="connectedArtifacts" class="external-artifact-grid connected-artifact-grid">
+        <div class="artifact-empty"><b>Preparando pacote…</b><span>Gerando escopo, cópia canônica, instruções e ZIP.</span></div>
+      </div>
+
+      <div class="external-contract-note">
+        <b>Contrato desta etapa</b>
+        <span>A IA usa <code>canonical_scene_current.json</code> como mapa, confirma os fenômenos pelo áudio e devolve apenas <code>connected_speech_return.json</code>. O canônico de entrada não deve ser modificado.</span>
+      </div>
+
+      <div class="stage-actions external-actions connected-actions">
+        <a class="btn btn-outline btn-link" href="/shadowing">← Shadowing</a>
+        <a id="connectedDownloadZip" class="btn btn-primary btn-lg is-disabled" href="#" aria-disabled="true">Baixar pacote completo ↓</a>
+      </div>
+    </section>
+
+    <section class="external-return-panel connected-next-note">
+      <header class="external-section-head compact">
+        <div><span class="mini-kicker">PRÓXIMA ETAPA</span><h2>Receber connected_speech_return.json</h2><p>Quando a IA devolver o JSON, envie-o para validação. Se o contrato estiver correto, o Generator abre automaticamente a conferência manual de cada fenômeno.</p></div>
+      </header>
+      <div class="stage-actions external-actions">
+        <span></span>
+        
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/connected_speech.js?v=alpha-1.39" defer></script>
+<script src="/static/mobile.js?v=alpha-1.74" defer></script></body>
+</html>

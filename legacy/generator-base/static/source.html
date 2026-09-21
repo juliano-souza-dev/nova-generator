@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07100c">
+  <title>Fonte YouTube · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.39">
+</head>
+<body data-page="source">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Media and Subtitle Generator">
+      <span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span>
+    </a>
+    <div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip" id="topState">aguardando fonte</span></div>
+  </header>
+
+  <nav class="flow-nav" aria-label="Etapas da Alpha 1.39">
+    <a href="/" class="active"><span>01</span><b>Fonte YouTube</b></a>
+    <a href="/config" data-gated="config"><span>02</span><b>Configuração</b></a>
+    <a href="/wave" data-gated="wave"><span>03</span><b>Mini Wave Editor</b></a>
+    <a href="/process" data-gated="process"><span>04</span><b>Processar mídia</b></a>
+    <a href="/external-ai" data-gated="external-ai"><span>05</span><b>IA Externa</b></a>
+    <a href="/cue-review" data-gated="cue-review"><span>06</span><b>Revisar cues</b></a>
+    <a href="/word-review" data-gated="word-review"><span>07</span><b>Word by Word</b></a>
+    <a href="/cue-timing" data-gated="cue-timing"><span>08</span><b>Cue Timing</b></a>
+    <a href="/word-timing" data-gated="word-timing"><span>09</span><b>WbW Time</b></a>
+  </nav>
+
+  <main class="page-shell">
+    <header class="page-hero">
+      <div><span class="eyebrow">NOVO PROJETO · ALPHA 1.39</span><h1>Media and Subtitle Generator</h1><p>Comece pela fonte em inglês. Nesta página fazemos somente a validação da URL e da permissão de incorporação.</p></div>
+      <div class="hero-badge">MEDIA + SUBTITLES</div>
+    </header>
+
+    <section class="panel stage-panel">
+      <div class="panel-head">
+        <div class="stage-title"><span class="stage-number">01</span><div><h2>Vídeo fonte</h2><p>Informe o link do YouTube em inglês. Só avançamos quando a URL for válida e incorporável.</p></div></div>
+        <span class="stage-chip">OBRIGATÓRIO</span>
+      </div>
+      <div class="field-block">
+        <label for="enUrl" class="field-label">URL DO YOUTUBE · FONTE EN</label>
+        <div class="url-row"><input id="enUrl" class="text-field mono" type="url" autocomplete="off" placeholder="https://www.youtube.com/watch?v=..."><button id="validateEn" class="btn btn-outline" type="button">Validar URL</button></div>
+        <div id="enStatus" class="inline-status">Cole uma URL do YouTube. A validação também acontece automaticamente após você parar de digitar.</div>
+      </div>
+      <div id="enValidated" class="validated-box" hidden>
+        <div class="validated-icon">✓</div>
+        <div><span class="mini-kicker">FONTE APROVADA</span><h3 id="enTitle">Vídeo válido</h3><p>A URL é válida e permite reprodução incorporada. Podemos prosseguir?</p><code id="enValidatedUrl">—</code></div>
+        <a id="openConfig" class="btn btn-primary btn-link" href="/config">Sim, prosseguir →</a>
+      </div>
+    </section>
+  </main>
+  <script src="/static/app.js?v=alpha-1.39" defer></script>
+<script src="/static/mobile.js?v=alpha-1.74" defer></script></body>
+</html>

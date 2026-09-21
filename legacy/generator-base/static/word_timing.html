@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07100c">
+  <title>WbW Time · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.64">
+</head>
+<body data-page="word-timing">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Media and Subtitle Generator"><span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span></a>
+    <div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip" id="topState">WbW Time</span></div>
+  </header>
+  <nav class="flow-nav" aria-label="Etapas da Alpha 1.39">
+    <a href="/"><span>01</span><b>Fonte YouTube</b></a>
+    <a href="/config"><span>02</span><b>Configuração</b></a>
+    <a href="/wave"><span>03</span><b>Mini Wave Editor</b></a>
+    <a href="/process"><span>04</span><b>Processar mídia</b></a>
+    <a href="/external-ai"><span>05</span><b>IA Externa</b></a>
+    <a href="/cue-review"><span>06</span><b>Revisar cues</b></a>
+    <a href="/word-review"><span>07</span><b>Word by Word</b></a>
+    <a href="/cue-timing"><span>08</span><b>Cue Timing</b></a>
+    <a href="/word-timing" class="active"><span>09</span><b>WbW Time</b></a>
+  </nav>
+
+  <main class="cue-timing-shell word-timing-shell">
+    <aside class="cue-timing-sidebar">
+      <header class="cue-sidebar-head"><div><span class="mini-kicker">TODAS AS CUES</span><h1>WbW Time</h1></div><span id="wordTimingProgress" class="cue-review-progress">0/0</span></header>
+      <div class="cue-review-counts"><span><b id="wordTimingAccepted">0</b> salvas</span><span><b id="wordTimingPending">0</b> pendentes</span></div>
+      <div id="wordTimingCueList" class="cue-timing-list"></div>
+    </aside>
+
+    <section class="cue-timing-main">
+      <header class="cue-timing-head">
+        <div><span class="mini-kicker">ETAPA 09 · TIMING WORD BY WORD</span><h1 id="wordTimingTitle">Cue — · Word —</h1><p id="wordTimingText">Ajuste o IN/OUT da word ou unidade semântica.</p></div>
+        <span id="wordTimingStatus" class="stage-chip">PENDENTE</span>
+      </header>
+
+      <div id="wordTimingStrip" class="word-timing-strip" aria-label="Words e grupos da cue"></div>
+
+      <div class="cue-timing-grid">
+        <section class="cue-timing-video-column">
+          <div class="column-kicker">VÍDEO · PREVIEW WbW EN/PT</div>
+          <div class="video-shell cue-timing-video-shell">
+            <video id="wordTimingVideo" controls preload="metadata" playsinline></video>
+            <div id="wordTimingSubtitleOverlay" class="wbw-timing-subtitle-overlay" aria-hidden="true" hidden>
+              <div id="wordTimingSubtitleEn" class="wbw-timing-line wbw-timing-en"></div>
+              <div id="wordTimingSubtitlePt" class="wbw-timing-line wbw-timing-pt"></div>
+            </div>
+          </div>
+          <div class="word-timing-current-card"><span id="wordTimingUnitType">WORD</span><div><b id="wordTimingCurrentEn">—</b><small id="wordTimingCurrentPt">—</small></div></div>
+        </section>
+
+        <section class="cue-timing-wave-column">
+          <div class="column-kicker">WAVECUT · WORD / GRUPO ATUAL</div>
+          <div class="wave-editor-body">
+            <div class="cue-timing-media-tools">
+              <label class="cue-wave-zoom"><span>ZOOM WbW</span><input id="wordTimingWaveZoom" type="range" min="1" max="200" step="1" value="64"><b id="wordTimingWaveZoomValue">64×</b></label>
+              <button id="wordTimingCenter" class="btn btn-outline btn-sm" type="button">Centralizar word</button>
+              <label class="cue-video-speed"><span>VELOCIDADE · ← / →</span><select id="wordTimingSpeed" class="text-field"><option value="0.25">.25×</option><option value="0.35">.35×</option><option value="0.5">.50×</option><option value="0.65">.65×</option><option value="0.75">.75×</option><option value="0.85">.85×</option><option value="1" selected>1×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option></select></label>
+            </div>
+            <div class="wave-head"><span>WAVEFORM REAL · IN / OUT</span><span id="wordTimingPlayhead">00:00:00.000</span></div>
+            <div id="wordTimingWaveStage" class="wave-editor-stage" tabindex="0" data-wave-height="196" aria-label="Wave Editor da word atual"><canvas id="wordTimingWaveCanvas"></canvas></div>
+            <div class="wave-legend"><span><i class="in"></i>IN · arraste</span><span><i class="out"></i>OUT · arraste</span><span><i class="play"></i>PLAYHEAD</span></div>
+          </div>
+          <div class="range-grid cue-timing-range-grid">
+            <label class="range-selector range-selector-in"><span>IN</span><input id="wordTimingIn" class="range-time" value="00:00:00.000"></label><div class="range-arrow">→</div>
+            <label class="range-selector range-selector-out"><span>OUT</span><input id="wordTimingOut" class="range-time" value="00:00:00.000"></label><div class="duration-box"><span>DURAÇÃO</span><b id="wordTimingDuration">--</b></div>
+          </div>
+          <div class="wave-controls"><div><button id="wordTimingMarkIn" class="btn btn-outline btn-sm" type="button">Marcar IN aqui</button><button id="wordTimingMarkOut" class="btn btn-outline btn-sm" type="button">Marcar OUT aqui</button><button id="wordTimingPlay" class="btn btn-outline btn-sm" type="button">▶ Reproduzir word</button></div><div class="shortcuts"><span><kbd>Space</kbd> word/grupo</span><span><kbd>Shift+Space</kbd> cena</span><span><kbd>G</kbd> salvar + próxima</span><span><kbd>Ctrl+G</kbd> salvar cue inteira</span><span><kbd>Ctrl+R</kbd> realinhar</span><span><kbd>←/→</kbd> velocidade</span><span><kbd>A</kbd> IN</span><span><kbd>S</kbd> OUT</span></div></div>
+        </section>
+      </div>
+
+      <div id="wordTimingMessage" class="inline-status"></div>
+      <div class="cue-timing-actions"><button id="testWordTiming" class="btn btn-outline" type="button">▶ Testar no player (Ctrl + Enter)</button><button id="realignWordTiming" class="btn btn-outline" type="button">Realinhar words desta cue (Ctrl + R)</button><button id="saveWordTiming" class="btn btn-primary btn-lg" type="button">Salvar word e próxima →</button></div>
+      <section id="wordTimingComplete" class="cue-review-complete" hidden><span class="complete-check">✓</span><div><span class="mini-kicker">ETAPA CONCLUÍDA</span><h2>WbW Timing revisado</h2><p>Words e grupos semânticos agora usam os timings validados com preview sincronizado EN/PT.</p></div><button id="wordTimingNext" class="btn btn-primary btn-lg" type="button" disabled>Próxima etapa · carregando</button></section>
+    </section>
+  </main>
+  <dialog id="wordTimingTestDialog" class="hub-wbw-dialog" aria-labelledby="wordTimingTestTitle">
+    <header><div><span>PRÉVIA DO HUB</span><h2 id="wordTimingTestTitle">Teste WbW</h2></div><button id="closeWordTimingTest" type="button" aria-label="Fechar">×</button></header>
+    <div class="hub-wbw-player">
+      <video id="wordTimingTestVideo" controls preload="metadata" playsinline></video>
+      <div id="wordTimingTestCaption" class="hub-word-preview-caption" hidden aria-live="off"></div>
+    </div>
+    <footer><span>A legenda segue o timing da cue; o destaque verde segue cada word.</span><span><kbd>Ctrl + Enter</kbd> cue atual · <kbd>Ctrl + Shift + Enter</kbd> início</span></footer>
+  </dialog>
+  <script src="/static/wave_editor.js?v=alpha-1.65" defer></script>
+  <script src="/static/word_timing.js?v=alpha-1.85" defer></script>
+<script src="/static/mobile.js?v=alpha-1.75" defer></script></body>
+</html>

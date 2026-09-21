@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#07100c">
+  <title>Mini Wave Editor · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.39">
+</head>
+<body data-page="wave">
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span></a>
+    <div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip" id="topState">Mini Wave Editor</span></div>
+  </header>
+  <nav class="flow-nav" aria-label="Etapas da Alpha 1.39">
+    <a href="/"><span>01</span><b>Fonte YouTube</b></a>
+    <a href="/config"><span>02</span><b>Configuração</b></a>
+    <a href="/wave" class="active"><span>03</span><b>Mini Wave Editor</b></a>
+    <a href="/process" data-gated="process"><span>04</span><b>Processar mídia</b></a>
+    <a href="/external-ai" data-gated="external-ai"><span>05</span><b>IA Externa</b></a>
+    <a href="/cue-review" data-gated="cue-review"><span>06</span><b>Revisar cues</b></a>
+    <a href="/word-review" data-gated="word-review"><span>07</span><b>Word by Word</b></a>
+    <a href="/cue-timing" data-gated="cue-timing"><span>08</span><b>Cue Timing</b></a>
+    <a href="/word-timing" data-gated="word-timing"><span>09</span><b>WbW Time</b></a>
+  </nav>
+
+  <main class="page-shell">
+    <header class="page-hero"><div><span class="eyebrow">ETAPA 03 · WAVE EDITOR GLOBAL</span><h1 id="waveHeroTitle">Defina o corte da cena</h1><p id="waveHeroCopy">O Mini Wave Editor usa o mesmo componente global que será reutilizado nos próximos editores de timeline.</p></div><div class="hero-badge">GLOBAL WAVE</div></header>
+    <section class="panel stage-panel wave-page-panel">
+      <div class="panel-head"><div class="stage-title"><span class="stage-number">03</span><div><h2>Mini Wave Editor</h2><p id="wavePanelCopy">Fonte EN preparada uma única vez. Ajuste IN e OUT da cena.</p></div></div><span class="stage-chip ready" id="waveStageChip">PREPARANDO</span></div>
+      <div id="wavePreparing" class="prepare-box"><div class="prepare-row"><b id="wavePrepareText">Preparando vídeo fonte…</b><strong id="wavePreparePercent">0%</strong></div><div class="progress-track"><i id="wavePrepareBar"></i></div><p id="wavePrepareDetail">O Generator está preparando o vídeo EN e a waveform real.</p></div>
+      <div id="waveWorkspace" class="wave-workspace" hidden>
+        <div class="wave-main-grid">
+          <div class="wave-video-column">
+            <div class="column-kicker">VÍDEO · FONTE EN</div>
+            <div class="video-shell"><video id="sourceVideo" controls preload="metadata" playsinline></video></div>
+          </div>
+          <div class="wave-editor-column">
+            <div class="column-kicker">WAVECUT · EDITOR GLOBAL</div>
+            <div class="wave-editor-body">
+              <div class="wave-head"><span>WAVEFORM REAL · FONTE EN</span><span id="playheadLabel">00:00:00.000</span></div>
+              <div id="globalWaveStage" class="wave-editor-stage" tabindex="0" data-wave-height="196" aria-label="Wave Editor global com seletores IN e OUT"><canvas id="globalWaveCanvas"></canvas></div>
+              <div class="wave-legend"><span><i class="in"></i>IN · arraste o seletor</span><span><i class="out"></i>OUT · arraste o seletor</span><span><i class="play"></i>PLAYHEAD</span></div>
+            </div>
+            <div class="range-grid">
+              <label class="range-selector range-selector-in"><span>IN · SELETOR ATIVO</span><input id="startTime" class="range-time" value="00:00:00.000"></label><div class="range-arrow">→</div>
+              <label class="range-selector range-selector-out"><span>OUT · SELETOR ATIVO</span><input id="endTime" class="range-time" value="00:00:30.000"></label><div class="duration-box"><span>DURAÇÃO</span><b id="durationLabel">--</b></div>
+            </div>
+            <div class="wave-controls"><div><button id="markIn" class="btn btn-outline btn-sm" type="button">Marcar IN aqui</button><button id="markOut" class="btn btn-outline btn-sm" type="button">Marcar OUT aqui</button><button id="playSelection" class="btn btn-outline btn-sm" type="button">▶ Reproduzir seleção</button></div><div class="shortcuts"><span><kbd>Space</kbd> play</span><span><kbd>A</kbd> IN</span><span><kbd>S</kbd> OUT</span><span><kbd>←/→</kbd> ±10ms</span><span><kbd>Shift</kbd> ±100ms</span><span><kbd>Alt</kbd> ±1ms</span></div></div>
+          </div>
+        </div>
+        <div id="cutMessage" class="inline-status"></div>
+        <div class="stage-actions final-actions"><a class="btn btn-outline btn-link" href="/config">← Alterar configuração</a><button id="saveCut" class="btn btn-primary btn-lg" type="button">Salvar recorte e continuar →</button></div>
+      </div>
+    </section>
+  </main>
+  <script src="/static/wave_editor.js?v=alpha-1.65" defer></script>
+  <script src="/static/app.js?v=music-unlimited" defer></script>
+<script src="/static/mobile.js?v=alpha-1.75" defer></script></body>
+</html>

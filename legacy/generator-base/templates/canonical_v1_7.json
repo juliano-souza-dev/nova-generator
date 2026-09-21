@@ -1,0 +1,177 @@
+{
+  "schema": "immersionhub-canonical-ai-input",
+  "schema_version": "1.7",
+  "snapshot_id": "__SNAPSHOT_ID__",
+  "generated_at_utc": "__GENERATED_AT_UTC__",
+  "workflow_status": "awaiting_external_ai_one_pass",
+  "generator": {
+    "name": "Media and Subtitle Generator",
+    "purpose": "Uma única análise externa para cues, tradução, Word by Word, Anki e candidatos de Connected Speech"
+  },
+  "project": {
+    "content_type": "dialogue",
+    "youtube": "",
+    "scene_start_ms": 0,
+    "scene_end_ms": 0,
+    "scene_duration_ms": 0,
+    "timeline": "scene_local_ms",
+    "source_video_start_ms": 0,
+    "source_video_end_ms": 0,
+    "fps": 0.0
+  },
+  "review": {
+    "source_kind": "external_ai_audio",
+    "caption_language": "en",
+    "cps_profile": "template",
+    "auto_saved_human_review": false,
+    "canonical_note": "ONE PASS: a IA externa analisa o WAV uma única vez. O Generator conduz todas as revisões e gera o resultado final localmente.",
+    "content_type_note": "dialogue usa cues faladas e candidatos de Connected Speech; music usa linhas cantadas e connected_speech.cues vazio."
+  },
+  "cues": [],
+  "shadowingConfig": {
+    "targetDurationMinutes": 3.0,
+    "maxDurationMinutes": 3.0,
+    "repetitionsPerBlock": 3,
+    "studentPause": {
+      "mode": "speech_duration_plus_margin",
+      "marginSeconds": 0.8,
+      "minSeconds": 1.5,
+      "maxSeconds": 6.0
+    },
+    "includeFullSpeech": true,
+    "blockSelection": {
+      "owner": "human_generator_editor",
+      "preferredWordsMin": 5,
+      "preferredWordsMax": 12,
+      "contextHasPriorityOverWordCount": true,
+      "allowConsecutiveCueGrouping": true,
+      "allowCueSplitting": false
+    }
+  },
+  "ai_training": {
+    "training_version": "2.2.0-one-pass-wbw-practices",
+    "role": "Você é o único analisador externo de áudio deste fluxo. Ouça o WAV completo e devolva o mesmo JSON canônico com cues[] preenchido e o campo raiz temporário generator_materials.",
+    "current_flow": [
+      "Esta é a única chamada à IA externa.",
+      "Depois do retorno, o humano revisa cues, Word by Word, timings, Shadowing e Connected Speech dentro do Generator.",
+      "Shadowing é escolhido manualmente em segmentos descontínuos; a IA não cria plano de Shadowing.",
+      "O Generator não produz PDF e não solicita conteúdo de PDF.",
+      "Anki é o material final proposto nesta chamada; Connected Speech é somente candidato sujeito a reconciliação e revisão humana.",
+      "Não produza Super JSON, study, shadowingScenes, PDF, workbook, guia, atividades ou segundo contrato."
+    ],
+    "authority": {
+      "primary": "scene_audio_16k_mono.wav",
+      "timeline": "Todos os timestamps usam a timeline local do recorte: 0..project.scene_duration_ms.",
+      "source_offset_rule": "source_video_start_ms/source_video_end_ms apenas localizam o recorte no vídeo original. Nunca some esse deslocamento aos timestamps."
+    },
+    "protected_root_fields": [
+      "schema",
+      "schema_version",
+      "snapshot_id",
+      "generated_at_utc",
+      "workflow_status",
+      "generator",
+      "project",
+      "review",
+      "shadowingConfig",
+      "ai_training"
+    ],
+    "mutable_targets": ["cues", "generator_materials"],
+    "cue_contract": {
+      "required_fields": [
+        "order", "speech_start_ms", "speech_end_ms", "subtitle_start_ms", "subtitle_end_ms",
+        "speaker", "original_en", "approved_en", "pt", "words"
+      ],
+      "rules": [
+        "Ouça o áudio inteiro antes de concluir a segmentação.",
+        "Crie order sequencial 1..N sem lacunas.",
+        "Use unidades naturais de fala ou canto e nunca invente conteúdo inaudível.",
+        "speech_start_ms/speech_end_ms marcam o som audível real.",
+        "subtitle_start_ms/subtitle_end_ms ficam coerentes com a fala e dentro da cena.",
+        "original_en é a transcrição fiel; approved_en inicialmente copia original_en.",
+        "pt é tradução contextual natural em pt-BR.",
+        "speaker deve ser string vazia; a atribuição humana acontece depois."
+      ]
+    },
+    "word_contract": {
+      "required_fields": [
+        "text", "start_ms", "end_ms", "original_start_ms", "original_end_ms", "confidence_score",
+        "review_status", "alignment_source", "audio_confidence", "composite_confidence", "qc_status",
+        "qc_reasons", "qc_auto_fixed", "human_verified_audio", "pt"
+      ],
+      "optional_group_fields": ["pt_group", "pt_group_role", "pt_group_original_pt"],
+      "semantic_translation_process": [
+        "Antes de traduzir qualquer word, leia e compreenda a cue inteira.",
+        "Determine o sentido de cada word no contexto real da cue; não use a tradução mais comum de dicionário quando ela não fizer sentido na frase.",
+        "Decida explicitamente se cada equivalente PT funciona sozinho ou se 2+ words contíguas formam uma única unidade semântica.",
+        "Agrupe obrigatoriamente phrasal verbs, expressões idiomáticas, collocations, auxiliares/negações, locuções, estruturas gramaticais e outras combinações cuja tradução isolada produza sentido falso, truncado ou artificial.",
+        "O resultado Word by Word deve ajudar o aluno a entender como a cue comunica sentido em português, não simular uma tradução mecânica palavra por palavra.",
+        "Exemplo: em 'give up', não traduza give=dar e up=para cima; use um pt_group com a equivalência contextual completa, como desistir."
+      ],
+      "timing_and_state_rules": [
+        "Cubra todas as words audíveis na ordem do cue.",
+        "Detecte timings pelo áudio; nunca divida a duração matematicamente.",
+        "start_ms/end_ms ficam dentro do speech interval do cue.",
+        "original_start_ms/original_end_ms copiam start_ms/end_ms neste primeiro retorno.",
+        "confidence_score, audio_confidence e composite_confidence ficam entre 0 e 1.",
+        "Use review_status=pending, alignment_source=auto, qc_status=needs_review, qc_reasons=[], qc_auto_fixed=false e human_verified_audio=false."
+      ],
+      "group_rules": [
+        "Word realmente independente recebe pt contextual não vazio.",
+        "Unidade de 2+ words contíguas usa exatamente o mesmo pt_group em todos os membros.",
+        "A primeira word usa pt_group_role=lead e recebe em pt a equivalência completa e natural do grupo.",
+        "As demais usam pt_group_role=member e pt=null.",
+        "pt_group_original_pt pode guardar a equivalência individual anterior, somente como apoio para desfazer o grupo.",
+        "Não crie translation_units, groups ou qualquer outro formato de agrupamento."
+      ]
+    },
+    "generator_materials_contract": {
+      "exact_root_shape": {
+        "anki": {"items": []},
+        "connected_speech": {"cues": []},
+        "wbw_practices": []
+      },
+      "anki_item_required_fields": [
+        "key", "cue_order", "score", "type", "focus", "meaning", "highlight_en", "marked",
+        "highlight_pt", "markedPT", "explanation", "example_en", "example_pt", "tags"
+      ],
+      "anki_rules": [
+        "Use no máximo 2 cards por cue e somente itens pedagogicamente fortes.",
+        "key e focus são únicos; score é inteiro 0..100; tags é array de strings.",
+        "marked ocorre literalmente em highlight_en e markedPT ocorre literalmente em highlight_pt.",
+        "example_en é novo e não copia highlight_en; example_pt traduz o novo exemplo.",
+        "Priorize chunks, collocations, phrasal verbs e estruturas reutilizáveis; não use nomes de obra ou personagem como foco."
+      ],
+      "connected_speech_row_shape": {"cue_order": 1, "phenomena": []},
+      "connected_speech_phenomenon_required_fields": [
+        "type", "start_ms", "end_ms", "source_text", "heard_as", "explanation_pt", "confidence"
+      ],
+      "connected_speech_rules": [
+        "Dialogue: devolva no máximo uma linha por cue_order, com phenomena=[] quando nada for confirmado.",
+        "Tipos permitidos: linking, elision, assimilation, reduction, contraction.",
+        "Cada intervalo fica dentro do cue e confidence fica entre 0 e 1.",
+        "Use somente fenômenos sustentados pelo áudio, nunca inferidos apenas pela grafia.",
+        "Music: connected_speech.cues deve ser exatamente []."
+      ],
+      "wbw_practice_required_fields": [
+        "cue_order", "type", "expression_en", "meaning_pt", "explanation_pt",
+        "example_en", "example_pt", "start_ms", "end_ms"
+      ],
+      "wbw_practice_rules": [
+        "Selecione somente estruturas, collocations, idioms e phrasal verbs realmente reutilizáveis.",
+        "Não crie uma prática para cada word ou cue; use [] quando não houver candidato forte.",
+        "type deve ser structure ou phrasal_verb.",
+        "start_ms/end_ms marcam o intervalo audível exato da expressão na timeline local da cena.",
+        "O intervalo deve ficar dentro de speech_start_ms/speech_end_ms da cue indicada.",
+        "Use a primeira word incluída como start_ms e a última word incluída como end_ms."
+      ]
+    },
+    "return_checklist": [
+      "Retorne somente JSON válido, sem Markdown e sem explicação externa.",
+      "Preserve todos os campos protegidos em estrutura, tipos e valores.",
+      "A raiz contém os campos canônicos recebidos mais generator_materials.",
+      "cues não está vazio e todas as words/timings obedecem aos contratos.",
+      "Não inclua PDF, study, Super JSON ou Shadowing."
+    ]
+  }
+}

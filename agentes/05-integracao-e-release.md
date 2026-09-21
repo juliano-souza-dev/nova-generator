@@ -6,6 +6,7 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 
 ## Responsabilidades
 
+- Usar exportadores, importadores e testes existentes em `legacy/generator-base/` para caracterizar compatibilidade antes de substituir uma integração.
 - Versionar schemas, exemplos válidos/inválidos e fixtures compartilhadas.
 - Manter os contratos de reel Anki (`hub_final.json` e `ankiAudio`) e História (`immersionhub-text-audio` 1.1).
 - Exigir compatibilidade retroativa, migration ou janela de transição para mudanças públicas.
@@ -23,4 +24,3 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Generator produz um pacote que o iHub importa em teste automatizado ou ambiente de validação.
 - Release tem notas, migrations, monitoramento, plano de rollback e responsável pelo aceite.
 - Incidentes preservam evidências suficientes para diagnóstico e reprocessamento seguro.
-

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07100c">
+  <title>Cue Timing · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.56">
+</head>
+<body data-page="cue-timing">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Media and Subtitle Generator"><span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span></a>
+    <div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip" id="topState">Cue Timing</span></div>
+  </header>
+  <nav class="flow-nav" aria-label="Etapas da Alpha 1.10">
+    <a href="/"><span>01</span><b>Fonte YouTube</b></a>
+    <a href="/config" data-gated="config"><span>02</span><b>Configuração</b></a>
+    <a href="/wave" data-gated="wave"><span>03</span><b>Mini Wave Editor</b></a>
+    <a href="/process" data-gated="process"><span>04</span><b>Processar mídia</b></a>
+    <a href="/external-ai" data-gated="external-ai"><span>05</span><b>IA Externa</b></a>
+    <a href="/cue-review" data-gated="cue-review"><span>06</span><b>Revisar cues</b></a>
+    <a href="/word-review" data-gated="word-review"><span>07</span><b>Word by Word</b></a>
+    <a href="/cue-timing" class="active"><span>08</span><b>Cue Timing</b></a>
+    <a href="/word-timing" data-gated="word-timing"><span>09</span><b>WbW Time</b></a>
+  </nav>
+
+  <main class="cue-timing-shell">
+    <aside class="cue-timing-sidebar">
+      <header class="cue-sidebar-head"><div><span class="mini-kicker">TODAS AS CUES</span><h1>Timing</h1></div><span id="cueTimingProgress" class="cue-review-progress">0/0</span></header>
+      <div class="cue-review-counts"><span><b id="cueTimingAccepted">0</b> salvas</span><span><b id="cueTimingPending">0</b> pendentes</span></div>
+      <div id="cueTimingList" class="cue-timing-list"></div>
+    </aside>
+
+    <section class="cue-timing-main">
+      <header class="cue-timing-head">
+        <div><span class="mini-kicker">ETAPA 08 · WAVE EDITOR POR CUE</span><h1 id="cueTimingTitle">Cue —</h1><p id="cueTimingText">Ajuste IN/OUT da fala e associe o speaker.</p></div>
+        <span id="cueTimingStatus" class="stage-chip">PENDENTE</span>
+      </header>
+
+      <div class="cue-timing-grid">
+        <section class="cue-timing-video-column">
+          <div class="column-kicker">VÍDEO · CENA PROCESSADA</div>
+          <div class="video-shell cue-timing-video-shell">
+            <video id="cueTimingVideo" controls preload="metadata" playsinline></video>
+            <div id="cueTimingSubtitleOverlay" class="cue-timing-subtitle-overlay" aria-hidden="true" hidden>
+              <div id="cueTimingSubtitleEn" class="cue-timing-subtitle-en"></div>
+              <div id="cueTimingSubtitlePt" class="cue-timing-subtitle-pt"></div>
+            </div>
+          </div>
+          <div class="cue-timing-translation"><span>PT</span><p id="cueTimingPt">—</p></div>
+        </section>
+
+        <section class="cue-timing-wave-column">
+          <div class="column-kicker">WAVECUT · CUE ATUAL</div>
+          <div class="wave-editor-body">
+            <div class="cue-timing-media-tools">
+            <label class="cue-wave-zoom"><span>ZOOM</span><input id="cueTimingWaveZoom" type="range" min="1" max="8" step="1" value="1"><b id="cueTimingWaveZoomValue">1×</b></label>
+            <button id="cueTimingCenterCue" class="btn btn-outline btn-sm" type="button">Centralizar cue</button>
+            <label class="cue-video-speed"><span>VELOCIDADE · ← / →</span><select id="cueTimingSpeed" class="text-field"><option value="0.25">.25×</option><option value="0.35">.35×</option><option value="0.5">.50×</option><option value="0.65">.65×</option><option value="0.75">.75×</option><option value="0.85">.85×</option><option value="1" selected>1×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option></select></label>
+          </div>
+          <div class="wave-head"><span>WAVEFORM REAL · IN / OUT</span><span id="cueTimingPlayhead">00:00:00.000</span></div>
+            <div id="cueTimingWaveStage" class="wave-editor-stage" tabindex="0" data-wave-height="196" aria-label="Wave Editor da cue atual"><canvas id="cueTimingWaveCanvas"></canvas></div>
+            <div class="wave-legend"><span><i class="in"></i>IN · arraste</span><span><i class="out"></i>OUT · arraste</span><span><i class="play"></i>PLAYHEAD</span></div>
+          </div>
+          <div class="range-grid cue-timing-range-grid">
+            <label class="range-selector range-selector-in"><span>IN</span><input id="cueTimingIn" class="range-time" value="00:00:00.000"></label><div class="range-arrow">→</div>
+            <label class="range-selector range-selector-out"><span>OUT</span><input id="cueTimingOut" class="range-time" value="00:00:00.000"></label><div class="duration-box"><span>DURAÇÃO</span><b id="cueTimingDuration">--</b></div>
+          </div>
+          <div class="wave-controls"><div><button id="cueTimingMarkIn" class="btn btn-outline btn-sm" type="button">Marcar IN aqui</button><button id="cueTimingMarkOut" class="btn btn-outline btn-sm" type="button">Marcar OUT aqui</button><button id="cueTimingPlay" class="btn btn-outline btn-sm" type="button">▶ Reproduzir cue</button></div><div class="shortcuts"><span><kbd>Space</kbd> cue</span><span><kbd>Shift+Space</kbd> cena</span><span><kbd>G</kbd> salvar + próxima</span><span><kbd>A</kbd> IN</span><span><kbd>S</kbd> OUT</span><span><kbd>←/→</kbd> ±10ms</span><span><kbd>Shift</kbd> ±100ms</span><span><kbd>Alt</kbd> ±1ms</span></div></div>
+        </section>
+      </div>
+
+      <section class="cue-speaker-panel">
+        <div class="cue-speaker-head"><div><span class="mini-kicker">SPEAKERS · SOMENTE NESTA ETAPA</span><h2>Falantes da cena</h2><p>Cadastre uma vez. Renomear ou excluir atualiza todas as cues vinculadas.</p></div><div class="cue-speaker-add"><input id="newCueSpeaker" maxlength="80" placeholder="Nome do speaker" autocomplete="off"><button id="addCueSpeaker" class="btn btn-outline" type="button">+ Adicionar</button></div></div>
+        <div id="cueSpeakerList" class="cue-speaker-list"></div>
+        <label class="cue-speaker-select"><span>Speaker da cue atual</span><select id="cueSpeakerSelect"><option value="">Sem speaker</option></select></label>
+      </section>
+
+      <div id="cueTimingMessage" class="inline-status"></div>
+      <div class="cue-timing-actions"><button id="deleteCueTiming" class="btn btn-danger" type="button">Excluir cue + WbW</button><button id="realignCueTiming" class="btn btn-outline" type="button">Realinhar próximas (Ctrl + R)</button><button id="saveCueTiming" class="btn btn-primary btn-lg" type="button">Salvar cue e próxima →</button></div>
+      <section id="cueTimingComplete" class="cue-review-complete" hidden><span class="complete-check">✓</span><div><span class="mini-kicker">ETAPA CONCLUÍDA</span><h2>IN/OUT e speakers revisados</h2><p>As cues agora usam os timings e speakers salvos nesta etapa.</p></div><a id="cueTimingNext" class="btn btn-primary btn-lg" href="/word-timing">Continuar para WbW Time →</a></section>
+    </section>
+  </main>
+  <div id="cueContextMenu" class="cue-context-menu" role="menu" hidden>
+    <button type="button" data-cue-context-action="open" role="menuitem">Abrir e editar</button>
+    <button type="button" data-cue-context-action="play" role="menuitem">▶ Reproduzir trecho</button>
+    <button type="button" data-cue-context-action="seek" role="menuitem">Ir para o início no vídeo</button>
+    <span></span>
+    <button type="button" class="danger" data-cue-context-action="delete" role="menuitem">Excluir cue + WbW</button>
+  </div>
+  <script src="/static/wave_editor.js?v=alpha-1.65" defer></script>
+  <script src="/static/cue_timing.js?v=alpha-1.86" defer></script>
+<script src="/static/mobile.js?v=alpha-1.75" defer></script></body>
+</html>

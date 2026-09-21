@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#07100c">
+  <title>Configuração · Media and Subtitle Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=alpha-1.72">
+</head>
+<body data-page="config">
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">MS</span><span><b>Media and Subtitle</b><small>Generator</small></span></a>
+    <div class="top-actions"><span class="alpha-chip">ALPHA 1.39</span><span class="status-chip" id="topState">configuração</span></div>
+  </header>
+  <nav class="flow-nav" aria-label="Etapas da Alpha 1.39">
+    <a href="/"><span>01</span><b>Fonte YouTube</b></a>
+    <a href="/config" class="active"><span>02</span><b>Configuração</b></a>
+    <a href="/wave" data-gated="wave"><span>03</span><b>Mini Wave Editor</b></a>
+    <a href="/process" data-gated="process"><span>04</span><b>Processar mídia</b></a>
+    <a href="/external-ai" data-gated="external-ai"><span>05</span><b>IA Externa</b></a>
+    <a href="/cue-review" data-gated="cue-review"><span>06</span><b>Revisar cues</b></a>
+    <a href="/word-review" data-gated="word-review"><span>07</span><b>Word by Word</b></a>
+    <a href="/cue-timing" data-gated="cue-timing"><span>08</span><b>Cue Timing</b></a>
+    <a href="/word-timing" data-gated="word-timing"><span>09</span><b>WbW Time</b></a>
+  </nav>
+
+  <main class="page-shell">
+    <header class="page-hero"><div><span class="eyebrow">ETAPA 02 · CONFIGURAÇÃO</span><h1>Configuração</h1><p>Escolha o tipo de conteúdo. Para Kit/cena, você pode habilitar DualScene antes de preparar o Wave Editor.</p></div><div class="hero-badge">SOURCE READY</div></header>
+    <section class="panel stage-panel">
+      <div class="panel-head"><div class="stage-title"><span class="stage-number">02</span><div><h2>Tipo de conteúdo</h2><p>O fluxo de música será definido posteriormente.</p></div></div><span class="stage-chip">CONFIGURAÇÃO</span></div>
+      <div id="sourceSummary" class="source-summary"></div>
+      <fieldset class="type-picker">
+        <legend>PREPARAÇÃO DO VÍDEO EN</legend>
+        <label class="type-option"><input type="radio" name="mediaSource" value="youtube" checked><span><b>Baixar do YouTube</b><small>Prioriza a maior qualidade disponível. Tenta qualidade inferior somente se falhar.</small></span></label>
+        <label class="type-option"><input type="radio" name="mediaSource" value="manual"><span><b>Enviar vídeo manualmente</b><small>Use o arquivo completo correspondente à fonte EN, com áudio. Ele será usado no recorte e no processamento.</small></span></label>
+        <label class="field-block"><span class="field-label">ARQUIVO DE VÍDEO</span><input id="manualVideo" class="text-field" type="file" accept="video/*,.mkv"><small id="manualVideoHint">Selecione um arquivo para usar o envio manual.</small></label>
+      </fieldset>
+      <fieldset class="type-picker">
+        <legend>TIPO DE CONTEÚDO</legend>
+        <label class="type-option"><input type="radio" name="contentType" value="kit" checked><span><b>Kit / cena</b><small>Cena, diálogo, filme, série, entrevista ou outro conteúdo falado.</small></span></label>
+        <label class="type-option"><input type="radio" name="contentType" value="music"><span><b>♫ Música</b><small>Microimersão musical de 30s ou mais com Lyrics + Word by Word.</small></span></label>
+      </fieldset>
+      <fieldset class="type-picker transcription-picker">
+        <legend>ORIGEM DA TRANSCRIÇÃO</legend>
+        <label class="type-option"><input type="radio" name="transcriptionMode" value="generator"><span><b>Transcrever no Generator</b><small>O Generator cria cues e timestamps por palavra. A IA externa valida, corrige e traduz esse rascunho.</small></span></label>
+        <label class="type-option"><input type="radio" name="transcriptionMode" value="external" checked><span><b>Transcrever somente na IA externa</b><small>O Generator envia o áudio sem cues. A IA externa faz transcrição, timing, tradução e materiais em uma única análise.</small></span></label>
+      </fieldset>
+      <label id="dualToggleWrap" class="dual-toggle"><input id="dualScene" type="checkbox"><span class="switch" aria-hidden="true"></span><span><b>DualScene</b><small>Usar também um vídeo equivalente em português.</small></span></label>
+      <div id="musicPending" class="notice" hidden><b>Music Micro-Immersion</b><span>Você escolherá manualmente um trecho de pelo menos 30 segundos, sem limite máximo além da duração do vídeo. Dual Scene, Shadowing e Connected Speech não fazem parte deste ramo.</span></div>
+      <div id="configStatus" class="inline-status page-status"></div>
+      <div class="stage-actions"><a class="btn btn-outline btn-link" href="/">← Voltar para fonte</a><button id="continueConfig" class="btn btn-primary btn-lg" type="button">Prosseguir →</button></div>
+    </section>
+    <section class="panel stage-panel groq-config-panel">
+      <div class="panel-head"><div class="stage-title"><span class="stage-number">AI</span><div><h2>Groq</h2><p>A Groq é usada somente para gerar os áudios TTS dos cards aprovados.</p></div></div><span id="groqConfigChip" class="stage-chip">VERIFICANDO</span></div>
+      <div class="groq-config-grid">
+        <label class="field-block"><span class="field-label">GROQ API KEY</span><input id="groqApiKey" class="text-field mono" type="password" autocomplete="off" placeholder="gsk_..."><small id="groqKeyHint">A chave salva nunca é devolvida ao navegador.</small></label>
+        <label class="field-block"><span class="field-label">MODELO TTS</span><input id="groqTtsModel" class="text-field mono" list="groqTtsModelList" value="canopylabs/orpheus-v1-english"><datalist id="groqTtsModelList"></datalist></label>
+        <label class="field-block"><span class="field-label">VOICE</span><select id="groqVoice" class="text-field"><option>autumn</option><option>diana</option><option selected>hannah</option><option>austin</option><option>daniel</option><option>troy</option></select></label>
+      </div>
+      <div id="groqConfigStatus" class="inline-status page-status">Validando configuração Groq…</div>
+      <div class="stage-actions"><button id="groqLoadModels" class="btn btn-outline" type="button">Conectar e carregar TTS</button><button id="groqSave" class="btn btn-primary" type="button">Salvar e validar Groq</button></div>
+    </section>
+  </main>
+
+  <dialog id="ptModal" class="app-dialog">
+    <form class="dialog-panel" id="ptForm" novalidate>
+      <header class="dialog-head"><div><span class="mini-kicker">DUALSCENE</span><h2>Vídeo equivalente em Português</h2></div><button id="closePtModal" class="dialog-x" type="button">×</button></header>
+      <p>DualScene exige uma segunda fonte válida e incorporável. Não é possível prosseguir sem ela.</p>
+      <label class="field-block"><span class="field-label">URL DO YOUTUBE · FONTE PT</span><div class="url-row"><input id="ptUrl" class="text-field mono" type="url" autocomplete="off" placeholder="https://www.youtube.com/watch?v=..."><button id="validatePt" class="btn btn-outline" type="button">Validar URL</button></div></label>
+      <div id="ptStatus" class="inline-status">Informe uma fonte PT válida.</div>
+      <div id="ptValidated" class="validated-inline" hidden><span>✓</span><div><b id="ptTitle">Fonte PT validada</b><small>URL válida e incorporável.</small></div></div>
+      <footer class="dialog-actions"><button id="cancelPtModal" class="btn btn-outline" type="button">Cancelar</button><button id="acceptPt" class="btn btn-primary" type="button" disabled>Usar vídeo PT e continuar →</button></footer>
+    </form>
+  </dialog>
+  <script src="/static/config_groq.js?v=alpha-1.39" defer></script>
+  <script src="/static/app.js?v=manual-video-1" defer></script>
+<script src="/static/mobile.js?v=alpha-1.74" defer></script></body>
+</html>
