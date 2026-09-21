@@ -1,8 +1,7 @@
 """Vercel entrypoint for the source-layout FastAPI application."""
 
-from pathlib import Path
 import sys
-
+from pathlib import Path
 
 SOURCE_ROOT = Path(__file__).parent / "src"
 if str(SOURCE_ROOT) not in sys.path:
