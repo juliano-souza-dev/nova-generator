@@ -27,6 +27,9 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/nova_generator"]
 
+[tool.vercel]
+entrypoint = "src/nova_generator/main.py:app"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
