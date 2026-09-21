@@ -1,0 +1,183 @@
+{
+  "schema": "nova-generator/editorial-cues",
+  "schema_version": "1.0",
+  "project_id": "10000000-0000-4000-8000-000000000001",
+  "timeline": {
+    "origin": "scene_local_ms",
+    "duration_ms": 1500
+  },
+  "cues": [
+    {
+      "id": "20000000-0000-4000-8000-000000000001",
+      "order": 1,
+      "speech_timing": {
+        "start_ms": 100,
+        "end_ms": 1400
+      },
+      "subtitle_timing": {
+        "start_ms": 80,
+        "end_ms": 1450
+      },
+      "speaker": "",
+      "original_en": {
+        "value": "“Don’t… stop,” she said.",
+        "utf8_sha256": "ade0031229f534028185d77903f1b7c57aff3e9df822b7590a962b2e39ea4d50"
+      },
+      "approved_en": {
+        "value": "“Don’t… stop,” she said.",
+        "utf8_sha256": "ade0031229f534028185d77903f1b7c57aff3e9df822b7590a962b2e39ea4d50"
+      },
+      "approved_pt": {
+        "value": "“Não… pare”, ela disse.",
+        "utf8_sha256": "88be65f1eb1212cfcbc4c7c388f2e8b57db074e1a296007df8946c1481627bdb"
+      },
+      "tokens": [
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "order": 1,
+          "surface": "“",
+          "char_start": 0,
+          "char_end": 1,
+          "kind": "punctuation",
+          "timing": null,
+          "gloss_pt": null,
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "order": 2,
+          "surface": "Don’t",
+          "char_start": 1,
+          "char_end": 6,
+          "kind": "word",
+          "timing": {
+            "start_ms": 120,
+            "end_ms": 470
+          },
+          "gloss_pt": "não",
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000003",
+          "order": 3,
+          "surface": "…",
+          "char_start": 6,
+          "char_end": 7,
+          "kind": "punctuation",
+          "timing": null,
+          "gloss_pt": null,
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000004",
+          "order": 4,
+          "surface": " ",
+          "char_start": 7,
+          "char_end": 8,
+          "kind": "whitespace",
+          "timing": null,
+          "gloss_pt": null,
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000005",
+          "order": 5,
+          "surface": "stop",
+          "char_start": 8,
+          "char_end": 12,
+          "kind": "word",
+          "timing": {
+            "start_ms": 520,
+            "end_ms": 810
+          },
+          "gloss_pt": "pare",
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000006",
+          "order": 6,
+          "surface": ",",
+          "char_start": 12,
+          "char_end": 13,
+          "kind": "punctuation",
+          "timing": null,
+          "gloss_pt": null,
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000007",
+          "order": 7,
+          "surface": "”",
+          "char_start": 13,
+          "char_end": 14,
+          "kind": "punctuation",
+          "timing": null,
+          "gloss_pt": null,
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000008",
+          "order": 8,
+          "surface": " ",
+          "char_start": 14,
+          "char_end": 15,
+          "kind": "whitespace",
+          "timing": null,
+          "gloss_pt": null,
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000009",
+          "order": 9,
+          "surface": "she",
+          "char_start": 15,
+          "char_end": 18,
+          "kind": "word",
+          "timing": {
+            "start_ms": 860,
+            "end_ms": 1040
+          },
+          "gloss_pt": "ela",
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "order": 10,
+          "surface": " ",
+          "char_start": 18,
+          "char_end": 19,
+          "kind": "whitespace",
+          "timing": null,
+          "gloss_pt": null,
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000011",
+          "order": 11,
+          "surface": "said",
+          "char_start": 19,
+          "char_end": 23,
+          "kind": "word",
+          "timing": {
+            "start_ms": 1090,
+            "end_ms": 1330
+          },
+          "gloss_pt": "disse",
+          "review_status": "approved"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000012",
+          "order": 12,
+          "surface": ".",
+          "char_start": 23,
+          "char_end": 24,
+          "kind": "punctuation",
+          "timing": null,
+          "gloss_pt": null,
+          "review_status": "approved"
+        }
+      ],
+      "revision": 1
+    }
+  ]
+}

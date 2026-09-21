@@ -1,0 +1,11 @@
+{
+  "schema": "immersionhub-text-audio",
+  "schema_version": "1.1",
+  "mode": "story",
+  "title": "Invalid highlight",
+  "description": "Fixture for semantic validation.",
+  "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "youtubeVideoId": "dQw4w9WgXcQ",
+  "durationMs": 1000,
+  "cues": [{"order": 1, "startMs": 0, "endMs": 1000, "en": "Maya found a key.", "pt": "Maya encontrou uma chave.", "highlights": [{"text": "missing", "type": "important_word"}]}]
+}

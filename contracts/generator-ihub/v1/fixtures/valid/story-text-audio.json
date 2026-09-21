@@ -1,0 +1,11 @@
+{
+  "schema": "immersionhub-text-audio",
+  "schema_version": "1.1",
+  "mode": "story",
+  "title": "The Lost Key",
+  "description": "Uma história curta para praticar phrasal verbs.",
+  "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "youtubeVideoId": "dQw4w9WgXcQ",
+  "durationMs": 4350,
+  "cues": [{"order": 1, "startMs": 0, "endMs": 4350, "en": "Maya found an old key under the stairs.", "pt": "Maya encontrou uma chave antiga sob as escadas.", "highlights": []}]
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nova-generator.local/contracts/generator-ihub/v1/immersionhub-text-audio-1.1.schema.json",
+  "title": "iHub Text and Audio Story 1.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "mode", "title", "description", "youtubeUrl", "youtubeVideoId", "durationMs", "cues"],
+  "properties": {
+    "schema": {"const": "immersionhub-text-audio"}, "schema_version": {"const": "1.1"}, "mode": {"const": "story"},
+    "title": {"type": "string", "minLength": 1}, "description": {"type": "string"}, "youtubeUrl": {"type": "string", "format": "uri"},
+    "youtubeVideoId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{11}$"}, "durationMs": {"type": "integer", "minimum": 1},
+    "cues": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/cue"}}
+  },
+  "$defs": {
+    "cue": {
+      "type": "object", "additionalProperties": false,
+      "required": ["order", "startMs", "endMs", "en", "pt", "highlights"],
+      "properties": {
+        "order": {"type": "integer", "minimum": 1}, "startMs": {"type": "integer", "minimum": 0}, "endMs": {"type": "integer", "minimum": 1},
+        "en": {"type": "string", "minLength": 1}, "pt": {"type": "string"}, "highlights": {"type": "array", "items": {"type": "object"}}
+      }
+    }
+  }
+}

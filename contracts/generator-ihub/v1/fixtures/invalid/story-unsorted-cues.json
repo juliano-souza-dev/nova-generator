@@ -1,0 +1,14 @@
+{
+  "schema": "immersionhub-text-audio",
+  "schema_version": "1.1",
+  "mode": "story",
+  "title": "Invalid order",
+  "description": "Fixture for semantic validation.",
+  "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "youtubeVideoId": "dQw4w9WgXcQ",
+  "durationMs": 3000,
+  "cues": [
+    {"order": 2, "startMs": 1500, "endMs": 3000, "en": "Second.", "pt": "Segunda.", "highlights": []},
+    {"order": 1, "startMs": 0, "endMs": 1500, "en": "First.", "pt": "Primeira.", "highlights": []}
+  ]
+}

@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+coverage.xml
+htmlcov/
+
+# Runtime state and generated media
+data/
+media_cache/
+projects/
+workspace/
+settings/
+backups/
+*.log
+
+# Frontend
+node_modules/
+dist/
+playwright-report/
+test-results/
+
+# Local configuration
+.env
+.env.*
+!.env.example
