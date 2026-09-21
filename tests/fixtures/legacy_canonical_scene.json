@@ -1,0 +1,28 @@
+{
+  "project": {
+    "youtube": "https://www.youtube.com/watch?v=abcDEF12345",
+    "youtube_video_id": "abcDEF12345",
+    "youtube_title": "Can't stop — café?",
+    "content_type": "dialogue",
+    "scene_duration_ms": 4200,
+    "timeline": "scene_local_ms"
+  },
+  "cues": [
+    {
+      "order": 1,
+      "speech_start_ms": 100,
+      "speech_end_ms": 2100,
+      "subtitle_start_ms": 90,
+      "subtitle_end_ms": 2150,
+      "speaker": "A",
+      "original_en": "“I can't… go?”",
+      "approved_en": "“I can't… go?”",
+      "pt": "“Eu não posso… ir?”",
+      "words": [
+        {"text": "I", "start_ms": 100, "end_ms": 250, "original_start_ms": 100, "original_end_ms": 250, "pt": "eu"},
+        {"text": "can't", "start_ms": 300, "end_ms": 700, "original_start_ms": 300, "original_end_ms": 700, "pt": "não posso"},
+        {"text": "go", "start_ms": 1500, "end_ms": 1900, "original_start_ms": 1500, "original_end_ms": 1900, "pt": "ir"}
+      ]
+    }
+  ]
+}

@@ -12,6 +12,9 @@ htmlcov/
 data/
 media_cache/
 projects/
+!src/nova_generator/domain/projects/
+!src/nova_generator/domain/projects/**
+src/nova_generator/domain/projects/__pycache__/
 workspace/
 settings/
 backups/
