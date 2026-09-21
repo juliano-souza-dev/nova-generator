@@ -28,7 +28,7 @@ dev = [
 packages = ["src/nova_generator"]
 
 [tool.vercel]
-entrypoint = "src/nova_generator/main.py:app"
+entrypoint = "main:app"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
