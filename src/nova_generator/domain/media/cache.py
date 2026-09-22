@@ -15,11 +15,14 @@ class YoutubeMediaMetadata:
     sha256: str
     size_bytes: int
     duration_ms: int
+    video_codec: str
+    audio_codec: str | None
     created_at_utc: datetime
     last_used_at_utc: datetime
     use_count: int = 0
     schema: str = "generator-youtube-media-cache"
-    schema_version: str = "1.0"
+    source_url: str = ""
+    schema_version: str = "1.1"
 
     def __post_init__(self) -> None:
         if self.source_file != "source.mp4":
@@ -28,6 +31,8 @@ class YoutubeMediaMetadata:
             raise ValueError("O SHA-256 da fonte é obrigatório.")
         if self.size_bytes <= 0 or self.duration_ms <= 0:
             raise ValueError("A fonte do cache deve ter tamanho e duração positivos.")
+        if not self.video_codec:
+            raise ValueError("A fonte do cache deve informar o codec de vídeo.")
         if self.use_count < 0:
             raise ValueError("use_count não pode ser negativo.")
 

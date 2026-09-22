@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
+from pathlib import Path
 from typing import Protocol
 
 from nova_generator.domain.media.cache import YoutubeMediaMetadata
@@ -20,3 +21,9 @@ class YoutubeMediaCache(Protocol):
 
     def save_verified(self, metadata: YoutubeMediaMetadata) -> None:
         """Persist metadata after a future downloader has atomically installed its source."""
+
+    def staging_directory(self, video: YoutubeVideo) -> Path:
+        """Return an isolated temporary directory in the cache filesystem."""
+
+    def install_source(self, video: YoutubeVideo, source: Path) -> Path:
+        """Atomically promote a validated staged source to the canonical cache path."""

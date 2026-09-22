@@ -30,6 +30,8 @@ def test_resolution_returns_reused_when_a_verified_source_exists() -> None:
         sha256="a" * 64,
         size_bytes=1,
         duration_ms=1,
+        video_codec="h264",
+        audio_codec="aac",
         created_at_utc=datetime.now(UTC),
         last_used_at_utc=datetime.now(UTC),
     )

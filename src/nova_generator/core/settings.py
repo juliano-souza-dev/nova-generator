@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     app_name: str = "Nova Generator"
     environment: str = "development"
     database_url: str = "sqlite:///./data/nova-generator.db"
+    media_cache_root: Path = Path("media_cache")
     api_prefix: str = "/api"
 
     def ensure_database_directory(self) -> None:
