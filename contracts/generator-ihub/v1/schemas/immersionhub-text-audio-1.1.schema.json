@@ -17,7 +17,17 @@
       "required": ["order", "startMs", "endMs", "en", "pt", "highlights"],
       "properties": {
         "order": {"type": "integer", "minimum": 1}, "startMs": {"type": "integer", "minimum": 0}, "endMs": {"type": "integer", "minimum": 1},
-        "en": {"type": "string", "minLength": 1}, "pt": {"type": "string"}, "highlights": {"type": "array", "items": {"type": "object"}}
+        "en": {"type": "string", "minLength": 1}, "pt": {"type": "string"}, "highlights": {"type": "array", "items": {"$ref": "#/$defs/highlight"}}
+      }
+    },
+    "highlight": {
+      "type": "object", "additionalProperties": false,
+      "required": ["text", "type", "pt", "occurrence"],
+      "properties": {
+        "text": {"type": "string", "minLength": 1},
+        "type": {"enum": ["important_word", "structure", "phrasal_verb"]},
+        "pt": {"type": "string", "minLength": 1},
+        "occurrence": {"type": "integer", "minimum": 1}
       }
     }
   }

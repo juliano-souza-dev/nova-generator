@@ -12,6 +12,7 @@ dependencies = [
   "alembic>=1.14,<2",
   "genanki>=0.13,<1",
   "fastapi>=0.115,<1",
+  "jsonschema>=4.23,<5",
   "pydantic-settings>=2.6,<3",
   "sqlalchemy>=2.0,<3",
   "yt-dlp>=2025.1.15,<2027",
