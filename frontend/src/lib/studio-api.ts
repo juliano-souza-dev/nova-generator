@@ -16,6 +16,8 @@ import type {
   Timing,
   WordTiming,
   VoiceProfile,
+  VoiceReference,
+  VoiceModelStatus,
 } from "./api.types";
 import { apiRequest } from "./api";
 
@@ -116,10 +118,17 @@ export const studioApi = {
   materialExport: (projectId: string, jobId: string) =>
     apiRequest<MaterialExport>(`/projects/${projectId}/materials/exports/${jobId}`),
   voices: () => apiRequest<VoiceProfile[]>("/voices"),
+  voiceModel: () => apiRequest<VoiceModelStatus>("/voices/model"),
+  voiceReferences: () => apiRequest<VoiceReference[]>("/voices/references"),
+  uploadVoiceReference: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return apiRequest<VoiceReference>("/voices/references", { method: "POST", body });
+  },
   createVoice: (input: {
     name: string;
     model_id: string;
-    model_sha256: string;
+    model_sha256?: string;
     reference_audio_sha256?: string;
     parameters: Record<string, unknown>;
   }) => apiRequest<VoiceProfile>("/voices", { method: "POST", body: JSON.stringify(input) }),
@@ -128,7 +137,7 @@ export const studioApi = {
     input: {
       name: string;
       model_id: string;
-      model_sha256: string;
+      model_sha256?: string;
       reference_audio_sha256?: string;
       parameters: Record<string, unknown>;
     },

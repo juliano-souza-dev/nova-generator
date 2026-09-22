@@ -154,6 +154,9 @@ export function StoryPage() {
               {voices.data?.map((profile) => (
                 <option key={profile.id} value={profile.id}>
                   {profile.name} · v{profile.version}
+                  {profile.reference_audio_sha256
+                    ? ` · ref ${profile.reference_audio_sha256.slice(0, 8)}`
+                    : ""}
                 </option>
               ))}
             </select>

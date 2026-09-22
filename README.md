@@ -56,6 +56,15 @@ falha no monitor de jobs. O SHA-256 informado ao criar o perfil identifica o
 checkpoint local usado no snapshot; mantenha o mesmo valor para exportações
 que devam preservar a identidade da voz.
 
+Para criar uma voz distinta, envie um WAV PCM de 1 a 30 segundos na biblioteca
+de vozes e selecione a referência no formulário. O servidor calcula os hashes
+da referência e do checkpoint Nano; o operador não precisa informá-los. O
+checkpoint `t3_nano_v1.safetensors` é procurado no cache Hugging Face ou pode
+ser indicado por `NOVA_GENERATOR_CHATTERBOX_MODEL_FILE`. Referências ficam em
+`media_cache/voice_references/` pelo hash do conteúdo. Se uma referência for
+removida ou alterada, a síntese falha no job; restaure o WAV original ou escolha
+outra referência em um novo perfil.
+
 ## Modo História
 
 Na área História, envie um ZIP com `story.json` e imagens. O validador informa o

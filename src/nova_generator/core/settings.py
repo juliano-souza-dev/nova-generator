@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     whisper_model: str = "small"
     whisper_model_root: Path = Path("models/whisper")
     chatterbox_model_root: Path = Path("models/chatterbox")
+    chatterbox_model_file: Path | None = None
     ffmpeg_executable: str = "ffmpeg"
     ffprobe_executable: str = "ffprobe"
     ytdlp_executable: str = "yt-dlp"

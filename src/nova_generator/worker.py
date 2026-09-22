@@ -25,6 +25,7 @@ from nova_generator.infrastructure.exports.ffmpeg_story_video_renderer import (
 )
 from nova_generator.infrastructure.exports.ffprobe_reel_validator import FfprobeReelValidator
 from nova_generator.infrastructure.exports.genanki_package_writer import GenankiPackageWriter
+from nova_generator.infrastructure.filesystem.voice_references import FileVoiceReferenceStore
 from nova_generator.infrastructure.filesystem.youtube_media_cache import FileYoutubeMediaCache
 from nova_generator.infrastructure.ingestion.faster_whisper_transcriber import (
     FasterWhisperTranscriber,
@@ -54,7 +55,9 @@ def main() -> None:
     settings = get_settings()
     runner = Path(__file__).parent / "infrastructure" / "speech" / "chatterbox_nano_runner.py"
     synthesizer = ChatterboxNanoSynthesizer(
-        runner, executable=os.environ.get("NOVA_GENERATOR_TTS_PYTHON", sys.executable)
+        runner,
+        executable=os.environ.get("NOVA_GENERATOR_TTS_PYTHON", sys.executable),
+        reference_store=FileVoiceReferenceStore(settings.media_cache_root),
     )
     speech = SynthesizeSpeech(FileSpeechCache(settings.media_cache_root), synthesizer)
     materials = MaterialsJobHandler(
