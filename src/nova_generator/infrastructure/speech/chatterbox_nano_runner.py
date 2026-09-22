@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
+from hashlib import file_digest
 from importlib import import_module
 from pathlib import Path
 
@@ -24,16 +26,28 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = chatterbox.ChatterboxTurboTTS.from_pretrained(device=device, nano=True)
     options = dict(request.get("parameters") or {})
-    reference = (profile.get("parameters") or {}).get("reference_audio_path")
-    if reference:
-        path = Path(reference)
-        if not path.is_file():
-            raise FileNotFoundError(f"Áudio de referência ausente: {path}")
-        options["audio_prompt_path"] = str(path)
+    if any(key.lower().endswith(("_path", "_file")) for key in options):
+        raise ValueError("Caminhos de arquivo não são aceitos como parâmetros de síntese.")
+    digest = request.get("reference_audio_sha256")
+    if digest:
+        options["audio_prompt_path"] = str(_resolve_reference(digest, request["reference_root"]))
     output = Path(request["output"])
     output.parent.mkdir(parents=True, exist_ok=True)
     waveform = model.generate(request["text"], **options)
     torchaudio.save(str(output), waveform, model.sr)
+
+
+def _resolve_reference(digest: str, raw_root: str) -> Path:
+    if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+        raise ValueError("Hash do áudio de referência inválido.")
+    root = Path(raw_root).resolve()
+    path = (root / f"{digest}.wav").resolve(strict=True)
+    if path.parent != root or not path.is_file():
+        raise ValueError("Áudio de referência fora da biblioteca local.")
+    with path.open("rb") as file:
+        if file_digest(file, "sha256").hexdigest() != digest:
+            raise ValueError("Hash do áudio de referência diverge.")
+    return path
 
 
 if __name__ == "__main__":

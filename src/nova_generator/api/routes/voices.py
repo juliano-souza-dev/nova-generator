@@ -1,7 +1,7 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -12,15 +12,73 @@ from nova_generator.application.use_cases.manage_voice_profiles import (
 )
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.voices import VoiceProfile
+from nova_generator.infrastructure.filesystem.voice_references import (
+    MAX_WAV_BYTES,
+    FileVoiceReferenceStore,
+    VoiceReference,
+)
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
+from nova_generator.infrastructure.speech.model_checkpoint import checkpoint_sha256
 
 router = APIRouter(prefix="/voices", tags=["voices"])
+
+
+def _references() -> FileVoiceReferenceStore:
+    return FileVoiceReferenceStore(get_settings().media_cache_root)
+
+
+class ReferenceResponse(BaseModel):
+    sha256: str
+    duration_ms: int
+    sample_rate: int
+    channels: int
+    size_bytes: int
+    audio_url: str
+
+
+def _reference_response(reference: VoiceReference) -> ReferenceResponse:
+    return ReferenceResponse(
+        **vars(reference),
+        audio_url=f"{get_settings().api_prefix}/voices/references/{reference.sha256}",
+    )
+
+
+@router.get("/model")
+def get_model_status() -> dict[str, str | bool]:
+    try:
+        return {"available": True, "model_sha256": checkpoint_sha256(get_settings())}
+    except ValueError as exc:
+        return {"available": False, "message": str(exc)}
+
+
+@router.get("/references", response_model=list[ReferenceResponse])
+def list_references() -> list[ReferenceResponse]:
+    return [_reference_response(reference) for reference in _references().list()]
+
+
+@router.post("/references", response_model=ReferenceResponse, status_code=201)
+async def upload_reference(file: Annotated[UploadFile, File(...)]) -> ReferenceResponse:
+    if not file.filename or not file.filename.lower().endswith(".wav"):
+        raise HTTPException(422, "Envie um arquivo .wav.")
+    content = await file.read(MAX_WAV_BYTES + 1)
+    try:
+        return _reference_response(_references().save(content))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/references/{digest}")
+def get_reference(digest: str) -> FileResponse:
+    stored = _references().get(digest)
+    if stored is None:
+        raise HTTPException(404, "Áudio de referência não encontrado")
+    return FileResponse(stored[1], media_type="audio/wav", filename="reference.wav")
 
 
 class VoiceInput(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     model_id: str = Field(default="chatterbox-nano", min_length=1, max_length=255)
-    model_sha256: str = Field(min_length=64, max_length=64)
+    model_sha256: str | None = Field(default=None, min_length=64, max_length=64)
     reference_audio_sha256: str | None = Field(default=None, min_length=64, max_length=64)
     parameters: dict[str, Any] = Field(default_factory=dict)
 
@@ -31,6 +89,18 @@ class VoiceResponse(VoiceInput):
     snapshot_sha256: str
     preview_url: str | None = None
     preview_ready: bool = False
+
+
+def _prepare(payload: VoiceInput) -> dict[str, Any]:
+    values = payload.model_dump()
+    parameters = values["parameters"]
+    if any(key.lower().endswith(("_path", "_file")) for key in parameters):
+        raise ValueError("Caminhos de arquivo não são aceitos nos parâmetros da voz.")
+    digest = values["reference_audio_sha256"]
+    if digest is not None and _references().get(digest) is None:
+        raise ValueError("Envie ou selecione um WAV de referência da biblioteca local.")
+    values["model_sha256"] = values["model_sha256"] or checkpoint_sha256(get_settings())
+    return values
 
 
 @router.get("", response_model=list[VoiceResponse])
@@ -44,7 +114,7 @@ def create_voice(
     use_case: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
 ):
     try:
-        return _response(use_case.create(**payload.model_dump()))
+        return _response(use_case.create(**_prepare(payload)))
     except ValueError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
 
@@ -58,7 +128,11 @@ def create_version(
     use_case: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
 ):
     try:
-        return _response(use_case.version(voice_id, **payload.model_dump()))
+        values = _prepare(payload)
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    try:
+        return _response(use_case.version(voice_id, **values))
     except ValueError as exc:
         raise HTTPException(404, detail=str(exc)) from exc
 

@@ -150,3 +150,16 @@ export type VoiceProfile = {
   preview_url: string | null;
   preview_ready: boolean;
 };
+export type VoiceReference = {
+  sha256: string;
+  duration_ms: number;
+  sample_rate: number;
+  channels: number;
+  size_bytes: number;
+  audio_url: string;
+};
+export type VoiceModelStatus = {
+  available: boolean;
+  model_sha256?: string;
+  message?: string;
+};

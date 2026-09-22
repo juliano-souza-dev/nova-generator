@@ -12,11 +12,7 @@ import "./voices.css";
 
 const schema = z.object({
   name: z.string().trim().min(1, "Informe o nome."),
-  model_sha256: z.string().regex(/^[a-fA-F0-9]{64}$/, "Informe o SHA-256 do modelo."),
-  reference_audio_sha256: z
-    .string()
-    .regex(/^[a-fA-F0-9]{64}$/, "Informe um SHA-256 válido.")
-    .or(z.literal("")),
+  reference_audio_sha256: z.string().regex(/^[a-f0-9]{64}$/, "Selecione um WAV de referência."),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -32,8 +28,9 @@ export function VoicesPage() {
   const mutation = useMutation({
     mutationFn: ({ values, existing }: { values: FormValues; existing?: VoiceProfile }) => {
       const input = {
-        ...values,
+        name: values.name,
         model_id: "chatterbox-nano",
+        model_sha256: existing?.model_sha256,
         reference_audio_sha256: values.reference_audio_sha256 || undefined,
         parameters: {},
       };
@@ -88,7 +85,6 @@ export function VoicesPage() {
                 mutation.mutate({
                   values: {
                     name: selected.name,
-                    model_sha256: selected.model_sha256,
                     reference_audio_sha256: selected.reference_audio_sha256 ?? "",
                   },
                   existing: selected,
@@ -132,6 +128,14 @@ function VoiceDetail({
           <dt>Snapshot</dt>
           <dd className="hash">{voice.snapshot_sha256}</dd>
         </div>
+        <div>
+          <dt>Referência</dt>
+          <dd>
+            {voice.reference_audio_sha256
+              ? voice.reference_audio_sha256.slice(0, 12)
+              : "Sem referência"}
+          </dd>
+        </div>
       </dl>
       {voice.preview_ready && voice.preview_url ? (
         <audio controls src={voice.preview_url} aria-label={`Prévia da voz ${voice.name}`} />
@@ -157,8 +161,24 @@ function VoiceForm({
 }) {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", model_sha256: "", reference_audio_sha256: "" },
+    defaultValues: { name: "", reference_audio_sha256: "" },
   });
+  const queryClient = useQueryClient();
+  const references = useQuery({
+    queryKey: ["voice-references"],
+    queryFn: studioApi.voiceReferences,
+  });
+  const model = useQuery({ queryKey: ["voice-model"], queryFn: studioApi.voiceModel });
+  const upload = useMutation({
+    mutationFn: studioApi.uploadVoiceReference,
+    onSuccess: (reference) => {
+      form.setValue("reference_audio_sha256", reference.sha256, { shouldValidate: true });
+      void queryClient.invalidateQueries({ queryKey: ["voice-references"] });
+    },
+  });
+  const selectedReference = references.data?.find(
+    (reference) => reference.sha256 === form.watch("reference_audio_sha256"),
+  );
   return (
     <form className="panel voice-form" onSubmit={form.handleSubmit(onSubmit)}>
       <h2>Nova voz</h2>
@@ -166,21 +186,55 @@ function VoiceForm({
         Nome
         <input {...form.register("name")} placeholder="Narradora Ana" />
       </label>
-      <label>
-        SHA-256 do modelo
-        <input {...form.register("model_sha256")} aria-label="SHA-256 do modelo" />
-      </label>
-      <label>
-        SHA-256 do áudio de referência (opcional)
-        <input {...form.register("reference_audio_sha256")} />
-      </label>
+      <p role="status">
+        {model.isPending
+          ? "Verificando modelo local…"
+          : model.data?.available
+            ? "Modelo Chatterbox Nano disponível."
+            : (model.data?.message ?? model.error?.message)}
+      </p>
+      <label htmlFor="voice-reference-upload">Enviar WAV de referência (1 a 30 segundos)</label>
+      <input
+        id="voice-reference-upload"
+        type="file"
+        accept=".wav,audio/wav"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) upload.mutate(file);
+        }}
+      />
+      {upload.isPending && <p>Validando áudio…</p>}
+      {upload.isError && (
+        <p role="alert" className="field-error">
+          {upload.error.message}
+        </p>
+      )}
+      <label htmlFor="voice-reference-select">Áudio de referência</label>
+      <select id="voice-reference-select" {...form.register("reference_audio_sha256")}>
+        <option value="">Selecione um WAV da biblioteca</option>
+        {references.data?.map((reference) => (
+          <option key={reference.sha256} value={reference.sha256}>
+            {reference.sha256.slice(0, 12)} · {(reference.duration_ms / 1000).toFixed(1)} s
+          </option>
+        ))}
+      </select>
+      {selectedReference && (
+        <audio
+          controls
+          src={selectedReference.audio_url}
+          aria-label="Áudio de referência selecionado"
+        />
+      )}
       {Object.values(form.formState.errors).map((value) => (
         <p key={value.message} className="field-error">
           {value.message}
         </p>
       ))}
       {error && <p className="field-error">{error}</p>}
-      <button className="primary-button" disabled={busy}>
+      <button
+        className="primary-button"
+        disabled={busy || !model.data?.available || upload.isPending}
+      >
         <Plus />
         {busy ? "Criando…" : "Criar e sintetizar prévia"}
       </button>
