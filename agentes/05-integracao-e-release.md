@@ -12,6 +12,9 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Publicar `hub_final.json` por projeto/exportação somente após APKG e reel concluídos e upload manual do reel; incluir cues, texto EN/PT aprovado, itens Anki, palavras revisadas e timeline do reel com ID validado do YouTube.
 - Exigir compatibilidade retroativa, migration ou janela de transição para mudanças públicas.
 - Coordenar testes de contrato, regressão de mídia, validação de importação e checklist de release.
+- Executar o ensaio reproduzível em `scripts/rehearse_local_release.py`, guardar o
+  relatório fora do Git e separar aceite do product owner de evidência técnica;
+  consultar `docs/validacao-issue-20.md` antes de aposentar um fluxo legado.
 - Manter os gates em `.github/workflows/quality.yml` e o checklist em
   `docs/qualidade-e-release.md`: pytest, Ruff, Pyright, fixtures JSON, ESLint, Prettier,
   Vitest e Playwright.

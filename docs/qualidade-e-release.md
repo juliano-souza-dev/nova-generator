@@ -2,8 +2,8 @@
 
 Este documento define os gates para código novo do Nova Generator. O diretório
 `legacy/` é referência de migração e não faz parte dos linters ou da análise de tipos.
-Pyright roda em modo de baseline durante a migração; novos pacotes devem elevar a checagem para
-`basic` quando suas anotações e dependências estiverem estabilizadas.
+Pyright roda em modo `basic` no CI para os módulos novos; o diretório legado
+permanece fora dessa verificação.
 
 ## Validação local
 
