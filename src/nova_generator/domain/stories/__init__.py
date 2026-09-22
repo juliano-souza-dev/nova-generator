@@ -9,6 +9,7 @@ from .package import (
     ValidationIssue,
     validate_story_package,
 )
+from .render import RenderedStoryCue, StoryRender
 
 __all__ = [
     "Highlight",
@@ -17,5 +18,7 @@ __all__ = [
     "StoryPackage",
     "StoryPackageViolation",
     "ValidationIssue",
+    "RenderedStoryCue",
+    "StoryRender",
     "validate_story_package",
 ]
