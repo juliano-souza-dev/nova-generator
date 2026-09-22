@@ -27,8 +27,12 @@ def upgrade() -> None:
         sa.Column("output_json", sa.Text(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("attempt", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("idempotency_key"),
     )

@@ -57,9 +57,7 @@ class ImportLegacyEditorialProject:
         )
         snapshot_cues: list[dict[str, Any]] = []
         for index, raw_cue in enumerate(cues_data, start=1):
-            cue, words, snapshot = _legacy_cue(
-                raw_cue, scene_id, legacy_key, index, duration_ms
-            )
+            cue, words, snapshot = _legacy_cue(raw_cue, scene_id, legacy_key, index, duration_ms)
             self._repository.save_cue(cue, words)
             snapshot_cues.append(snapshot)
         snapshot = {"project": project_data, "cues": snapshot_cues}
