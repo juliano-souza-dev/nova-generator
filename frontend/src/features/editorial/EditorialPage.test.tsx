@@ -31,17 +31,15 @@ vi.mock("../../lib/studio-api", () => ({
       cut_url: "/api/cut.wav",
       waveform: { sample_rate_hz: 8000, bucket_ms: 40, peaks: [0.3, 0.8] },
     }),
-    editorialScenes: vi
-      .fn()
-      .mockResolvedValue([
-        {
-          id: "s1",
-          project_id: "p1",
-          order: 1,
-          duration_ms: 2000,
-          provenance: { ingest_job_id: "j1" },
-        },
-      ]),
+    editorialScenes: vi.fn().mockResolvedValue([
+      {
+        id: "s1",
+        project_id: "p1",
+        order: 1,
+        duration_ms: 2000,
+        provenance: { ingest_job_id: "j1" },
+      },
+    ]),
     editorialCues: mocks.editorialCues,
     draftAsrCandidate: mocks.draftAsrCandidate,
     updateCueText: mocks.updateCueText,
