@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from hashlib import sha256
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
@@ -68,6 +69,7 @@ class JobRefResponse(BaseModel):
 class ExportResponse(BaseModel):
     job_id: UUID
     status: str
+    error_message: str | None = None
     apkg_url: str | None = None
     manifest_url: str | None = None
     reel_url: str | None = None
@@ -110,11 +112,15 @@ def _card(
         speech = cache.find(key)
     tags = cue.provenance.get("tags", [])
     return CardResponse(
-        cue_id=cue.id, scene_order=scene_order, cue_order=cue.order,
-        approved_en=cue.approved_en, approved_pt=cue.approved_pt,
+        cue_id=cue.id,
+        scene_order=scene_order,
+        cue_order=cue.order,
+        approved_en=cue.approved_en,
+        approved_pt=cue.approved_pt,
         tags=[tag for tag in tags if isinstance(tag, str)] if isinstance(tags, list) else [],
         included=cue.provenance.get("anki_included") is not False,
-        speaker=cue.speaker, speech_start_ms=cue.speech_start_ms,
+        speaker=cue.speaker,
+        speech_start_ms=cue.speech_start_ms,
         speech_end_ms=cue.speech_end_ms,
         reel_start_ms=reel_start if speech and reel_start is not None else None,
         reel_end_ms=reel_start + speech.duration_ms if speech and reel_start is not None else None,
@@ -122,7 +128,8 @@ def _card(
         audio_url=(
             f"{get_settings().api_prefix}/projects/{project_id}/materials/{cue.id}/audio"
             f"?voice_id={voice.profile_id}&voice_version={voice.version}"
-            if speech and voice else None
+            if speech and voice
+            else None
         ),
     )
 
@@ -142,14 +149,17 @@ def list_materials(
         if card.included:
             cursor = card.reel_end_ms if card.audio_ready else None
     return MaterialListResponse(
-        cards=cards, voice_id=voice.profile_id if voice else None,
+        cards=cards,
+        voice_id=voice.profile_id if voice else None,
         voice_version=voice.version if voice else None,
     )
 
 
 @router.patch("/{cue_id}", response_model=CardResponse)
 def update_material(project_id: UUID, cue_id: UUID, payload: SelectionInput) -> CardResponse:
-    match = next(((order, cue) for order, cue in _project_cues(project_id) if cue.id == cue_id), None)
+    match = next(
+        ((order, cue) for order, cue in _project_cues(project_id) if cue.id == cue_id), None
+    )
     if match is None:
         raise HTTPException(404, detail="card not found")
     scene_order, cue = match
@@ -161,9 +171,11 @@ def update_material(project_id: UUID, cue_id: UUID, payload: SelectionInput) -> 
 
 @router.get("/{cue_id}/audio")
 def stream_material_audio(
-    project_id: UUID, cue_id: UUID,
+    project_id: UUID,
+    cue_id: UUID,
     voices: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
-    voice_id: UUID, voice_version: int,
+    voice_id: UUID,
+    voice_version: int,
 ) -> FileResponse:
     cue = next((cue for _, cue in _project_cues(project_id) if cue.id == cue_id), None)
     if cue is None:
@@ -172,7 +184,9 @@ def stream_material_audio(
     if profile is None:
         raise HTTPException(404, detail="voice profile not found")
     cache = FileSpeechCache(get_settings().media_cache_root)
-    speech = cache.find(cache.cache_key(text=cue.approved_en, profile=profile.snapshot(), parameters={}))
+    speech = cache.find(
+        cache.cache_key(text=cue.approved_en, profile=profile.snapshot(), parameters={})
+    )
     if speech is None:
         raise HTTPException(404, detail="canonical WAV not ready")
     return FileResponse(speech.audio_path, media_type="audio/wav", filename=f"cue-{cue.id}.wav")
@@ -180,7 +194,9 @@ def stream_material_audio(
 
 @router.post("/{cue_id}/audio", response_model=JobRefResponse, status_code=status.HTTP_202_ACCEPTED)
 def prepare_material_audio(
-    project_id: UUID, cue_id: UUID, payload: VoiceInput,
+    project_id: UUID,
+    cue_id: UUID,
+    payload: VoiceInput,
     voices: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
     enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
 ) -> JobRefResponse:
@@ -190,8 +206,12 @@ def prepare_material_audio(
     voice = _voice(voices, payload.voice_id)
     job = enqueue.execute(
         kind="synthesize_material_audio",
-        input={"project_id": str(project_id), "cue_id": str(cue_id),
-               "approved_en": cue.approved_en, "voice_snapshot": _voice_payload(voice)},
+        input={
+            "project_id": str(project_id),
+            "cue_id": str(cue_id),
+            "approved_en": cue.approved_en,
+            "voice_snapshot": _voice_payload(voice),
+        },
         idempotency_key=None,
     )
     return JobRefResponse(id=job.id, status=job.status)
@@ -199,23 +219,35 @@ def prepare_material_audio(
 
 @router.post("/exports", response_model=ExportResponse, status_code=status.HTTP_202_ACCEPTED)
 def export_materials(
-    project_id: UUID, payload: VoiceInput,
+    project_id: UUID,
+    payload: VoiceInput,
     voices: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
     enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
 ) -> ExportResponse:
-    selected = [cue for _, cue in _project_cues(project_id) if cue.provenance.get("anki_included") is not False]
+    selected = [
+        cue
+        for _, cue in _project_cues(project_id)
+        if cue.provenance.get("anki_included") is not False
+    ]
     if not selected:
         raise HTTPException(422, detail="select at least one card")
     voice = _voice(voices, payload.voice_id)
     cache = FileSpeechCache(get_settings().media_cache_root)
+    audio_hashes: dict[str, str] = {}
     for cue in selected:
-        if cache.find(cache.cache_key(text=cue.approved_en, profile=voice, parameters={})) is None:
+        speech = cache.find(cache.cache_key(text=cue.approved_en, profile=voice, parameters={}))
+        if speech is None:
             raise HTTPException(422, detail=f"canonical WAV not ready for cue {cue.id}")
+        audio_hashes[str(cue.id)] = sha256(Path(speech.audio_path).read_bytes()).hexdigest()
     job = enqueue.execute(
         kind="export_materials",
-        input={"project_id": str(project_id), "cue_ids": [str(cue.id) for cue in selected],
-               "text_hashes": {str(cue.id): cue.approved_en_sha256 for cue in selected},
-               "voice_snapshot": _voice_payload(voice)},
+        input={
+            "project_id": str(project_id),
+            "cue_ids": [str(cue.id) for cue in selected],
+            "text_hashes": {str(cue.id): cue.approved_en_sha256 for cue in selected},
+            "audio_hashes": audio_hashes,
+            "voice_snapshot": _voice_payload(voice),
+        },
         idempotency_key=None,
     )
     return ExportResponse(job_id=job.id, status=job.status)
@@ -226,11 +258,17 @@ def get_material_export(
     project_id: UUID, job_id: UUID, jobs: Annotated[GetJob, Depends(get_job)]
 ) -> ExportResponse:
     job = jobs.execute(str(job_id))
-    if job is None or job.kind != "export_materials" or job.input.get("project_id") != str(project_id):
+    if (
+        job is None
+        or job.kind != "export_materials"
+        or job.input.get("project_id") != str(project_id)
+    ):
         raise HTTPException(404, detail="export not found")
     base = f"{get_settings().api_prefix}/projects/{project_id}/materials/exports/{job_id}"
     return ExportResponse(
-        job_id=job.id, status=job.status,
+        job_id=job.id,
+        status=job.status,
+        error_message=job.error_message,
         apkg_url=f"{base}/anki.apkg" if job.status == "succeeded" else None,
         manifest_url=f"{base}/anki-audio-manifest.json" if job.status == "succeeded" else None,
         reel_url=f"{base}/anki-reel.mp4" if job.status == "succeeded" else None,
@@ -239,13 +277,20 @@ def get_material_export(
 
 @router.get("/exports/{job_id}/{artifact}")
 def download_material_export(
-    project_id: UUID, job_id: UUID, artifact: str,
+    project_id: UUID,
+    job_id: UUID,
+    artifact: str,
     jobs: Annotated[GetJob, Depends(get_job)],
 ) -> FileResponse:
     if artifact not in {"anki.apkg", "anki-audio-manifest.json", "anki-reel.mp4"}:
         raise HTTPException(404, detail="artifact not found")
     job = jobs.execute(str(job_id))
-    if job is None or job.kind != "export_materials" or job.status != "succeeded" or job.input.get("project_id") != str(project_id):
+    if (
+        job is None
+        or job.kind != "export_materials"
+        or job.status != "succeeded"
+        or job.input.get("project_id") != str(project_id)
+    ):
         raise HTTPException(404, detail="export not found")
     path = Path(get_settings().media_cache_root) / "exports" / str(job_id) / artifact
     if not path.is_file():
@@ -255,9 +300,12 @@ def download_material_export(
 
 def _voice_payload(snapshot: VoiceProfileSnapshot) -> dict[str, object]:
     return {
-        "profile_id": str(snapshot.profile_id), "name": snapshot.name,
-        "version": snapshot.version, "model_id": snapshot.model_id,
+        "profile_id": str(snapshot.profile_id),
+        "name": snapshot.name,
+        "version": snapshot.version,
+        "model_id": snapshot.model_id,
         "model_sha256": snapshot.model_sha256,
         "reference_audio_sha256": snapshot.reference_audio_sha256,
-        "parameters": snapshot.parameters, "snapshot_sha256": snapshot.sha256,
+        "parameters": snapshot.parameters,
+        "snapshot_sha256": snapshot.sha256,
     }

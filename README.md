@@ -32,6 +32,12 @@ npm run dev
 O Vite encaminha `/api` para `http://127.0.0.1:8000` no desenvolvimento. Use
 `npm run build`, `npm run lint`, `npm run test` e `npm run test:e2e` para validar a aplicação.
 
+Na rota **Materiais**, selecione um perfil de voz, prepare o WAV de cada card e exporte os
+cards incluídos. Em outro terminal, execute `python -m nova_generator.worker` para processar
+os jobs de áudio e exportação. O worker requer o ambiente local de Chatterbox, FFmpeg e FFprobe.
+O APKG, manifesto e reel ficam disponíveis para download quando o job termina. Se um job
+falhar, consulte o erro em **Jobs**, reprocesse o card afetado e inicie uma nova exportação.
+
 ## Prévia de vozes locais
 
 Instale `chatterbox-tts`, `torch` e `torchaudio` em um ambiente Python separado e
