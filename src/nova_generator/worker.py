@@ -9,13 +9,22 @@ from pathlib import Path
 from threading import Event
 
 from nova_generator.api.dependencies import get_session_factory
+from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.core.settings import get_settings
+from nova_generator.infrastructure.database.editorial_project_repository import (
+    SqlAlchemyEditorialProjectRepository,
+)
 from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
+from nova_generator.infrastructure.exports.ffmpeg_audio_reel_renderer import FfmpegAudioReelRenderer
+from nova_generator.infrastructure.exports.ffprobe_reel_validator import FfprobeReelValidator
+from nova_generator.infrastructure.exports.genanki_package_writer import GenankiPackageWriter
 from nova_generator.infrastructure.speech.chatterbox_nano_synthesizer import (
     ChatterboxNanoSynthesizer,
 )
+from nova_generator.infrastructure.speech.ffprobe_wav_probe import FfprobeWavProbe
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
+from nova_generator.infrastructure.worker.materials_handler import MaterialsJobHandler
 from nova_generator.infrastructure.worker.persistent_worker import PersistentWorker
 from nova_generator.infrastructure.worker.voice_preview_handler import make_voice_preview_handler
 
@@ -27,10 +36,26 @@ def main() -> None:
         runner, executable=os.environ.get("NOVA_GENERATOR_TTS_PYTHON", sys.executable)
     )
     speech = SynthesizeSpeech(FileSpeechCache(settings.media_cache_root), synthesizer)
+    materials = MaterialsJobHandler(
+        SqlAlchemyEditorialProjectRepository(get_session_factory()),
+        FileSpeechCache(settings.media_cache_root),
+        speech,
+        ExportAnkiReel(
+            GenankiPackageWriter(),
+            FfmpegAudioReelRenderer(),
+            FfprobeWavProbe(),
+            FfprobeReelValidator(),
+        ),
+        settings.media_cache_root / "exports",
+    )
     worker = PersistentWorker(
         SqlAlchemyJobRepository(get_session_factory()),
         worker_id=f"local-{os.getpid()}",
-        handlers={"synthesize_voice_preview": make_voice_preview_handler(speech)},
+        handlers={
+            "synthesize_voice_preview": make_voice_preview_handler(speech),
+            "synthesize_material_audio": materials.synthesize,
+            "export_materials": materials.export,
+        },
     )
     stopped = Event()
     signal.signal(signal.SIGINT, lambda *_: stopped.set())
