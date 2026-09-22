@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Nova Generator Anki Audio",
+  "type": "object",
+  "required": ["ankiAudio"],
+  "properties": {
+    "ankiAudio": {
+      "type": "object",
+      "required": ["youtube", "cues"],
+      "properties": {
+        "youtube": {
+          "type": "object",
+          "required": ["video_id"],
+          "properties": {"video_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{11}$"}}
+        },
+        "cues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["cue_order", "start_ms", "end_ms", "voice_id", "voice_name", "variant_index"],
+            "properties": {
+              "cue_order": {"type": "integer", "minimum": 1},
+              "start_ms": {"type": "integer", "minimum": 0},
+              "end_ms": {"type": "integer", "minimum": 1},
+              "voice_id": {"type": "string"},
+              "voice_name": {"type": "string"},
+              "variant_index": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    }
+  }
+}
