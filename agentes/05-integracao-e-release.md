@@ -9,6 +9,7 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Usar exportadores, importadores e testes existentes em `legacy/generator-base/` para caracterizar compatibilidade antes de substituir uma integração.
 - Versionar schemas, exemplos válidos/inválidos e fixtures compartilhadas.
 - Manter os contratos de reel Anki (`hub_final.json` e `ankiAudio`) e História (`immersionhub-text-audio` 1.1).
+- Publicar `hub_final.json` por projeto/exportação somente após APKG e reel concluídos e upload manual do reel; incluir cues, texto EN/PT aprovado, itens Anki, palavras revisadas e timeline do reel com ID validado do YouTube.
 - Exigir compatibilidade retroativa, migration ou janela de transição para mudanças públicas.
 - Coordenar testes de contrato, regressão de mídia, validação de importação e checklist de release.
 - Manter os gates em `.github/workflows/quality.yml` e o checklist em
@@ -25,6 +26,7 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 
 - Todo contrato possui versão, proprietário, fixture válida, fixture inválida e política de compatibilidade.
 - Generator produz um pacote que o iHub importa em teste automatizado ou ambiente de validação.
+- Publicação Anki rejeita alterações de texto EN/PT ou WAV após a exportação e não troca o vídeo vinculado à mesma exportação.
 - Release tem notas, migrations, monitoramento, plano de rollback e responsável pelo aceite.
 - Incidentes preservam evidências suficientes para diagnóstico e reprocessamento seguro.
 - Um release só segue após registrar migrations, compatibilidade, mídia, logs e rollback no

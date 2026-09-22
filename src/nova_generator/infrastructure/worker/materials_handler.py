@@ -75,6 +75,10 @@ class MaterialsJobHandler:
                 raise ValueError(f"selected card {raw_id} was excluded after enqueue")
             if cue.approved_en_sha256 != job.input.get("text_hashes", {}).get(str(raw_id)):
                 raise ValueError(f"approved text changed for card {raw_id}; enqueue a new export")
+            if utf8_sha256(cue.approved_pt) != job.input.get("pt_hashes", {}).get(str(raw_id)):
+                raise ValueError(
+                    f"approved translation changed for card {raw_id}; enqueue a new export"
+                )
             key = self._cache.cache_key(text=cue.approved_en, profile=voice, parameters={})
             speech = self._cache.find(key)
             if speech is None:

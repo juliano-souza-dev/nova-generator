@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
@@ -18,11 +19,20 @@ from nova_generator.api.dependencies import (
 )
 from nova_generator.application.use_cases.manage_jobs import EnqueueJob, GetJob
 from nova_generator.application.use_cases.manage_voice_profiles import ManageVoiceProfiles
+from nova_generator.application.use_cases.publish_anki_reel import (
+    AnkiPublicationError,
+    PublishAnkiReel,
+)
 from nova_generator.core.settings import get_settings
-from nova_generator.domain.projects.entities import Cue
+from nova_generator.domain.projects.entities import Cue, utf8_sha256
 from nova_generator.domain.voices import VoiceProfileSnapshot
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
+)
+from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
+from nova_generator.infrastructure.integration.ihub_contracts import (
+    ContractViolation,
+    validate_anki_audio,
 )
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 
@@ -35,6 +45,11 @@ class SelectionInput(BaseModel):
 
 class VoiceInput(BaseModel):
     voice_id: UUID
+
+
+class PublicationInput(BaseModel):
+    youtube: str
+    confirmed: bool
 
 
 class CardResponse(BaseModel):
@@ -73,10 +88,55 @@ class ExportResponse(BaseModel):
     apkg_url: str | None = None
     manifest_url: str | None = None
     reel_url: str | None = None
+    hub_final_url: str | None = None
+    youtube_video_id: str | None = None
+
+
+class PublicationResponse(BaseModel):
+    youtube_video_id: str
+    youtube_url: str
+    hub_final_url: str
 
 
 def _repository() -> SqlAlchemyEditorialProjectRepository:
     return SqlAlchemyEditorialProjectRepository(get_session_factory())
+
+
+def _publisher() -> PublishAnkiReel:
+    settings = get_settings()
+    return PublishAnkiReel(
+        _repository(),
+        SqlAlchemyJobRepository(get_session_factory()),
+        settings.media_cache_root / "exports",
+        settings.project_root,
+    )
+
+
+def _export_job(project_id: UUID, job_id: UUID, jobs: GetJob):
+    job = jobs.execute(str(job_id))
+    if (
+        job is None
+        or job.kind != "export_materials"
+        or job.input.get("project_id") != str(project_id)
+    ):
+        raise HTTPException(404, detail="export not found")
+    return job
+
+
+def _publication_document(project_id: UUID, job_id: UUID) -> dict | None:
+    path = _publisher().publication_path(project_id, job_id)
+    if not path.is_file():
+        return None
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        validate_anki_audio(document)
+        if document.get("generator", {}).get("project_id") != str(project_id) or document.get(
+            "generator", {}
+        ).get("export_job_id") != str(job_id):
+            raise ValueError("publication identity mismatch")
+    except (OSError, ValueError, ContractViolation, json.JSONDecodeError) as error:
+        raise HTTPException(409, detail="published hub_final.json is invalid") from error
+    return document
 
 
 def _project_cues(project_id: UUID) -> list[tuple[int, Cue]]:
@@ -245,6 +305,7 @@ def export_materials(
             "project_id": str(project_id),
             "cue_ids": [str(cue.id) for cue in selected],
             "text_hashes": {str(cue.id): cue.approved_en_sha256 for cue in selected},
+            "pt_hashes": {str(cue.id): utf8_sha256(cue.approved_pt) for cue in selected},
             "audio_hashes": audio_hashes,
             "voice_snapshot": _voice_payload(voice),
         },
@@ -257,14 +318,9 @@ def export_materials(
 def get_material_export(
     project_id: UUID, job_id: UUID, jobs: Annotated[GetJob, Depends(get_job)]
 ) -> ExportResponse:
-    job = jobs.execute(str(job_id))
-    if (
-        job is None
-        or job.kind != "export_materials"
-        or job.input.get("project_id") != str(project_id)
-    ):
-        raise HTTPException(404, detail="export not found")
+    job = _export_job(project_id, job_id, jobs)
     base = f"{get_settings().api_prefix}/projects/{project_id}/materials/exports/{job_id}"
+    publication = _publication_document(project_id, job_id) if job.status == "succeeded" else None
     return ExportResponse(
         job_id=job.id,
         status=job.status,
@@ -272,6 +328,58 @@ def get_material_export(
         apkg_url=f"{base}/anki.apkg" if job.status == "succeeded" else None,
         manifest_url=f"{base}/anki-audio-manifest.json" if job.status == "succeeded" else None,
         reel_url=f"{base}/anki-reel.mp4" if job.status == "succeeded" else None,
+        hub_final_url=f"{base}/hub_final.json" if publication else None,
+        youtube_video_id=publication["ankiAudio"]["youtube"]["video_id"] if publication else None,
+    )
+
+
+@router.get("/latest-export", response_model=ExportResponse)
+def latest_material_export(project_id: UUID) -> ExportResponse:
+    if _repository().get_project(project_id) is None:
+        raise HTTPException(404, detail="project not found")
+    job = SqlAlchemyJobRepository(get_session_factory()).latest_for_project(
+        str(project_id), "export_materials"
+    )
+    if job is None:
+        raise HTTPException(404, detail="export not found")
+    return get_material_export(
+        project_id, job.id, GetJob(SqlAlchemyJobRepository(get_session_factory()))
+    )
+
+
+@router.post("/exports/{job_id}/publication", response_model=PublicationResponse)
+def publish_material_export(
+    project_id: UUID,
+    job_id: UUID,
+    payload: PublicationInput,
+    jobs: Annotated[GetJob, Depends(get_job)],
+) -> PublicationResponse:
+    if not payload.confirmed:
+        raise HTTPException(422, detail="Confirme o upload e o ID do reel no YouTube.")
+    job = _export_job(project_id, job_id, jobs)
+    try:
+        result = _publisher().execute(project_id=project_id, job=job, youtube=payload.youtube)
+    except (AnkiPublicationError, ContractViolation) as error:
+        raise HTTPException(409, detail=str(error)) from error
+    return PublicationResponse(
+        youtube_video_id=result.youtube_video_id,
+        youtube_url=result.youtube_url,
+        hub_final_url=(
+            f"{get_settings().api_prefix}/projects/{project_id}/materials/exports/"
+            f"{job_id}/hub_final.json"
+        ),
+    )
+
+
+@router.get("/exports/{job_id}/hub_final.json")
+def download_hub_final(
+    project_id: UUID, job_id: UUID, jobs: Annotated[GetJob, Depends(get_job)]
+) -> FileResponse:
+    job = _export_job(project_id, job_id, jobs)
+    if job.status != "succeeded" or _publication_document(project_id, job_id) is None:
+        raise HTTPException(404, detail="publication not found")
+    return FileResponse(
+        _publisher().publication_path(project_id, job_id), filename="hub_final.json"
     )
 
 

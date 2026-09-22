@@ -137,6 +137,13 @@ export type MaterialExport = {
   apkg_url: string | null;
   manifest_url: string | null;
   reel_url: string | null;
+  hub_final_url?: string | null;
+  youtube_video_id?: string | null;
+};
+export type MaterialPublication = {
+  youtube_video_id: string;
+  youtube_url: string;
+  hub_final_url: string;
 };
 export type VoiceProfile = {
   id: string;

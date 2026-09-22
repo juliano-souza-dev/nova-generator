@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
+import { ApiError } from "../../lib/api";
 import type { MaterialCard } from "../../lib/api.types";
 import { studioApi } from "../../lib/studio-api";
 import "./materials.css";
@@ -13,6 +14,8 @@ export function MaterialsPage() {
   const [voiceId, setVoiceId] = useState("");
   const [exportJobId, setExportJobId] = useState<string | null>(null);
   const [audioJobIds, setAudioJobIds] = useState<Record<string, string>>({});
+  const [youtube, setYoutube] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
   const client = useQueryClient();
   const projects = useQuery({
     queryKey: ["projects", "materials"],
@@ -31,10 +34,17 @@ export function MaterialsPage() {
     refetchInterval: (query) =>
       query.state.data?.cards.some((card) => !card.audio_ready) ? 5000 : false,
   });
+  const latestExport = useQuery({
+    queryKey: ["material-latest-export", projectId],
+    queryFn: () => studioApi.latestMaterialExport(projectId),
+    enabled: !!projectId,
+    retry: false,
+  });
+  const activeExportId = exportJobId ?? latestExport.data?.job_id ?? null;
   const exportStatus = useQuery({
-    queryKey: ["material-export", projectId, exportJobId],
-    queryFn: () => studioApi.materialExport(projectId, exportJobId!),
-    enabled: !!projectId && !!exportJobId,
+    queryKey: ["material-export", projectId, activeExportId],
+    queryFn: () => studioApi.materialExport(projectId, activeExportId!),
+    enabled: !!projectId && !!activeExportId,
     refetchInterval: (query) =>
       ["queued", "running", "retryable"].includes(query.state.data?.status ?? "") ? 3000 : false,
   });
@@ -52,7 +62,15 @@ export function MaterialsPage() {
   });
   const exportCards = useMutation({
     mutationFn: () => studioApi.exportMaterials(projectId, voiceId),
-    onSuccess: (result) => setExportJobId(result.job_id),
+    onSuccess: (result) => {
+      setExportJobId(result.job_id);
+      setYoutube("");
+      setConfirmed(false);
+    },
+  });
+  const publication = useMutation({
+    mutationFn: () => studioApi.publishMaterialExport(projectId, activeExportId!, youtube.trim()),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["material-export", projectId] }),
   });
   const cards = materials.data?.cards ?? [];
   const selected = cards.filter((card) => card.included);
@@ -160,11 +178,18 @@ export function MaterialsPage() {
           </table>
         </div>
       )}
-      {(select.error || audio.error || exportCards.error) && (
+      {(select.error || audio.error || exportCards.error || publication.error) && (
         <p className="field-error" role="alert">
-          {(select.error ?? audio.error ?? exportCards.error)?.message}
+          {(select.error ?? audio.error ?? exportCards.error ?? publication.error)?.message}
         </p>
       )}
+      {latestExport.isError &&
+        !(latestExport.error instanceof ApiError && latestExport.error.status === 404) && (
+          <ErrorState
+            message={latestExport.error.message}
+            retry={() => void latestExport.refetch()}
+          />
+        )}
       {cards.length > 0 && (
         <section className="materials-export panel" aria-label="Exportação Anki">
           <div>
@@ -198,6 +223,44 @@ export function MaterialsPage() {
             <a href={exportStatus.data.manifest_url}>Baixar manifesto</a>
           )}
           {exportStatus.data.reel_url && <a href={exportStatus.data.reel_url}>Baixar reel</a>}
+          {exportStatus.data.hub_final_url ? (
+            <div>
+              <p>Reel vinculado ao YouTube: {exportStatus.data.youtube_video_id}</p>
+              <a href={exportStatus.data.hub_final_url}>Baixar hub_final.json</a>
+            </div>
+          ) : exportStatus.data.status === "succeeded" ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                publication.mutate();
+              }}
+            >
+              <h3>Publicar no iHub</h3>
+              <p>Faça o upload manual do reel no YouTube e informe a URL ou o ID do vídeo.</p>
+              <label>
+                URL ou ID do reel no YouTube
+                <input
+                  value={youtube}
+                  onChange={(event) => setYoutube(event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(event) => setConfirmed(event.target.checked)}
+                />
+                Confirmo que fiz o upload do reel e conferi o vídeo informado.
+              </label>
+              <button
+                type="submit"
+                disabled={!youtube.trim() || !confirmed || publication.isPending}
+              >
+                {publication.isPending ? "Publicando…" : "Gerar hub_final.json"}
+              </button>
+            </form>
+          ) : null}
         </section>
       )}
     </section>

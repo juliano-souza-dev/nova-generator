@@ -8,6 +8,7 @@ import type {
   MaterialCard,
   MaterialExport,
   MaterialList,
+  MaterialPublication,
   Project,
   MediaJobReference,
   ProjectMedia,
@@ -117,6 +118,16 @@ export const studioApi = {
     }),
   materialExport: (projectId: string, jobId: string) =>
     apiRequest<MaterialExport>(`/projects/${projectId}/materials/exports/${jobId}`),
+  latestMaterialExport: (projectId: string) =>
+    apiRequest<MaterialExport>(`/projects/${projectId}/materials/latest-export`),
+  publishMaterialExport: (projectId: string, jobId: string, youtube: string) =>
+    apiRequest<MaterialPublication>(
+      `/projects/${projectId}/materials/exports/${jobId}/publication`,
+      {
+        method: "POST",
+        body: JSON.stringify({ youtube, confirmed: true }),
+      },
+    ),
   voices: () => apiRequest<VoiceProfile[]>("/voices"),
   voiceModel: () => apiRequest<VoiceModelStatus>("/voices/model"),
   voiceReferences: () => apiRequest<VoiceReference[]>("/voices/references"),
