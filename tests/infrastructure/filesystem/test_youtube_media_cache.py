@@ -18,6 +18,8 @@ def _metadata(video: YoutubeVideo, contents: bytes) -> YoutubeMediaMetadata:
         sha256=hashlib.sha256(contents).hexdigest(),
         size_bytes=len(contents),
         duration_ms=1000,
+        video_codec="h264",
+        audio_codec="aac",
         created_at_utc=datetime.now(UTC),
         last_used_at_utc=datetime.now(UTC),
     )

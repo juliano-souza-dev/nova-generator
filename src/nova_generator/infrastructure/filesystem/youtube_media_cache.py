@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -60,6 +61,23 @@ class FileYoutubeMediaCache:
         )
         os.replace(temporary, destination)
 
+    def staging_directory(self, video: YoutubeVideo) -> Path:
+        directory = self._directory(video)
+        directory.mkdir(parents=True, exist_ok=True)
+        return Path(tempfile.mkdtemp(prefix=".download-", dir=directory))
+
+    def install_source(self, video: YoutubeVideo, source: Path) -> Path:
+        directory = self._directory(video)
+        if source.parent.parent != directory:
+            raise ValueError("A fonte temporária deve pertencer à entrada do cache.")
+        if not source.is_file() or source.stat().st_size == 0:
+            raise ValueError("A fonte temporária deve existir e não pode estar vazia.")
+        destination = directory / "source.mp4"
+        # Staging and destination share a filesystem; replace makes readers see
+        # either the complete old source or the complete newly validated source.
+        os.replace(source, destination)
+        return destination
+
     def _directory(self, video: YoutubeVideo) -> Path:
         return self._root / "youtube" / video.video_id
 
@@ -106,6 +124,9 @@ class FileYoutubeMediaCache:
             "sha256": metadata.sha256,
             "size_bytes": metadata.size_bytes,
             "duration_ms": metadata.duration_ms,
+            "video_codec": metadata.video_codec,
+            "audio_codec": metadata.audio_codec,
+            "source_url": metadata.source_url,
             "created_at_utc": metadata.created_at_utc.isoformat(),
             "last_used_at_utc": metadata.last_used_at_utc.isoformat(),
             "use_count": metadata.use_count,
@@ -121,6 +142,9 @@ class FileYoutubeMediaCache:
             sha256=str(payload["sha256"]),
             size_bytes=int(payload["size_bytes"]),
             duration_ms=int(payload["duration_ms"]),
+            video_codec=str(payload["video_codec"]),
+            audio_codec=(str(payload["audio_codec"]) if payload.get("audio_codec") else None),
+            source_url=str(payload.get("source_url", "")),
             created_at_utc=datetime.fromisoformat(str(payload["created_at_utc"])),
             last_used_at_utc=datetime.fromisoformat(str(payload["last_used_at_utc"])),
             use_count=int(payload.get("use_count", 0)),

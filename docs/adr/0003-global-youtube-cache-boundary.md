@@ -19,15 +19,17 @@ da porta `YoutubeMediaCache`; `ResolveYoutubeSource` resolve `reused` ou
 `FileYoutubeMediaCache` armazena cada entrada em
 `media_cache/youtube/<video_id>/`. Uma entrada é reutilizável somente se
 `metadata.json`, `source.mp4`, tamanho e SHA-256 coincidirem. A escrita do
-metadata é atômica e o lock exclusivo `.download.lock` é por vídeo. O futuro
-caso de uso de download deve adquirir o mesmo lock, instalar a fonte
-atomicamente, validar FFprobe e só então chamar `save_verified`.
+metadata é atômica e o lock exclusivo `.download.lock` é por vídeo.
+`DownloadYoutubeSource` adquire esse lock, baixa em um diretório temporário da
+própria entrada, valida duração e codecs via `MediaProbe`, promove o MP4 de
+forma atômica e só então chama `save_verified`.
 
 ## Consequências
 
 - URLs equivalentes reutilizam uma única identidade, sem expor caminhos locais
   nos contratos com o iHub.
-- Esta fatia não chama yt-dlp, FFmpeg ou FFprobe e não altera o legado.
+- `YtDlpYoutubeDownloader` chama yt-dlp e `FfprobeMediaProbe` chama FFprobe;
+  os dois são adaptadores substituíveis por fakes nos testes.
 - Um arquivo corrompido nunca é cache hit; ele poderá ser rebaixado por uma
   fatia posterior.
 - Recortes, áudio e demais derivados continuam responsabilidade do projeto,

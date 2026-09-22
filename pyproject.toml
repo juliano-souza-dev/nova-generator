@@ -13,6 +13,7 @@ dependencies = [
   "fastapi>=0.115,<1",
   "pydantic-settings>=2.6,<3",
   "sqlalchemy>=2.0,<3",
+  "yt-dlp>=2025.1.15,<2027",
   "uvicorn[standard]>=0.32,<1",
 ]
 
