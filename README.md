@@ -50,6 +50,16 @@ falha no monitor de jobs. O SHA-256 informado ao criar o perfil identifica o
 checkpoint local usado no snapshot; mantenha o mesmo valor para exportações
 que devam preservar a identidade da voz.
 
+## Modo História
+
+Na área História, envie um ZIP com `story.json` e imagens. O validador informa o
+arquivo, cue e campo a corrigir antes de criar a produção. Revise o texto EN/PT,
+highlights e imagens, selecione um perfil de voz e inicie o render. Acompanhe o
+job no monitor; o mesmo worker local produz o vídeo em
+`media_cache/stories/<id>/render/story_final.mp4`. Depois de publicar o vídeo
+manualmente no YouTube, informe o URL ou ID para gerar o JSON público. Uma
+falha de render pode ser repetida no monitor; cues válidos são reutilizados.
+
 ## Qualidade e release
 
 Os comandos locais, gates de CI e checklist de migrations, contratos, mídia, logs e rollback

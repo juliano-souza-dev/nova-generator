@@ -8,6 +8,7 @@ import type {
   MaterialExport,
   MaterialList,
   Project,
+  StoryProduction,
   Timing,
   WordTiming,
   VoiceProfile,
@@ -55,6 +56,22 @@ export const studioApi = {
     apiRequest<WordTiming[]>(`/editorial/cues/${id}/words/timing`, {
       method: "PUT",
       body: JSON.stringify(input),
+    }),
+  uploadStory: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return apiRequest<StoryProduction>("/stories", { method: "POST", body });
+  },
+  story: (id: string) => apiRequest<StoryProduction>(`/stories/${id}`),
+  renderStory: (id: string, voice_profile_id: string) =>
+    apiRequest<{ job_id: string; status: string }>(`/stories/${id}/render`, {
+      method: "POST",
+      body: JSON.stringify({ voice_profile_id }),
+    }),
+  publishStory: (id: string, youtube: string) =>
+    apiRequest<Record<string, unknown>>(`/stories/${id}/publication`, {
+      method: "POST",
+      body: JSON.stringify({ youtube }),
     }),
   materials: (projectId: string, voiceId?: string) =>
     apiRequest<MaterialList>(
