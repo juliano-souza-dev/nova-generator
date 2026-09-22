@@ -14,6 +14,8 @@ vi.mock("../../lib/studio-api", () => ({
     prepareMaterialAudio: vi.fn(),
     exportMaterials: vi.fn(),
     materialExport: vi.fn(),
+    latestMaterialExport: vi.fn(),
+    publishMaterialExport: vi.fn(),
   },
 }));
 
@@ -75,6 +77,12 @@ describe("MaterialsPage", () => {
       manifest_url: "/manifest.json",
       reel_url: "/reel.mp4",
     });
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    vi.mocked(studioApi.publishMaterialExport).mockResolvedValue({
+      youtube_video_id: "bbbbbbbbbbb",
+      youtube_url: "https://www.youtube.com/watch?v=bbbbbbbbbbb",
+      hub_final_url: "/hub_final.json",
+    });
     mount();
     expect(await screen.findByText("Café?")).toBeInTheDocument();
     expect(screen.getByLabelText("Áudio do card 1.1")).toHaveAttribute("src", card.audio_url);
@@ -90,6 +98,18 @@ describe("MaterialsPage", () => {
     expect(await screen.findByRole("link", { name: "Baixar APKG" })).toHaveAttribute(
       "href",
       "/anki.apkg",
+    );
+    fireEvent.change(screen.getByLabelText("URL ou ID do reel no YouTube"), {
+      target: { value: "bbbbbbbbbbb" },
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Confirmo que fiz o upload/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Gerar hub_final.json" }));
+    await waitFor(() =>
+      expect(studioApi.publishMaterialExport).toHaveBeenCalledWith(
+        "project-1",
+        "job-1",
+        "bbbbbbbbbbb",
+      ),
     );
   });
 });

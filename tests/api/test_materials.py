@@ -2,7 +2,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from nova_generator.api.dependencies import get_session_factory
-from nova_generator.domain.projects.entities import Cue, Project, Scene
+from nova_generator.domain.projects.entities import Cue, Project, Scene, utf8_sha256
 from nova_generator.domain.voices import SynthesizedSpeech, VoiceProfileSnapshot
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
@@ -89,7 +89,24 @@ def test_material_selection_keeps_approved_text_and_export_freezes_cards(
     assert export["input"]["cue_ids"] == [first_id]
     assert len(export["input"]["audio_hashes"][first_id]) == 64
     assert export["input"]["voice_snapshot"]["snapshot_sha256"] == profile.sha256
+    assert export["input"]["pt_hashes"][first_id] == utf8_sha256("Olá.")
     assert client.get(f"{base}/exports/{job_id}").json()["apkg_url"] is None
+    assert client.get(f"{base}/latest-export").json()["job_id"] == job_id
+    assert (
+        client.post(
+            f"{base}/exports/{job_id}/publication",
+            json={"youtube": "bbbbbbbbbbb", "confirmed": False},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            f"{base}/exports/{job_id}/publication",
+            json={"youtube": "bbbbbbbbbbb", "confirmed": True},
+        ).status_code
+        == 409
+    )
+    assert client.get(f"{base}/exports/{job_id}/hub_final.json").status_code == 404
     assert client.get(f"{base}/exports/{job_id}/anki.apkg").status_code == 404
 
 
