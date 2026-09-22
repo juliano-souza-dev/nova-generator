@@ -38,6 +38,12 @@ os jobs de áudio e exportação. O worker requer o ambiente local de Chatterbox
 O APKG, manifesto e reel ficam disponíveis para download quando o job termina. Se um job
 falhar, consulte o erro em **Jobs**, reprocesse o card afetado e inicie uma nova exportação.
 
+Na rota **Mídia**, baixe ou reutilize a fonte YouTube verificada e escolha o intervalo de
+corte. O worker gera o MP4 do projeto, waveform e transcrição candidata com Faster-Whisper
+(`pip install -e ".[asr]"`). O resultado aparece na mesma tela e pode seguir para revisão
+Editorial. Os jobs usam o mesmo worker local; em caso de falha, consulte **Jobs** e refaça
+somente o download ou corte afetado.
+
 ## Prévia de vozes locais
 
 Instale `chatterbox-tts`, `torch` e `torchaudio` em um ambiente Python separado e

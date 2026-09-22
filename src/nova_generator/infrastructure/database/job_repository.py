@@ -230,6 +230,21 @@ class SqlAlchemyJobRepository:
             )
             return record.status if record else None
 
+    def latest_for_project(
+        self, project_id: str, kind: str, status: str | None = None
+    ) -> Job | None:
+        with self._session_factory() as session:
+            query = select(JobRecord).where(
+                JobRecord.kind == kind,
+                JobRecord.input_json.contains(f'"project_id":"{project_id}"'),
+            )
+            if status is not None:
+                query = query.where(JobRecord.status == status)
+            record = session.scalar(
+                query.order_by(JobRecord.created_at.desc(), JobRecord.id.desc()).limit(1)
+            )
+            return _job(record) if record else None
+
     def _owned_update(self, job_id: str, worker_id: str, values: dict[str, Any]) -> bool:
         with self._session_factory() as session:
             result = session.execute(
