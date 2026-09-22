@@ -1,12 +1,13 @@
 from dataclasses import dataclass
+from typing import Literal
 
 from nova_generator.application.ports.health_repository import HealthRepository
 
 
 @dataclass(frozen=True)
 class HealthStatus:
-    status: str
-    database: str
+    status: Literal["ok", "degraded"]
+    database: Literal["ok", "unavailable"]
 
 
 class CheckHealth:

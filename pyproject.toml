@@ -55,6 +55,4 @@ select = ["E", "F", "I", "UP", "B"]
 include = ["src"]
 exclude = ["legacy", "frontend", "tests", "editorial_contracts"]
 pythonVersion = "3.12"
-# The modular migration has typed and legacy-derived modules side by side. Keep Pyright
-# in the required CI path now, then raise this to `basic` per package as migrations finish.
-typeCheckingMode = "off"
+typeCheckingMode = "basic"

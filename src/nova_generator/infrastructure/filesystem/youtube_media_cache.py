@@ -6,7 +6,7 @@ import os
 import tempfile
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -24,7 +24,9 @@ class FileYoutubeMediaCache:
     def __init__(self, root: Path) -> None:
         self._root = root
 
-    def acquire(self, video: YoutubeVideo, *, timeout_seconds: float = 30.0) -> Iterator[None]:
+    def acquire(
+        self, video: YoutubeVideo, *, timeout_seconds: float = 30.0
+    ) -> AbstractContextManager[None]:
         return self._lock(self._directory(video) / ".download.lock", timeout_seconds)
 
     def find_verified(self, video: YoutubeVideo) -> YoutubeMediaMetadata | None:

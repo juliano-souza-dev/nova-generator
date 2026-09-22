@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -179,7 +180,7 @@ class SqlAlchemyEditorialProjectRepository:
             return [_revision(record) for record in records]
 
 
-def _dump(value: dict[object, object]) -> str:
+def _dump(value: dict[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
