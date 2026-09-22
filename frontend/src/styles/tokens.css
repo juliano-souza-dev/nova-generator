@@ -1,1 +1,15 @@
-:root { color-scheme: dark; --bg: #111827; --surface: #182235; --surface-raised: #22314a; --text: #f4f7fb; --muted: #aebbd0; --border: #344663; --accent: #7dd3fc; --accent-strong: #38bdf8; --danger: #fda4af; --radius: 12px; --shadow: 0 12px 32px rgb(0 0 0 / 18%); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+:root {
+  color-scheme: dark;
+  --bg: #111827;
+  --surface: #182235;
+  --surface-raised: #22314a;
+  --text: #f4f7fb;
+  --muted: #aebbd0;
+  --border: #344663;
+  --accent: #7dd3fc;
+  --accent-strong: #38bdf8;
+  --danger: #fda4af;
+  --radius: 12px;
+  --shadow: 0 12px 32px rgb(0 0 0 / 18%);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}

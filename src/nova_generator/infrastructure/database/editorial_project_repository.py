@@ -118,6 +118,31 @@ class SqlAlchemyEditorialProjectRepository:
             record = session.get(ProjectRecord, project_id)
             return _project(record) if record else None
 
+    def list_projects(self) -> list[Project]:
+        with self._session_factory() as session:
+            records = session.scalars(
+                select(ProjectRecord).order_by(ProjectRecord.created_at.desc())
+            ).all()
+            return [_project(record) for record in records]
+
+    def delete_project(self, project_id: UUID) -> bool:
+        with self._session_factory() as session:
+            record = session.get(ProjectRecord, project_id)
+            if record is None:
+                return False
+            session.delete(record)
+            session.commit()
+            return True
+
+    def get_project_scenes(self, project_id: UUID) -> list[Scene]:
+        with self._session_factory() as session:
+            records = session.scalars(
+                select(SceneRecord)
+                .where(SceneRecord.project_id == project_id)
+                .order_by(SceneRecord.order)
+            ).all()
+            return [_scene(record) for record in records]
+
     def get_scene_project_id(self, scene_id: UUID) -> UUID | None:
         with self._session_factory() as session:
             record = session.get(SceneRecord, scene_id)
@@ -200,6 +225,17 @@ def _word_record(value: WordTiming) -> WordTimingRecord:
 
 def _project(value: ProjectRecord) -> Project:
     return Project(value.id, value.title, value.content_type, _load(value.provenance_json))
+
+
+def _scene(value: SceneRecord) -> Scene:
+    return Scene(
+        value.id,
+        value.project_id,
+        value.order,
+        value.duration_ms,
+        value.source_video_id,
+        _load(value.provenance_json),
+    )
 
 
 def _cue(value: CueRecord) -> Cue:

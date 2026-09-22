@@ -13,23 +13,41 @@ export function StudioShell({ children }: { children: ReactNode }) {
   const [isMenuOpen, setMenuOpen] = useState(false);
   return (
     <div className="studio-shell">
-      <a className="skip-link" href="#main-content">Pular para o conteúdo</a>
+      <a className="skip-link" href="#main-content">
+        Pular para o conteúdo
+      </a>
       <header className="topbar">
-        <button className="icon-button menu-button" aria-label="Abrir navegação" onClick={() => setMenuOpen((open) => !open)}>
+        <button
+          className="icon-button menu-button"
+          aria-label="Abrir navegação"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
           <Menu aria-hidden="true" />
         </button>
-        <a className="brand" href="/projects"><Sparkles aria-hidden="true" /> Nova Generator</a>
+        <a className="brand" href="/projects">
+          <Sparkles aria-hidden="true" /> Nova Generator
+        </a>
         <span className="environment">Estúdio</span>
       </header>
       <div className="studio-layout">
-        <nav className={`sidebar ${isMenuOpen ? "sidebar-open" : ""}`} aria-label="Navegação principal">
+        <nav
+          className={`sidebar ${isMenuOpen ? "sidebar-open" : ""}`}
+          aria-label="Navegação principal"
+        >
           {links.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`} onClick={() => setMenuOpen(false)}>
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`}
+              onClick={() => setMenuOpen(false)}
+            >
               <Icon aria-hidden="true" /> {label}
             </NavLink>
           ))}
         </nav>
-        <main id="main-content" className="main-content">{children}</main>
+        <main id="main-content" className="main-content">
+          {children}
+        </main>
       </div>
     </div>
   );
