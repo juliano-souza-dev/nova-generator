@@ -179,8 +179,44 @@ class SqlAlchemyJobRepository:
 
     def get(self, job_id: str) -> Job | None:
         with self._session_factory() as session:
-            record = session.get(JobRecord, UUID(job_id))
+            try:
+                record = session.get(JobRecord, UUID(job_id))
+            except ValueError:
+                return None
             return _job(record) if record else None
+
+    def list(self, *, offset: int, limit: int, status: str | None = None) -> tuple[list[Job], int]:
+        with self._session_factory() as session:
+            query = select(JobRecord)
+            if status:
+                query = query.where(JobRecord.status == status)
+            total = len(session.scalars(query).all())
+            records = session.scalars(
+                query.order_by(JobRecord.created_at.desc(), JobRecord.id.desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
+            return [_job(record) for record in records], total
+
+    def retry(self, *, job_id: str, now: datetime) -> Job | None:
+        with self._session_factory() as session:
+            try:
+                record = session.get(JobRecord, UUID(job_id))
+            except ValueError:
+                return None
+            if record is None or record.status not in {"failed", "cancelled"}:
+                return None
+            record.status = "queued"
+            record.worker_id = None
+            record.heartbeat_at = None
+            record.cancel_requested_at = None
+            record.started_at = None
+            record.finished_at = None
+            record.error_message = None
+            record.updated_at = now
+            session.commit()
+            session.refresh(record)
+            return _job(record)
 
     def latest_status_for_project(self, project_id: str) -> str | None:
         """Return the newest job explicitly associated with this project."""
@@ -222,6 +258,10 @@ def _job(record: JobRecord) -> Job:
         attempt=record.attempt,
         max_attempts=record.max_attempts,
         worker_id=record.worker_id,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        started_at=record.started_at,
+        finished_at=record.finished_at,
         heartbeat_at=record.heartbeat_at,
         cancel_requested_at=record.cancel_requested_at,
         output=json.loads(record.output_json) if record.output_json else None,
