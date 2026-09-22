@@ -31,7 +31,10 @@ class FfprobeReelValidator:
         streams = payload.get("streams", [])
         if not isinstance(streams, list):
             raise ValueError("FFprobe não retornou streams do reel.")
-        duration = float(payload.get("format", {}).get("duration", 0))
+        format_data = payload.get("format")
+        if not isinstance(format_data, dict):
+            raise ValueError("FFprobe não retornou formato do reel.")
+        duration = float(format_data.get("duration", 0))
         return (
             round(duration * 1000),
             any(s.get("codec_type") == "audio" for s in streams if isinstance(s, dict)),

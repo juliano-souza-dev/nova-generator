@@ -47,10 +47,17 @@ class RenderStory:
             audio = cue_dir / f"{cue.order:03d}.wav"
             video = cue_dir / f"{cue.order:03d}.mp4"
             if _reusable(old, fingerprint, audio, video):
+                duration_ms = old["duration_ms"]
+                assert isinstance(duration_ms, int)
                 rendered.append(
                     RenderedStoryCue(
-                        cue, audio, video, int(old["duration_ms"]), fingerprint,
-                        sha256_file(audio), sha256_file(video),
+                        cue,
+                        audio,
+                        video,
+                        duration_ms,
+                        fingerprint,
+                        sha256_file(audio),
+                        sha256_file(video),
                     )
                 )
                 continue
@@ -66,8 +73,13 @@ class RenderStory:
             os.replace(staged_video, video)
             rendered.append(
                 RenderedStoryCue(
-                    cue, audio, video, speech.duration_ms, fingerprint,
-                    sha256_file(audio), sha256_file(video),
+                    cue,
+                    audio,
+                    video,
+                    speech.duration_ms,
+                    fingerprint,
+                    sha256_file(audio),
+                    sha256_file(video),
                 )
             )
         final_video = output_directory / "story_final.mp4"
@@ -91,10 +103,11 @@ def _load_manifest(path: Path) -> dict[str, dict[str, object]]:
 
 
 def _reusable(old: dict[str, object], fingerprint: str, audio: Path, video: Path) -> bool:
+    duration_ms = old.get("duration_ms")
     return (
         old.get("input_sha256") == fingerprint
-        and isinstance(old.get("duration_ms"), int)
-        and old["duration_ms"] > 0
+        and isinstance(duration_ms, int)
+        and duration_ms > 0
         and old.get("audio_sha256") == sha256_file_or_none(audio)
         and old.get("video_sha256") == sha256_file_or_none(video)
     )

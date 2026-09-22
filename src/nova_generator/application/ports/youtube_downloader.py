@@ -7,5 +7,4 @@ from nova_generator.domain.media.youtube import YoutubeVideo
 class YoutubeDownloader(Protocol):
     """Downloads one canonical YouTube source into the caller's staging directory."""
 
-    def download(self, video: YoutubeVideo, destination_directory: Path) -> Path:
-        """Return a non-empty MP4 file inside ``destination_directory``."""
+    def download(self, video: YoutubeVideo, destination_directory: Path) -> Path: ...

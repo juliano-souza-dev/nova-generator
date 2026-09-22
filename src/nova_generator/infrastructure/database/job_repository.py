@@ -3,14 +3,15 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import and_, case, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from nova_generator.domain.jobs import Job
+from nova_generator.domain.jobs import Job, JobStatus
 from nova_generator.infrastructure.database.models import JobRecord
 
 SessionFactory = Callable[[], Session]
@@ -80,7 +81,7 @@ class SqlAlchemyJobRepository:
                     updated_at=now,
                 )
             )
-            if result.rowcount != 1:
+            if cast(CursorResult[Any], result).rowcount != 1:
                 session.rollback()
                 return None
             record = session.get(JobRecord, candidate_id)
@@ -175,7 +176,7 @@ class SqlAlchemyJobRepository:
                 )
             )
             session.commit()
-            return result.rowcount or 0
+            return cast(CursorResult[Any], result).rowcount or 0
 
     def get(self, job_id: str) -> Job | None:
         with self._session_factory() as session:
@@ -241,7 +242,7 @@ class SqlAlchemyJobRepository:
                 .values(**values)
             )
             session.commit()
-            return result.rowcount == 1
+            return cast(CursorResult[Any], result).rowcount == 1
 
 
 def _dump(value: dict[str, Any]) -> str:
@@ -252,7 +253,7 @@ def _job(record: JobRecord) -> Job:
     return Job(
         id=record.id,
         kind=record.kind,
-        status=record.status,
+        status=cast("JobStatus", record.status),
         input=json.loads(record.input_json),
         idempotency_key=record.idempotency_key,
         attempt=record.attempt,

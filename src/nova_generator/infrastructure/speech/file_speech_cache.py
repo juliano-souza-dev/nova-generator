@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from nova_generator.domain.voices import SynthesizedSpeech, VoiceProfileSnapshot
 
@@ -89,7 +90,7 @@ def _payload(speech: SynthesizedSpeech) -> dict[str, object]:
     }
 
 
-def _speech_from_payload(payload: dict[str, object], audio: Path) -> SynthesizedSpeech:
+def _speech_from_payload(payload: dict[str, Any], audio: Path) -> SynthesizedSpeech:
     from uuid import UUID
 
     profile_data = payload["profile"]

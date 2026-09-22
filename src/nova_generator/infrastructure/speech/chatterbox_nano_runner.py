@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import sys
+from importlib import import_module
 from pathlib import Path
 
 
 def main() -> None:
     request = json.load(sys.stdin)
     try:
-        import torch
-        import torchaudio
-        from chatterbox.tts_turbo import ChatterboxTurboTTS
+        torch = import_module("torch")
+        torchaudio = import_module("torchaudio")
+        chatterbox = import_module("chatterbox.tts_turbo")
     except ImportError as exc:
         raise RuntimeError(
             "Instale chatterbox-tts, torch e torchaudio no Python configurado para TTS."
@@ -21,7 +22,7 @@ def main() -> None:
     if profile["model_id"] != "chatterbox-nano":
         raise ValueError("Modelo de voz não suportado pelo runner local.")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = ChatterboxTurboTTS.from_pretrained(device=device, nano=True)
+    model = chatterbox.ChatterboxTurboTTS.from_pretrained(device=device, nano=True)
     options = dict(request.get("parameters") or {})
     reference = (profile.get("parameters") or {}).get("reference_audio_path")
     if reference:

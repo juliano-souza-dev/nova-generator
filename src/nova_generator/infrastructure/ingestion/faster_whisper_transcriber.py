@@ -63,12 +63,14 @@ class FasterWhisperTranscriber:
     @staticmethod
     def _default_factory() -> ModelFactory:
         try:
-            from faster_whisper import WhisperModel
+            from importlib import import_module
+
+            whisper_model = import_module("faster_whisper").WhisperModel
         except ImportError as exc:
             raise TranscriptionError(
                 "Instale o extra de ASR para usar Faster-Whisper neste worker."
             ) from exc
-        return WhisperModel
+        return whisper_model
 
     @staticmethod
     def _cue(segment: Any, language: str | None) -> TranscriptCueCandidate:

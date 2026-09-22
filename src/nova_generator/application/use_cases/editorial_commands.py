@@ -81,7 +81,7 @@ class AdjustWordTiming:
         for word in words:
             item = supplied[str(word.id)]
             start, end = item.get("start_ms"), item.get("end_ms")
-            _range(start, end, f"word[{word.id}]")
+            start, end = _range(start, end, f"word[{word.id}]")
             if start < previous_end or start < cue.speech_start_ms or end > cue.speech_end_ms:
                 raise EditorialCommandError(
                     f"word[{word.id}] timing must be ordered and inside speech_timing"
@@ -372,7 +372,7 @@ def _literal(value: object, field: str) -> None:
         raise EditorialCommandError(f"{field} must be a literal string")
 
 
-def _range(start: object, end: object, field: str) -> None:
+def _range(start: object, end: object, field: str) -> tuple[int, int]:
     if (
         not isinstance(start, int)
         or isinstance(start, bool)
@@ -382,6 +382,7 @@ def _range(start: object, end: object, field: str) -> None:
         or end <= start
     ):
         raise EditorialCommandError(f"{field} must be a positive millisecond range")
+    return start, end
 
 
 def _split_text(value: dict[str, str], field: str) -> None:

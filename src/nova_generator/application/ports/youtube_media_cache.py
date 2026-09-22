@@ -13,17 +13,12 @@ class YoutubeMediaCache(Protocol):
 
     def acquire(
         self, video: YoutubeVideo, *, timeout_seconds: float = 30.0
-    ) -> AbstractContextManager[None]:
-        """Serialize inspection or creation of one video's cache entry."""
+    ) -> AbstractContextManager[None]: ...
 
-    def find_verified(self, video: YoutubeVideo) -> YoutubeMediaMetadata | None:
-        """Return metadata only when its local source file still matches its hash."""
+    def find_verified(self, video: YoutubeVideo) -> YoutubeMediaMetadata | None: ...
 
-    def save_verified(self, metadata: YoutubeMediaMetadata) -> None:
-        """Persist metadata after a future downloader has atomically installed its source."""
+    def save_verified(self, metadata: YoutubeMediaMetadata) -> None: ...
 
-    def staging_directory(self, video: YoutubeVideo) -> Path:
-        """Return an isolated temporary directory in the cache filesystem."""
+    def staging_directory(self, video: YoutubeVideo) -> Path: ...
 
-    def install_source(self, video: YoutubeVideo, source: Path) -> Path:
-        """Atomically promote a validated staged source to the canonical cache path."""
+    def install_source(self, video: YoutubeVideo, source: Path) -> Path: ...

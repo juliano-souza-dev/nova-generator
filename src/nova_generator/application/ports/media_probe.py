@@ -7,5 +7,4 @@ from nova_generator.domain.media.probe import MediaInspection
 class MediaProbe(Protocol):
     """Inspects media without coupling application code to FFprobe."""
 
-    def inspect(self, source: Path) -> MediaInspection:
-        """Return validated duration and codecs for ``source``."""
+    def inspect(self, source: Path) -> MediaInspection: ...

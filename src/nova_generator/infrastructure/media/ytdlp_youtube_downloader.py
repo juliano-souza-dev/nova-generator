@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from nova_generator.domain.media.youtube import YoutubeVideo
 
@@ -34,7 +34,7 @@ class YtDlpYoutubeDownloader:
             "socket_timeout": 25,
         }
         try:
-            with yt_dlp.YoutubeDL(options) as downloader:
+            with yt_dlp.YoutubeDL(cast(Any, options)) as downloader:
                 exit_code = downloader.download([video.canonical_url])
         except Exception as exc:
             raise YoutubeDownloadError(f"yt-dlp falhou para {video.video_id}: {exc}") from exc
@@ -45,9 +45,7 @@ class YtDlpYoutubeDownloader:
             (
                 path
                 for path in destination_directory.glob("source.*")
-                if path.is_file()
-                and path.suffix.lower() == ".mp4"
-                and path.stat().st_size > 0
+                if path.is_file() and path.suffix.lower() == ".mp4" and path.stat().st_size > 0
             ),
             key=lambda path: path.stat().st_mtime_ns,
             reverse=True,
