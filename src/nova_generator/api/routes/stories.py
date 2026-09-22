@@ -14,7 +14,8 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from nova_generator.api.dependencies import get_enqueue_job
+from nova_generator.api.dependencies import get_enqueue_job, get_manage_voice_profiles
+from nova_generator.application.use_cases.manage_voice_profiles import _payload
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.media.youtube import InvalidYoutubeUrl, YoutubeVideo
 from nova_generator.domain.stories import StoryPackageViolation, validate_story_package
@@ -99,17 +100,19 @@ class RenderRequest(BaseModel):
 
 @router.post("/{production_id}/render", status_code=202)
 def render_story(production_id: str, payload: RenderRequest) -> dict:
-    directory = _directory(production_id)
-    if not payload.voice_profile_id.strip():
-        raise HTTPException(422, "Selecione um perfil de voz")
-    # The worker reads this selection with the immutable package and records its snapshot.
-    (directory / "selection.json").write_text(
-        json.dumps({"voice_profile_id": payload.voice_profile_id}), encoding="utf-8"
-    )
+    _directory(production_id)
+    try:
+        voice_id = UUID(payload.voice_profile_id)
+    except ValueError as exc:
+        raise HTTPException(422, "Selecione um perfil de voz válido") from exc
+    profile = get_manage_voice_profiles().get(voice_id)
+    if profile is None:
+        raise HTTPException(404, "Perfil de voz não encontrado")
+    snapshot = profile.snapshot()
     job = get_enqueue_job().execute(
         kind="story.render",
-        input={"production_id": production_id},
-        idempotency_key=f"story.render:{production_id}:{payload.voice_profile_id}",
+        input={"production_id": production_id, "voice_snapshot": _payload(snapshot)},
+        idempotency_key=f"story.render:{production_id}:{snapshot.sha256}",
         max_attempts=3,
     )
     return {"job_id": str(job.id), "status": job.status}

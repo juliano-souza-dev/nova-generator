@@ -12,7 +12,10 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...init?.headers },
+    headers: {
+      ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+      ...init?.headers,
+    },
     ...init,
   });
   if (!response.ok) {
@@ -21,8 +24,10 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
       typeof body === "object" && body !== null && "detail" in body
         ? String(body.detail)
         : `Erro ${response.status}`;
-    const issues = typeof body === "object" && body !== null && "issues" in body && Array.isArray(body.issues)
-      ? body.issues as Array<{ path: string; message: string }> : undefined;
+    const issues =
+      typeof body === "object" && body !== null && "issues" in body && Array.isArray(body.issues)
+        ? (body.issues as Array<{ path: string; message: string }>)
+        : undefined;
     throw new ApiError(detail, response.status, issues);
   }
   if (response.status === 204) {

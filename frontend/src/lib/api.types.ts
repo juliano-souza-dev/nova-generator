@@ -48,6 +48,24 @@ export type Project = {
   cache_status: "missing" | "reused" | "not_configured";
   job_status: string;
 };
+export type StoryHighlight = { text: string; type: string; pt: string; occurrence: number };
+export type StoryCue = {
+  order: number;
+  image: string;
+  en: string;
+  pt: string;
+  highlights: StoryHighlight[];
+};
+export type StoryProduction = {
+  id: string;
+  title: string;
+  language: string;
+  aspect_ratio: string;
+  cues: StoryCue[];
+  images: Array<{ path: string; sha256: string; size_bytes: number }>;
+  image_urls: Record<string, string>;
+  preview_url: string | null;
+};
 export type VoiceProfile = {
   id: string;
   name: string;
@@ -59,11 +77,4 @@ export type VoiceProfile = {
   snapshot_sha256: string;
   preview_url: string | null;
   preview_ready: boolean;
-};
-export type StoryHighlight = { text: string; type: string; pt: string; occurrence: number };
-export type StoryCue = { order: number; image: string; en: string; pt: string; highlights: StoryHighlight[] };
-export type StoryProduction = {
-  id: string; title: string; language: string; aspect_ratio: string;
-  cues: StoryCue[]; images: Array<{ path: string; sha256: string; size_bytes: number }>;
-  image_urls: Record<string, string>; preview_url: string | null;
 };

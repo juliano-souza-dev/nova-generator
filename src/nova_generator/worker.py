@@ -9,14 +9,19 @@ from pathlib import Path
 from threading import Event
 
 from nova_generator.api.dependencies import get_session_factory
+from nova_generator.application.use_cases.render_story import RenderStory
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.core.settings import get_settings
 from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
+from nova_generator.infrastructure.exports.ffmpeg_story_video_renderer import (
+    FfmpegStoryVideoRenderer,
+)
 from nova_generator.infrastructure.speech.chatterbox_nano_synthesizer import (
     ChatterboxNanoSynthesizer,
 )
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 from nova_generator.infrastructure.worker.persistent_worker import PersistentWorker
+from nova_generator.infrastructure.worker.story_render_handler import make_story_render_handler
 from nova_generator.infrastructure.worker.voice_preview_handler import make_voice_preview_handler
 
 
@@ -30,7 +35,12 @@ def main() -> None:
     worker = PersistentWorker(
         SqlAlchemyJobRepository(get_session_factory()),
         worker_id=f"local-{os.getpid()}",
-        handlers={"synthesize_voice_preview": make_voice_preview_handler(speech)},
+        handlers={
+            "synthesize_voice_preview": make_voice_preview_handler(speech),
+            "story.render": make_story_render_handler(
+                settings.media_cache_root, RenderStory(speech, FfmpegStoryVideoRenderer())
+            ),
+        },
     )
     stopped = Event()
     signal.signal(signal.SIGINT, lambda *_: stopped.set())

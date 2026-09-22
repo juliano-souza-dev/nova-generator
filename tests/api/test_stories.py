@@ -1,8 +1,12 @@
 import io
 import json
 import zipfile
+from types import SimpleNamespace
+from uuid import UUID
 
 from nova_generator.core.settings import get_settings
+from nova_generator.domain.jobs import Job
+from nova_generator.infrastructure.worker.story_render_handler import make_story_render_handler
 
 
 def _archive(*, image="images/one.jpg"):
@@ -67,9 +71,22 @@ def test_review_render_and_publication_gate(client, tmp_path, monkeypatch):
         ).status_code
         == 409
     )
-    queued = client.post(f"/api/stories/{story['id']}/render", json={"voice_profile_id": "voice-1"})
+    voice = client.post(
+        "/api/voices",
+        json={
+            "name": "Ana",
+            "model_id": "chatterbox-nano",
+            "model_sha256": "a" * 64,
+            "parameters": {},
+        },
+    ).json()
+    queued = client.post(
+        f"/api/stories/{story['id']}/render", json={"voice_profile_id": voice["id"]}
+    )
     assert queued.status_code == 202
-    assert client.get(f"/api/jobs/{queued.json()['job_id']}").json()["kind"] == "story.render"
+    job = client.get(f"/api/jobs/{queued.json()['job_id']}").json()
+    assert job["kind"] == "story.render"
+    assert job["input"]["voice_snapshot"]["snapshot_sha256"] == voice["snapshot_sha256"]
 
     output = tmp_path / "stories" / story["id"] / "render"
     output.mkdir()
@@ -83,3 +100,46 @@ def test_review_render_and_publication_gate(client, tmp_path, monkeypatch):
     assert published.status_code == 200
     assert published.json()["cues"][0]["en"] == "Don’t stop."
     assert published.json()["youtubeVideoId"] == "abcdefghijk"
+
+
+def test_worker_uses_frozen_voice_snapshot_and_validated_images(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("NOVA_GENERATOR_MEDIA_CACHE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    story = client.post(
+        "/api/stories", files={"file": ("story.zip", _archive(), "application/zip")}
+    ).json()
+    voice = client.post(
+        "/api/voices",
+        json={
+            "name": "Ana",
+            "model_id": "chatterbox-nano",
+            "model_sha256": "a" * 64,
+            "parameters": {},
+        },
+    ).json()
+    queued = client.post(
+        f"/api/stories/{story['id']}/render", json={"voice_profile_id": voice["id"]}
+    ).json()
+    job_data = client.get(f"/api/jobs/{queued['job_id']}").json()
+
+    class Renderer:
+        def execute(self, *, package, images, voice, output_directory):
+            assert package.cues[0].en == "Don’t stop."
+            assert images["images/one.jpg"].read_bytes() == b"image"
+            assert voice.sha256 == job_data["input"]["voice_snapshot"]["snapshot_sha256"]
+            return SimpleNamespace(
+                final_video_path=output_directory / "story_final.mp4",
+                manifest_path=output_directory / "story-manifest.json",
+                duration_ms=100,
+            )
+
+    class Execution:
+        def raise_if_cancelled(self):
+            pass
+
+        def heartbeat(self):
+            pass
+
+    job = Job(UUID(job_data["id"]), "story.render", "queued", job_data["input"], None, 0, 3)
+    result = make_story_render_handler(tmp_path, Renderer())(job, Execution())
+    assert result["production_id"] == story["id"]
