@@ -54,9 +54,12 @@ python -m pytest tests/contracts editorial_contracts/v1/tests
    referência para criar outro perfil. Em **Materiais**, selecione os cards,
    gere os áudios e exporte APKG, manifesto e reel. Compare os hashes do WAV
    canônico entre APKG e manifesto antes de publicar.
-5. Faça o upload do reel no YouTube manualmente. Valide a URL/ID no contrato
-   `hub_final.json` e faça a importação no iHub em ambiente de validação.
-   Registre o resultado do importador e a comparação com a produção legada.
+5. Faça o upload do reel no YouTube manualmente. Em **Materiais**, informe a
+   URL/ID, confirme o vínculo e baixe `hub_final.json`. O documento congela as
+   cues selecionadas com EN/PT literal, palavras revisadas, itens Anki e a
+   timeline `ankiAudio` do reel. Faça o preflight e a importação no iHub em
+   ambiente de validação. Registre o resultado do importador e a comparação
+   com a produção legada.
 
 ## Banco, rollback e recuperação
 
