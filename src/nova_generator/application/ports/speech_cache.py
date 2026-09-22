@@ -1,0 +1,13 @@
+from pathlib import Path
+from typing import Any, Protocol
+
+from nova_generator.domain.voices import SynthesizedSpeech, VoiceProfileSnapshot
+
+
+class SpeechCache(Protocol):
+    def cache_key(
+        self, *, text: str, profile: VoiceProfileSnapshot, parameters: dict[str, Any]
+    ) -> str: ...
+    def find(self, key: str) -> SynthesizedSpeech | None: ...
+    def staging_path(self, key: str) -> Path: ...
+    def save(self, key: str, speech: SynthesizedSpeech) -> SynthesizedSpeech: ...
