@@ -26,3 +26,5 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Split/merge preservam rastreabilidade e permitem desfazer.
 - O operador conclui a revisão com menos trocas de tela e recebe avisos claros, nunca correções ocultas.
 - Regressões de texto e timing possuem fixtures bloqueadoras de release.
+- Candidatos ASR criam rascunhos separados do texto aprovado; a aprovação EN/PT é explícita,
+  auditável e repetir a importação nunca apaga uma revisão.

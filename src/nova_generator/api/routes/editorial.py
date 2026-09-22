@@ -11,7 +11,9 @@ from nova_generator.api.dependencies import (
     get_adjust_cue_timing,
     get_adjust_word_timing,
     get_edit_approved_text,
+    get_editorial_repository,
     get_merge_cues,
+    get_review_asr_candidate,
     get_split_cue,
     get_undo_editorial_revision,
 )
@@ -24,7 +26,14 @@ from nova_generator.application.use_cases.editorial_commands import (
     SplitCue,
     UndoEditorialRevision,
 )
+from nova_generator.application.use_cases.review_asr_candidate import (
+    CandidateReviewError,
+    ReviewAsrCandidate,
+)
 from nova_generator.domain.projects.entities import Cue, WordTiming
+from nova_generator.infrastructure.database.editorial_project_repository import (
+    SqlAlchemyEditorialProjectRepository,
+)
 
 router = APIRouter(prefix="/editorial", tags=["editorial"])
 
@@ -108,6 +117,94 @@ class CueResponse(BaseModel):
 
 class CueWithWordsResponse(CueResponse):
     words: list[WordResponse]
+
+
+class SceneResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    order: int
+    duration_ms: int
+    source_video_id: str | None
+    provenance: dict[str, object]
+
+
+class RevisionResponse(BaseModel):
+    id: UUID
+    sequence: int
+    command: str
+    author: str
+    before_sha256: str
+    after_sha256: str
+
+
+@router.get("/projects/{project_id}/scenes", response_model=list[SceneResponse])
+def list_scenes(
+    project_id: UUID,
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+) -> list[SceneResponse]:
+    if repository.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return [
+        SceneResponse.model_validate(scene, from_attributes=True)
+        for scene in repository.get_project_scenes(project_id)
+    ]
+
+
+@router.get("/scenes/{scene_id}/cues", response_model=list[CueWithWordsResponse])
+def list_scene_cues(
+    scene_id: UUID,
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+) -> list[dict[str, Any]]:
+    if repository.get_scene_project_id(scene_id) is None:
+        raise HTTPException(status_code=404, detail="scene not found")
+    return [
+        {
+            **_cue_response(cue),
+            "words": [_word_response(word) for word in repository.get_cue_words(cue.id)],
+        }
+        for cue in repository.get_scene_cues(scene_id)
+    ]
+
+
+@router.get("/scenes/{scene_id}/revisions", response_model=list[RevisionResponse])
+def list_scene_revisions(
+    scene_id: UUID,
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+) -> list[RevisionResponse]:
+    if repository.get_scene_project_id(scene_id) is None:
+        raise HTTPException(status_code=404, detail="scene not found")
+    return [
+        RevisionResponse(
+            id=item.id,
+            sequence=item.sequence,
+            command=item.command,
+            author=item.author,
+            before_sha256=item.before_sha256,
+            after_sha256=item.after_sha256,
+        )
+        for item in repository.list_revisions(scene_id)
+    ]
+
+
+@router.post(
+    "/projects/{project_id}/candidates/{ingest_job_id}/draft",
+    response_model=SceneResponse,
+    status_code=201,
+)
+def draft_from_candidate(
+    project_id: UUID,
+    ingest_job_id: UUID,
+    payload: ActorRequest,
+    use_case: Annotated[ReviewAsrCandidate, Depends(get_review_asr_candidate)],
+) -> SceneResponse:
+    try:
+        scene = use_case.execute(project_id, ingest_job_id, author=payload.author)
+    except CandidateReviewError as error:
+        raise HTTPException(
+            status_code=404 if str(error).endswith("not found") else 422,
+            detail=str(error),
+        ) from error
+    return SceneResponse.model_validate(scene, from_attributes=True)
 
 
 @router.put("/cues/{cue_id}/text", response_model=CueResponse)

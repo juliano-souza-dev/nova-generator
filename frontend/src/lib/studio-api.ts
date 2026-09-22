@@ -1,5 +1,6 @@
 import type {
   Cue,
+  EditorialCue,
   Health,
   Job,
   JobDetail,
@@ -8,8 +9,9 @@ import type {
   MaterialExport,
   MaterialList,
   Project,
-  ProjectMedia,
   MediaJobReference,
+  ProjectMedia,
+  Scene,
   StoryProduction,
   Timing,
   WordTiming,
@@ -49,6 +51,15 @@ export const studioApi = {
   restoreProject: (id: string) =>
     apiRequest<Project>(`/projects/${id}/restore`, { method: "POST" }),
   deleteProject: (id: string) => apiRequest<void>(`/projects/${id}`, { method: "DELETE" }),
+  editorialScenes: (projectId: string) =>
+    apiRequest<Scene[]>(`/editorial/projects/${projectId}/scenes`),
+  editorialCues: (sceneId: string) =>
+    apiRequest<EditorialCue[]>(`/editorial/scenes/${sceneId}/cues`),
+  draftAsrCandidate: (projectId: string, jobId: string, author: string) =>
+    apiRequest<Scene>(`/editorial/projects/${projectId}/candidates/${jobId}/draft`, {
+      method: "POST",
+      body: JSON.stringify({ author }),
+    }),
   updateCueText: (
     id: string,
     input: { author: string; approved_en: string; approved_pt: string },

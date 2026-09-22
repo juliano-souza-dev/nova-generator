@@ -21,9 +21,17 @@ class EditApprovedText:
         cue, words = _cue_with_words(self._repository, cue_id)
         _literal(approved_en, "approved_en")
         _literal(approved_pt, "approved_pt")
+        if cue.provenance.get("source") == "asr_candidate" and (not approved_en or not approved_pt):
+            raise EditorialCommandError("ASR approval requires non-empty EN and PT text")
         before = _scene_snapshot(self._repository, cue.scene_id)
         updated = replace(
-            cue, approved_en=approved_en, approved_pt=approved_pt, revision=cue.revision + 1
+            cue,
+            approved_en=approved_en,
+            approved_pt=approved_pt,
+            revision=cue.revision + 1,
+            provenance={**cue.provenance, "approval": "approved"}
+            if cue.provenance.get("source") == "asr_candidate"
+            else cue.provenance,
         )
         self._repository.save_cue(updated, words)
         _record(self._repository, updated, "edit_approved_text", author, before)
