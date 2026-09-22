@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .ihub_contracts import ContractViolation, validate_anki_audio, validate_story
 
-_ROOT = Path(__file__).resolve().parents[4] / "contracts" / "generator-ihub" / "v1" / "fixtures"
+_ROOT = Path.cwd() / "contracts" / "generator-ihub" / "v1" / "fixtures"
 
 
 def main() -> int:

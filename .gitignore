@@ -15,7 +15,7 @@ htmlcov/
 # Runtime state and generated media
 data/
 media_cache/
-projects/
+/projects/
 !src/nova_generator/domain/projects/
 !src/nova_generator/domain/projects/**
 src/nova_generator/domain/projects/__pycache__/

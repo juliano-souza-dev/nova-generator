@@ -48,3 +48,15 @@ export type Project = {
   cache_status: "missing" | "reused" | "not_configured";
   job_status: string;
 };
+export type VoiceProfile = {
+  id: string;
+  name: string;
+  version: number;
+  model_id: string;
+  model_sha256: string;
+  reference_audio_sha256: string | null;
+  parameters: Record<string, unknown>;
+  snapshot_sha256: string;
+  preview_url: string | null;
+  preview_ready: boolean;
+};

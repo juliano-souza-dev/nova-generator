@@ -131,3 +131,20 @@ class EditorialRevisionRecord(Base):
     before_sha256: Mapped[str] = mapped_column(String(64))
     after_sha256: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class VoiceProfileRecord(Base):
+    """An append-only voice configuration. Exported snapshots never reference mutable state."""
+
+    __tablename__ = "voice_profiles"
+    __table_args__ = (UniqueConstraint("profile_id", "version", name="uq_voice_profiles_version"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    profile_id: Mapped[UUID] = mapped_column(index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    version: Mapped[int] = mapped_column(Integer)
+    model_id: Mapped[str] = mapped_column(String(255))
+    model_sha256: Mapped[str] = mapped_column(String(64))
+    reference_audio_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parameters_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

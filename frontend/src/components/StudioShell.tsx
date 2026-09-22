@@ -14,6 +14,7 @@ const links = [
   { to: "/projects", label: "Projetos", icon: FolderKanban },
   { to: "/editorial", label: "Editorial", icon: Languages },
   { to: "/media", label: "Mídia", icon: Mic2 },
+  { to: "/voices", label: "Vozes", icon: Mic2 },
   { to: "/jobs", label: "Jobs", icon: ListChecks },
   { to: "/story", label: "História", icon: Clapperboard },
 ];
