@@ -30,7 +30,17 @@ export type Cue = {
   speech_timing: Timing;
   subtitle_timing: Timing;
   revision: number;
+  provenance?: Record<string, unknown>;
 };
+export type Scene = {
+  id: string;
+  project_id: string;
+  order: number;
+  duration_ms: number;
+  source_video_id: string | null;
+  provenance: Record<string, unknown>;
+};
+export type EditorialCue = Cue & { words: WordTiming[] };
 export type WordTiming = {
   id: string;
   order: number;

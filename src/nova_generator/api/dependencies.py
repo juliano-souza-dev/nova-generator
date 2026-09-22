@@ -20,6 +20,7 @@ from nova_generator.application.use_cases.manage_jobs import (
 )
 from nova_generator.application.use_cases.manage_projects import ManageProjects
 from nova_generator.application.use_cases.manage_voice_profiles import ManageVoiceProfiles
+from nova_generator.application.use_cases.review_asr_candidate import ReviewAsrCandidate
 from nova_generator.core.settings import get_settings
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
@@ -71,11 +72,21 @@ def _editorial_repository() -> SqlAlchemyEditorialProjectRepository:
     return SqlAlchemyEditorialProjectRepository(get_session_factory())
 
 
+def get_editorial_repository() -> SqlAlchemyEditorialProjectRepository:
+    return _editorial_repository()
+
+
 def get_manage_projects() -> ManageProjects:
     return ManageProjects(
         _editorial_repository(),
         FileYoutubeMediaCache(get_settings().media_cache_root),
         SqlAlchemyJobRepository(get_session_factory()),
+    )
+
+
+def get_review_asr_candidate() -> ReviewAsrCandidate:
+    return ReviewAsrCandidate(
+        _editorial_repository(), SqlAlchemyJobRepository(get_session_factory())
     )
 
 
