@@ -19,3 +19,15 @@ Leia [`AGENTS.md`](AGENTS.md) e o [mapa de uso](agentes/MAPA_DE_USO.md). Cada ta
 3. Migrar uma jornada vertical por vez, mantendo exportações compatíveis.
 4. Só remover ou aposentar uma parte do legado após validação de equivalência e plano de rollback.
 
+## Frontend do estúdio
+
+O frontend independente está em `frontend/`; ele não usa arquivos do diretório `legacy/` em runtime.
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+O Vite encaminha `/api` para `http://127.0.0.1:8000` no desenvolvimento. Use
+`npm run build`, `npm run lint`, `npm run test` e `npm run test:e2e` para validar a aplicação.
