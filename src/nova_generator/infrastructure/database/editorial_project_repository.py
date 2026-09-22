@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from nova_generator.domain.projects.entities import (
@@ -74,6 +74,24 @@ class SqlAlchemyEditorialProjectRepository:
                 ).delete(synchronize_session=False)
             session.commit()
 
+    def replace_scene_cues(
+        self, scene_id: UUID, entries: list[tuple[Cue, list[WordTiming]]]
+    ) -> None:
+        """Atomically replace a scene cue set while revision snapshots retain its history."""
+        with self._session_factory() as session:
+            cue_ids = list(
+                session.scalars(select(CueRecord.id).where(CueRecord.scene_id == scene_id))
+            )
+            if cue_ids:
+                session.execute(
+                    delete(WordTimingRecord).where(WordTimingRecord.cue_id.in_(cue_ids))
+                )
+            session.execute(delete(CueRecord).where(CueRecord.scene_id == scene_id))
+            for cue, words in entries:
+                session.add(_cue_record(cue))
+                session.add_all(_word_record(word) for word in words)
+            session.commit()
+
     def save_revision(self, revision: EditorialRevision) -> None:
         with self._session_factory() as session:
             session.merge(
@@ -99,6 +117,16 @@ class SqlAlchemyEditorialProjectRepository:
         with self._session_factory() as session:
             record = session.get(ProjectRecord, project_id)
             return _project(record) if record else None
+
+    def get_scene_project_id(self, scene_id: UUID) -> UUID | None:
+        with self._session_factory() as session:
+            record = session.get(SceneRecord, scene_id)
+            return record.project_id if record else None
+
+    def get_cue(self, cue_id: UUID) -> Cue | None:
+        with self._session_factory() as session:
+            record = session.get(CueRecord, cue_id)
+            return _cue(record) if record else None
 
     def get_scene_cues(self, scene_id: UUID) -> list[Cue]:
         with self._session_factory() as session:
