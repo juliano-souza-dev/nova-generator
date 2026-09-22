@@ -27,3 +27,5 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 - Cache global deduplica downloads por `youtube_id` e controla concorrência.
 - Migrations possuem caminho de upgrade e recuperação documentados.
 - Logs correlacionam projeto, job, fonte de mídia e artefato.
+- Configuração tipada falha com mensagem acionável para executáveis ou diretórios indisponíveis.
+- Logs JSON e métricas de jobs, cache e exportação não incluem tokens, texto editorial ou payloads.

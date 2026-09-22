@@ -1,6 +1,10 @@
+import json
+import logging
 from datetime import UTC, datetime, timedelta
+from io import StringIO
 from threading import Barrier, Thread
 
+from nova_generator.core.observability import JsonFormatter
 from nova_generator.infrastructure.database import models  # noqa: F401
 from nova_generator.infrastructure.database.base import Base
 from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
@@ -74,3 +78,32 @@ def test_cooperative_cancellation(tmp_path) -> None:
 
     assert PersistentWorker(repository, "worker", {"cancel": handler}).run_once()
     assert repository.get(str(job.id)).status == "cancelled"
+
+
+def test_worker_logs_safe_correlations_without_private_error(tmp_path) -> None:
+    repository = _repo(tmp_path)
+    job = repository.enqueue(
+        kind="media",
+        input={"project_id": "project_1", "text": "private lesson"},
+        idempotency_key=None,
+        max_attempts=1,
+    )
+    stream = StringIO()
+    logger = logging.getLogger("test_safe_worker")
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(JsonFormatter())
+    logger.addHandler(handler)
+    try:
+
+        def fail(*_args):
+            raise RuntimeError("private lesson and token")
+
+        PersistentWorker(repository, "worker_1", {"media": fail}, logger=logger).run_once()
+    finally:
+        logger.removeHandler(handler)
+    events = [json.loads(line) for line in stream.getvalue().splitlines()]
+    assert [event["event"] for event in events] == ["job_started", "job_failed"]
+    assert all(event["job_id"] == str(job.id) for event in events)
+    assert all(event["project_id"] == "project_1" for event in events)
+    assert "private lesson" not in stream.getvalue()

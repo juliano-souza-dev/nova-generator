@@ -4,6 +4,7 @@ from typing import Any
 
 from nova_generator.application.ports.speech_cache import SpeechCache
 from nova_generator.application.ports.speech_synthesizer import SpeechSynthesizer
+from nova_generator.core.observability import metrics
 from nova_generator.domain.voices import SynthesizedSpeech, VoiceProfileSnapshot
 
 
@@ -22,6 +23,7 @@ class SynthesizeSpeech:
         params = parameters or {}
         key = self._cache.cache_key(text=text, profile=profile, parameters=params)
         if cached := self._cache.find(key):
+            metrics.record("speech_cache_hit")
             return cached
         staging = self._cache.staging_path(key)
         speech = self._synthesizer.synthesize(
