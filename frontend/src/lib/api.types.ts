@@ -48,6 +48,38 @@ export type Project = {
   cache_status: "missing" | "reused" | "not_configured";
   job_status: string;
 };
+export type ProjectMedia = {
+  source_ready: boolean;
+  source_url: string | null;
+  duration_ms: number | null;
+  download_job_id: string | null;
+  download_status: string | null;
+  download_error: string | null;
+  ingest_job_id: string | null;
+  ingest_status: string | null;
+  ingest_error: string | null;
+  cut_url: string | null;
+  cut_start_ms: number | null;
+  cut_end_ms: number | null;
+  waveform: { sample_rate_hz: number; bucket_ms: number; peaks: number[] } | null;
+  transcript_candidate: {
+    engine: string;
+    model: string;
+    language: string | null;
+    cues: Array<{
+      start_ms: number;
+      end_ms: number;
+      text: string;
+      words: Array<{
+        surface: string;
+        start_ms: number;
+        end_ms: number;
+        probability: number | null;
+      }>;
+    }>;
+  } | null;
+};
+export type MediaJobReference = { id: string; status: string };
 export type StoryHighlight = { text: string; type: string; pt: string; occurrence: number };
 export type StoryCue = {
   order: number;

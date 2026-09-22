@@ -53,6 +53,35 @@
   margin: 0 0 1rem;
   color: var(--accent);
 }
+.media-transcript {
+  margin-top: 1.5rem;
+}
+.media-transcript ol {
+  padding-left: 1.5rem;
+}
+.media-transcript li {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.media-transcript time {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.media-transcript .primary-button {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 1rem;
+  text-decoration: none;
+}
+.media-language select {
+  padding: 0.65rem;
+  color: var(--text);
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
 .media-player {
   margin-bottom: 1rem;
 }

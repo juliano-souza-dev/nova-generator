@@ -8,6 +8,8 @@ import type {
   MaterialExport,
   MaterialList,
   Project,
+  ProjectMedia,
+  MediaJobReference,
   StoryProduction,
   Timing,
   WordTiming,
@@ -30,6 +32,14 @@ export const studioApi = {
     apiRequest<Project[]>(
       `/projects?search=${encodeURIComponent(search)}&include_archived=${includeArchived}`,
     ),
+  projectMedia: (id: string) => apiRequest<ProjectMedia>(`/projects/${id}/media`),
+  downloadProjectMedia: (id: string) =>
+    apiRequest<MediaJobReference>(`/projects/${id}/media/download`, { method: "POST" }),
+  ingestProjectMedia: (id: string, input: { start_ms: number; end_ms: number; language: string }) =>
+    apiRequest<MediaJobReference>(`/projects/${id}/media/ingest`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   createProject: (input: { title: string; content_type: string; youtube_url?: string }) =>
     apiRequest<Project>("/projects", { method: "POST", body: JSON.stringify(input) }),
   duplicateProject: (id: string) =>

@@ -68,6 +68,10 @@ class FileYoutubeMediaCache:
         directory.mkdir(parents=True, exist_ok=True)
         return Path(tempfile.mkdtemp(prefix=".download-", dir=directory))
 
+    def source_path(self, video: YoutubeVideo) -> Path:
+        """Return the canonical path after the caller has verified the cache entry."""
+        return self._directory(video) / "source.mp4"
+
     def install_source(self, video: YoutubeVideo, source: Path) -> Path:
         directory = self._directory(video)
         if source.parent.parent != directory:
