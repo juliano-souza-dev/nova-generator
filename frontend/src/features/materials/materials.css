@@ -1,0 +1,14 @@
+.materials-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin-bottom: 1.5rem; }
+.materials-controls label { min-width: 200px; margin: 0; }
+.materials-controls select { padding: .65rem; color: var(--text); background: #0f172a; border: 1px solid var(--border); border-radius: 8px; }
+.materials-controls button, .materials-table button { display: inline-flex; align-items: center; gap: .4rem; }
+.materials-table-wrap { overflow-x: auto; }
+.materials-table { width: 100%; border-collapse: collapse; text-align: left; }
+.materials-table th, .materials-table td { padding: .85rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.materials-table td p { margin: .4rem 0; }
+.materials-table small { display: block; margin-top: .4rem; color: var(--muted); }
+.materials-table audio { max-width: 220px; }
+.materials-export { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 1.5rem; }
+.materials-export p { margin: 0; color: var(--muted); }
+.materials-result { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-top: 1.5rem; }
+@media (max-width: 720px) { .materials-export { display: grid; } }

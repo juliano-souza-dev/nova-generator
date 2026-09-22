@@ -48,6 +48,36 @@ export type Project = {
   cache_status: "missing" | "reused" | "not_configured";
   job_status: string;
 };
+export type MaterialCard = {
+  cue_id: string;
+  scene_order: number;
+  cue_order: number;
+  approved_en: string;
+  approved_pt: string;
+  tags: string[];
+  included: boolean;
+  speaker: string;
+  speech_start_ms: number;
+  speech_end_ms: number;
+  reel_start_ms: number | null;
+  reel_end_ms: number | null;
+  audio_ready: boolean;
+  audio_url: string | null;
+  audio_error: string | null;
+};
+export type MaterialList = {
+  cards: MaterialCard[];
+  voice_id: string | null;
+  voice_version: number | null;
+};
+export type MaterialExport = {
+  job_id: string;
+  status: string;
+  error_message?: string | null;
+  apkg_url: string | null;
+  manifest_url: string | null;
+  reel_url: string | null;
+};
 export type VoiceProfile = {
   id: string;
   name: string;
