@@ -40,6 +40,24 @@ python -m nova_generator.infrastructure.integration.contract_runner
 python -m pytest tests/contracts editorial_contracts/v1/tests
 ```
 
+## Jornada de operador para uma fonte autorizada
+
+1. Inicie a API, o worker (`python -m nova_generator.worker`) e o frontend. Crie
+   um projeto com a URL do vídeo autorizado na área **Projetos**.
+2. Na área **Mídia**, baixe ou reutilize a fonte verificada, defina o corte e
+   aguarde o job de ingestão. Confira o vídeo do corte, a waveform e o
+   candidato Faster-Whisper no monitor de jobs.
+3. Abra **Editorial** para importar o candidato como rascunho. Aprove EN/PT
+   explicitamente e corrija quebra e timing de cue e palavra; confira que o
+   texto final mantém cada acento e sinal de pontuação.
+4. Na **Biblioteca de vozes**, escolha um perfil local ou envie um WAV de
+   referência para criar outro perfil. Em **Materiais**, selecione os cards,
+   gere os áudios e exporte APKG, manifesto e reel. Compare os hashes do WAV
+   canônico entre APKG e manifesto antes de publicar.
+5. Faça o upload do reel no YouTube manualmente. Valide a URL/ID no contrato
+   `hub_final.json` e faça a importação no iHub em ambiente de validação.
+   Registre o resultado do importador e a comparação com a produção legada.
+
 ## Banco, rollback e recuperação
 
 Uma base SQLite descartável recebeu `alembic upgrade head`,
