@@ -19,6 +19,7 @@ from nova_generator.application.use_cases.manage_jobs import (
     RetryJob,
 )
 from nova_generator.application.use_cases.manage_projects import ManageProjects
+from nova_generator.application.use_cases.manage_voice_profiles import ManageVoiceProfiles
 from nova_generator.core.settings import get_settings
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
@@ -28,6 +29,9 @@ from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobR
 from nova_generator.infrastructure.database.session import (
     create_database_engine,
     create_session_factory,
+)
+from nova_generator.infrastructure.database.voice_profile_repository import (
+    SqlAlchemyVoiceProfileRepository,
 )
 from nova_generator.infrastructure.filesystem.youtube_media_cache import FileYoutubeMediaCache
 
@@ -97,3 +101,10 @@ def get_merge_cues() -> MergeCues:
 
 def get_undo_editorial_revision() -> UndoEditorialRevision:
     return UndoEditorialRevision(_editorial_repository())
+
+
+def get_manage_voice_profiles() -> ManageVoiceProfiles:
+    return ManageVoiceProfiles(
+        SqlAlchemyVoiceProfileRepository(get_session_factory()),
+        SqlAlchemyJobRepository(get_session_factory()),
+    )

@@ -32,6 +32,18 @@ npm run dev
 O Vite encaminha `/api` para `http://127.0.0.1:8000` no desenvolvimento. Use
 `npm run build`, `npm run lint`, `npm run test` e `npm run test:e2e` para validar a aplicação.
 
+## Prévia de vozes locais
+
+Instale `chatterbox-tts`, `torch` e `torchaudio` em um ambiente Python separado e
+configure `NOVA_GENERATOR_TTS_PYTHON` com o executável desse ambiente. Com as
+migrações aplicadas, rode `python -m nova_generator.worker` em paralelo à API.
+O worker consome jobs de prévia, carrega Chatterbox Nano em subprocesso e salva
+o WAV canônico no cache local. A biblioteca atualiza o estado da prévia e usa
+esse mesmo WAV no player. Se o runtime ou os pesos faltarem, o job mostra a
+falha no monitor de jobs. O SHA-256 informado ao criar o perfil identifica o
+checkpoint local usado no snapshot; mantenha o mesmo valor para exportações
+que devam preservar a identidade da voz.
+
 ## Qualidade e release
 
 Os comandos locais, gates de CI e checklist de migrations, contratos, mídia, logs e rollback

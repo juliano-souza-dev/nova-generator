@@ -7,6 +7,7 @@ import type {
   Project,
   Timing,
   WordTiming,
+  VoiceProfile,
 } from "./api.types";
 import { apiRequest } from "./api";
 
@@ -50,6 +51,28 @@ export const studioApi = {
   ) =>
     apiRequest<WordTiming[]>(`/editorial/cues/${id}/words/timing`, {
       method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  voices: () => apiRequest<VoiceProfile[]>("/voices"),
+  createVoice: (input: {
+    name: string;
+    model_id: string;
+    model_sha256: string;
+    reference_audio_sha256?: string;
+    parameters: Record<string, unknown>;
+  }) => apiRequest<VoiceProfile>("/voices", { method: "POST", body: JSON.stringify(input) }),
+  createVoiceVersion: (
+    id: string,
+    input: {
+      name: string;
+      model_id: string;
+      model_sha256: string;
+      reference_audio_sha256?: string;
+      parameters: Record<string, unknown>;
+    },
+  ) =>
+    apiRequest<VoiceProfile>(`/voices/${id}/versions`, {
+      method: "POST",
       body: JSON.stringify(input),
     }),
 };

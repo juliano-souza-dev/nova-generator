@@ -6,6 +6,7 @@ import { MediaPage } from "../features/media/MediaPage";
 import { JobsPage } from "../features/jobs/JobsPage";
 import { ProjectsPage } from "../features/projects/ProjectsPage";
 import { StoryPage } from "../features/story/StoryPage";
+import { VoicesPage } from "../features/voices/VoicesPage";
 
 export function App() {
   return (
@@ -16,6 +17,7 @@ export function App() {
         <Route path="/media" element={<MediaPage />} />
         <Route path="/jobs" element={<JobsPage />} />
         <Route path="/story" element={<StoryPage />} />
+        <Route path="/voices" element={<VoicesPage />} />
         <Route path="*" element={<Navigate to="/projects" replace />} />
       </Routes>
     </StudioShell>
