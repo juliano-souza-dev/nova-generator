@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-import json
 import logging
+import re
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from threading import Event
 from typing import Any
 
 from nova_generator.application.ports.job_repository import JobRepository
+from nova_generator.core.observability import configure_json_logging, metrics
 from nova_generator.domain.jobs import Job
 
 JobHandler = Callable[[Job, "JobExecution"], dict[str, Any]]
@@ -43,6 +45,7 @@ class PersistentWorker:
         heartbeat_timeout: timedelta = timedelta(minutes=2),
         logger: logging.Logger | None = None,
     ) -> None:
+        configure_json_logging()
         self._repository, self._worker_id, self._handlers = repository, worker_id, handlers
         self._heartbeat_timeout, self._logger = (
             heartbeat_timeout,
@@ -60,7 +63,9 @@ class PersistentWorker:
         if job is None:
             return False
         execution = JobExecution(self._repository, job, self._worker_id)
-        self._log("job_started", job_id=str(job.id), kind=job.kind, attempt=job.attempt)
+        started = time.monotonic()
+        ids = _safe_ids(job.input)
+        self._log("job_started", job_id=str(job.id), kind=job.kind, attempt=job.attempt, **ids)
         try:
             execution.raise_if_cancelled()
             handler = self._handlers.get(job.kind)
@@ -71,10 +76,14 @@ class PersistentWorker:
             self._repository.succeed(
                 job_id=str(job.id), worker_id=self._worker_id, output=output, now=_utcnow()
             )
-            self._log("job_succeeded", job_id=str(job.id), kind=job.kind)
+            self._log(
+                "job_succeeded", job_id=str(job.id), kind=job.kind, **(ids | _safe_ids(output))
+            )
+            metrics.record("job_succeeded", duration_ms=int((time.monotonic() - started) * 1000))
         except JobCancelled:
             self._repository.cancel(job_id=str(job.id), worker_id=self._worker_id, now=_utcnow())
-            self._log("job_cancelled", job_id=str(job.id), kind=job.kind)
+            self._log("job_cancelled", job_id=str(job.id), kind=job.kind, **ids)
+            metrics.record("job_cancelled", duration_ms=int((time.monotonic() - started) * 1000))
         except Exception as error:
             self._repository.fail(
                 job_id=str(job.id),
@@ -82,7 +91,10 @@ class PersistentWorker:
                 error_message=str(error),
                 now=_utcnow(),
             )
-            self._log("job_failed", job_id=str(job.id), kind=job.kind, error=str(error))
+            self._log(
+                "job_failed", job_id=str(job.id), kind=job.kind, result=type(error).__name__, **ids
+            )
+            metrics.record("job_failed", duration_ms=int((time.monotonic() - started) * 1000))
         return True
 
     def run_forever(self, *, poll_interval_seconds: float, stop_event: Event) -> None:
@@ -96,14 +108,17 @@ class PersistentWorker:
         self._log("worker_stopped")
 
     def _log(self, event: str, **fields: object) -> None:
-        self._logger.info(
-            json.dumps(
-                {"event": event, "worker_id": self._worker_id, **fields},
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-        )
+        self._logger.info(event, extra={"worker_id": self._worker_id, **fields})
 
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _safe_ids(payload: dict[str, Any]) -> dict[str, str]:
+    return {
+        key: value
+        for key in ("project_id", "artifact_id")
+        if isinstance(value := payload.get(key), str)
+        and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value)
+    }

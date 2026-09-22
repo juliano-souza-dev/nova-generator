@@ -8,6 +8,7 @@ from pathlib import Path
 from nova_generator.application.ports.media_probe import MediaProbe
 from nova_generator.application.ports.youtube_downloader import YoutubeDownloader
 from nova_generator.application.ports.youtube_media_cache import YoutubeMediaCache
+from nova_generator.core.observability import metrics
 from nova_generator.domain.media.cache import YoutubeMediaMetadata
 from nova_generator.domain.media.youtube import YoutubeVideo
 
@@ -37,6 +38,7 @@ class DownloadYoutubeSource:
         with self._cache.acquire(video):
             reusable = self._cache.find_verified(video)
             if reusable:
+                metrics.record("youtube_cache_hit")
                 metadata = reusable.mark_used()
                 self._cache.save_verified(metadata)
                 return DownloadYoutubeSourceResult(video, "reused", metadata)

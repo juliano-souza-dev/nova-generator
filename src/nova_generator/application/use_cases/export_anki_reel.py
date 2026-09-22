@@ -9,6 +9,7 @@ from nova_generator.application.ports.anki_package_writer import AnkiPackageWrit
 from nova_generator.application.ports.audio_reel_renderer import AudioReelRenderer
 from nova_generator.application.ports.reel_validator import ReelValidator
 from nova_generator.application.ports.wav_probe import WavProbe
+from nova_generator.core.observability import metrics
 from nova_generator.domain.exports import AnkiAudioExport, ExportCue
 from nova_generator.domain.voices import VoiceProfileSnapshot
 
@@ -75,6 +76,7 @@ class ExportAnkiReel:
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         os.replace(staging, manifest)
+        metrics.record("anki_export_succeeded")
         return AnkiAudioExport(apkg, reel, manifest, voice, tuple(intervals))
 
 
