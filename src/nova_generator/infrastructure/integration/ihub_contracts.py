@@ -18,7 +18,7 @@ from jsonschema.exceptions import SchemaError
 from nova_generator.domain.media.youtube import InvalidYoutubeUrl, YoutubeVideo
 
 _HIGHLIGHT_TYPES = {"important_word", "structure", "phrasal_verb"}
-_CONTRACT_ROOT = Path(__file__).resolve().parents[4] / "contracts" / "generator-ihub" / "v1"
+_CONTRACT_ROOT = Path.cwd() / "contracts" / "generator-ihub" / "v1"
 
 
 @dataclass(frozen=True)
@@ -90,10 +90,7 @@ def _validate_schema(document: dict[str, Any], filename: str) -> None:
     except (OSError, json.JSONDecodeError, SchemaError) as exc:
         raise RuntimeError(f"Schema de contrato indisponível: {schema_file}") from exc
     errors = sorted(validator.iter_errors(document), key=lambda error: list(error.absolute_path))
-    issues = [
-        ContractIssue(_json_path(error.absolute_path), error.message)
-        for error in errors
-    ]
+    issues = [ContractIssue(_json_path(error.absolute_path), error.message) for error in errors]
     _raise_if_issues(issues)
 
 
@@ -123,8 +120,7 @@ def _validate_timeline(
         previous_end = max(previous_end, end)
 
 
-def _validate_highlights(
-    cue: dict[str, Any], path: str, issues: list[ContractIssue]) -> None:
+def _validate_highlights(cue: dict[str, Any], path: str, issues: list[ContractIssue]) -> None:
     literal_en = cue["en"]
     for index, highlight in enumerate(cue["highlights"]):
         item_path = f"{path}[{index}]"
