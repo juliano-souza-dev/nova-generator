@@ -11,6 +11,9 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Manter os contratos de reel Anki (`hub_final.json` e `ankiAudio`) e História (`immersionhub-text-audio` 1.1).
 - Exigir compatibilidade retroativa, migration ou janela de transição para mudanças públicas.
 - Coordenar testes de contrato, regressão de mídia, validação de importação e checklist de release.
+- Manter os gates em `.github/workflows/quality.yml` e o checklist em
+  `docs/qualidade-e-release.md`: pytest, Ruff, Pyright, fixtures JSON, ESLint, Prettier,
+  Vitest e Playwright.
 - Acompanhar métricas de entrega, falhas pós-release e tempo de recuperação.
 
 ## Limites
@@ -24,3 +27,5 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Generator produz um pacote que o iHub importa em teste automatizado ou ambiente de validação.
 - Release tem notas, migrations, monitoramento, plano de rollback e responsável pelo aceite.
 - Incidentes preservam evidências suficientes para diagnóstico e reprocessamento seguro.
+- Um release só segue após registrar migrations, compatibilidade, mídia, logs e rollback no
+  checklist de release.
