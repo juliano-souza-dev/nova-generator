@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -16,12 +17,16 @@ import tempfile
 import zipfile
 from contextlib import closing
 from pathlib import Path
-from uuid import UUID
+from unittest.mock import Mock
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
 from nova_generator.application.use_cases.ingest_scene_media import IngestSceneMedia
+from nova_generator.application.use_cases.publish_anki_reel import PublishAnkiReel
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
-from nova_generator.domain.exports import ExportCue
+from nova_generator.domain.exports import AnkiAudioExport, ExportCue
+from nova_generator.domain.jobs import Job
+from nova_generator.domain.projects.entities import Cue, Project, Scene, utf8_sha256
 from nova_generator.domain.voices import VoiceProfileSnapshot
 from nova_generator.infrastructure.exports.ffmpeg_audio_reel_renderer import FfmpegAudioReelRenderer
 from nova_generator.infrastructure.exports.ffprobe_reel_validator import FfprobeReelValidator
@@ -41,6 +46,7 @@ from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCac
 
 ENGLISH = '"Hello," she said. This is a local voice preview.'
 PORTUGUESE = '"Olá", ela disse. Esta é uma prévia de voz local.'
+PLACEHOLDER_YOUTUBE_ID = "AAAAAAAAAAA"
 
 
 def _sha256(path: Path) -> str:
@@ -80,6 +86,75 @@ def _source_video(audio: Path, output: Path) -> None:
     )
     if result.returncode or not output.is_file():
         raise RuntimeError(result.stderr or "FFmpeg did not create source video")
+
+
+def _rehearse_hub_publication(
+    output: Path, export: AnkiAudioExport, voice: VoiceProfileSnapshot, audio_sha256: str
+) -> Path:
+    """Exercise the real publisher with local artifacts and an unuploaded placeholder ID."""
+    project_id = UUID("00000000-0000-4000-8000-000000000020")
+    scene_id = UUID("00000000-0000-4000-8000-000000000022")
+    cue_id = UUID("00000000-0000-4000-8000-000000000021")
+    manifest_path = export.manifest_path
+    job_id = uuid5(NAMESPACE_URL, _sha256(manifest_path))
+    export_directory = output / "exports" / str(job_id)
+    export_directory.mkdir(parents=True, exist_ok=True)
+    for path in (export.apkg_path, export.reel_path, manifest_path):
+        shutil.copy2(path, export_directory / path.name)
+    interval = export.intervals[0]
+    cue = Cue(
+        cue_id,
+        scene_id,
+        1,
+        interval.start_ms,
+        interval.end_ms,
+        interval.start_ms,
+        interval.end_ms,
+        "Narrator",
+        ENGLISH,
+        ENGLISH,
+        PORTUGUESE,
+    )
+    repository = Mock()
+    repository.get_project.return_value = Project(project_id, "Release rehearsal", "dialogue")
+    repository.get_cue.return_value = cue
+    repository.get_scene_project_id.return_value = project_id
+    repository.get_project_scenes.return_value = [Scene(scene_id, project_id, 1, interval.end_ms)]
+    repository.get_cue_words.return_value = []
+    job = Job(
+        job_id,
+        "export_materials",
+        "succeeded",
+        {
+            "project_id": str(project_id),
+            "cue_ids": [str(cue_id)],
+            "text_hashes": {str(cue_id): cue.approved_en_sha256},
+            "pt_hashes": {str(cue_id): utf8_sha256(PORTUGUESE)},
+            "audio_hashes": {str(cue_id): audio_sha256},
+            "voice_snapshot": {"snapshot_sha256": voice.sha256},
+        },
+        None,
+        1,
+        3,
+    )
+    published = PublishAnkiReel(
+        repository, Mock(), output / "exports", output / "projects"
+    ).execute(project_id=project_id, job=job, youtube=PLACEHOLDER_YOUTUBE_ID)
+    document = json.loads(published.path.read_text(encoding="utf-8"))
+    selected = document["cues"][0]
+    card = selected["anki"]["items"][0]
+    audio = document["ankiAudio"]["cues"][0]
+    if (
+        selected["final_en"] != ENGLISH
+        or selected["pt"] != PORTUGUESE
+        or card["focus"] != ENGLISH
+        or card["meaning"] != PORTUGUESE
+        or audio["start_ms"] != interval.start_ms
+        or audio["end_ms"] != interval.end_ms
+        or document["ankiAudio"]["youtube"]["video_id"] != PLACEHOLDER_YOUTUBE_ID
+    ):
+        raise RuntimeError("Hub publication differs from the approved card and reel")
+    return published.path
 
 
 def run(model_file: Path, output: Path, whisper_model: str) -> dict[str, object]:
@@ -152,9 +227,11 @@ def run(model_file: Path, output: Path, whisper_model: str) -> dict[str, object]
     manifest = json.loads(export.manifest_path.read_text(encoding="utf-8"))
     if manifest["cues"][0]["audio_sha256"] != cue.audio_sha256:
         raise RuntimeError("Reel manifest differs from the canonical WAV")
+    hub_final = _rehearse_hub_publication(output, export, voice, cue.audio_sha256)
     report: dict[str, object] = {
         "scope": (
-            "local technical rehearsal; external YouTube publication and iHub import not exercised"
+            "local technical rehearsal with placeholder hub_final; external YouTube upload "
+            "and iHub import not exercised"
         ),
         "approved_en": ENGLISH,
         "approved_pt": PORTUGUESE,
@@ -166,6 +243,7 @@ def run(model_file: Path, output: Path, whisper_model: str) -> dict[str, object]
         "project_cut_sha256": _sha256(ingested.cut_file),
         "apkg_sha256": _sha256(export.apkg_path),
         "reel_sha256": _sha256(export.reel_path),
+        "hub_final_sha256": _sha256(hub_final),
         "reel_interval": {
             "start_ms": export.intervals[0].start_ms,
             "end_ms": export.intervals[0].end_ms,
@@ -181,6 +259,7 @@ def run(model_file: Path, output: Path, whisper_model: str) -> dict[str, object]
                 "apkg": export.apkg_path,
                 "reel": export.reel_path,
                 "manifest": export.manifest_path,
+                "hub_final": hub_final,
             }.items()
         },
     }

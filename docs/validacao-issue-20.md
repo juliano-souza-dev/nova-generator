@@ -20,8 +20,11 @@ MP4 de teste, corta a fonte por projeto, pré-calcula a waveform, obtém um
 candidato de transcrição por Faster-Whisper, exporta APKG e reel MP4 e verifica
 que o WAV incorporado ao Anki tem o mesmo SHA-256 do WAV canônico registrado no
 manifesto do reel. O comando também lê o banco interno do APKG e compara os
-campos EN/PT com os literais aprovados, incluindo acentos e pontuação. Os
-arquivos e o relatório ficam em
+campos EN/PT com os literais aprovados, incluindo acentos e pontuação. Os mesmos
+artefatos alimentam o publicador real para gerar um `hub_final.json` local com
+ID de YouTube fictício; o ensaio confere texto dos cards e intervalo
+`ankiAudio` contra a exportação. Esse ID é somente uma fixture e não indica
+upload ou publicação externa. Os arquivos e o relatório ficam em
 `data/release-issue20/`, fora do Git. O texto de teste mantém literalmente
 aspas, vírgulas, pontos e acentos em EN/PT; o ASR é apenas candidato e não
 reescreve o texto aprovado.
@@ -30,7 +33,9 @@ Na execução local de 22/09/2026, o ensaio produziu um candidato ASR, 50
 buckets de waveform, APKG e reel com intervalo de 0 a 3200 ms. O WAV canônico
 e o membro de mídia do APKG tiveram SHA-256
 `7aec48af5543cef2e4f94dd60ebac0012827cc09f24e472f352740d8cc02ee1d`.
-O manifesto do reel registrou esse mesmo hash. Consulte o relatório local para
+O manifesto do reel registrou esse mesmo hash. Em uma execução subsequente,
+o publicador gerou `hub_final.json` a partir desses artefatos e confirmou os
+literais EN/PT e o intervalo de 0 a 3200 ms. Consulte o relatório local para
 os caminhos completos e os hashes da nova execução.
 
 O runner de contratos aceitou os exemplos válidos e rejeitou os inválidos:
