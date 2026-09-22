@@ -154,14 +154,18 @@ def run(model_file: Path, output: Path, whisper_model: str) -> dict[str, object]
         raise RuntimeError("Reel manifest differs from the canonical WAV")
     report: dict[str, object] = {
         "scope": (
-            "local technical rehearsal; external YouTube publication "
-            "and iHub import not exercised"
+            "local technical rehearsal; external YouTube publication and iHub import not exercised"
         ),
         "approved_en": ENGLISH,
         "approved_pt": PORTUGUESE,
+        "model_checkpoint_sha256": voice.model_sha256,
         "voice_snapshot_sha256": voice.sha256,
         "canonical_wav_sha256": cue.audio_sha256,
         "anki_audio_sha256": cue.audio_sha256,
+        "source_sha256": _sha256(source),
+        "project_cut_sha256": _sha256(ingested.cut_file),
+        "apkg_sha256": _sha256(export.apkg_path),
+        "reel_sha256": _sha256(export.reel_path),
         "reel_interval": {
             "start_ms": export.intervals[0].start_ms,
             "end_ms": export.intervals[0].end_ms,
