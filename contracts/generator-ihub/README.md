@@ -22,7 +22,8 @@ O Generator **não envia vídeo ao YouTube**. Depois da publicação manual, rec
 
 ## Política de compatibilidade
 
-- `contractVersion` é SemVer. Um pacote `1.x` é aceito pelo consumidor que suporte major `1`; campos novos opcionais em minor releases devem ser ignorados por consumidores anteriores.
+- As versões publicadas deste contrato seguem SemVer: uma release `1.x.y` mantém o major `1`. Os envelopes já definidos pelo iHub não recebem um campo inventado de versão: História mantém `schema_version: "1.1"` e o reel mantém o envelope legível pelo `hub_final.json` legado. A versão exata usada deve constar das notas de release e do manifesto de exportação do Generator.
+- Um consumidor que suporte o major `1` deve aceitar alterações de patch e campos opcionais de uma minor release que consiga ignorar com segurança.
 - Uma alteração que mude significado, remova campo, altere tipo, torne campo opcional obrigatório ou mude unidade de tempo exige major novo (`v2/`), schema e fixtures próprios.
 - O iHub deve aceitar a última minor do major anterior durante a janela de transição registrada na ADR e nas notas de release. Essa janela só termina após migração/reimportação dos pacotes pendentes e teste integrado de rollback.
 - Valores enumerados novos são alteração compatível somente quando o consumidor trata valores desconhecidos de forma explícita e segura; caso contrário exigem major.
@@ -35,4 +36,3 @@ O Generator **não envia vídeo ao YouTube**. Depois da publicação manual, rec
 2. Criar/alterar schema, fixture válida e fixture inválida no mesmo pull request.
 3. Rodar validação no Generator e no importador do iHub usando as fixtures.
 4. Documentar migration, janela de transição e rollback nas notas de release.
-
