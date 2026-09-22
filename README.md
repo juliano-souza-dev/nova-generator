@@ -31,3 +31,9 @@ npm run dev
 
 O Vite encaminha `/api` para `http://127.0.0.1:8000` no desenvolvimento. Use
 `npm run build`, `npm run lint`, `npm run test` e `npm run test:e2e` para validar a aplicação.
+
+## Qualidade e release
+
+Os comandos locais, gates de CI e checklist de migrations, contratos, mídia, logs e rollback
+estão em [`docs/qualidade-e-release.md`](docs/qualidade-e-release.md). O workflow de pull
+request fica em [`.github/workflows/quality.yml`](.github/workflows/quality.yml).

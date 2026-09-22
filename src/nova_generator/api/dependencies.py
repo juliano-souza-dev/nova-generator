@@ -12,6 +12,7 @@ from nova_generator.application.use_cases.editorial_commands import (
     UndoEditorialRevision,
 )
 from nova_generator.application.use_cases.manage_jobs import CancelJob, EnqueueJob
+from nova_generator.application.use_cases.manage_projects import ManageProjects
 from nova_generator.core.settings import get_settings
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
@@ -22,6 +23,7 @@ from nova_generator.infrastructure.database.session import (
     create_database_engine,
     create_session_factory,
 )
+from nova_generator.infrastructure.filesystem.youtube_media_cache import FileYoutubeMediaCache
 
 
 @lru_cache
@@ -45,6 +47,14 @@ def get_cancel_job() -> CancelJob:
 
 def _editorial_repository() -> SqlAlchemyEditorialProjectRepository:
     return SqlAlchemyEditorialProjectRepository(get_session_factory())
+
+
+def get_manage_projects() -> ManageProjects:
+    return ManageProjects(
+        _editorial_repository(),
+        FileYoutubeMediaCache(get_settings().media_cache_root),
+        SqlAlchemyJobRepository(get_session_factory()),
+    )
 
 
 def get_edit_approved_text() -> EditApprovedText:
