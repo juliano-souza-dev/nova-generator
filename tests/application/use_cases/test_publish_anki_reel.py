@@ -1,10 +1,14 @@
 import json
+from dataclasses import replace
 from hashlib import sha256
 from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
 
+from nova_generator.application.use_cases.editorial_publication_snapshot import (
+    editorial_publication_sha256,
+)
 from nova_generator.application.use_cases.publish_anki_reel import (
     AnkiPublicationError,
     PublishAnkiReel,
@@ -49,8 +53,10 @@ def test_publication_keeps_literal_text_words_and_card_timeline(tmp_path):
     apkg, reel = directory / "anki.apkg", directory / "anki-reel.mp4"
     apkg.write_bytes(b"apkg")
     reel.write_bytes(b"reel")
+
     def digest(path):
         return sha256(path.read_bytes()).hexdigest()
+
     manifest = {
         "schema": "nova-generator-anki-audio",
         "schema_version": "1.0",
@@ -87,6 +93,11 @@ def test_publication_keeps_literal_text_words_and_card_timeline(tmp_path):
             "text_hashes": {str(cue_id): cue.approved_en_sha256},
             "pt_hashes": {str(cue_id): utf8_sha256(cue.approved_pt)},
             "audio_hashes": {str(cue_id): "b" * 64},
+            "editorial_sha256": editorial_publication_sha256(
+                repository.get_project.return_value,
+                repository.get_project_scenes.return_value,
+                [(cue, [word])],
+            ),
             "voice_snapshot": {"snapshot_sha256": voice.sha256},
         },
         None,
@@ -103,6 +114,7 @@ def test_publication_keeps_literal_text_words_and_card_timeline(tmp_path):
     assert document["cues"][0]["anki"]["items"][0]["focus"] == "Café?"
     assert document["ankiAudio"]["youtube"]["video_id"] == "bbbbbbbbbbb"
     assert document["ankiAudio"]["cues"][0]["start_ms"] == 0
+    assert document["generator"]["editorial_sha256"] == job.input["editorial_sha256"]
     assert publisher.execute(project_id=project_id, job=job, youtube="bbbbbbbbbbb") == published
     with pytest.raises(AnkiPublicationError, match="outro vídeo"):
         publisher.execute(project_id=project_id, job=job, youtube="ccccccccccc")
@@ -117,3 +129,10 @@ def test_publication_keeps_literal_text_words_and_card_timeline(tmp_path):
     )
     with pytest.raises(AnkiPublicationError, match="Texto ou WAV"):
         publisher.execute(project_id=project_id, job=changed, youtube="bbbbbbbbbbb")
+    repository.get_cue_words.return_value = [replace(word, start_ms=150)]
+    with pytest.raises(AnkiPublicationError, match="Timing, palavras"):
+        publisher.execute(project_id=project_id, job=job, youtube="bbbbbbbbbbb")
+    repository.get_cue_words.return_value = [word]
+    repository.get_cue.return_value = replace(cue, speech_start_ms=150)
+    with pytest.raises(AnkiPublicationError, match="Timing, palavras"):
+        publisher.execute(project_id=project_id, job=job, youtube="bbbbbbbbbbb")

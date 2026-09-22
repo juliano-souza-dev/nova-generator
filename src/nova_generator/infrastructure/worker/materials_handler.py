@@ -4,6 +4,9 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from nova_generator.application.use_cases.editorial_publication_snapshot import (
+    editorial_publication_sha256,
+)
 from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.domain.exports import ExportCue
@@ -67,6 +70,7 @@ class MaterialsJobHandler:
         if not isinstance(raw_ids, list) or not raw_ids:
             raise ValueError("export requires selected cards")
         cues: list[ExportCue] = []
+        editorial_cards = []
         for order, raw_id in enumerate(raw_ids, 1):
             cue = self._repository.get_cue(UUID(str(raw_id)))
             if cue is None or self._repository.get_scene_project_id(cue.scene_id) != project_id:
@@ -95,10 +99,15 @@ class MaterialsJobHandler:
             if export_cue.audio_sha256 != job.input.get("audio_hashes", {}).get(str(raw_id)):
                 raise ValueError(f"canonical WAV changed for card {raw_id}; enqueue a new export")
             cues.append(export_cue)
+            editorial_cards.append((cue, self._repository.get_cue_words(cue.id)))
             execution.heartbeat()
         project = self._repository.get_project(project_id)
         if project is None:
             raise ValueError("project no longer exists")
+        if editorial_publication_sha256(
+            project, self._repository.get_project_scenes(project_id), editorial_cards
+        ) != job.input.get("editorial_sha256"):
+            raise ValueError("editorial timing or words changed; enqueue a new export")
         result = self._exporter.execute(
             cues=cues,
             voice=voice,

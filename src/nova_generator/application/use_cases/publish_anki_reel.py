@@ -15,10 +15,13 @@ from nova_generator.application.ports.job_repository import JobRepository
 from nova_generator.application.use_cases.build_hub_final_anki_audio import (
     add_manual_youtube_anki_audio,
 )
+from nova_generator.application.use_cases.editorial_publication_snapshot import (
+    editorial_publication_sha256,
+)
 from nova_generator.domain.exports import AnkiAudioExport, ReelInterval
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.media.youtube import YoutubeVideo
-from nova_generator.domain.projects.entities import Cue, utf8_sha256
+from nova_generator.domain.projects.entities import Cue, Scene, utf8_sha256
 from nova_generator.domain.voices import VoiceProfileSnapshot
 from nova_generator.infrastructure.integration.ihub_contracts import validate_anki_audio
 
@@ -62,10 +65,19 @@ class PublishAnkiReel:
             raise AnkiPublicationError("Projeto não encontrado.")
         export = self._read_export(job)
         cues = self._approved_cues(project_id, job, export)
+        scenes = self._repository.get_project_scenes(project_id)
+        editorial_cards = [(cue, self._repository.get_cue_words(cue.id)) for cue in cues]
+        if editorial_publication_sha256(project, scenes, editorial_cards) != job.input.get(
+            "editorial_sha256"
+        ):
+            raise AnkiPublicationError(
+                "Timing, palavras ou metadados editoriais mudaram após a exportação. "
+                "Exporte novamente."
+            )
         source_url = project.provenance.get("youtube_url")
         has_source = isinstance(source_url, str) and bool(source_url)
         cue_times = (
-            self._source_times(project_id, cues)
+            self._source_times(project_id, cues, scenes)
             if has_source
             else [(interval.start_ms, interval.end_ms) for interval in export.intervals]
         )
@@ -113,7 +125,7 @@ class PublishAnkiReel:
                             "original_start_ms": word.original_start_ms,
                             "original_end_ms": word.original_end_ms,
                         }
-                        for word in self._repository.get_cue_words(cue.id)
+                        for word in words
                     ],
                     "anki": {
                         "include": True,
@@ -136,7 +148,9 @@ class PublishAnkiReel:
                         ],
                     },
                 }
-                for cue, interval, timing in zip(cues, export.intervals, cue_times, strict=True)
+                for (cue, words), interval, timing in zip(
+                    editorial_cards, export.intervals, cue_times, strict=True
+                )
             ],
             "materials": [{"label": "Anki", "type": "ANKI", "fileName": "anki.apkg"}],
             "generator": {
@@ -144,6 +158,7 @@ class PublishAnkiReel:
                 "export_job_id": str(job.id),
                 "source_cue_ids": [str(cue.id) for cue in cues],
                 "anki_manifest_sha256": _file_hash(export.manifest_path),
+                "editorial_sha256": job.input["editorial_sha256"],
             },
         }
         document = add_manual_youtube_anki_audio(
@@ -234,8 +249,10 @@ class PublishAnkiReel:
             cues.append(cue)
         return cues
 
-    def _source_times(self, project_id: UUID, cues: list[Cue]) -> list[tuple[int, int]]:
-        scenes = {scene.id: scene for scene in self._repository.get_project_scenes(project_id)}
+    def _source_times(
+        self, project_id: UUID, cues: list[Cue], project_scenes: list[Scene]
+    ) -> list[tuple[int, int]]:
+        scenes = {scene.id: scene for scene in project_scenes}
         times: list[tuple[int, int]] = []
         for cue in cues:
             scene = scenes.get(cue.scene_id)

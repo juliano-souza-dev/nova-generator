@@ -17,6 +17,9 @@ from nova_generator.api.dependencies import (
     get_manage_voice_profiles,
     get_session_factory,
 )
+from nova_generator.application.use_cases.editorial_publication_snapshot import (
+    editorial_publication_sha256,
+)
 from nova_generator.application.use_cases.manage_jobs import EnqueueJob, GetJob
 from nova_generator.application.use_cases.manage_voice_profiles import ManageVoiceProfiles
 from nova_generator.application.use_cases.publish_anki_reel import (
@@ -299,6 +302,15 @@ def export_materials(
         if speech is None:
             raise HTTPException(422, detail=f"canonical WAV not ready for cue {cue.id}")
         audio_hashes[str(cue.id)] = sha256(Path(speech.audio_path).read_bytes()).hexdigest()
+    repository = _repository()
+    project = repository.get_project(project_id)
+    if project is None:
+        raise HTTPException(404, detail="project not found")
+    editorial_hash = editorial_publication_sha256(
+        project,
+        repository.get_project_scenes(project_id),
+        [(cue, repository.get_cue_words(cue.id)) for cue in selected],
+    )
     job = enqueue.execute(
         kind="export_materials",
         input={
@@ -307,6 +319,7 @@ def export_materials(
             "text_hashes": {str(cue.id): cue.approved_en_sha256 for cue in selected},
             "pt_hashes": {str(cue.id): utf8_sha256(cue.approved_pt) for cue in selected},
             "audio_hashes": audio_hashes,
+            "editorial_sha256": editorial_hash,
             "voice_snapshot": _voice_payload(voice),
         },
         idempotency_key=None,

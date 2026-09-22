@@ -6,7 +6,7 @@ Uma exportação de materiais concluída gera APKG, reel e manifesto congelado. 
 
 O documento contém `kit`, `project`, `cues` selecionadas em ordem, texto EN/PT aprovado literalmente, itens Anki e palavras com timing revisado. `ankiAudio` mantém a timeline do reel e o ID do vídeo manual, conforme o contrato Generator–iHub v1. O vídeo de origem do projeto continua em `kit.youtube` quando existir; assim, cues e palavras mantêm os tempos da fonte, enquanto cards Anki usam o reel. Uma produção sem vídeo de origem usa o reel também como vídeo do kit.
 
-A API compara hashes de EN, PT, WAV, APKG, reel e snapshot de voz com a exportação antes de publicar. Uma exportação não pode ser vinculada a outro vídeo depois da primeira publicação; para corrigir o vínculo ou conteúdo, cria-se nova exportação. O arquivo é gravado por substituição atômica e a mesma requisição é idempotente.
+A API compara hashes de EN, PT, WAV, APKG, reel e snapshot de voz com a exportação antes de publicar. O job também congela uma impressão digital do projeto, cenas, cues, timings e palavras selecionadas. O worker confere essa impressão antes de exportar; o publicador a confere novamente antes de gerar `hub_final.json`. Se houver edição depois da seleção, é preciso criar outra exportação. Jobs antigos sem essa impressão devem ser exportados novamente para publicação. Uma exportação não pode ser vinculada a outro vídeo depois da primeira publicação; para corrigir o vínculo ou conteúdo, cria-se nova exportação. O arquivo é gravado por substituição atômica e a mesma requisição é idempotente.
 
 ## Recuperação
 
