@@ -3,7 +3,8 @@
 1. Crie um projeto com fonte autorizada e conclua o job de ingestão da cena na área de mídia.
 2. Abra **Revisão editorial** pelo link da mídia ou selecione o projeto e informe o ID do
    job de ingestão concluído. Clique em **Criar rascunho do ASR**.
-3. Compare `ASR original` com o áudio e preencha os campos EN/PT literalmente. Clique em
+3. Ouça o corte da cena e confira a waveform real na timeline. Compare `ASR original` com o
+   áudio e preencha os campos EN/PT literalmente. Clique em
    **Aprovar texto** para cada cue. Aspas, acentos, reticências, espaços e pontuação são
    preservados como digitados; nenhum ajuste de timing altera esses campos.
 4. Se necessário, ajuste limites do cue na timeline e salve o timing; selecione palavras para

@@ -26,9 +26,22 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../lib/studio-api", () => ({
   studioApi: {
     projects: vi.fn().mockResolvedValue([{ id: "p1", title: "Projeto" }]),
+    projectMedia: vi.fn().mockResolvedValue({
+      ingest_job_id: "j1",
+      cut_url: "/api/cut.wav",
+      waveform: { sample_rate_hz: 8000, bucket_ms: 40, peaks: [0.3, 0.8] },
+    }),
     editorialScenes: vi
       .fn()
-      .mockResolvedValue([{ id: "s1", project_id: "p1", order: 1, duration_ms: 2000 }]),
+      .mockResolvedValue([
+        {
+          id: "s1",
+          project_id: "p1",
+          order: 1,
+          duration_ms: 2000,
+          provenance: { ingest_job_id: "j1" },
+        },
+      ]),
     editorialCues: mocks.editorialCues,
     draftAsrCandidate: mocks.draftAsrCandidate,
     updateCueText: mocks.updateCueText,
@@ -43,6 +56,8 @@ describe("EditorialPage", () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText("ASR original: “I can't… go?”")).toBeInTheDocument();
+    expect(screen.getByLabelText("Áudio do corte da cena")).toHaveAttribute("src", "/api/cut.wav");
+    expect(document.querySelectorAll(".wave-bar")).toHaveLength(160);
     fireEvent.click(screen.getByRole("button", { name: "Criar rascunho do ASR" }));
     await waitFor(() => expect(mocks.draftAsrCandidate).toHaveBeenCalledWith("p1", "j1", "editor"));
     fireEvent.change(screen.getByLabelText("Inglês aprovado"), {

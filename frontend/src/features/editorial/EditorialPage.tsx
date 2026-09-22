@@ -1,7 +1,7 @@
 import { Save } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { Project, Scene, WordTiming } from "../../lib/api.types";
+import type { Project, ProjectMedia, Scene, WordTiming } from "../../lib/api.types";
 import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { CueWordTimeline, type TimelineCue } from "./CueWordTimeline";
@@ -53,6 +53,8 @@ const sampleCues: TimelineCue[] = [
 export function EditorialPage() {
   const [params] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [media, setMedia] = useState<ProjectMedia | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [projectId, setProjectId] = useState(params.get("project") ?? "");
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [sceneId, setSceneId] = useState("");
@@ -71,7 +73,11 @@ export function EditorialPage() {
   const [wordStart, setWordStart] = useState(0);
   const [wordEnd, setWordEnd] = useState(0);
   const live = Boolean(projectId);
-  const durationMs = scenes.find((item) => item.id === sceneId)?.duration_ms ?? 6000;
+  const selectedScene = scenes.find((item) => item.id === sceneId);
+  const durationMs = selectedScene?.duration_ms ?? 6000;
+  const matchingMedia = Boolean(
+    media?.ingest_job_id && media.ingest_job_id === selectedScene?.provenance.ingest_job_id,
+  );
   const selectedCue = useMemo(
     () => cues.find((cue) => cue.id === selectedCueId) ?? cues[0],
     [cues, selectedCueId],
@@ -88,9 +94,14 @@ export function EditorialPage() {
       setScenes([]);
       setSceneId("");
       setCues(sampleCues);
+      setMedia(null);
       return;
     }
     setCues([]);
+    void studioApi
+      .projectMedia(projectId)
+      .then(setMedia)
+      .catch((error: Error) => setMessage(error.message));
     void studioApi
       .editorialScenes(projectId)
       .then((items) => {
@@ -149,6 +160,20 @@ export function EditorialPage() {
       setCues(prior);
       setHistory((value) => value.slice(0, -1));
     }
+  }
+  function togglePlayback() {
+    const audio = audioRef.current;
+    if (!audio) {
+      setPlaying((value) => !value);
+    } else if (audio.paused) {
+      void audio.play().catch((error: Error) => setMessage(error.message));
+    } else {
+      audio.pause();
+    }
+  }
+  function seek(timeMs: number) {
+    setPlayheadMs(timeMs);
+    if (audioRef.current) audioRef.current.currentTime = timeMs / 1000;
   }
   async function draftCandidate() {
     if (!projectId || !ingestJobId) return;
@@ -247,16 +272,28 @@ export function EditorialPage() {
       {live && !selectedCue && <p>Nenhum cue nesta cena. Importe um job ASR concluído.</p>}
       {selectedCue && (
         <>
+          {matchingMedia && media?.cut_url && (
+            <audio
+              ref={audioRef}
+              src={media.cut_url}
+              controls
+              aria-label="Áudio do corte da cena"
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              onTimeUpdate={(event) => setPlayheadMs(event.currentTarget.currentTime * 1000)}
+            />
+          )}
           <CueWordTimeline
             cues={cues}
+            waveform={live ? (matchingMedia ? media?.waveform : null) : undefined}
             durationMs={durationMs}
             playheadMs={playheadMs}
             playing={playing}
             zoom={zoom}
             selectedCueId={selectedCueId}
             selectedWordId={selectedWordId}
-            onPlayToggle={() => setPlaying((value) => !value)}
-            onPlayheadChange={setPlayheadMs}
+            onPlayToggle={togglePlayback}
+            onPlayheadChange={seek}
             onZoomChange={setZoom}
             onSelectCue={(id) => {
               setSelectedCueId(id);

@@ -7,6 +7,7 @@ export type TimelineCue = Cue & { words: WordTiming[] };
 
 type Props = {
   cues: TimelineCue[];
+  waveform?: { bucket_ms: number; peaks: number[] } | null;
   durationMs: number;
   playheadMs: number;
   playing: boolean;
@@ -31,6 +32,27 @@ export function CueWordTimeline(props: Props) {
     Math.min(props.playheadMs - visibleDuration / 2, props.durationMs - visibleDuration),
   );
   const pct = (time: number) => timeToPercent(time - windowStart, visibleDuration);
+  const waveBars = useMemo(() => {
+    if (props.waveform === undefined) {
+      return Array.from({ length: 80 }, (_, index) => ({
+        x: index * 13,
+        y1: 20 + (index % 5) * 8,
+        y2: 170 - (index % 7) * 6,
+      }));
+    }
+    const waveform = props.waveform;
+    if (!waveform?.peaks.length || waveform.bucket_ms <= 0) return [];
+    return Array.from({ length: 160 }, (_, index) => {
+      const start = Math.floor(
+        (windowStart + (index * visibleDuration) / 160) / waveform.bucket_ms,
+      );
+      const end = Math.ceil(
+        (windowStart + ((index + 1) * visibleDuration) / 160) / waveform.bucket_ms,
+      );
+      const peak = Math.max(0, ...waveform.peaks.slice(start, Math.max(start + 1, end)));
+      return { x: index * 6.25, y1: 95 - peak * 75, y2: 95 + peak * 75 };
+    });
+  }, [props.waveform, visibleDuration, windowStart]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
@@ -107,15 +129,8 @@ export function CueWordTimeline(props: Props) {
         onClick={seek}
       >
         <rect width="1000" height="190" className="timeline-bg" />
-        {Array.from({ length: 80 }, (_, index) => (
-          <line
-            key={index}
-            x1={index * 13}
-            x2={index * 13}
-            y1={20 + (index % 5) * 8}
-            y2={170 - (index % 7) * 6}
-            className="wave-bar"
-          />
+        {waveBars.map((bar, index) => (
+          <line key={index} x1={bar.x} x2={bar.x} y1={bar.y1} y2={bar.y2} className="wave-bar" />
         ))}
         {props.cues.map((cue) => (
           <g key={cue.id}>
