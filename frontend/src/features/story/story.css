@@ -1,0 +1,11 @@
+.story-upload { display: grid; gap: .75rem; margin-bottom: 1.25rem; }
+.story-heading { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; }
+.story-cues { list-style: none; padding: 0; display: grid; gap: 1rem; }
+.story-cues > li { display: grid; grid-template-columns: minmax(120px, 240px) 1fr; gap: 1rem; }
+.story-cues img { width: 100%; aspect-ratio: 16/9; object-fit: contain; background: #111; }
+.story-cues p { white-space: pre-wrap; }
+.story-highlights { padding-left: 1.25rem; }
+.story-actions, .story-publication { display: grid; gap: .75rem; margin-top: 1rem; }
+.story-actions select, .story-publication input { max-width: 28rem; }
+.story-publication video { width: 100%; max-width: 850px; }
+@media (max-width: 640px) { .story-cues > li { grid-template-columns: 1fr; } }
