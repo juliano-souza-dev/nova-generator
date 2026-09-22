@@ -20,4 +20,3 @@ def session_scope(factory: sessionmaker[Session]) -> Generator[Session, None, No
         yield session
     finally:
         session.close()
-

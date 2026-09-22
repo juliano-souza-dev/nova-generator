@@ -19,4 +19,3 @@ class CheckHealth:
             status="ok" if available else "degraded",
             database="ok" if available else "unavailable",
         )
-

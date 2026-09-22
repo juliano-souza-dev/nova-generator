@@ -14,4 +14,3 @@ class SqlAlchemyHealthRepository:
             return True
         except SQLAlchemyError:
             return False
-
