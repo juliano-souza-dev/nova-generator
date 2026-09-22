@@ -51,6 +51,8 @@ test("validates, reviews, renders and publishes a Story", async ({ page }) => {
       json: { schema: "immersionhub-text-audio", youtubeVideoId: "abcdefghijk" },
     });
   });
+  await page.route("**/api/stories/1/images/**", (route) => route.fulfill({ body: "image" }));
+  await page.route("**/api/stories/1/preview", (route) => route.fulfill({ body: "video" }));
   await page.route("**/api/stories/00000000-0000-4000-8000-000000000001", (route) =>
     route.fulfill({
       json: {

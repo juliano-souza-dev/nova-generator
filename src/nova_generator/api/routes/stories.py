@@ -6,6 +6,7 @@ import json
 import re
 import zipfile
 from dataclasses import asdict
+from hashlib import file_digest, sha256
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID, uuid4
@@ -144,9 +145,26 @@ def publish_story(production_id: str, payload: PublishRequest) -> dict:
         raise HTTPException(409, "Renderize a História antes de publicar")
     package = validate_story_package(directory / "package.zip")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    durations = [item["duration_ms"] for item in manifest["cues"]]
-    if len(durations) != len(package.cues):
+    manifest_cues = manifest.get("cues", [])
+    with final_video.open("rb") as video_file:
+        video_hash = file_digest(video_file, "sha256").hexdigest()
+    if (
+        manifest.get("schema") != "nova-generator-story-render"
+        or manifest.get("title") != package.title
+        or manifest.get("final_video_sha256") != video_hash
+        or len(manifest_cues) != len(package.cues)
+        or any(
+            item.get("order") != cue.order
+            or item.get("en_sha256") != sha256(cue.en.encode("utf-8")).hexdigest()
+            or item.get("pt_sha256") != sha256(cue.pt.encode("utf-8")).hexdigest()
+            or item.get("image") != cue.image
+            or not isinstance(item.get("duration_ms"), int)
+            or item["duration_ms"] <= 0
+            for cue, item in zip(package.cues, manifest_cues, strict=True)
+        )
+    ):
         raise HTTPException(409, "Manifesto de render incompatível com o pacote")
+    durations = [item["duration_ms"] for item in manifest_cues]
     cursor = 0
     cues = []
     for cue, duration in zip(package.cues, durations, strict=True):

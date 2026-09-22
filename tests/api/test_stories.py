@@ -1,6 +1,7 @@
 import io
 import json
 import zipfile
+from hashlib import sha256
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -91,15 +92,34 @@ def test_review_render_and_publication_gate(client, tmp_path, monkeypatch):
     output = tmp_path / "stories" / story["id"] / "render"
     output.mkdir()
     (output / "story_final.mp4").write_bytes(b"video")
-    (output / "story-manifest.json").write_text(
-        json.dumps({"cues": [{"duration_ms": 1234}]}), encoding="utf-8"
-    )
+    manifest = {
+        "schema": "nova-generator-story-render",
+        "title": "História Á",
+        "final_video_sha256": sha256(b"video").hexdigest(),
+        "cues": [
+            {
+                "order": 1,
+                "image": "images/one.jpg",
+                "duration_ms": 1234,
+                "en_sha256": sha256("Don’t stop.".encode()).hexdigest(),
+                "pt_sha256": sha256("Não pare.".encode()).hexdigest(),
+            }
+        ],
+    }
+    (output / "story-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     published = client.post(
         f"/api/stories/{story['id']}/publication", json={"youtube": "abcdefghijk"}
     )
     assert published.status_code == 200
     assert published.json()["cues"][0]["en"] == "Don’t stop."
     assert published.json()["youtubeVideoId"] == "abcdefghijk"
+    (output / "story_final.mp4").write_bytes(b"changed")
+    assert (
+        client.post(
+            f"/api/stories/{story['id']}/publication", json={"youtube": "abcdefghijk"}
+        ).status_code
+        == 409
+    )
 
 
 def test_worker_uses_frozen_voice_snapshot_and_validated_images(client, tmp_path, monkeypatch):
