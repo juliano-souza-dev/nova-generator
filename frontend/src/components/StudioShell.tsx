@@ -1,4 +1,12 @@
-import { Clapperboard, FolderKanban, Languages, Menu, Mic2, Sparkles } from "lucide-react";
+import {
+  Clapperboard,
+  FolderKanban,
+  Languages,
+  ListChecks,
+  Menu,
+  Mic2,
+  Sparkles,
+} from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { NavLink } from "react-router-dom";
 
@@ -6,6 +14,7 @@ const links = [
   { to: "/projects", label: "Projetos", icon: FolderKanban },
   { to: "/editorial", label: "Editorial", icon: Languages },
   { to: "/media", label: "Mídia", icon: Mic2 },
+  { to: "/jobs", label: "Jobs", icon: ListChecks },
   { to: "/story", label: "História", icon: Clapperboard },
 ];
 

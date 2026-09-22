@@ -1,4 +1,13 @@
-import type { Cue, Health, Job, Project, Timing, WordTiming } from "./api.types";
+import type {
+  Cue,
+  Health,
+  Job,
+  JobDetail,
+  JobPage,
+  Project,
+  Timing,
+  WordTiming,
+} from "./api.types";
 import { apiRequest } from "./api";
 
 export const studioApi = {
@@ -6,6 +15,12 @@ export const studioApi = {
   enqueueJob: (input: { kind: string; input: Record<string, unknown>; idempotency_key?: string }) =>
     apiRequest<Job>("/jobs", { method: "POST", body: JSON.stringify(input) }),
   cancelJob: (id: string) => apiRequest<Job>(`/jobs/${id}/cancel`, { method: "POST" }),
+  jobs: (offset = 0, limit = 25, status?: string) =>
+    apiRequest<JobPage>(
+      `/jobs?offset=${offset}&limit=${limit}${status ? `&status=${status}` : ""}`,
+    ),
+  job: (id: string) => apiRequest<JobDetail>(`/jobs/${id}`),
+  retryJob: (id: string) => apiRequest<Job>(`/jobs/${id}/retry`, { method: "POST" }),
   projects: (search = "", includeArchived = false) =>
     apiRequest<Project[]>(
       `/projects?search=${encodeURIComponent(search)}&include_archived=${includeArchived}`,

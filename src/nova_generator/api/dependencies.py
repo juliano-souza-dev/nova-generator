@@ -11,7 +11,13 @@ from nova_generator.application.use_cases.editorial_commands import (
     SplitCue,
     UndoEditorialRevision,
 )
-from nova_generator.application.use_cases.manage_jobs import CancelJob, EnqueueJob
+from nova_generator.application.use_cases.manage_jobs import (
+    CancelJob,
+    EnqueueJob,
+    GetJob,
+    ListJobs,
+    RetryJob,
+)
 from nova_generator.application.use_cases.manage_projects import ManageProjects
 from nova_generator.core.settings import get_settings
 from nova_generator.infrastructure.database.editorial_project_repository import (
@@ -43,6 +49,18 @@ def get_enqueue_job() -> EnqueueJob:
 
 def get_cancel_job() -> CancelJob:
     return CancelJob(SqlAlchemyJobRepository(get_session_factory()))
+
+
+def get_list_jobs() -> ListJobs:
+    return ListJobs(SqlAlchemyJobRepository(get_session_factory()))
+
+
+def get_job() -> GetJob:
+    return GetJob(SqlAlchemyJobRepository(get_session_factory()))
+
+
+def get_retry_job() -> RetryJob:
+    return RetryJob(SqlAlchemyJobRepository(get_session_factory()))
 
 
 def _editorial_repository() -> SqlAlchemyEditorialProjectRepository:
