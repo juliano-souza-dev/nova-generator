@@ -4,6 +4,9 @@ import type {
   Job,
   JobDetail,
   JobPage,
+  MaterialCard,
+  MaterialExport,
+  MaterialList,
   Project,
   StoryProduction,
   Timing,
@@ -70,6 +73,27 @@ export const studioApi = {
       method: "POST",
       body: JSON.stringify({ youtube }),
     }),
+  materials: (projectId: string, voiceId?: string) =>
+    apiRequest<MaterialList>(
+      `/projects/${projectId}/materials${voiceId ? `?voice_id=${encodeURIComponent(voiceId)}` : ""}`,
+    ),
+  updateMaterial: (projectId: string, cueId: string, included: boolean) =>
+    apiRequest<MaterialCard>(`/projects/${projectId}/materials/${cueId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ included }),
+    }),
+  prepareMaterialAudio: (projectId: string, cueId: string, voiceId: string) =>
+    apiRequest<Job>(`/projects/${projectId}/materials/${cueId}/audio`, {
+      method: "POST",
+      body: JSON.stringify({ voice_id: voiceId }),
+    }),
+  exportMaterials: (projectId: string, voiceId: string) =>
+    apiRequest<MaterialExport>(`/projects/${projectId}/materials/exports`, {
+      method: "POST",
+      body: JSON.stringify({ voice_id: voiceId }),
+    }),
+  materialExport: (projectId: string, jobId: string) =>
+    apiRequest<MaterialExport>(`/projects/${projectId}/materials/exports/${jobId}`),
   voices: () => apiRequest<VoiceProfile[]>("/voices"),
   createVoice: (input: {
     name: string;
