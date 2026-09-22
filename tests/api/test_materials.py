@@ -90,6 +90,7 @@ def test_material_selection_keeps_approved_text_and_export_freezes_cards(
     assert len(export["input"]["audio_hashes"][first_id]) == 64
     assert export["input"]["voice_snapshot"]["snapshot_sha256"] == profile.sha256
     assert export["input"]["pt_hashes"][first_id] == utf8_sha256("Olá.")
+    assert len(export["input"]["editorial_sha256"]) == 64
     assert client.get(f"{base}/exports/{job_id}").json()["apkg_url"] is None
     assert client.get(f"{base}/latest-export").json()["job_id"] == job_id
     assert (

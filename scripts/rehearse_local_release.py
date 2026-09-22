@@ -20,6 +20,9 @@ from pathlib import Path
 from unittest.mock import Mock
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+from nova_generator.application.use_cases.editorial_publication_snapshot import (
+    editorial_publication_sha256,
+)
 from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
 from nova_generator.application.use_cases.ingest_scene_media import IngestSceneMedia
 from nova_generator.application.use_cases.publish_anki_reel import PublishAnkiReel
@@ -131,6 +134,11 @@ def _rehearse_hub_publication(
             "text_hashes": {str(cue_id): cue.approved_en_sha256},
             "pt_hashes": {str(cue_id): utf8_sha256(PORTUGUESE)},
             "audio_hashes": {str(cue_id): audio_sha256},
+            "editorial_sha256": editorial_publication_sha256(
+                repository.get_project.return_value,
+                repository.get_project_scenes.return_value,
+                [(cue, [])],
+            ),
             "voice_snapshot": {"snapshot_sha256": voice.sha256},
         },
         None,
