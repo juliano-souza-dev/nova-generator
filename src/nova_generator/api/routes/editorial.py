@@ -14,6 +14,7 @@ from nova_generator.api.dependencies import (
     get_editorial_repository,
     get_merge_cues,
     get_review_asr_candidate,
+    get_session_factory,
     get_split_cue,
     get_undo_editorial_revision,
 )
@@ -30,10 +31,14 @@ from nova_generator.application.use_cases.review_asr_candidate import (
     CandidateReviewError,
     ReviewAsrCandidate,
 )
+from nova_generator.core.settings import get_settings
+from nova_generator.domain.media.youtube import YoutubeVideo
 from nova_generator.domain.projects.entities import Cue, WordTiming
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
 )
+from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
+from nova_generator.infrastructure.filesystem.youtube_media_cache import FileYoutubeMediaCache
 
 router = APIRouter(prefix="/editorial", tags=["editorial"])
 
@@ -137,6 +142,13 @@ class RevisionResponse(BaseModel):
     after_sha256: str
 
 
+class ReviewContextResponse(BaseModel):
+    status: str
+    scene: SceneResponse
+    ingest_job_id: UUID
+    cut_url: str
+
+
 @router.get("/projects/{project_id}/scenes", response_model=list[SceneResponse])
 def list_scenes(
     project_id: UUID,
@@ -205,6 +217,55 @@ def draft_from_candidate(
             detail=str(error),
         ) from error
     return SceneResponse.model_validate(scene, from_attributes=True)
+
+
+@router.post("/projects/{project_id}/review", response_model=ReviewContextResponse)
+def open_latest_review(
+    project_id: UUID,
+    use_case: Annotated[ReviewAsrCandidate, Depends(get_review_asr_candidate)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+) -> ReviewContextResponse:
+    """Resolve and materialize the latest valid ASR candidate without exposing job IDs."""
+    project = repository.get_project(project_id)
+    if project is None:
+        raise HTTPException(404, detail="project not found")
+    job = SqlAlchemyJobRepository(get_session_factory()).latest_for_project(
+        str(project_id), "ingest_scene_media", "succeeded"
+    )
+    video_id = project.provenance.get("youtube_video_id")
+    metadata = (
+        FileYoutubeMediaCache(get_settings().media_cache_root).find_verified(YoutubeVideo(video_id))
+        if isinstance(video_id, str)
+        else None
+    )
+    cut = (
+        get_settings().project_root / str(project_id) / "cuts" / f"{job.id}.mp4"
+        if job
+        else None
+    )
+    if (
+        job is None
+        or not isinstance(job.output, dict)
+        or metadata is None
+        or job.output.get("source_sha256") != metadata.sha256
+        or job.output.get("video_id") != video_id
+        or cut is None
+        or not cut.is_file()
+        or cut.stat().st_size == 0
+    ):
+        raise HTTPException(409, detail="no current ASR candidate; process the latest cut first")
+    try:
+        scene = use_case.execute(project_id, job.id, author="local-editor")
+    except CandidateReviewError as error:
+        raise HTTPException(422, detail=str(error)) from error
+    return ReviewContextResponse(
+        status="ready",
+        scene=SceneResponse.model_validate(scene, from_attributes=True),
+        ingest_job_id=job.id,
+        cut_url=(
+            f"{get_settings().api_prefix}/projects/{project_id}/media/cuts/{job.id}"
+        ),
+    )
 
 
 @router.put("/cues/{cue_id}/text", response_model=CueResponse)

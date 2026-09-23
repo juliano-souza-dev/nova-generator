@@ -50,6 +50,9 @@ def test_project_media_scopes_source_cut_and_candidate(client, tmp_path, monkeyp
     project_id = project["id"]
     base = f"/api/projects/{project_id}/media"
     assert client.get(base).json()["source_ready"] is False
+    initial = client.get(base).json()
+    assert initial["state"] == "source_validated"
+    assert initial["can_start"] is True
     assert client.post(f"{base}/ingest", json={"start_ms": 0, "end_ms": 1000}).status_code == 422
     source, digest = _verified_source(tmp_path, project_id)
     snapshot = client.get(base).json()
@@ -95,7 +98,21 @@ def test_project_media_scopes_source_cut_and_candidate(client, tmp_path, monkeyp
                 "engine": "faster-whisper",
                 "model": "small",
                 "language": "en",
-                "cues": [],
+                "cues": [
+                    {
+                        "start_ms": 100,
+                        "end_ms": 700,
+                        "text": "Café?",
+                        "words": [
+                            {
+                                "surface": "Café?",
+                                "start_ms": 100,
+                                "end_ms": 700,
+                                "probability": 0.99,
+                            }
+                        ],
+                    }
+                ],
             },
         },
     )
@@ -103,7 +120,33 @@ def test_project_media_scopes_source_cut_and_candidate(client, tmp_path, monkeyp
     assert snapshot["ingest_job_id"] == job_id
     assert snapshot["waveform"]["peaks"] == [0.2]
     assert snapshot["transcript_candidate"]["engine"] == "faster-whisper"
+    assert snapshot["state"] == "ready_for_review"
+    assert snapshot["can_review"] is True
     assert client.get(snapshot["cut_url"]).content == b"project-cut"
+    review = client.post(f"/api/editorial/projects/{project_id}/review")
+    assert review.status_code == 200
+    assert review.json()["status"] == "ready"
+    repeated_review = client.post(f"/api/editorial/projects/{project_id}/review").json()
+    assert repeated_review["scene"]["id"] == review.json()["scene"]["id"]
+    source.write_bytes(b"replacement-video")
+    replacement_digest = sha256(source.read_bytes()).hexdigest()
+    now = datetime.now(UTC)
+    FileYoutubeMediaCache(tmp_path / "media").save_verified(
+        YoutubeMediaMetadata(
+            video=YoutubeVideo("dQw4w9WgXcQ"),
+            source_file="source.mp4",
+            sha256=replacement_digest,
+            size_bytes=source.stat().st_size,
+            duration_ms=90_000,
+            video_codec="h264",
+            audio_codec="aac",
+            source_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            created_at_utc=now,
+            last_used_at_utc=now,
+            use_count=1,
+        )
+    )
+    assert client.post(f"/api/editorial/projects/{project_id}/review").status_code == 409
     other = client.post(
         "/api/projects", json={"title": "Other", "content_type": "story"}
     ).json()
@@ -124,3 +167,21 @@ def test_download_job_uses_project_identity(client):
     assert queued.status_code == 202
     assert client.post(f"{base}/download").json()["id"] == queued.json()["id"]
     assert client.get(base).json()["download_status"] == "queued"
+
+
+def test_start_is_idempotent_and_skips_download_on_cache_hit(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("NOVA_GENERATOR_MEDIA_CACHE_ROOT", str(tmp_path / "media"))
+    get_settings.cache_clear()
+    project = client.post(
+        "/api/projects",
+        json={"title": "Lesson", "youtube_url": "https://youtu.be/dQw4w9WgXcQ"},
+    ).json()
+    base = f"/api/projects/{project['id']}/media"
+    first = client.post(f"{base}/start")
+    second = client.post(f"{base}/start")
+    assert first.status_code == second.status_code == 202
+    assert first.json()["download_job_id"] == second.json()["download_job_id"]
+    _verified_source(tmp_path, project["id"])
+    cached = client.post(f"{base}/start").json()
+    assert cached["state"] == "cut_required"
+    assert cached["can_cut"] is True

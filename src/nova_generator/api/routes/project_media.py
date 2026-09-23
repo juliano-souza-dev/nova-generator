@@ -33,6 +33,12 @@ class JobReference(BaseModel):
 
 
 class MediaSnapshot(BaseModel):
+    state: str
+    current_step: str
+    can_start: bool
+    can_cut: bool
+    can_review: bool
+    review_url: str | None
     source_ready: bool
     source_url: str | None
     duration_ms: int | None
@@ -95,7 +101,34 @@ def get_project_media(project_id: UUID) -> MediaSnapshot:
     cut_ready = bool(cut_path and cut_path.is_file() and cut_path.stat().st_size > 0)
     output = completed.output if completed and cut_ready else None
     base = f"{get_settings().api_prefix}/projects/{project_id}/media"
+    download_active = bool(download and download.status in {"queued", "running", "retryable"})
+    ingest_active = bool(ingest and ingest.status in {"queued", "running", "retryable"})
+    failure = ingest if ingest and ingest.status == "failed" else (
+        download if download and download.status == "failed" else None
+    )
+    if failure:
+        failed_step = "cut_and_asr" if failure.kind == "ingest_scene_media" else "source"
+        state, step = "failed", failed_step
+    elif output and output.get("transcript_candidate"):
+        state, step = "ready_for_review", "review"
+    elif ingest_active:
+        state, step = "asr_processing", "cut_and_asr"
+    elif metadata:
+        state, step = "cut_required", "cut"
+    elif download_active:
+        state, step = "source_processing", "source"
+    else:
+        state, step = "source_validated", "source"
+    review_url = (
+        f"/editorial?project={project_id}" if state == "ready_for_review" else None
+    )
     return MediaSnapshot(
+        state=state,
+        current_step=step,
+        can_start=state in {"source_validated", "failed"} and not metadata,
+        can_cut=metadata is not None and not ingest_active,
+        can_review=state == "ready_for_review",
+        review_url=review_url,
         source_ready=metadata is not None,
         source_url=f"{base}/source" if metadata else None,
         duration_ms=metadata.duration_ms if metadata else None,
@@ -159,6 +192,19 @@ def queue_source_download(
         idempotency_key=None,
     )
     return JobReference(id=job.id, status=job.status)
+
+
+@router.post("/start", response_model=MediaSnapshot, status_code=status.HTTP_202_ACCEPTED)
+def start_media_processing(
+    project_id: UUID, enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)]
+) -> MediaSnapshot:
+    """Start or resume source preparation; a verified global cache is an immediate hit."""
+    _project, video, metadata = _source(project_id)
+    if video is None:
+        raise HTTPException(422, detail="project has no validated YouTube source")
+    if metadata is None:
+        queue_source_download(project_id, enqueue)
+    return get_project_media(project_id)
 
 
 @router.post("/ingest", response_model=JobReference, status_code=status.HTTP_202_ACCEPTED)

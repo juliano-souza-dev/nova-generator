@@ -65,6 +65,18 @@ export type InspectedYoutubeSource = {
   channel: string | null;
 };
 export type ProjectMedia = {
+  state:
+    | "source_validated"
+    | "source_processing"
+    | "cut_required"
+    | "asr_processing"
+    | "ready_for_review"
+    | "failed";
+  current_step: "source" | "cut" | "cut_and_asr" | "review";
+  can_start: boolean;
+  can_cut: boolean;
+  can_review: boolean;
+  review_url: string | null;
   source_ready: boolean;
   source_url: string | null;
   duration_ms: number | null;
@@ -94,6 +106,12 @@ export type ProjectMedia = {
       }>;
     }>;
   } | null;
+};
+export type EditorialReviewContext = {
+  status: "ready";
+  scene: Scene;
+  ingest_job_id: string;
+  cut_url: string;
 };
 export type MediaJobReference = { id: string; status: string };
 export type StoryHighlight = { text: string; type: string; pt: string; occurrence: number };

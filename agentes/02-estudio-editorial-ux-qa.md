@@ -12,6 +12,8 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Especificar split, merge e reconciliação de palavras com IDs estáveis e proveniência.
 - Validar acentos, Unicode, aspas, reticências, pontuação, contrações e caracteres especiais sem normalização destrutiva.
 - Criar fixtures canônicas, testes unitários de transformação, testes de interface e cenários Playwright.
+- Abrir o último candidato ASR válido pelo projeto e cena, materializando o rascunho de forma
+  idempotente sem solicitar IDs de job ou autoria técnica ao operador.
 
 ## Limites
 

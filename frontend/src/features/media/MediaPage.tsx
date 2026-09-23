@@ -36,8 +36,8 @@ export function MediaPage() {
     void client.invalidateQueries({ queryKey: ["project-media", selected?.id] });
     void client.invalidateQueries({ queryKey: ["projects", "media"] });
   };
-  const download = useMutation({
-    mutationFn: (id: string) => studioApi.downloadProjectMedia(id),
+  const start = useMutation({
+    mutationFn: (id: string) => studioApi.startProjectMedia(id),
     onSuccess: refresh,
   });
   const ingest = useMutation({
@@ -90,22 +90,25 @@ export function MediaPage() {
               <SourceStatus
                 project={selected}
                 media={media.data}
-                onDownload={() => download.mutate(selected.id)}
-                busy={download.isPending}
+                onStart={() => start.mutate(selected.id)}
+                busy={start.isPending}
               />
-              {download.error && (
+              {start.error && (
                 <p className="field-error" role="alert">
-                  {download.error.message}
+                  {start.error.message}
                 </p>
               )}
-              <MediaPlayer media={media.data} />
-              <CutEditor
-                key={selected.id}
-                project={selected}
-                media={media.data}
-                onIngest={(input) => ingest.mutate(input)}
-                busy={ingest.isPending}
-              />
+              <JourneySteps media={media.data} />
+              {media.data.source_ready && <MediaPlayer media={media.data} />}
+              {media.data.can_cut && (
+                <CutEditor
+                  key={selected.id}
+                  project={selected}
+                  media={media.data}
+                  onIngest={(input) => ingest.mutate(input)}
+                  busy={ingest.isPending}
+                />
+              )}
               {ingest.error && (
                 <p className="field-error" role="alert">
                   {ingest.error.message}
@@ -125,12 +128,12 @@ export function MediaPage() {
 function SourceStatus({
   project,
   media,
-  onDownload,
+  onStart,
   busy,
 }: {
   project: Project;
   media: ProjectMedia;
-  onDownload: () => void;
+  onStart: () => void;
   busy: boolean;
 }) {
   const hasSource = Boolean(project.youtube_url && project.youtube_video_id);
@@ -173,11 +176,17 @@ function SourceStatus({
       {hasSource ? (
         <button
           className="primary-button"
-          onClick={onDownload}
-          disabled={busy || ACTIVE.has(media.download_status ?? "")}
+          onClick={onStart}
+          disabled={busy || ACTIVE.has(media.download_status ?? "") || !media.can_start}
         >
           <Download aria-hidden="true" />
-          {busy ? "Enfileirando…" : media.source_ready ? "Verificar fonte" : "Baixar fonte"}
+          {busy || ACTIVE.has(media.download_status ?? "")
+            ? "Preparando fonte…"
+            : media.source_ready
+              ? "Fonte pronta"
+              : media.state === "failed"
+                ? "Tentar novamente"
+                : "Iniciar processamento"}
         </button>
       ) : (
         <span className="media-warning">
@@ -185,6 +194,30 @@ function SourceStatus({
         </span>
       )}
     </section>
+  );
+}
+
+function JourneySteps({ media }: { media: ProjectMedia }) {
+  const steps = [
+    ["source", "Preparar fonte"],
+    ["cut", "Escolher corte"],
+    ["cut_and_asr", "Cortar e transcrever"],
+    ["review", "Revisar legenda"],
+  ] as const;
+  const current = steps.findIndex(([key]) => key === media.current_step);
+  return (
+    <ol className="media-steps" aria-label="Etapas do processamento">
+      {steps.map(([key, label], index) => (
+        <li
+          key={key}
+          className={index < current ? "complete" : index === current ? "current" : "pending"}
+          aria-current={index === current ? "step" : undefined}
+        >
+          <span>{index + 1}</span>
+          {label}
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -399,7 +432,7 @@ function CutWaveform({ peaks, bucketMs }: { peaks: number[]; bucketMs: number })
 
 function TranscriptReview({ projectId, media }: { projectId: string; media: ProjectMedia }) {
   const candidate = media.transcript_candidate;
-  if (!candidate || !media.ingest_job_id) return null;
+  if (!candidate || !media.can_review) return null;
   return (
     <section className="panel media-transcript">
       <h2>Transcrição candidata</h2>
@@ -418,9 +451,9 @@ function TranscriptReview({ projectId, media }: { projectId: string; media: Proj
       </ol>
       <Link
         className="primary-button"
-        to={`/editorial?project=${encodeURIComponent(projectId)}&ingest_job=${encodeURIComponent(media.ingest_job_id)}`}
+        to={media.review_url ?? `/editorial?project=${encodeURIComponent(projectId)}`}
       >
-        Revisar no Editorial
+        Revisar legenda
       </Link>
     </section>
   );

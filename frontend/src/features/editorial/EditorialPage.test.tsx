@@ -5,7 +5,6 @@ import { EditorialPage } from "./EditorialPage";
 
 const mocks = vi.hoisted(() => ({
   updateCueText: vi.fn().mockResolvedValue({}),
-  draftAsrCandidate: vi.fn().mockResolvedValue({ id: "s1" }),
   editorialCues: vi.fn().mockResolvedValue([
     {
       id: "c1",
@@ -40,8 +39,19 @@ vi.mock("../../lib/studio-api", () => ({
         provenance: { ingest_job_id: "j1" },
       },
     ]),
+    openEditorialReview: vi.fn().mockResolvedValue({
+      status: "ready",
+      ingest_job_id: "j1",
+      cut_url: "/api/cut.wav",
+      scene: {
+        id: "s1",
+        project_id: "p1",
+        order: 1,
+        duration_ms: 2000,
+        provenance: { ingest_job_id: "j1" },
+      },
+    }),
     editorialCues: mocks.editorialCues,
-    draftAsrCandidate: mocks.draftAsrCandidate,
     updateCueText: mocks.updateCueText,
   },
 }));
@@ -49,15 +59,13 @@ vi.mock("../../lib/studio-api", () => ({
 describe("EditorialPage", () => {
   it("loads an ASR draft and sends literal EN/PT approval", async () => {
     render(
-      <MemoryRouter initialEntries={["/editorial?project=p1&ingest_job=j1"]}>
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
         <EditorialPage />
       </MemoryRouter>,
     );
     expect(await screen.findByText("ASR original: “I can't… go?”")).toBeInTheDocument();
     expect(screen.getByLabelText("Áudio do corte da cena")).toHaveAttribute("src", "/api/cut.wav");
     expect(document.querySelectorAll(".wave-bar")).toHaveLength(160);
-    fireEvent.click(screen.getByRole("button", { name: "Criar rascunho do ASR" }));
-    await waitFor(() => expect(mocks.draftAsrCandidate).toHaveBeenCalledWith("p1", "j1", "editor"));
     fireEvent.change(screen.getByLabelText("Inglês aprovado"), {
       target: { value: "“I can't… go?”" },
     });
@@ -67,7 +75,7 @@ describe("EditorialPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Aprovar texto" }));
     await waitFor(() =>
       expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
-        author: "editor",
+        author: "local-editor",
         approved_en: "“I can't… go?”",
         approved_pt: "“Não posso… ir?”",
       }),

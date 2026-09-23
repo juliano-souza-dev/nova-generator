@@ -14,6 +14,8 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Validar duração, codec, canais, seek e integridade com FFprobe.
 - Usar cache de áudio por conteúdo e permitir reprocessamento seletivo de artefatos inválidos.
 - Implementar jobs retomáveis e manter Groq fora da geração de voz.
+- Expor download, corte, waveform e ASR como jornada derivada dos jobs e artefatos; o ASR usa
+  sempre o MP4 cortado e o downloader registra sua estratégia de fallback.
 
 ## Limites
 
