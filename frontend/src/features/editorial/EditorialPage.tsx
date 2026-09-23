@@ -58,8 +58,7 @@ export function EditorialPage() {
   const [projectId, setProjectId] = useState(params.get("project") ?? "");
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [sceneId, setSceneId] = useState("");
-  const [ingestJobId, setIngestJobId] = useState(params.get("ingest_job") ?? "");
-  const [author, setAuthor] = useState("editor");
+  const author = "local-editor";
   const [message, setMessage] = useState("");
   const [cues, setCues] = useState(sampleCues);
   const [history, setHistory] = useState<TimelineCue[][]>([]);
@@ -98,15 +97,12 @@ export function EditorialPage() {
       return;
     }
     setCues([]);
-    void studioApi
-      .projectMedia(projectId)
-      .then(setMedia)
-      .catch((error: Error) => setMessage(error.message));
-    void studioApi
-      .editorialScenes(projectId)
-      .then((items) => {
-        setScenes(items);
-        setSceneId(items[0]?.id ?? "");
+    void Promise.all([studioApi.projectMedia(projectId), studioApi.openEditorialReview(projectId)])
+      .then(([currentMedia, context]) => {
+        setMedia(currentMedia);
+        setScenes([context.scene]);
+        setSceneId(context.scene.id);
+        setMessage("Transcrição pronta para revisão.");
       })
       .catch((error: Error) => setMessage(error.message));
   }, [projectId]);
@@ -175,15 +171,6 @@ export function EditorialPage() {
     setPlayheadMs(timeMs);
     if (audioRef.current) audioRef.current.currentTime = timeMs / 1000;
   }
-  async function draftCandidate() {
-    if (!projectId || !ingestJobId) return;
-    await run(async () => {
-      const scene = await studioApi.draftAsrCandidate(projectId, ingestJobId, author);
-      setScenes(await studioApi.editorialScenes(projectId));
-      setSceneId(scene.id);
-      await refreshCues(scene.id);
-    }, "Candidato ASR importado como rascunho. Revise EN/PT antes de aprovar.");
-  }
   async function saveText() {
     if (!live || !selectedCue) return;
     await run(async () => {
@@ -250,26 +237,11 @@ export function EditorialPage() {
                 ))}
               </select>
             </label>
-            <label>
-              ID do job ASR concluído
-              <input value={ingestJobId} onChange={(event) => setIngestJobId(event.target.value)} />
-            </label>
-            <label>
-              Editor
-              <input value={author} onChange={(event) => setAuthor(event.target.value)} />
-            </label>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void draftCandidate()}
-            >
-              Criar rascunho do ASR
-            </button>
           </>
         )}
       </div>
       {message && <p role="status">{message}</p>}
-      {live && !selectedCue && <p>Nenhum cue nesta cena. Importe um job ASR concluído.</p>}
+      {live && !selectedCue && <p>Preparando a transcrição para revisão…</p>}
       {selectedCue && (
         <>
           {matchingMedia && media?.cut_url && (

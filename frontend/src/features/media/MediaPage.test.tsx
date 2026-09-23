@@ -16,6 +16,12 @@ const fixtures = vi.hoisted(() => ({
     job_status: "idle",
   },
   media: {
+    state: "ready_for_review",
+    current_step: "review",
+    can_start: false,
+    can_cut: true,
+    can_review: true,
+    review_url: "/editorial?project=p1",
     source_ready: true,
     source_url: "/api/projects/p1/media/source",
     duration_ms: 90_000,
@@ -37,6 +43,7 @@ const fixtures = vi.hoisted(() => ({
     },
   },
   download: vi.fn().mockResolvedValue({ id: "job-1", status: "queued" }),
+  start: vi.fn().mockResolvedValue({}),
   ingest: vi.fn().mockResolvedValue({ id: "job-3", status: "queued" }),
 }));
 vi.mock("../../lib/studio-api", () => ({
@@ -44,6 +51,7 @@ vi.mock("../../lib/studio-api", () => ({
     projects: vi.fn().mockResolvedValue([fixtures.project]),
     projectMedia: vi.fn().mockResolvedValue(fixtures.media),
     downloadProjectMedia: fixtures.download,
+    startProjectMedia: fixtures.start,
     ingestProjectMedia: fixtures.ingest,
   },
 }));
@@ -65,12 +73,10 @@ describe("MediaPage", () => {
       fixtures.media.cut_url,
     );
     expect(screen.getByText("Café?")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Revisar no Editorial" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Revisar legenda" })).toHaveAttribute(
       "href",
-      "/editorial?project=p1&ingest_job=job-2",
+      "/editorial?project=p1",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Verificar fonte" }));
-    await waitFor(() => expect(fixtures.download).toHaveBeenCalledWith("p1"));
     fireEvent.change(screen.getByLabelText("Handle de início"), { target: { value: "1000" } });
     expect(screen.getByLabelText("Início do corte em milissegundos")).toHaveValue(1000);
     fireEvent.click(screen.getByRole("button", { name: "Extrair corte e transcrever" }));

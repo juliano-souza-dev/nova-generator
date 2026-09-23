@@ -25,3 +25,14 @@ pare os processos, guarde uma cópia do estado atual, reponha banco e diretório
 backup e inicie novamente. Rode `python -m alembic upgrade head` após restaurar uma versão
 anterior do banco. Jobs abandonados voltam a `retryable` quando o worker reinicia; inspecione
 o job antes de solicitar retry manual para evitar repetir uma publicação externa.
+# Jornada de mídia e revisão
+
+Na tela **Mídia**, selecione o projeto e use **Iniciar processamento**. Uma fonte já verificada no
+cache global avança diretamente para o corte; caso contrário, o worker tenta as alternativas do
+yt-dlp e valida o resultado com FFprobe. Depois de confirmar o intervalo, o mesmo job cria o MP4
+do projeto, a waveform e a transcrição do corte. **Revisar legenda** abre o candidato correto sem
+copiar IDs.
+
+Se uma etapa falhar, o snapshot mostra `failed`. Repita a ação da etapa: cache e artefatos válidos
+são reutilizados. Um candidato é recusado quando o hash da fonte atual não corresponde ao hash do
+corte, evitando revisar uma transcrição obsoleta.

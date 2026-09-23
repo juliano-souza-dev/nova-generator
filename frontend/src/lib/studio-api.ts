@@ -1,6 +1,7 @@
 import type {
   Cue,
   EditorialCue,
+  EditorialReviewContext,
   Health,
   Job,
   JobDetail,
@@ -39,6 +40,8 @@ export const studioApi = {
       `/projects?search=${encodeURIComponent(search)}&include_archived=${includeArchived}`,
     ),
   projectMedia: (id: string) => apiRequest<ProjectMedia>(`/projects/${id}/media`),
+  startProjectMedia: (id: string) =>
+    apiRequest<ProjectMedia>(`/projects/${id}/media/start`, { method: "POST" }),
   downloadProjectMedia: (id: string) =>
     apiRequest<MediaJobReference>(`/projects/${id}/media/download`, { method: "POST" }),
   ingestProjectMedia: (id: string, input: { start_ms: number; end_ms: number; language: string }) =>
@@ -62,6 +65,10 @@ export const studioApi = {
   deleteProject: (id: string) => apiRequest<void>(`/projects/${id}`, { method: "DELETE" }),
   editorialScenes: (projectId: string) =>
     apiRequest<Scene[]>(`/editorial/projects/${projectId}/scenes`),
+  openEditorialReview: (projectId: string) =>
+    apiRequest<EditorialReviewContext>(`/editorial/projects/${projectId}/review`, {
+      method: "POST",
+    }),
   editorialCues: (sceneId: string) =>
     apiRequest<EditorialCue[]>(`/editorial/scenes/${sceneId}/cues`),
   draftAsrCandidate: (projectId: string, jobId: string, author: string) =>
