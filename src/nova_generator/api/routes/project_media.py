@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -17,6 +19,9 @@ from nova_generator.infrastructure.database.editorial_project_repository import 
 )
 from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
 from nova_generator.infrastructure.filesystem.youtube_media_cache import FileYoutubeMediaCache
+from nova_generator.infrastructure.ingestion.ffmpeg_waveform_generator import (
+    FfmpegWaveformGenerator,
+)
 
 router = APIRouter(prefix="/projects/{project_id}/media", tags=["project-media"])
 
@@ -30,6 +35,12 @@ class CutInput(BaseModel):
 class JobReference(BaseModel):
     id: UUID
     status: str
+
+
+class WaveformResponse(BaseModel):
+    sample_rate_hz: int
+    bucket_ms: int
+    peaks: list[float]
 
 
 class MediaSnapshot(BaseModel):
@@ -103,8 +114,10 @@ def get_project_media(project_id: UUID) -> MediaSnapshot:
     base = f"{get_settings().api_prefix}/projects/{project_id}/media"
     download_active = bool(download and download.status in {"queued", "running", "retryable"})
     ingest_active = bool(ingest and ingest.status in {"queued", "running", "retryable"})
-    failure = ingest if ingest and ingest.status == "failed" else (
-        download if download and download.status == "failed" else None
+    failure = (
+        ingest
+        if ingest and ingest.status == "failed"
+        else (download if download and download.status == "failed" else None)
     )
     if failure:
         failed_step = "cut_and_asr" if failure.kind == "ingest_scene_media" else "source"
@@ -119,9 +132,7 @@ def get_project_media(project_id: UUID) -> MediaSnapshot:
         state, step = "source_processing", "source"
     else:
         state, step = "source_validated", "source"
-    review_url = (
-        f"/editorial?project={project_id}" if state == "ready_for_review" else None
-    )
+    review_url = f"/editorial?project={project_id}" if state == "ready_for_review" else None
     return MediaSnapshot(
         state=state,
         current_step=step,
@@ -155,6 +166,34 @@ def stream_project_source(project_id: UUID) -> FileResponse:
     return FileResponse(
         path, media_type="video/mp4", filename="source.mp4", content_disposition_type="inline"
     )
+
+
+@router.get("/source-waveform", response_model=WaveformResponse)
+def source_waveform(project_id: UUID) -> WaveformResponse:
+    _project, video, metadata = _source(project_id)
+    if video is None or metadata is None:
+        raise HTTPException(404, detail="verified source not ready")
+    cache = FileYoutubeMediaCache(get_settings().media_cache_root)
+    source = cache.source_path(video)
+    stored = source.with_suffix(".waveform.json")
+    try:
+        if stored.is_file():
+            payload = json.loads(stored.read_text(encoding="utf-8"))
+            return WaveformResponse.model_validate(payload)
+        waveform = FfmpegWaveformGenerator(get_settings().ffmpeg_executable).generate(
+            source, bucket_ms=20
+        )
+        response = WaveformResponse(
+            sample_rate_hz=waveform.sample_rate_hz,
+            bucket_ms=waveform.bucket_ms,
+            peaks=list(waveform.peaks),
+        )
+        temporary = stored.with_suffix(".json.tmp")
+        temporary.write_text(response.model_dump_json(), encoding="utf-8")
+        os.replace(temporary, stored)
+        return response
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
+        raise HTTPException(500, detail="Não foi possível preparar a waveform da fonte.") from error
 
 
 @router.get("/cuts/{job_id}")

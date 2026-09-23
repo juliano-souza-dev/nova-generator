@@ -50,6 +50,11 @@ vi.mock("../../lib/studio-api", () => ({
   studioApi: {
     projects: vi.fn().mockResolvedValue([fixtures.project]),
     projectMedia: vi.fn().mockResolvedValue(fixtures.media),
+    projectSourceWaveform: vi.fn().mockResolvedValue({
+      sample_rate_hz: 8000,
+      bucket_ms: 20,
+      peaks: [0.1, 0.5, 0.9, 0.3],
+    }),
     downloadProjectMedia: fixtures.download,
     startProjectMedia: fixtures.start,
     ingestProjectMedia: fixtures.ingest,
@@ -68,6 +73,9 @@ describe("MediaPage", () => {
     expect(
       await screen.findByRole("img", { name: "Waveform extraída do corte" }),
     ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("img", { name: "Waveform da fonte com intervalo de corte" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Player da fonte de vídeo")).toHaveAttribute(
       "src",
       fixtures.media.cut_url,
@@ -77,8 +85,10 @@ describe("MediaPage", () => {
       "href",
       "/editorial?project=p1",
     );
-    fireEvent.change(screen.getByLabelText("Handle de início"), { target: { value: "1000" } });
-    expect(screen.getByLabelText("Início do corte em milissegundos")).toHaveValue(1000);
+    fireEvent.change(screen.getByLabelText("Início do corte em segundos"), {
+      target: { value: "1" },
+    });
+    expect(screen.getByLabelText("Início do corte em segundos")).toHaveValue(1);
     fireEvent.click(screen.getByRole("button", { name: "Extrair corte e transcrever" }));
     await waitFor(() =>
       expect(fixtures.ingest).toHaveBeenCalledWith("p1", {
