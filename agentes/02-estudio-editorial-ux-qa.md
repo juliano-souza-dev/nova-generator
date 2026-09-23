@@ -16,6 +16,11 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   idempotente sem solicitar IDs de job ou autoria técnica ao operador.
 - Manter a revisão como uma estação única: contexto e progresso, player do corte, timeline com
   viewport próprio, edição EN/PT, inspetor de palavra e ações persistentes.
+- Exibir a fila real de cues com status e permitir ouvir exatamente o cue ou a palavra selecionada;
+  salvar rascunho nunca equivale a aprovar e nenhuma troca de seleção pode descartar ajustes locais.
+- Na revisão, preservar o mapa produtivo do legado: Espaço reproduz o cue, Shift+Espaço a cena,
+  `A/S` marcam IN/OUT, `G` salva e avança, e setas movem o playhead em 10 ms (Shift 100 ms, Alt
+  1 ms). Manter botões visíveis equivalentes e waveform para posicionamento preciso.
 - Reservar milissegundos para edição fina, exibir tempos legíveis durante a revisão e manter ajuda de
   atalhos recolhível.
 

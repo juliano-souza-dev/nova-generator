@@ -163,3 +163,6 @@ def test_publication_keeps_literal_text_words_and_card_timeline(
     repository.get_cue.return_value = replace(cue, speech_start_ms=150)
     with pytest.raises(AnkiPublicationError, match="Timing, palavras"):
         publisher.execute(project_id=project_id, job=job, youtube="bbbbbbbbbbb")
+    repository.get_cue.return_value = replace(cue, provenance={"approval": "draft"})
+    with pytest.raises(AnkiPublicationError, match="rascunho"):
+        publisher.execute(project_id=project_id, job=job, youtube="bbbbbbbbbbb")

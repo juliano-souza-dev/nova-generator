@@ -30,6 +30,7 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Todo contrato possui versão, proprietário, fixture válida, fixture inválida e política de compatibilidade.
 - Generator produz um pacote que o iHub importa em teste automatizado ou ambiente de validação.
 - Publicação Anki rejeita alterações de texto EN/PT ou WAV após a exportação e não troca o vídeo vinculado à mesma exportação.
+- Materiais, worker e publicação rejeitam cues explicitamente em rascunho, inclusive se voltarem a rascunho depois de enfileirar; cues legados sem estado de aprovação permanecem compatíveis.
 - Release tem notas, migrations, monitoramento, plano de rollback e responsável pelo aceite.
 - Incidentes preservam evidências suficientes para diagnóstico e reprocessamento seguro.
 - Um release só segue após registrar migrations, compatibilidade, mídia, logs e rollback no

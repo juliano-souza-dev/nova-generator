@@ -81,7 +81,7 @@ export const studioApi = {
     }),
   updateCueText: (
     id: string,
-    input: { author: string; approved_en: string; approved_pt: string },
+    input: { author: string; approved_en: string; approved_pt: string; approve?: boolean },
   ) =>
     apiRequest<Cue>(`/editorial/cues/${id}/text`, { method: "PUT", body: JSON.stringify(input) }),
   updateCueTiming: (

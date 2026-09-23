@@ -89,6 +89,36 @@ def test_candidate_becomes_draft_then_literal_approval(client: TestClient) -> No
     )
 
 
+def test_save_draft_is_literal_incomplete_and_never_approves(client: TestClient) -> None:
+    project_id, job_id = _seed_candidate()
+    scene = client.post(
+        f"/api/editorial/projects/{project_id}/candidates/{job_id}/draft",
+        json={"author": "editor"},
+    ).json()
+    cue = client.get(f"/api/editorial/scenes/{scene['id']}/cues").json()[0]
+    url = f"/api/editorial/cues/{cue['id']}/text"
+    payload = {
+        "author": "editor",
+        "approved_en": "  “I can't… go?”  ",
+        "approved_pt": "",
+        "approve": False,
+    }
+    draft = client.put(url, json=payload)
+    assert draft.status_code == 200
+    assert draft.json()["approved_en"] == payload["approved_en"]
+    assert draft.json()["provenance"]["approval"] == "draft"
+    assert client.put(url, json={**payload, "approve": True}).status_code == 422
+    payload["approved_pt"] = "“Não posso… ir?”"
+    assert client.put(url, json=payload).json()["provenance"]["approval"] == "draft"
+    assert (
+        client.put(url, json={**payload, "approve": True}).json()["provenance"]["approval"]
+        == "approved"
+    )
+    assert client.put(url, json=payload).json()["provenance"]["approval"] == "draft"
+    revisions = client.get(f"/api/editorial/scenes/{scene['id']}/revisions").json()
+    assert revisions[-1]["command"] == "edit_draft_text"
+
+
 def test_candidate_job_must_belong_to_project(client: TestClient) -> None:
     _, job_id = _seed_candidate()
     unrelated = uuid4()

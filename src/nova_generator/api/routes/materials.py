@@ -150,7 +150,7 @@ def _project_cues(project_id: UUID) -> list[tuple[int, Cue]]:
         (scene.order, cue)
         for scene in repository.get_project_scenes(project_id)
         for cue in repository.get_scene_cues(scene.id)
-        if cue.approved_en and cue.approved_pt
+        if cue.approved_en and cue.approved_pt and cue.provenance.get("approval") != "draft"
     ]
 
 

@@ -21,6 +21,17 @@ export function nudgeTiming(
   return { ...timing, end_ms: Math.max(next, timing.start_ms + SNAP_MS) };
 }
 
+export function setTimingEdge(
+  timing: Timing,
+  edge: "start" | "end",
+  timeMs: number,
+  durationMs: number,
+): Timing {
+  const next = snapTime(timeMs, durationMs);
+  if (edge === "start") return { ...timing, start_ms: Math.min(next, timing.end_ms - SNAP_MS) };
+  return { ...timing, end_ms: Math.max(next, timing.start_ms + SNAP_MS) };
+}
+
 export function validateTimeline(cues: Array<Cue & { words: WordTiming[] }>): string[] {
   return cues.flatMap((cue) => {
     const errors: string[] = [];

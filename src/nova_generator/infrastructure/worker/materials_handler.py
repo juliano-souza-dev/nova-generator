@@ -42,6 +42,8 @@ class MaterialsJobHandler:
         cue = self._repository.get_cue(cue_id)
         if cue is None or self._repository.get_scene_project_id(cue.scene_id) != project_id:
             raise ValueError("card no longer belongs to project")
+        if cue.provenance.get("approval") == "draft":
+            raise ValueError("card is a draft; approve it before generating materials")
         text = str(job.input["approved_en"])
         if cue.approved_en != text:
             raise ValueError("approved cue changed; request fresh audio")
@@ -75,6 +77,8 @@ class MaterialsJobHandler:
             cue = self._repository.get_cue(UUID(str(raw_id)))
             if cue is None or self._repository.get_scene_project_id(cue.scene_id) != project_id:
                 raise ValueError(f"selected card {raw_id} no longer belongs to project")
+            if cue.provenance.get("approval") == "draft":
+                raise ValueError(f"selected card {raw_id} is a draft; approve it before export")
             if cue.provenance.get("anki_included") is False:
                 raise ValueError(f"selected card {raw_id} was excluded after enqueue")
             if cue.approved_en_sha256 != job.input.get("text_hashes", {}).get(str(raw_id)):

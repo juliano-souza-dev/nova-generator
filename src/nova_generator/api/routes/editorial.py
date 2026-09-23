@@ -50,6 +50,7 @@ class ActorRequest(BaseModel):
 class TextRequest(ActorRequest):
     approved_en: str
     approved_pt: str
+    approve: bool = True
 
 
 class Timing(BaseModel):
