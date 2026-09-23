@@ -18,7 +18,13 @@ from nova_generator.domain.projects.entities import Cue, Project, Scene, WordTim
 from nova_generator.domain.voices import VoiceProfile
 
 
-def test_publication_keeps_literal_text_words_and_card_timeline(tmp_path):
+@pytest.mark.parametrize(
+    ("content_type", "expected_start_ms"),
+    [("dialogue", 10_100), ("music", 0)],
+)
+def test_publication_keeps_literal_text_words_and_card_timeline(
+    tmp_path, content_type, expected_start_ms
+):
     project_id, scene_id, cue_id, job_id = (uuid4() for _ in range(4))
     cue = Cue(
         cue_id,
@@ -40,14 +46,27 @@ def test_publication_keeps_literal_text_words_and_card_timeline(tmp_path):
     repository.get_project.return_value = Project(
         project_id,
         "Lesson",
-        "dialogue",
+        content_type,
         {"youtube_url": "https://www.youtube.com/watch?v=aaaaaaaaaaa"},
     )
     repository.get_cue.return_value = cue
     repository.get_scene_project_id.return_value = project_id
-    repository.get_project_scenes.return_value = [Scene(scene_id, project_id, 1, 1000)]
+    ingest_id = uuid4()
+    repository.get_project_scenes.return_value = [
+        Scene(scene_id, project_id, 1, 1000, provenance={"ingest_job_id": str(ingest_id)})
+    ]
     repository.get_cue_words.return_value = [word]
     jobs = Mock()
+    jobs.get.return_value = Job(
+        ingest_id,
+        "ingest_scene_media",
+        "succeeded",
+        {"project_id": str(project_id)},
+        None,
+        1,
+        3,
+        output={"start_ms": 10_000},
+    )
     directory = tmp_path / "exports" / str(job_id)
     directory.mkdir(parents=True)
     apkg, reel = directory / "anki.apkg", directory / "anki-reel.mp4"
@@ -107,10 +126,18 @@ def test_publication_keeps_literal_text_words_and_card_timeline(tmp_path):
     publisher = PublishAnkiReel(repository, jobs, tmp_path / "exports", tmp_path / "projects")
     published = publisher.execute(project_id=project_id, job=job, youtube="bbbbbbbbbbb")
     document = json.loads(published.path.read_text(encoding="utf-8"))
-    assert document["kit"]["contentType"] == "immersion"
+    assert document["kit"]["contentType"] == ("music" if content_type == "music" else "immersion")
+    assert document["kit"]["scene_start_ms"] == 10_100
     assert document["cues"][0]["final_en"] == "Café?"
     assert document["cues"][0]["pt"] == "Café!"
     assert document["cues"][0]["words"][0]["text"] == "Café?"
+    assert document["cues"][0]["start"] == expected_start_ms / 1000
+    assert document["cues"][0]["end"] == (expected_start_ms + 600) / 1000
+    assert document["cues"][0]["words"][0]["start_ms"] == expected_start_ms
+    assert document["cues"][0]["words"][0]["original_start_ms"] == expected_start_ms
+    ihub_offset = document["kit"]["scene_start_ms"] if content_type == "music" else 0
+    assert round(document["cues"][0]["start"] * 1000) + ihub_offset == 10_100
+    assert document["cues"][0]["words"][0]["start_ms"] + ihub_offset == 10_100
     assert document["cues"][0]["anki"]["items"][0]["focus"] == "Café?"
     assert document["ankiAudio"]["youtube"]["video_id"] == "bbbbbbbbbbb"
     assert document["ankiAudio"]["cues"][0]["start_ms"] == 0

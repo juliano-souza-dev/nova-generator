@@ -87,6 +87,10 @@ class PublishAnkiReel:
             raise AnkiPublicationError(
                 "Cues selecionadas se sobrepõem na fonte. Revise a ordem e os tempos."
             )
+        # The iHub importer treats second-based cue times as absolute for immersion
+        # and relative to kit.scene_start_ms for music. Its *_ms fallback is
+        # heuristic, so publish both cues and words in this explicit convention.
+        timeline_origin = scene_start if project.content_type == "music" else 0
         kit_youtube = source_url if has_source else video.canonical_url
         base: dict[str, Any] = {
             "version": 3,
@@ -113,17 +117,31 @@ class PublishAnkiReel:
                     "approved_en": cue.approved_en,
                     "final_en": cue.approved_en,
                     "pt": cue.approved_pt,
-                    "speech_start_ms": timing[0],
-                    "speech_end_ms": timing[1],
-                    "subtitle_start_ms": timing[0],
-                    "subtitle_end_ms": timing[1],
+                    "start": (timing[0] - timeline_origin) / 1000,
+                    "end": (timing[1] - timeline_origin) / 1000,
+                    "speech_start_ms": timing[0] - timeline_origin,
+                    "speech_end_ms": timing[1] - timeline_origin,
+                    "subtitle_start_ms": timing[0] - timeline_origin,
+                    "subtitle_end_ms": timing[1] - timeline_origin,
                     "words": [
                         {
                             "text": word.surface,
-                            "start_ms": word.start_ms + timing[0] - cue.speech_start_ms,
-                            "end_ms": word.end_ms + timing[0] - cue.speech_start_ms,
-                            "original_start_ms": word.original_start_ms,
-                            "original_end_ms": word.original_end_ms,
+                            "start_ms": word.start_ms
+                            + timing[0]
+                            - cue.speech_start_ms
+                            - timeline_origin,
+                            "end_ms": word.end_ms
+                            + timing[0]
+                            - cue.speech_start_ms
+                            - timeline_origin,
+                            "original_start_ms": word.original_start_ms
+                            + timing[0]
+                            - cue.speech_start_ms
+                            - timeline_origin,
+                            "original_end_ms": word.original_end_ms
+                            + timing[0]
+                            - cue.speech_start_ms
+                            - timeline_origin,
                         }
                         for word in words
                     ],
