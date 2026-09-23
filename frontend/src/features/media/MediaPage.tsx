@@ -1,11 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, Scissors, Video } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-  RefObject,
-} from "react";
+import type { RefObject } from "react";
+import { SourceWaveEditor } from "./SourceWaveEditor";
 import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
@@ -111,20 +108,27 @@ export function MediaPage() {
                 </p>
               )}
               <JourneySteps media={media.data} />
-              {media.data.source_ready && (
-                <MediaPlayer media={media.data} playerRef={sourcePlayer} />
-              )}
-              {media.data.can_cut && (
-                <CutEditor
-                  key={selected.id}
-                  project={selected}
-                  media={media.data}
-                  onIngest={(input) => ingest.mutate(input)}
-                  busy={ingest.isPending}
-                  waveform={sourceWaveform.data?.peaks ?? []}
-                  playerRef={sourcePlayer}
-                />
-              )}
+              <div className="media-cut-workspace">
+                {media.data.source_ready && (
+                  <MediaPlayer
+                    key={`player-${selected.id}`}
+                    media={media.data}
+                    playerRef={sourcePlayer}
+                  />
+                )}
+                {media.data.can_cut && (
+                  <CutEditor
+                    key={selected.id}
+                    media={media.data}
+                    onIngest={(input) => ingest.mutate(input)}
+                    busy={ingest.isPending}
+                    waveform={sourceWaveform.data?.peaks ?? []}
+                    waveformError={sourceWaveform.isError}
+                    retryWaveform={() => void sourceWaveform.refetch()}
+                    playerRef={sourcePlayer}
+                  />
+                )}
+              </div>
               {ingest.error && (
                 <p className="field-error" role="alert">
                   {ingest.error.message}
@@ -225,10 +229,10 @@ function MediaPlayer({
   media: ProjectMedia;
   playerRef: RefObject<HTMLVideoElement | null>;
 }) {
-  const url = media.cut_url ?? media.source_url;
+  const url = media.can_cut ? media.source_url : (media.cut_url ?? media.source_url);
   return (
     <section className="media-player panel">
-      <h2>{media.cut_url ? "Player do corte" : "Player da fonte"}</h2>
+      <h2>{media.can_cut ? "Vídeo original" : "Vídeo"}</h2>
       {url ? (
         <video
           ref={playerRef}
@@ -253,41 +257,51 @@ function MediaPlayer({
 }
 
 function CutEditor({
-  project,
   media,
   onIngest,
   busy,
   waveform,
+  waveformError,
+  retryWaveform,
   playerRef,
 }: {
-  project: Project;
   media: ProjectMedia;
   onIngest: (input: { start_ms: number; end_ms: number; language: string }) => void;
   busy: boolean;
   waveform: number[];
+  waveformError: boolean;
+  retryWaveform: () => void;
   playerRef: RefObject<HTMLVideoElement | null>;
 }) {
   const duration = media.duration_ms ?? 0;
-  const [startMs, setStartMs] = useState(0);
-  const [endMs, setEndMs] = useState(60_000);
+  const [startMs, setStartMs] = useState(media.cut_start_ms ?? 0);
+  const [endMs, setEndMs] = useState(media.cut_end_ms ?? duration);
   const [language, setLanguage] = useState("en");
   useEffect(() => {
     if (duration > 0) setEndMs((current) => Math.min(current, duration));
   }, [duration]);
-  const updateStart = (value: number) => setStartMs(Math.min(Math.max(0, value), endMs - 100));
-  const updateEnd = (value: number) => setEndMs(Math.max(Math.min(duration, value), startMs + 100));
+  const updateStart = (value: number) =>
+    setStartMs(Math.round(Math.min(Math.max(0, value), endMs - 100)));
+  const updateEnd = (value: number) =>
+    setEndMs(Math.round(Math.max(Math.min(duration, value), startMs + 100)));
   const ready = media.source_ready && duration >= 100 && endMs > startMs && endMs <= duration;
   return (
     <section className="cut-editor panel" aria-label="Seleção de corte">
       <div className="cut-heading">
         <div>
           <h2>Seleção de corte</h2>
-          <p>Os tempos são da fonte verificada; o MP4 resultante pertence a {project.title}.</p>
+          <p>Ouça o vídeo e marque o trecho que deseja transcrever.</p>
         </div>
         <Scissors aria-hidden="true" />
       </div>
       <SourceWaveEditor
         peaks={waveform}
+        failed={waveformError}
+        onRetry={retryWaveform}
+        onReset={() => {
+          setStartMs(0);
+          setEndMs(duration);
+        }}
         startMs={startMs}
         endMs={endMs}
         durationMs={duration}
@@ -303,8 +317,8 @@ function CutEditor({
             type="number"
             min="0"
             max={Math.max(0, (endMs - 100) / 1000)}
-            step="0.1"
-            value={(startMs / 1000).toFixed(1)}
+            step="0.01"
+            value={(startMs / 1000).toFixed(3)}
             disabled={!media.source_ready}
             onChange={(event) => updateStart(Number(event.target.value) * 1000)}
           />
@@ -316,8 +330,8 @@ function CutEditor({
             type="number"
             min={(startMs + 100) / 1000}
             max={duration / 1000}
-            step="0.1"
-            value={(endMs / 1000).toFixed(1)}
+            step="0.01"
+            value={(endMs / 1000).toFixed(3)}
             disabled={!media.source_ready}
             onChange={(event) => updateEnd(Number(event.target.value) * 1000)}
           />
@@ -339,9 +353,13 @@ function CutEditor({
         <Scissors aria-hidden="true" />
         {busy ? "Enfileirando…" : "Extrair corte e transcrever"}
       </button>
-      {media.ingest_status && (
+      {media.ingest_status && ACTIVE.has(media.ingest_status) && (
         <p className="media-job" role="status">
-          Corte: {media.ingest_status}
+          {media.ingest_status === "queued"
+            ? "Aguardando processamento…"
+            : media.ingest_status === "retryable"
+              ? "Preparando nova tentativa…"
+              : "Cortando e transcrevendo…"}
         </p>
       )}
       {media.ingest_error && (
@@ -350,125 +368,12 @@ function CutEditor({
         </p>
       )}
       {media.waveform && (
-        <CutWaveform peaks={media.waveform.peaks} bucketMs={media.waveform.bucket_ms} />
+        <details>
+          <summary>Ver áudio do último corte</summary>
+          <CutWaveform peaks={media.waveform.peaks} bucketMs={media.waveform.bucket_ms} />
+        </details>
       )}
     </section>
-  );
-}
-
-function SourceWaveEditor({
-  peaks,
-  startMs,
-  endMs,
-  durationMs,
-  onStartChange,
-  onEndChange,
-  playerRef,
-}: {
-  peaks: number[];
-  startMs: number;
-  endMs: number;
-  durationMs: number;
-  onStartChange: (value: number) => void;
-  onEndChange: (value: number) => void;
-  playerRef: RefObject<HTMLVideoElement | null>;
-}) {
-  const [dragging, setDragging] = useState<"start" | "end" | null>(null);
-  const [playheadMs, setPlayheadMs] = useState(0);
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return;
-    const update = () => setPlayheadMs(player.currentTime * 1000);
-    player.addEventListener("timeupdate", update);
-    return () => player.removeEventListener("timeupdate", update);
-  }, [playerRef]);
-  const displayed = useMemo(() => {
-    if (peaks.length <= 500) return peaks;
-    const size = Math.ceil(peaks.length / 500);
-    return Array.from({ length: Math.ceil(peaks.length / size) }, (_, index) =>
-      Math.max(...peaks.slice(index * size, (index + 1) * size)),
-    );
-  }, [peaks]);
-  const start = durationMs > 0 ? (startMs / durationMs) * 1200 : 0;
-  const end = durationMs > 0 ? (endMs / durationMs) * 1200 : 0;
-  const playhead = durationMs > 0 ? (playheadMs / durationMs) * 1200 : 0;
-  const position = (event: ReactPointerEvent<SVGSVGElement> | ReactMouseEvent<SVGSVGElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return Math.max(
-      0,
-      Math.min(durationMs, ((event.clientX - bounds.left) / bounds.width) * durationMs),
-    );
-  };
-  const move = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (dragging === "start") onStartChange(position(event));
-    if (dragging === "end") onEndChange(position(event));
-  };
-  return (
-    <div className="source-wave-editor">
-      <div className="wave-editor-heading">
-        <strong>Arraste os limites sobre o áudio</strong>
-        <span>
-          {formatClock(startMs)} — {formatClock(endMs)}
-        </span>
-      </div>
-      {displayed.length ? (
-        <svg
-          className="source-waveform interactive"
-          viewBox="0 0 1200 180"
-          role="img"
-          aria-label="Waveform da fonte com intervalo de corte"
-          onPointerMove={move}
-          onPointerUp={() => setDragging(null)}
-          onPointerLeave={() => setDragging(null)}
-          onPointerDown={(event) => {
-            const value = position(event);
-            const edge = Math.abs(value - startMs) <= Math.abs(value - endMs) ? "start" : "end";
-            setDragging(edge);
-            event.currentTarget.setPointerCapture(event.pointerId);
-            if (edge === "start") onStartChange(value);
-            else onEndChange(value);
-          }}
-          onDoubleClick={(event) => {
-            const value = position(event);
-            if (playerRef.current) playerRef.current.currentTime = value / 1000;
-            setPlayheadMs(value);
-          }}
-        >
-          <rect width="1200" height="180" className="wave-bg" />
-          {displayed.map((peak, index) => {
-            const x = (index / Math.max(1, displayed.length - 1)) * 1200;
-            return (
-              <line
-                key={index}
-                x1={x}
-                x2={x}
-                y1={90 - peak * 76}
-                y2={90 + peak * 76}
-                className="source-wave-bar"
-              />
-            );
-          })}
-          <rect
-            x={start}
-            width={Math.max(0, end - start)}
-            height="180"
-            className="wave-selection"
-          />
-          <rect width={start} height="180" className="wave-outside" />
-          <rect x={end} width={Math.max(0, 1200 - end)} height="180" className="wave-outside" />
-          <line x1={playhead} x2={playhead} y1="0" y2="180" className="wave-playhead" />
-          <line x1={start} x2={start} y1="0" y2="180" className="cut-handle" />
-          <circle cx={start} cy="18" r="11" className="cut-grip" />
-          <line x1={end} x2={end} y1="0" y2="180" className="cut-handle" />
-          <circle cx={end} cy="18" r="11" className="cut-grip" />
-        </svg>
-      ) : (
-        <div className="waveform-loading">Gerando waveform da fonte…</div>
-      )}
-      <p className="wave-help">
-        Arraste o início ou o fim. Dê dois cliques para posicionar o vídeo.
-      </p>
-    </div>
   );
 }
 
