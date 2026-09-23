@@ -24,6 +24,8 @@ async function mockEditorialWorkstation(page: Page) {
   await page.route("**/api/projects/p1/media", (route) =>
     route.fulfill({
       json: {
+        state: "ready_for_review",
+        can_review: true,
         ingest_job_id: "j1",
         cut_url: "/cut.mp4",
         waveform: { bucket_ms: 40, peaks: [0.2, 0.7] },
