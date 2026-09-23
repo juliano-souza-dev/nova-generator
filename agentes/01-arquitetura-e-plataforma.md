@@ -13,6 +13,8 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 - Manter cache global de mídia por identidade canônica do YouTube; cada projeto guarda apenas seus cortes e artefatos próprios.
 - Definir políticas de armazenamento, hash, retenção, limpeza e recuperação.
 - Criar ADRs para fronteiras de contexto, schema, dependências e decisões irreversíveis.
+- Manter `INICIAR.bat` como ponto único de entrada local no Windows, com bootstrap idempotente,
+  migrations, supervisão dos processos e diagnóstico por logs.
 
 ## Limites
 
@@ -28,4 +30,5 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 - Migrations possuem caminho de upgrade e recuperação documentados.
 - Logs correlacionam projeto, job, fonte de mídia e artefato.
 - Configuração tipada falha com mensagem acionável para executáveis ou diretórios indisponíveis.
+- Uma instalação local limpa pode preparar e iniciar API, worker e frontend por um único clique.
 - Logs JSON e métricas de jobs, cache e exportação não incluem tokens, texto editorial ou payloads.

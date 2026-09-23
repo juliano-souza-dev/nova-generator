@@ -2,6 +2,21 @@
 
 Nova Generator é a reestruturação do sistema de produção de conteúdo para o iHub. A implementação nova será construída em módulos, preservando a compatibilidade dos fluxos que já funcionam.
 
+## Iniciar no Windows
+
+Dê duplo clique em **`INICIAR.bat`**, na raiz do projeto. Na primeira execução, o
+inicializador prepara Python, backend/ASR, Chatterbox Nano, frontend e banco de dados. Depois,
+inicia API, worker e interface e abre `http://127.0.0.1:5173` automaticamente. A instalação
+inicial pode demorar por causa do PyTorch e do modelo de voz; as próximas execuções reutilizam
+o ambiente.
+
+Mantenha a janela **Nova Generator - Inicializador** aberta. Fechá-la encerra os serviços.
+Se algo falhar, a janela mostra a causa e os detalhes ficam em `data/logs/`.
+
+São necessários Windows 10/11 e conexão com a internet na primeira execução. Quando Python
+3.12+, Node.js ou FFmpeg não estiverem presentes, o inicializador tenta instalá-los pelo
+Winget. O modo manual abaixo continua disponível para desenvolvimento e diagnóstico.
+
 ## Base de referência
 
 O código atual foi importado em `legacy/generator-base/`. Ele é uma **referência de comportamento e regras de negócio** para a migração; novos módulos não devem ser adicionados nele.
@@ -19,7 +34,11 @@ Leia [`AGENTS.md`](AGENTS.md) e o [mapa de uso](agentes/MAPA_DE_USO.md). Cada ta
 3. Migrar uma jornada vertical por vez, mantendo exportações compatíveis.
 4. Só remover ou aposentar uma parte do legado após validação de equivalência e plano de rollback.
 
-## Frontend do estúdio
+## Execução manual para desenvolvimento
+
+O procedimento desta seção é opcional e serve para desenvolvimento dos processos separados.
+
+### Frontend do estúdio
 
 O frontend independente está em `frontend/`; ele não usa arquivos do diretório `legacy/` em runtime.
 
