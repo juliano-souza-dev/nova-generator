@@ -80,7 +80,7 @@ describe("EditorialPage", () => {
     );
   });
 
-  it("supports cue navigation, problem state and an accessible word inspector", async () => {
+  it("supports cue navigation and an accessible word inspector", async () => {
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1"]}>
         <EditorialPage />
@@ -91,8 +91,6 @@ describe("EditorialPage", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /can't…/ }));
     expect(screen.getByRole("heading", { name: "Palavra “can't…”" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Marcar problema" }));
-    expect(screen.getAllByText("Problema marcado")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Cue anterior" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Próximo cue" })).toBeDisabled();
   });

@@ -161,7 +161,6 @@
 .transport-action,
 .icon-action,
 .secondary-button,
-.finish-button,
 .timing-controls button {
   display: inline-flex;
   align-items: center;
@@ -480,9 +479,6 @@
   color: var(--muted);
   font-size: 0.78rem;
 }
-.finish-button {
-  background: transparent;
-}
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -536,9 +532,5 @@ button:disabled {
   .review-actions {
     left: 0;
     padding: 0.65rem;
-  }
-  .review-actions > div,
-  .review-actions .finish-button {
-    display: none;
   }
 }

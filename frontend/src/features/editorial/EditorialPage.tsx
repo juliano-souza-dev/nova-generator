@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock3, Film, Save } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Clock3, Film, Save } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { Project, ProjectMedia, Scene } from "../../lib/api.types";
@@ -34,7 +34,6 @@ export function EditorialPage() {
   const [wordStart, setWordStart] = useState(0);
   const [wordEnd, setWordEnd] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [flaggedCueIds, setFlaggedCueIds] = useState<Set<string>>(new Set());
   const author = "local-editor";
 
   const project = projects.find((item) => item.id === projectId);
@@ -56,11 +55,7 @@ export function EditorialPage() {
   );
   const timingDirty = history.length > 0;
   const isDirty = textDirty || wordDirty || timingDirty;
-  const cueStatus = flaggedCueIds.has(selectedCueId)
-    ? "Problema marcado"
-    : selectedCue?.provenance?.approval === "approved"
-      ? "Aprovado"
-      : "Pendente";
+  const cueStatus = selectedCue?.provenance?.approval === "approved" ? "Aprovado" : "Pendente";
 
   useEffect(() => {
     void studioApi
@@ -194,30 +189,6 @@ export function EditorialPage() {
     const next = cues[selectedCueIndex + offset];
     if (next) selectCue(next.id);
   }
-  function toggleProblem() {
-    if (!selectedCue) return;
-    const wasFlagged = flaggedCueIds.has(selectedCue.id);
-    setFlaggedCueIds((current) => {
-      const next = new Set(current);
-      if (wasFlagged) next.delete(selectedCue.id);
-      else next.add(selectedCue.id);
-      return next;
-    });
-    setMessage(
-      wasFlagged
-        ? `Problema removido do cue ${selectedCue.order}.`
-        : `Cue ${selectedCue.order} marcado para revisão.`,
-    );
-  }
-  function completeReview() {
-    const pending = cues.length - approvedCount;
-    setMessage(
-      pending === 0 && !isDirty
-        ? "Revisão concluída. Todos os cues estão aprovados."
-        : `Ainda há ${pending} cue${pending === 1 ? "" : "s"} pendente${pending === 1 ? "" : "s"}.`,
-    );
-  }
-
   return (
     <section className="editorial-workstation">
       <PageHeader
@@ -485,15 +456,6 @@ export function EditorialPage() {
             <button
               type="button"
               className="secondary-button"
-              onClick={toggleProblem}
-              aria-pressed={flaggedCueIds.has(selectedCue.id)}
-            >
-              <AlertTriangle aria-hidden="true" />{" "}
-              {flaggedCueIds.has(selectedCue.id) ? "Remover problema" : "Marcar problema"}
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
               onClick={() => void saveChanges()}
               disabled={!isDirty || saving}
             >
@@ -506,9 +468,6 @@ export function EditorialPage() {
               disabled={saving}
             >
               <Check aria-hidden="true" /> Aprovar cue
-            </button>
-            <button type="button" className="finish-button" onClick={completeReview}>
-              Concluir revisão
             </button>
           </footer>
         </>

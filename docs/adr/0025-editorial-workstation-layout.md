@@ -1,4 +1,4 @@
-# ADR 0023 — Estação de revisão editorial orientada ao cue
+# ADR 0025 — Estação de revisão editorial orientada ao cue
 
 ## Status
 
@@ -27,5 +27,5 @@ A timeline pode rolar internamente quando sua largura mínima exceder o viewport
 - A integração com ingestão só precisa fornecer projeto, cena, mídia e cues; não existe dependência de fixtures de demonstração.
 - A barra de ações torna salvar e aprovar acessíveis durante a rolagem.
 - Ajustes de cue e palavra continuam separados nos contratos da API, embora sejam apresentados no mesmo contexto.
-- Novos estados persistentes, como sinalização de problema e conclusão da revisão, exigirão contrato próprio; enquanto não existirem, permanecem estados da sessão e são identificados como tal na implementação.
+- A barra expõe somente ações com efeito real nos contratos atuais: salvar alterações e aprovar o cue. Novas ações só entram na interface depois que possuírem persistência e resultado verificável.
 - Testes de interface devem cobrir 1366×768 e 1440×900, ausência de overflow da página, navegação de cue e preservação literal de EN/PT.
