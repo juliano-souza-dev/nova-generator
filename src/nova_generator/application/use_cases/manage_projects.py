@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.ports.job_repository import JobRepository
 from nova_generator.application.ports.youtube_media_cache import YoutubeMediaCache
+from nova_generator.application.use_cases.inspect_youtube_source import InspectYoutubeSource
 from nova_generator.domain.media.youtube import YoutubeVideo
 from nova_generator.domain.projects.entities import Project, Scene
 
@@ -31,10 +32,12 @@ class ManageProjects:
         repository: EditorialProjectRepository,
         cache: YoutubeMediaCache,
         jobs: JobRepository,
+        source_inspection: InspectYoutubeSource,
     ) -> None:
         self._repository = repository
         self._cache = cache
         self._jobs = jobs
+        self._source_inspection = source_inspection
 
     def list(self, *, search: str = "", include_archived: bool = False) -> list[ManagedProject]:
         needle = search.casefold().strip()
@@ -49,8 +52,30 @@ class ManageProjects:
     def get(self, project_id: UUID) -> ManagedProject:
         return self._managed(self._require(project_id))
 
-    def create(self, *, title: str, content_type: str, youtube_url: str | None) -> ManagedProject:
-        project = Project(uuid4(), _title(title), content_type, _provenance(youtube_url))
+    def create(
+        self, *, title: str | None, content_type: str, youtube_url: str | None
+    ) -> ManagedProject:
+        if content_type == "story":
+            project = Project(uuid4(), _title(title), content_type, _story_provenance(youtube_url))
+        else:
+            if not youtube_url or not youtube_url.strip():
+                raise ProjectCommandError("youtube_url is required for production projects")
+            inspected = self._source_inspection.execute(youtube_url)
+            manual_title = title.strip() if title else ""
+            project = Project(
+                uuid4(),
+                manual_title or inspected.title,
+                content_type,
+                {
+                    "lifecycle": "active",
+                    "youtube_url": inspected.video.canonical_url,
+                    "youtube_video_id": inspected.video.video_id,
+                    "youtube_title": inspected.title,
+                    "youtube_channel": inspected.channel,
+                    "youtube_inspected_at_utc": inspected.inspected_at_utc.isoformat(),
+                    "title_source": "manual" if manual_title else "youtube",
+                },
+            )
         self._repository.save_project(project)
         return self._managed(project)
 
@@ -109,14 +134,14 @@ class ManageProjects:
         return self._jobs.latest_status_for_project(str(project.id)) or "idle"
 
 
-def _title(value: str) -> str:
-    title = value.strip()
+def _title(value: str | None) -> str:
+    title = value.strip() if value else ""
     if not title:
         raise ProjectCommandError("title is required")
     return title
 
 
-def _provenance(youtube_url: str | None) -> dict[str, Any]:
+def _story_provenance(youtube_url: str | None) -> dict[str, Any]:
     provenance: dict[str, Any] = {"lifecycle": "active"}
     if youtube_url:
         video = YoutubeVideo.from_url(youtube_url)

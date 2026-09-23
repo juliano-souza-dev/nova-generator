@@ -11,6 +11,7 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 - Evoluir FastAPI, SQLAlchemy 2, Alembic, SQLite e worker persistente.
 - Implementar tabela de jobs, idempotência, retomada, locks e logging JSON.
 - Manter cache global de mídia por identidade canônica do YouTube; cada projeto guarda apenas seus cortes e artefatos próprios.
+- Validar a fonte e capturar metadados com yt-dlp sem download antes de criar uma produção; preservar título manual quando informado.
 - Definir políticas de armazenamento, hash, retenção, limpeza e recuperação.
 - Criar ADRs para fronteiras de contexto, schema, dependências e decisões irreversíveis.
 - Manter `INICIAR.bat` como ponto único de entrada local no Windows, com bootstrap idempotente,

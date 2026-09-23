@@ -20,11 +20,26 @@ import type { Project } from "../../lib/api.types";
 import { studioApi } from "../../lib/studio-api";
 import "./projects.css";
 
-const projectSchema = z.object({
-  title: z.string().trim().min(1, "Informe um nome para o projeto.").max(255),
-  content_type: z.enum(["dialogue", "story"]),
-  youtube_url: z.union([z.literal(""), z.string().url("Informe uma URL válida.")]),
-});
+const projectSchema = z
+  .object({
+    title: z.string().trim().max(255),
+    content_type: z.enum(["dialogue", "story"]),
+    youtube_url: z.union([z.literal(""), z.string().url("Informe uma URL válida.")]),
+  })
+  .superRefine((value, context) => {
+    if (value.content_type === "dialogue" && !value.youtube_url)
+      context.addIssue({
+        code: "custom",
+        path: ["youtube_url"],
+        message: "Informe a URL do vídeo.",
+      });
+    if (value.content_type === "story" && !value.title)
+      context.addIssue({
+        code: "custom",
+        path: ["title"],
+        message: "Informe o nome da história.",
+      });
+  });
 type ProjectForm = z.infer<typeof projectSchema>;
 
 export function ProjectsPage() {
@@ -66,7 +81,11 @@ export function ProjectsPage() {
           error={create.error?.message}
           onCancel={() => setCreating(false)}
           onSubmit={(input) =>
-            create.mutate({ ...input, youtube_url: input.youtube_url || undefined })
+            create.mutate({
+              ...input,
+              title: input.title || undefined,
+              youtube_url: input.youtube_url || undefined,
+            })
           }
         />
       )}
@@ -139,12 +158,30 @@ function ProjectFormPanel({
     resolver: zodResolver(projectSchema),
     defaultValues: { title: "", content_type: "dialogue", youtube_url: "" },
   });
+  const contentType = form.watch("content_type");
+  const youtubeUrl = form.watch("youtube_url");
+  const inspection = useMutation({ mutationFn: studioApi.inspectYoutubeSource });
+  const inspectedCurrentUrl = Boolean(
+    inspection.data && youtubeUrl.trim() === inspection.variables?.trim(),
+  );
+  const submit = form.handleSubmit((value) => {
+    if (value.content_type === "dialogue" && !inspectedCurrentUrl) {
+      form.setError("youtube_url", { message: "Verifique o vídeo antes de criar o projeto." });
+      return;
+    }
+    onSubmit(value);
+  });
   return (
-    <form className="panel project-form" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+    <form className="panel project-form" onSubmit={submit} noValidate>
       <h2>Novo projeto</h2>
       <label>
-        Nome
-        <input autoFocus {...form.register("title")} />
+        {contentType === "story" ? "Nome da história" : "Título"}{" "}
+        {contentType === "dialogue" && <span className="optional">(opcional)</span>}
+        <input
+          autoFocus
+          placeholder={contentType === "dialogue" ? "Use o título do vídeo" : undefined}
+          {...form.register("title")}
+        />
         {form.formState.errors.title && (
           <span className="field-error">{form.formState.errors.title.message}</span>
         )}
@@ -157,19 +194,50 @@ function ProjectFormPanel({
         </select>
       </label>
       <label>
-        URL do YouTube <span className="optional">(opcional)</span>
-        <input placeholder="https://youtu.be/..." {...form.register("youtube_url")} />
+        URL do YouTube {contentType === "story" && <span className="optional">(opcional)</span>}
+        <div className="source-inspection-row">
+          <input
+            placeholder="https://youtu.be/..."
+            {...form.register("youtube_url", { onChange: () => inspection.reset() })}
+          />
+          {contentType === "dialogue" && (
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!youtubeUrl.trim() || inspection.isPending}
+              onClick={() => {
+                form.clearErrors("youtube_url");
+                inspection.mutate(youtubeUrl, {
+                  onError: (failure) => form.setError("youtube_url", { message: failure.message }),
+                });
+              }}
+            >
+              {inspection.isPending ? "Verificando…" : "Verificar vídeo"}
+            </button>
+          )}
+        </div>
         {form.formState.errors.youtube_url && (
           <span className="field-error">{form.formState.errors.youtube_url.message}</span>
         )}
       </label>
+      {contentType === "dialogue" && inspectedCurrentUrl && inspection.data && (
+        <div className="source-inspection-result" role="status">
+          <strong>Vídeo encontrado</strong>
+          <span>{inspection.data.title}</span>
+          {inspection.data.channel && <small>{inspection.data.channel}</small>}
+        </div>
+      )}
       {error && (
         <p className="field-error" role="alert">
           {error}
         </p>
       )}
       <div className="form-actions">
-        <button className="primary-button" type="submit" disabled={busy}>
+        <button
+          className="primary-button"
+          type="submit"
+          disabled={busy || (contentType === "dialogue" && !inspectedCurrentUrl)}
+        >
           {busy ? "Criando…" : "Criar projeto"}
         </button>
         <button className="secondary-button" type="button" onClick={onCancel}>
