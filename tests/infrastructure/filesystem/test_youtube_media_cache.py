@@ -1,5 +1,6 @@
 import hashlib
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -55,3 +56,17 @@ def test_video_locks_are_isolated_and_released(tmp_path) -> None:
 
     with cache.acquire(first, timeout_seconds=0):
         pass
+
+
+def test_install_accepts_absolute_staging_from_a_relative_cache_root(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    cache = FileYoutubeMediaCache(Path("media_cache"))
+    video = YoutubeVideo("dQw4w9WgXcQ")
+    staging = cache.staging_directory(video).resolve()
+    downloaded = staging / "source.mp4"
+    downloaded.write_bytes(b"video")
+
+    installed = cache.install_source(video, downloaded)
+
+    assert installed.resolve() == (tmp_path / "media_cache/youtube/dQw4w9WgXcQ/source.mp4")
+    assert installed.read_bytes() == b"video"

@@ -70,7 +70,11 @@ class DownloadYoutubeSource:
 
     @staticmethod
     def _assert_staged_file(source: Path, staging: Path) -> None:
-        if source.parent != staging or not source.is_file() or source.stat().st_size == 0:
+        if (
+            source.parent.resolve() != staging.resolve()
+            or not source.is_file()
+            or source.stat().st_size == 0
+        ):
             raise ValueError("O downloader deve retornar um MP4 não vazio no diretório temporário.")
         if source.suffix.lower() != ".mp4":
             raise ValueError("A fonte baixada deve ser normalizada para MP4.")

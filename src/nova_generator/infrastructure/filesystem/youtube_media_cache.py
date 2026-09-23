@@ -74,7 +74,7 @@ class FileYoutubeMediaCache:
 
     def install_source(self, video: YoutubeVideo, source: Path) -> Path:
         directory = self._directory(video)
-        if source.parent.parent != directory:
+        if source.parent.parent.resolve() != directory.resolve():
             raise ValueError("A fonte temporária deve pertencer à entrada do cache.")
         if not source.is_file() or source.stat().st_size == 0:
             raise ValueError("A fonte temporária deve existir e não pode estar vazia.")

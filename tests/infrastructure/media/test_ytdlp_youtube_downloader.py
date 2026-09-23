@@ -11,7 +11,7 @@ from nova_generator.infrastructure.media.ytdlp_youtube_downloader import (
 
 class FakeYoutubeDl:
     attempts: list[str] = []
-    succeeds_on = "b[ext=mp4]/b"
+    succeeds_on = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best"
 
     def __init__(self, options):
         self.options = options
@@ -37,7 +37,10 @@ def test_downloader_uses_ordered_fallbacks(tmp_path):
         YoutubeVideo("dQw4w9WgXcQ"), tmp_path
     )
     assert result.read_bytes() == b"video"
-    assert FakeYoutubeDl.attempts == ["bv*+ba/b", "b[ext=mp4]/b"]
+    assert FakeYoutubeDl.attempts == [
+        *(["bestvideo+bestaudio/best"] * len(YtDlpYoutubeDownloader.PLAYER_CLIENTS)),
+        "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best",
+    ]
 
 
 def test_downloader_reports_every_failed_strategy(tmp_path):
@@ -46,4 +49,4 @@ def test_downloader_reports_every_failed_strategy(tmp_path):
 
     with pytest.raises(YoutubeDownloadError) as raised:
         YtDlpYoutubeDownloader(AlwaysFails).download(YoutubeVideo("dQw4w9WgXcQ"), tmp_path)
-    assert all(name in str(raised.value) for name, _selector in YtDlpYoutubeDownloader.STRATEGIES)
+    assert "todas as alternativas" in str(raised.value)
