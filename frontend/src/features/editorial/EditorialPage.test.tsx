@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorialPage } from "./EditorialPage";
 
 const mocks = vi.hoisted(() => ({
@@ -57,13 +57,25 @@ vi.mock("../../lib/studio-api", () => ({
 }));
 
 describe("EditorialPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.projectMedia.mockResolvedValue({
+      state: "ready_for_review",
+      can_review: true,
+      ingest_job_id: "j1",
+      cut_url: "/api/cut.wav",
+      waveform: { sample_rate_hz: 8000, bucket_ms: 40, peaks: [0.3, 0.8] },
+    });
+  });
+
   it("presents a focused workstation and sends literal EN/PT approval", async () => {
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1&ingest_job=j1"]}>
         <EditorialPage />
       </MemoryRouter>,
     );
-    expect(await screen.findByText("“I can't… go?”")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Player do corte da cena")).toBeInTheDocument();
+    expect(screen.getAllByText("“I can't… go?”")).toHaveLength(2);
     expect(screen.queryByText("Demonstração da timeline")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("ID do job ASR concluído")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Player do corte da cena")).toHaveAttribute("src", "/api/cut.wav");
@@ -81,6 +93,28 @@ describe("EditorialPage", () => {
         author: "local-editor",
         approved_en: "“I can't… go?”",
         approved_pt: "“Não posso… ir?”",
+        approve: true,
+      }),
+    );
+  });
+
+  it("saves incomplete text as a draft without approving it", async () => {
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    await screen.findByLabelText("Player do corte da cena");
+    fireEvent.change(screen.getByLabelText("Inglês aprovado"), {
+      target: { value: "Mike…" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    await waitFor(() =>
+      expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
+        author: "local-editor",
+        approved_en: "Mike…",
+        approved_pt: "",
+        approve: false,
       }),
     );
   });
@@ -106,9 +140,18 @@ describe("EditorialPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Selecione uma palavra" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /can't…/ }));
+    fireEvent.click(
+      within(screen.getByRole("list", { name: "Palavras do cue selecionado" })).getByRole(
+        "button",
+        { name: /can't…/ },
+      ),
+    );
     expect(screen.getByRole("heading", { name: "Palavra “can't…”" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cue anterior" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Próximo cue" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("spinbutton", { name: "IN (ms)" }), {
+      target: { value: "125" },
+    });
+    expect(screen.getByRole("button", { name: "Salvar palavra" })).toBeEnabled();
   });
 });

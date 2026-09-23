@@ -255,6 +255,10 @@ class PublishAnkiReel:
                 raise AnkiPublicationError("ID de card inválido na exportação.") from error
             if cue is None or self._repository.get_scene_project_id(cue.scene_id) != project_id:
                 raise AnkiPublicationError(f"Card {raw_id} não pertence mais ao projeto.")
+            if cue.provenance.get("approval") == "draft":
+                raise AnkiPublicationError(
+                    f"Card {raw_id} está em rascunho. Aprove antes de publicar."
+                )
             if (
                 cue.approved_en_sha256 != interval.text_sha256
                 or cue.approved_en_sha256 != job.input.get("text_hashes", {}).get(str(raw_id))

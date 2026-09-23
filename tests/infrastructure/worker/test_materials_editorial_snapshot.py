@@ -64,3 +64,8 @@ def test_worker_rejects_timing_edit_after_export_was_queued(tmp_path):
     with pytest.raises(ValueError, match="editorial timing or words changed"):
         handler.export(job, Mock())
     exporter.execute.assert_not_called()
+
+    repository.get_cue.return_value = replace(cue, provenance={"approval": "draft"})
+    with pytest.raises(ValueError, match="is a draft"):
+        handler.export(job, Mock())
+    exporter.execute.assert_not_called()

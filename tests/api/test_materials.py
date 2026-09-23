@@ -127,3 +127,36 @@ def test_material_audio_requires_project_cue_and_voice(client):
         ).status_code
         == 404
     )
+
+
+def test_materials_exclude_explicit_editorial_drafts(client):
+    project_id, first_id, _ = _seed_project()
+    repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    cue = repository.get_cue(UUID(first_id))
+    assert cue is not None
+    repository.save_cue(
+        Cue(
+            cue.id,
+            cue.scene_id,
+            cue.order,
+            cue.speech_start_ms,
+            cue.speech_end_ms,
+            cue.subtitle_start_ms,
+            cue.subtitle_end_ms,
+            cue.speaker,
+            cue.original_en,
+            cue.approved_en,
+            cue.approved_pt,
+            cue.revision,
+            {**cue.provenance, "approval": "draft"},
+        ),
+        repository.get_cue_words(cue.id),
+    )
+    voice = client.post(
+        "/api/voices",
+        json={"name": "Draft gate", "model_id": "nano", "model_sha256": "d" * 64},
+    ).json()
+    cards = client.get(
+        f"/api/projects/{project_id}/materials", params={"voice_id": voice["id"]}
+    ).json()["cards"]
+    assert all(card["cue_id"] != first_id for card in cards)

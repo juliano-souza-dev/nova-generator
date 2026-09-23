@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nudgeTiming, snapTime, validateTimeline } from "./timeline";
+import { nudgeTiming, setTimingEdge, snapTime, validateTimeline } from "./timeline";
 
 describe("timeline helpers", () => {
   it("snaps time and keeps timing valid", () => {
@@ -7,6 +7,16 @@ describe("timeline helpers", () => {
     expect(nudgeTiming({ start_ms: 100, end_ms: 300 }, "start", 400, 1000)).toEqual({
       start_ms: 275,
       end_ms: 300,
+    });
+  });
+  it("marks cue boundaries at the snapped playhead", () => {
+    expect(setTimingEdge({ start_ms: 100, end_ms: 500 }, "start", 212, 1000)).toEqual({
+      start_ms: 200,
+      end_ms: 500,
+    });
+    expect(setTimingEdge({ start_ms: 100, end_ms: 500 }, "end", 463, 1000)).toEqual({
+      start_ms: 100,
+      end_ms: 475,
     });
   });
   it("reports word timing outside a cue", () => {
