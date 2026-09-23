@@ -255,3 +255,120 @@
     grid-template-columns: 1fr;
   }
 }
+
+.media-cut-workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.3fr);
+  gap: 1rem;
+  align-items: start;
+}
+.media-cut-workspace .panel {
+  padding: 1rem;
+  min-width: 0;
+}
+.media-cut-workspace .media-player {
+  position: sticky;
+  top: 1rem;
+}
+.media-cut-workspace video {
+  max-height: 330px;
+  min-height: 0;
+}
+.cut-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+.cut-toolbar button {
+  padding: 0.5rem 0.65rem;
+  color: var(--text);
+  background: #24324a;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cut-toolbar button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.cut-toolbar output {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.cut-toolbar kbd,
+.cut-shortcuts kbd {
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 0.2rem;
+}
+.cut-shortcuts {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  margin: 0.6rem 0 !important;
+}
+.wave-tick {
+  fill: var(--muted);
+  font-size: 19px;
+  pointer-events: none;
+}
+.wave-edge-label {
+  fill: var(--text);
+  font-size: 18px;
+  pointer-events: none;
+  font-weight: 700;
+}
+.wave-handle-hit {
+  fill: rgb(125 211 252 / 12%);
+  cursor: ew-resize;
+}
+.source-waveform.interactive {
+  cursor: crosshair;
+  margin: 0.5rem 0;
+  overflow: hidden;
+}
+.cut-controls {
+  gap: 0.5rem;
+}
+.cut-controls input {
+  width: 100%;
+  min-width: 0;
+}
+.media-cut-workspace .media-language {
+  display: grid;
+  gap: 0.3rem;
+  margin: 1rem 0;
+}
+@media (max-width: 1100px) {
+  .media-cut-workspace {
+    grid-template-columns: 1fr;
+  }
+  .media-cut-workspace .media-player {
+    position: static;
+  }
+  .media-cut-workspace video {
+    max-height: 230px;
+  }
+}
+
+.wave-display {
+  position: relative;
+}
+.wave-ruler {
+  display: flex;
+  justify-content: space-between;
+  position: absolute;
+  top: 0.7rem;
+  left: 0.3rem;
+  right: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  z-index: 1;
+}
+.cut-editor details {
+  margin-top: 1rem;
+}

@@ -71,14 +71,14 @@ describe("MediaPage", () => {
       </QueryClientProvider>,
     );
     expect(
-      await screen.findByRole("img", { name: "Waveform extraída do corte" }),
+      await screen.findByRole("img", { name: "Waveform extraída do corte", hidden: true }),
     ).toBeInTheDocument();
     expect(
       await screen.findByRole("img", { name: "Waveform da fonte com intervalo de corte" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Player da fonte de vídeo")).toHaveAttribute(
       "src",
-      fixtures.media.cut_url,
+      fixtures.media.source_url,
     );
     expect(screen.getByText("Café?")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Revisar legenda" })).toHaveAttribute(

@@ -36,3 +36,12 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Regressões de texto e timing possuem fixtures bloqueadoras de release.
 - Candidatos ASR criam rascunhos separados do texto aprovado; a aprovação EN/PT é explícita,
   auditável e repetir a importação nunca apaga uma revisão.
+
+## Recorte da fonte
+
+- Player e waveform devem usar a fonte completa e compartilhar coordenadas; nunca usar o MP4 já recortado para marcar novos limites.
+- Disponibilizar botões e atalhos visíveis: Espaço reproduz/pausa; I/O marcam início/fim; setas movem 10 ms (Shift: 100 ms); +/- ajustam zoom.
+- Campos editáveis preservam sua digitação. Atalhos de marcação continuam funcionando após clicar em botões.
+- Clique na waveform posiciona o vídeo sem mudar a seleção; somente arrastar IN/OUT altera limites. Manter intervalo mínimo de 100 ms e enviar milissegundos inteiros.
+- Ouvir seleção inicia no limite IN e pausa em OUT; zoom possui régua, navegação e retorno à visão completa. Restauro da seleção deve ser explícito.
+- Testar teclado, mouse, reprodução limitada, troca de projeto, carregamento com erro e preservação do último corte.
