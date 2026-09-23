@@ -32,6 +32,11 @@ export function CueWordTimeline(props: Props) {
     Math.min(props.playheadMs - visibleDuration / 2, props.durationMs - visibleDuration),
   );
   const pct = (time: number) => timeToPercent(time - windowStart, visibleDuration);
+  const timeLabel = (time: number) => `${(Math.max(0, time) / 1000).toFixed(2)} s`;
+  const ticks = Array.from({ length: 6 }, (_, index) => ({
+    x: index * 200,
+    label: timeLabel(windowStart + (visibleDuration * index) / 5),
+  }));
   const waveBars = useMemo(() => {
     if (props.waveform === undefined) {
       return Array.from({ length: 80 }, (_, index) => ({
@@ -93,103 +98,128 @@ export function CueWordTimeline(props: Props) {
     >
       <div className="timeline-toolbar">
         <button
-          className="icon-action"
+          className="transport-action"
+          type="button"
           onClick={props.onPlayToggle}
           aria-label={props.playing ? "Pausar" : "Reproduzir"}
         >
-          {props.playing ? <Pause /> : <Play />}
+          {props.playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+          {props.playing ? "Pausar" : "Reproduzir"}
         </button>
-        <button
-          className="icon-action"
-          onClick={() => props.onZoomChange(Math.max(1, props.zoom - 1))}
-          aria-label="Diminuir zoom"
-        >
-          <ZoomOut />
+        <div className="zoom-controls" aria-label="Zoom da timeline">
+          <button
+            className="icon-action"
+            type="button"
+            onClick={() => props.onZoomChange(Math.max(1, props.zoom - 1))}
+            aria-label="Diminuir zoom"
+          >
+            <ZoomOut aria-hidden="true" />
+          </button>
+          <output aria-label="Zoom atual">Zoom {props.zoom}×</output>
+          <button
+            className="icon-action"
+            type="button"
+            onClick={() => props.onZoomChange(Math.min(16, props.zoom + 1))}
+            aria-label="Aumentar zoom"
+          >
+            <ZoomIn aria-hidden="true" />
+          </button>
+        </div>
+        <button className="secondary-button" type="button" onClick={props.onUndo}>
+          <RotateCcw aria-hidden="true" /> Desfazer ajuste
         </button>
-        <output aria-label="Zoom atual">{props.zoom}×</output>
-        <button
-          className="icon-action"
-          onClick={() => props.onZoomChange(Math.min(16, props.zoom + 1))}
-          aria-label="Aumentar zoom"
-        >
-          <ZoomIn />
-        </button>
-        <button className="secondary-button" onClick={props.onUndo}>
-          <RotateCcw /> Desfazer
-        </button>
-        <span className="timeline-help">
-          Espaço reproduz · ←/→ ajusta final · Shift+←/→ ajusta início · Ctrl+Z desfaz
-        </span>
+        <details className="shortcut-help">
+          <summary>Atalhos</summary>
+          <span>
+            Espaço: reproduzir · Setas: ajustar fim · Shift + setas: ajustar início · Ctrl + Z:
+            desfazer
+          </span>
+        </details>
       </div>
-      <svg
-        className="cue-timeline"
-        viewBox="0 0 1000 190"
-        role="img"
-        aria-label="Waveform, cues e tempos das palavras"
-        onClick={seek}
-      >
-        <rect width="1000" height="190" className="timeline-bg" />
-        {waveBars.map((bar, index) => (
-          <line key={index} x1={bar.x} x2={bar.x} y1={bar.y1} y2={bar.y2} className="wave-bar" />
-        ))}
-        {props.cues.map((cue) => (
-          <g key={cue.id}>
-            <rect
-              x={pct(cue.speech_timing.start_ms) * 10}
-              width={Math.max(
-                2,
-                (pct(cue.speech_timing.end_ms) - pct(cue.speech_timing.start_ms)) * 10,
-              )}
-              y="42"
-              height="46"
-              rx="4"
-              className={cue.id === props.selectedCueId ? "cue-block cue-selected" : "cue-block"}
-              onClick={(event) => {
-                event.stopPropagation();
-                props.onSelectCue(cue.id);
-              }}
-            />
-            <text x={pct(cue.speech_timing.start_ms) * 10 + 5} y="67" className="cue-label">
-              {cue.order}
-            </text>
-            {cue.words.map((word) => (
+      <div className="timeline-viewport">
+        <svg
+          className="cue-timeline"
+          viewBox="0 0 1000 210"
+          role="img"
+          aria-label="Waveform, cues e tempos das palavras"
+          onClick={seek}
+        >
+          <rect width="1000" height="210" className="timeline-bg" />
+          {ticks.map((tick) => (
+            <g key={tick.x}>
+              <line x1={tick.x} x2={tick.x} y1="20" y2="195" className="timeline-gridline" />
+              <text x={tick.x + 6} y="15" className="timeline-tick">
+                {tick.label}
+              </text>
+            </g>
+          ))}
+          {waveBars.map((bar, index) => (
+            <line key={index} x1={bar.x} x2={bar.x} y1={bar.y1} y2={bar.y2} className="wave-bar" />
+          ))}
+          {props.cues.map((cue) => (
+            <g key={cue.id}>
               <rect
-                key={word.id}
-                x={pct(word.start_ms) * 10}
-                width={Math.max(2, (pct(word.end_ms) - pct(word.start_ms)) * 10)}
-                y="112"
-                height="30"
-                rx="3"
-                className={
-                  word.id === props.selectedWordId ? "word-block word-selected" : "word-block"
-                }
+                x={pct(cue.speech_timing.start_ms) * 10}
+                width={Math.max(
+                  2,
+                  (pct(cue.speech_timing.end_ms) - pct(cue.speech_timing.start_ms)) * 10,
+                )}
+                y="42"
+                height="46"
+                rx="4"
+                className={cue.id === props.selectedCueId ? "cue-block cue-selected" : "cue-block"}
                 onClick={(event) => {
                   event.stopPropagation();
                   props.onSelectCue(cue.id);
-                  props.onSelectWord(word.id);
                 }}
-              >
-                <title>{word.surface}</title>
-              </rect>
-            ))}
-          </g>
-        ))}
-        <line
-          x1={pct(props.playheadMs) * 10}
-          x2={pct(props.playheadMs) * 10}
-          y1="15"
-          y2="175"
-          className="playhead"
-        />
-      </svg>
+              />
+              <text x={pct(cue.speech_timing.start_ms) * 10 + 5} y="67" className="cue-label">
+                {cue.order}
+              </text>
+              {cue.words.map((word) => (
+                <rect
+                  key={word.id}
+                  x={pct(word.start_ms) * 10}
+                  width={Math.max(2, (pct(word.end_ms) - pct(word.start_ms)) * 10)}
+                  y="112"
+                  height="30"
+                  rx="3"
+                  className={
+                    word.id === props.selectedWordId ? "word-block word-selected" : "word-block"
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onSelectCue(cue.id);
+                    props.onSelectWord(word.id);
+                  }}
+                >
+                  <title>{word.surface}</title>
+                </rect>
+              ))}
+            </g>
+          ))}
+          <line
+            x1={pct(props.playheadMs) * 10}
+            x2={pct(props.playheadMs) * 10}
+            y1="15"
+            y2="195"
+            className="playhead"
+          />
+        </svg>
+      </div>
       <div className="timeline-legend">
-        <span>
-          <i className="legend-cue" /> Cue
-        </span>
-        <span>
-          <i className="legend-word" /> Palavra
-        </span>
-        <span>{Math.round(props.playheadMs)} ms</span>
+        <div>
+          <span>
+            <i className="legend-cue" /> Cue
+          </span>
+          <span>
+            <i className="legend-word" /> Palavra
+          </span>
+          <span>
+            <i className="legend-playhead" /> Reprodução
+          </span>
+        </div>
+        <strong>{timeLabel(props.playheadMs)}</strong>
       </div>
       {errors.length > 0 && (
         <div role="alert" className="timeline-errors">

@@ -5,6 +5,8 @@ import { EditorialPage } from "./EditorialPage";
 
 const mocks = vi.hoisted(() => ({
   updateCueText: vi.fn().mockResolvedValue({}),
+  updateCueTiming: vi.fn().mockResolvedValue({}),
+  updateWordTiming: vi.fn().mockResolvedValue({}),
   editorialCues: vi.fn().mockResolvedValue([
     {
       id: "c1",
@@ -30,15 +32,6 @@ vi.mock("../../lib/studio-api", () => ({
       cut_url: "/api/cut.wav",
       waveform: { sample_rate_hz: 8000, bucket_ms: 40, peaks: [0.3, 0.8] },
     }),
-    editorialScenes: vi.fn().mockResolvedValue([
-      {
-        id: "s1",
-        project_id: "p1",
-        order: 1,
-        duration_ms: 2000,
-        provenance: { ingest_job_id: "j1" },
-      },
-    ]),
     openEditorialReview: vi.fn().mockResolvedValue({
       status: "ready",
       ingest_job_id: "j1",
@@ -53,18 +46,22 @@ vi.mock("../../lib/studio-api", () => ({
     }),
     editorialCues: mocks.editorialCues,
     updateCueText: mocks.updateCueText,
+    updateCueTiming: mocks.updateCueTiming,
+    updateWordTiming: mocks.updateWordTiming,
   },
 }));
 
 describe("EditorialPage", () => {
-  it("loads an ASR draft and sends literal EN/PT approval", async () => {
+  it("presents a focused workstation and sends literal EN/PT approval", async () => {
     render(
-      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+      <MemoryRouter initialEntries={["/editorial?project=p1&ingest_job=j1"]}>
         <EditorialPage />
       </MemoryRouter>,
     );
-    expect(await screen.findByText("ASR original: “I can't… go?”")).toBeInTheDocument();
-    expect(screen.getByLabelText("Áudio do corte da cena")).toHaveAttribute("src", "/api/cut.wav");
+    expect(await screen.findByText("“I can't… go?”")).toBeInTheDocument();
+    expect(screen.queryByText("Demonstração da timeline")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("ID do job ASR concluído")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Player do corte da cena")).toHaveAttribute("src", "/api/cut.wav");
     expect(document.querySelectorAll(".wave-bar")).toHaveLength(160);
     fireEvent.change(screen.getByLabelText("Inglês aprovado"), {
       target: { value: "“I can't… go?”" },
@@ -72,7 +69,8 @@ describe("EditorialPage", () => {
     fireEvent.change(screen.getByLabelText("Português aprovado"), {
       target: { value: "“Não posso… ir?”" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Aprovar texto" }));
+    expect(screen.getByText("Alterações não salvas")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Aprovar cue" }));
     await waitFor(() =>
       expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
         author: "local-editor",
@@ -80,5 +78,20 @@ describe("EditorialPage", () => {
         approved_pt: "“Não posso… ir?”",
       }),
     );
+  });
+
+  it("supports cue navigation and an accessible word inspector", async () => {
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Selecione uma palavra" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /can't…/ }));
+    expect(screen.getByRole("heading", { name: "Palavra “can't…”" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cue anterior" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Próximo cue" })).toBeDisabled();
   });
 });

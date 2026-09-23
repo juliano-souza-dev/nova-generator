@@ -14,6 +14,10 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Criar fixtures canônicas, testes unitários de transformação, testes de interface e cenários Playwright.
 - Abrir o último candidato ASR válido pelo projeto e cena, materializando o rascunho de forma
   idempotente sem solicitar IDs de job ou autoria técnica ao operador.
+- Manter a revisão como uma estação única: contexto e progresso, player do corte, timeline com
+  viewport próprio, edição EN/PT, inspetor de palavra e ações persistentes.
+- Reservar milissegundos para edição fina, exibir tempos legíveis durante a revisão e manter ajuda de
+  atalhos recolhível.
 
 ## Limites
 
@@ -27,6 +31,8 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Todo cue tem intervalo válido; palavras respeitam ordem e pertencem ao cue.
 - Split/merge preservam rastreabilidade e permitem desfazer.
 - O operador conclui a revisão com menos trocas de tela e recebe avisos claros, nunca correções ocultas.
+- Em 1366×768 e 1440×900, a página não cria overflow horizontal; timeline e listas rolam dentro de
+  seus próprios viewports e as ações principais permanecem disponíveis.
 - Regressões de texto e timing possuem fixtures bloqueadoras de release.
 - Candidatos ASR criam rascunhos separados do texto aprovado; a aprovação EN/PT é explícita,
   auditável e repetir a importação nunca apaga uma revisão.
