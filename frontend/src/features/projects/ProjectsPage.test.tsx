@@ -7,6 +7,12 @@ import { ProjectsPage } from "./ProjectsPage";
 vi.mock("../../lib/studio-api", () => ({
   studioApi: {
     projects: vi.fn().mockResolvedValue([]),
+    inspectYoutubeSource: vi.fn().mockResolvedValue({
+      youtube_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      youtube_video_id: "dQw4w9WgXcQ",
+      title: "Título real — café?",
+      channel: "Canal",
+    }),
     createProject: vi.fn(),
     duplicateProject: vi.fn(),
     archiveProject: vi.fn(),
@@ -16,7 +22,7 @@ vi.mock("../../lib/studio-api", () => ({
 }));
 
 describe("ProjectsPage", () => {
-  it("opens the project form and validates its required title", async () => {
+  it("requires and verifies the URL while leaving the production title optional", async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter>
@@ -25,7 +31,13 @@ describe("ProjectsPage", () => {
       </QueryClientProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Novo projeto" }));
-    fireEvent.click(screen.getByRole("button", { name: "Criar projeto" }));
-    expect(await screen.findByText("Informe um nome para o projeto.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Título/)).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Criar projeto" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("URL do YouTube"), {
+      target: { value: "https://youtu.be/dQw4w9WgXcQ" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Verificar vídeo" }));
+    expect(await screen.findByText("Título real — café?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Criar projeto" })).toBeEnabled();
   });
 });

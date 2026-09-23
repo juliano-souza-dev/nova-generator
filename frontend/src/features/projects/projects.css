@@ -107,6 +107,28 @@
   border-radius: 8px;
   background: #0f172a;
 }
+.source-inspection-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.65rem;
+}
+.source-inspection-row input {
+  flex: 1;
+  min-width: 0;
+}
+.source-inspection-result {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.8rem;
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+.source-inspection-result strong,
+.source-inspection-result small {
+  color: var(--accent);
+}
 .sr-only {
   position: absolute;
   width: 1px;

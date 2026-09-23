@@ -10,6 +10,7 @@ import type {
   MaterialList,
   MaterialPublication,
   Project,
+  InspectedYoutubeSource,
   MediaJobReference,
   ProjectMedia,
   Scene,
@@ -45,7 +46,12 @@ export const studioApi = {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  createProject: (input: { title: string; content_type: string; youtube_url?: string }) =>
+  inspectYoutubeSource: (youtube_url: string) =>
+    apiRequest<InspectedYoutubeSource>("/projects/source-inspections", {
+      method: "POST",
+      body: JSON.stringify({ youtube_url }),
+    }),
+  createProject: (input: { title?: string; content_type: string; youtube_url?: string }) =>
     apiRequest<Project>("/projects", { method: "POST", body: JSON.stringify(input) }),
   duplicateProject: (id: string) =>
     apiRequest<Project>(`/projects/${id}/duplicate`, { method: "POST" }),

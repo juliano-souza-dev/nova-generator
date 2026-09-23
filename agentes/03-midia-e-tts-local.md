@@ -7,6 +7,7 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 ## Responsabilidades
 
 - Mapear os pipelines equivalentes em `legacy/generator-base/` antes de migrar comportamento de mídia para serviços novos.
+- Separar inspeção leve de metadados, download da fonte e extração do corte em etapas observáveis.
 - Manter perfis de voz versionados, incluindo configuração, referência autorizada e hash de modelo.
 - Gerar WAV canônico por cue; APKG, manifesto e reel derivam exatamente desse mesmo áudio.
 - Criar reel MP4 com áudio sincronizado aos tempos publicados no contrato do Hub.

@@ -1,5 +1,7 @@
 from functools import lru_cache
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy.orm import Session, sessionmaker
 
 from nova_generator.application.use_cases.check_health import CheckHealth
@@ -11,6 +13,7 @@ from nova_generator.application.use_cases.editorial_commands import (
     SplitCue,
     UndoEditorialRevision,
 )
+from nova_generator.application.use_cases.inspect_youtube_source import InspectYoutubeSource
 from nova_generator.application.use_cases.manage_jobs import (
     CancelJob,
     EnqueueJob,
@@ -35,6 +38,9 @@ from nova_generator.infrastructure.database.voice_profile_repository import (
     SqlAlchemyVoiceProfileRepository,
 )
 from nova_generator.infrastructure.filesystem.youtube_media_cache import FileYoutubeMediaCache
+from nova_generator.infrastructure.media.ytdlp_youtube_metadata_inspector import (
+    YtDlpYoutubeMetadataInspector,
+)
 
 
 @lru_cache
@@ -76,11 +82,19 @@ def get_editorial_repository() -> SqlAlchemyEditorialProjectRepository:
     return _editorial_repository()
 
 
-def get_manage_projects() -> ManageProjects:
+@lru_cache
+def get_inspect_youtube_source() -> InspectYoutubeSource:
+    return InspectYoutubeSource(YtDlpYoutubeMetadataInspector())
+
+
+def get_manage_projects(
+    source_inspection: Annotated[InspectYoutubeSource, Depends(get_inspect_youtube_source)],
+) -> ManageProjects:
     return ManageProjects(
         _editorial_repository(),
         FileYoutubeMediaCache(get_settings().media_cache_root),
         SqlAlchemyJobRepository(get_session_factory()),
+        source_inspection,
     )
 
 

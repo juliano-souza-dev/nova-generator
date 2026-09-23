@@ -58,6 +58,12 @@ export type Project = {
   cache_status: "missing" | "reused" | "not_configured";
   job_status: string;
 };
+export type InspectedYoutubeSource = {
+  youtube_url: string;
+  youtube_video_id: string;
+  title: string;
+  channel: string | null;
+};
 export type ProjectMedia = {
   source_ready: boolean;
   source_url: string | null;

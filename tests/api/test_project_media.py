@@ -104,7 +104,9 @@ def test_project_media_scopes_source_cut_and_candidate(client, tmp_path, monkeyp
     assert snapshot["waveform"]["peaks"] == [0.2]
     assert snapshot["transcript_candidate"]["engine"] == "faster-whisper"
     assert client.get(snapshot["cut_url"]).content == b"project-cut"
-    other = client.post("/api/projects", json={"title": "Other"}).json()
+    other = client.post(
+        "/api/projects", json={"title": "Other", "content_type": "story"}
+    ).json()
     assert client.get(f"/api/projects/{other['id']}/media/cuts/{job_id}").status_code == 404
     assert client.get(f"{base}/cuts/{UUID(int=0)}").status_code == 404
 
