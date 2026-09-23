@@ -79,6 +79,7 @@ class FileYoutubeMediaCache:
         if not source.is_file() or source.stat().st_size == 0:
             raise ValueError("A fonte temporária deve existir e não pode estar vazia.")
         destination = directory / "source.mp4"
+        destination.with_suffix(".waveform.json").unlink(missing_ok=True)
         # Staging and destination share a filesystem; replace makes readers see
         # either the complete old source or the complete newly validated source.
         os.replace(source, destination)

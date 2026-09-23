@@ -4,6 +4,7 @@ from uuid import UUID
 
 from nova_generator.api.dependencies import get_session_factory
 from nova_generator.core.settings import get_settings
+from nova_generator.domain.ingestion import WaveformMetadata
 from nova_generator.domain.media.cache import YoutubeMediaMetadata
 from nova_generator.domain.media.youtube import YoutubeVideo
 from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
@@ -59,6 +60,14 @@ def test_project_media_scopes_source_cut_and_candidate(client, tmp_path, monkeyp
     assert snapshot["source_ready"] is True
     assert snapshot["duration_ms"] == 90_000
     assert client.get(snapshot["source_url"]).content == source.read_bytes()
+    monkeypatch.setattr(
+        "nova_generator.api.routes.project_media.FfmpegWaveformGenerator.generate",
+        lambda *_args, **_kwargs: WaveformMetadata(8000, 20, (0.2, 0.8)),
+    )
+    source_waveform = client.get(f"{base}/source-waveform")
+    assert source_waveform.status_code == 200
+    assert source_waveform.json()["peaks"] == [0.2, 0.8]
+    assert client.get(f"{base}/source-waveform").json()["peaks"] == [0.2, 0.8]
     assert client.post(f"{base}/ingest", json={"start_ms": 0, "end_ms": 91_000}).status_code == 422
 
     queued = client.post(
@@ -147,9 +156,7 @@ def test_project_media_scopes_source_cut_and_candidate(client, tmp_path, monkeyp
         )
     )
     assert client.post(f"/api/editorial/projects/{project_id}/review").status_code == 409
-    other = client.post(
-        "/api/projects", json={"title": "Other", "content_type": "story"}
-    ).json()
+    other = client.post("/api/projects", json={"title": "Other", "content_type": "story"}).json()
     assert client.get(f"/api/projects/{other['id']}/media/cuts/{job_id}").status_code == 404
     assert client.get(f"{base}/cuts/{UUID(int=0)}").status_code == 404
 

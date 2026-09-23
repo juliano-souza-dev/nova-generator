@@ -107,6 +107,8 @@ export type ProjectMedia = {
     }>;
   } | null;
 };
+
+export type MediaWaveform = { sample_rate_hz: number; bucket_ms: number; peaks: number[] };
 export type EditorialReviewContext = {
   status: "ready";
   scene: Scene;

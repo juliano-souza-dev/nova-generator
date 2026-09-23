@@ -61,6 +61,11 @@
   margin: 0;
   color: var(--muted);
 }
+.media-status strong {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--text);
+}
 .media-status dl {
   display: flex;
   gap: 1.25rem;
@@ -141,20 +146,70 @@
   border-radius: 8px;
   background: #0b1220;
 }
+.source-wave-editor {
+  margin: 1rem 0;
+}
+.wave-editor-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.wave-editor-heading span,
+.wave-help {
+  color: var(--muted);
+}
+.source-waveform.interactive {
+  height: 12rem;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
 .wave-bg {
   fill: #0b1220;
 }
 .wave-selection {
-  fill: rgb(125 211 252 / 18%);
+  fill: rgb(125 211 252 / 16%);
+  pointer-events: none;
+}
+.wave-outside {
+  fill: rgb(2 6 23 / 64%);
+  pointer-events: none;
 }
 .source-wave-bar {
-  stroke: #94a3b8;
-  stroke-width: 5;
+  stroke: #7dd3fc;
+  stroke-width: 3;
   stroke-linecap: round;
+  pointer-events: none;
 }
 .cut-handle {
   stroke: var(--accent);
-  stroke-width: 6;
+  stroke-width: 5;
+  pointer-events: none;
+}
+.cut-grip {
+  fill: var(--accent);
+  stroke: #082f49;
+  stroke-width: 3;
+  pointer-events: none;
+}
+.wave-playhead {
+  stroke: #fb7185;
+  stroke-width: 2;
+  pointer-events: none;
+}
+.waveform-loading {
+  display: grid;
+  min-height: 12rem;
+  margin: 1rem 0;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #0b1220;
+}
+.wave-help {
+  margin-top: -0.45rem !important;
+  font-size: 0.85rem;
 }
 .cut-controls {
   display: grid;

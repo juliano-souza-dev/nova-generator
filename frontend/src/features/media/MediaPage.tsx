@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, Scissors, Video } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  RefObject,
+} from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
@@ -45,6 +50,13 @@ export function MediaPage() {
       studioApi.ingestProjectMedia(selected!.id, input),
     onSuccess: refresh,
   });
+  const sourceWaveform = useQuery({
+    queryKey: ["source-waveform", selected?.id],
+    queryFn: () => studioApi.projectSourceWaveform(selected!.id),
+    enabled: Boolean(selected && media.data?.can_cut),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const sourcePlayer = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (selected && selected.id !== selectedId)
@@ -99,7 +111,9 @@ export function MediaPage() {
                 </p>
               )}
               <JourneySteps media={media.data} />
-              {media.data.source_ready && <MediaPlayer media={media.data} />}
+              {media.data.source_ready && (
+                <MediaPlayer media={media.data} playerRef={sourcePlayer} />
+              )}
               {media.data.can_cut && (
                 <CutEditor
                   key={selected.id}
@@ -107,6 +121,8 @@ export function MediaPage() {
                   media={media.data}
                   onIngest={(input) => ingest.mutate(input)}
                   busy={ingest.isPending}
+                  waveform={sourceWaveform.data?.peaks ?? []}
+                  playerRef={sourcePlayer}
                 />
               )}
               {ingest.error && (
@@ -147,26 +163,7 @@ function SourceStatus({
       <div>
         <h2>Fonte</h2>
         <p>{cacheMessage}</p>
-        {project.youtube_video_id && (
-          <dl>
-            <div>
-              <dt>Vídeo</dt>
-              <dd>{project.youtube_video_id}</dd>
-            </div>
-            {media.duration_ms !== null && (
-              <div>
-                <dt>Duração</dt>
-                <dd>{formatMs(media.duration_ms)}</dd>
-              </div>
-            )}
-            {media.download_status && (
-              <div>
-                <dt>Download</dt>
-                <dd>{media.download_status}</dd>
-              </div>
-            )}
-          </dl>
-        )}
+        {media.duration_ms !== null && <strong>{formatClock(media.duration_ms)} de vídeo</strong>}
         {media.download_error && (
           <p className="field-error" role="alert">
             {media.download_error}
@@ -221,13 +218,20 @@ function JourneySteps({ media }: { media: ProjectMedia }) {
   );
 }
 
-function MediaPlayer({ media }: { media: ProjectMedia }) {
+function MediaPlayer({
+  media,
+  playerRef,
+}: {
+  media: ProjectMedia;
+  playerRef: RefObject<HTMLVideoElement | null>;
+}) {
   const url = media.cut_url ?? media.source_url;
   return (
     <section className="media-player panel">
       <h2>{media.cut_url ? "Player do corte" : "Player da fonte"}</h2>
       {url ? (
         <video
+          ref={playerRef}
           key={url}
           controls
           preload="metadata"
@@ -253,11 +257,15 @@ function CutEditor({
   media,
   onIngest,
   busy,
+  waveform,
+  playerRef,
 }: {
   project: Project;
   media: ProjectMedia;
   onIngest: (input: { start_ms: number; end_ms: number; language: string }) => void;
   busy: boolean;
+  waveform: number[];
+  playerRef: RefObject<HTMLVideoElement | null>;
 }) {
   const duration = media.duration_ms ?? 0;
   const [startMs, setStartMs] = useState(0);
@@ -278,66 +286,43 @@ function CutEditor({
         </div>
         <Scissors aria-hidden="true" />
       </div>
-      <SourceRange startMs={startMs} endMs={endMs} durationMs={duration} />
+      <SourceWaveEditor
+        peaks={waveform}
+        startMs={startMs}
+        endMs={endMs}
+        durationMs={duration}
+        onStartChange={updateStart}
+        onEndChange={updateEnd}
+        playerRef={playerRef}
+      />
       <div className="cut-controls">
         <label>
-          Início (ms)
+          Início (segundos)
           <input
-            aria-label="Início do corte em milissegundos"
+            aria-label="Início do corte em segundos"
             type="number"
             min="0"
-            max={Math.max(0, endMs - 100)}
-            step="100"
-            value={startMs}
+            max={Math.max(0, (endMs - 100) / 1000)}
+            step="0.1"
+            value={(startMs / 1000).toFixed(1)}
             disabled={!media.source_ready}
-            onChange={(event) => updateStart(Number(event.target.value))}
+            onChange={(event) => updateStart(Number(event.target.value) * 1000)}
           />
         </label>
         <label>
-          Fim (ms)
+          Fim (segundos)
           <input
-            aria-label="Fim do corte em milissegundos"
+            aria-label="Fim do corte em segundos"
             type="number"
-            min={startMs + 100}
-            max={duration}
-            step="100"
-            value={endMs}
+            min={(startMs + 100) / 1000}
+            max={duration / 1000}
+            step="0.1"
+            value={(endMs / 1000).toFixed(1)}
             disabled={!media.source_ready}
-            onChange={(event) => updateEnd(Number(event.target.value))}
+            onChange={(event) => updateEnd(Number(event.target.value) * 1000)}
           />
         </label>
         <output aria-label="Duração do corte">{((endMs - startMs) / 1000).toFixed(1)} s</output>
-      </div>
-      <div
-        className="range-stack"
-        aria-label="Handles do corte. Use as setas para ajustar em 100 milissegundos."
-      >
-        <label>
-          Handle de início
-          <input
-            aria-label="Handle de início"
-            type="range"
-            min="0"
-            max={Math.max(0, endMs - 100)}
-            step="100"
-            value={startMs}
-            disabled={!media.source_ready}
-            onChange={(event) => updateStart(Number(event.target.value))}
-          />
-        </label>
-        <label>
-          Handle de fim
-          <input
-            aria-label="Handle de fim"
-            type="range"
-            min={startMs + 100}
-            max={duration}
-            step="100"
-            value={endMs}
-            disabled={!media.source_ready}
-            onChange={(event) => updateEnd(Number(event.target.value))}
-          />
-        </label>
       </div>
       <label className="media-language">
         Idioma da transcrição
@@ -371,29 +356,119 @@ function CutEditor({
   );
 }
 
-function SourceRange({
+function SourceWaveEditor({
+  peaks,
   startMs,
   endMs,
   durationMs,
+  onStartChange,
+  onEndChange,
+  playerRef,
 }: {
+  peaks: number[];
   startMs: number;
   endMs: number;
   durationMs: number;
+  onStartChange: (value: number) => void;
+  onEndChange: (value: number) => void;
+  playerRef: RefObject<HTMLVideoElement | null>;
 }) {
+  const [dragging, setDragging] = useState<"start" | "end" | null>(null);
+  const [playheadMs, setPlayheadMs] = useState(0);
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    const update = () => setPlayheadMs(player.currentTime * 1000);
+    player.addEventListener("timeupdate", update);
+    return () => player.removeEventListener("timeupdate", update);
+  }, [playerRef]);
+  const displayed = useMemo(() => {
+    if (peaks.length <= 500) return peaks;
+    const size = Math.ceil(peaks.length / 500);
+    return Array.from({ length: Math.ceil(peaks.length / size) }, (_, index) =>
+      Math.max(...peaks.slice(index * size, (index + 1) * size)),
+    );
+  }, [peaks]);
   const start = durationMs > 0 ? (startMs / durationMs) * 1200 : 0;
   const end = durationMs > 0 ? (endMs / durationMs) * 1200 : 0;
+  const playhead = durationMs > 0 ? (playheadMs / durationMs) * 1200 : 0;
+  const position = (event: ReactPointerEvent<SVGSVGElement> | ReactMouseEvent<SVGSVGElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return Math.max(
+      0,
+      Math.min(durationMs, ((event.clientX - bounds.left) / bounds.width) * durationMs),
+    );
+  };
+  const move = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (dragging === "start") onStartChange(position(event));
+    if (dragging === "end") onEndChange(position(event));
+  };
   return (
-    <svg
-      className="source-waveform"
-      viewBox="0 0 1200 160"
-      role="img"
-      aria-label="Intervalo selecionado na fonte"
-    >
-      <rect width="1200" height="160" className="wave-bg" />
-      <rect x={start} width={Math.max(0, end - start)} height="160" className="wave-selection" />
-      <line x1={start} x2={start} y1="0" y2="160" className="cut-handle" />
-      <line x1={end} x2={end} y1="0" y2="160" className="cut-handle" />
-    </svg>
+    <div className="source-wave-editor">
+      <div className="wave-editor-heading">
+        <strong>Arraste os limites sobre o áudio</strong>
+        <span>
+          {formatClock(startMs)} — {formatClock(endMs)}
+        </span>
+      </div>
+      {displayed.length ? (
+        <svg
+          className="source-waveform interactive"
+          viewBox="0 0 1200 180"
+          role="img"
+          aria-label="Waveform da fonte com intervalo de corte"
+          onPointerMove={move}
+          onPointerUp={() => setDragging(null)}
+          onPointerLeave={() => setDragging(null)}
+          onPointerDown={(event) => {
+            const value = position(event);
+            const edge = Math.abs(value - startMs) <= Math.abs(value - endMs) ? "start" : "end";
+            setDragging(edge);
+            event.currentTarget.setPointerCapture(event.pointerId);
+            if (edge === "start") onStartChange(value);
+            else onEndChange(value);
+          }}
+          onDoubleClick={(event) => {
+            const value = position(event);
+            if (playerRef.current) playerRef.current.currentTime = value / 1000;
+            setPlayheadMs(value);
+          }}
+        >
+          <rect width="1200" height="180" className="wave-bg" />
+          {displayed.map((peak, index) => {
+            const x = (index / Math.max(1, displayed.length - 1)) * 1200;
+            return (
+              <line
+                key={index}
+                x1={x}
+                x2={x}
+                y1={90 - peak * 76}
+                y2={90 + peak * 76}
+                className="source-wave-bar"
+              />
+            );
+          })}
+          <rect
+            x={start}
+            width={Math.max(0, end - start)}
+            height="180"
+            className="wave-selection"
+          />
+          <rect width={start} height="180" className="wave-outside" />
+          <rect x={end} width={Math.max(0, 1200 - end)} height="180" className="wave-outside" />
+          <line x1={playhead} x2={playhead} y1="0" y2="180" className="wave-playhead" />
+          <line x1={start} x2={start} y1="0" y2="180" className="cut-handle" />
+          <circle cx={start} cy="18" r="11" className="cut-grip" />
+          <line x1={end} x2={end} y1="0" y2="180" className="cut-handle" />
+          <circle cx={end} cy="18" r="11" className="cut-grip" />
+        </svg>
+      ) : (
+        <div className="waveform-loading">Gerando waveform da fonte…</div>
+      )}
+      <p className="wave-help">
+        Arraste o início ou o fim. Dê dois cliques para posicionar o vídeo.
+      </p>
+    </div>
   );
 }
 
@@ -461,4 +536,9 @@ function TranscriptReview({ projectId, media }: { projectId: string; media: Proj
 
 function formatMs(value: number) {
   return `${(value / 1000).toFixed(2)} s`;
+}
+
+function formatClock(value: number) {
+  const seconds = Math.max(0, value) / 1000;
+  return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
 }

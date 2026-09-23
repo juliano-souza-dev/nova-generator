@@ -13,6 +13,7 @@ import type {
   Project,
   InspectedYoutubeSource,
   MediaJobReference,
+  MediaWaveform,
   ProjectMedia,
   Scene,
   StoryProduction,
@@ -40,6 +41,8 @@ export const studioApi = {
       `/projects?search=${encodeURIComponent(search)}&include_archived=${includeArchived}`,
     ),
   projectMedia: (id: string) => apiRequest<ProjectMedia>(`/projects/${id}/media`),
+  projectSourceWaveform: (id: string) =>
+    apiRequest<MediaWaveform>(`/projects/${id}/media/source-waveform`),
   startProjectMedia: (id: string) =>
     apiRequest<ProjectMedia>(`/projects/${id}/media/start`, { method: "POST" }),
   downloadProjectMedia: (id: string) =>
