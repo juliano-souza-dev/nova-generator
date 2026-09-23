@@ -4,6 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import { EditorialPage } from "./EditorialPage";
 
 const mocks = vi.hoisted(() => ({
+  projectMedia: vi.fn().mockResolvedValue({
+    state: "ready_for_review",
+    can_review: true,
+    ingest_job_id: "j1",
+    cut_url: "/api/cut.wav",
+    waveform: { sample_rate_hz: 8000, bucket_ms: 40, peaks: [0.3, 0.8] },
+  }),
+  startProjectMedia: vi.fn().mockResolvedValue({ state: "source_processing", can_review: false }),
   updateCueText: vi.fn().mockResolvedValue({}),
   updateCueTiming: vi.fn().mockResolvedValue({}),
   updateWordTiming: vi.fn().mockResolvedValue({}),
@@ -27,11 +35,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../lib/studio-api", () => ({
   studioApi: {
     projects: vi.fn().mockResolvedValue([{ id: "p1", title: "Projeto" }]),
-    projectMedia: vi.fn().mockResolvedValue({
-      ingest_job_id: "j1",
-      cut_url: "/api/cut.wav",
-      waveform: { sample_rate_hz: 8000, bucket_ms: 40, peaks: [0.3, 0.8] },
-    }),
+    projectMedia: mocks.projectMedia,
+    startProjectMedia: mocks.startProjectMedia,
     openEditorialReview: vi.fn().mockResolvedValue({
       status: "ready",
       ingest_job_id: "j1",
@@ -78,6 +83,18 @@ describe("EditorialPage", () => {
         approved_pt: "“Não posso… ir?”",
       }),
     );
+  });
+
+  it("explains a validated source and starts processing from the empty state", async () => {
+    mocks.projectMedia.mockResolvedValueOnce({ state: "source_validated", can_review: false });
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole("heading", { name: "Vídeo validado" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar processamento" }));
+    await waitFor(() => expect(mocks.startProjectMedia).toHaveBeenCalledWith("p1"));
   });
 
   it("supports cue navigation and an accessible word inspector", async () => {

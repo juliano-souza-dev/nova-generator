@@ -1,6 +1,6 @@
 import { Check, ChevronLeft, ChevronRight, Clock3, Film, Save } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { Project, ProjectMedia, Scene } from "../../lib/api.types";
 import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
@@ -34,6 +34,8 @@ export function EditorialPage() {
   const [wordStart, setWordStart] = useState(0);
   const [wordEnd, setWordEnd] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [startingMedia, setStartingMedia] = useState(false);
+  const [mediaReload, setMediaReload] = useState(0);
   const author = "local-editor";
 
   const project = projects.find((item) => item.id === projectId);
@@ -70,15 +72,35 @@ export function EditorialPage() {
     setSelectedCueId("");
     setMedia(null);
     if (!projectId) return;
-    void Promise.all([studioApi.projectMedia(projectId), studioApi.openEditorialReview(projectId)])
-      .then(([currentMedia, context]) => {
+    let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    async function loadReview() {
+      try {
+        const currentMedia = await studioApi.projectMedia(projectId);
+        if (cancelled) return;
         setMedia(currentMedia);
+        if (!currentMedia.can_review) {
+          setMessage("");
+          if (currentMedia.state === "source_processing" || currentMedia.state === "asr_processing")
+            refreshTimer = setTimeout(() => void loadReview(), 2000);
+          return;
+        }
+        const context = await studioApi.openEditorialReview(projectId);
+        if (cancelled) return;
         setScenes([context.scene]);
         setSceneId(context.scene.id);
         setMessage("Transcrição pronta para revisão.");
-      })
-      .catch((error: Error) => setMessage(error.message));
-  }, [projectId]);
+      } catch {
+        if (!cancelled)
+          setMessage("Não foi possível carregar a etapa atual. Tente novamente ou abra Mídia.");
+      }
+    }
+    void loadReview();
+    return () => {
+      cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
+  }, [projectId, mediaReload]);
   useEffect(() => {
     setCues([]);
     setSelectedCueId("");
@@ -189,6 +211,19 @@ export function EditorialPage() {
     const next = cues[selectedCueIndex + offset];
     if (next) selectCue(next.id);
   }
+  async function startMediaProcessing() {
+    if (!projectId || startingMedia) return;
+    setStartingMedia(true);
+    try {
+      setMedia(await studioApi.startProjectMedia(projectId));
+      setMessage("Processamento iniciado. Esta tela será atualizada automaticamente.");
+      setMediaReload((value) => value + 1);
+    } catch {
+      setMessage("Não foi possível iniciar o processamento. Abra Mídia para ver os detalhes.");
+    } finally {
+      setStartingMedia(false);
+    }
+  }
   return (
     <section className="editorial-workstation">
       <PageHeader
@@ -257,10 +292,60 @@ export function EditorialPage() {
       {projectId && !selectedCue && (
         <div className="editorial-empty panel" role="status">
           <Clock3 aria-hidden="true" />
-          <h2>Aguardando transcrição</h2>
-          <p>
-            Quando o processamento da mídia terminar, o primeiro cue será aberto automaticamente.
-          </p>
+          {media?.state === "source_validated" && (
+            <>
+              <h2>Vídeo validado</h2>
+              <p>O download ainda não foi iniciado.</p>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => void startMediaProcessing()}
+                disabled={startingMedia}
+              >
+                {startingMedia ? "Iniciando…" : "Iniciar processamento"}
+              </button>
+            </>
+          )}
+          {media?.state === "source_processing" && (
+            <>
+              <h2>Baixando o vídeo</h2>
+              <p>O download está em andamento. O estado será atualizado automaticamente.</p>
+            </>
+          )}
+          {media?.state === "cut_required" && (
+            <>
+              <h2>Vídeo pronto para recorte</h2>
+              <p>Escolha o início e o fim do trecho antes de transcrever.</p>
+              <Link className="primary-button" to={`/media?project=${projectId}`}>
+                Abrir recorte
+              </Link>
+            </>
+          )}
+          {media?.state === "asr_processing" && (
+            <>
+              <h2>Transcrevendo o corte</h2>
+              <p>
+                A transcrição está em andamento. Esta tela verifica o resultado automaticamente.
+              </p>
+            </>
+          )}
+          {media?.state === "failed" && (
+            <>
+              <h2>O processamento encontrou um problema</h2>
+              <p>
+                {media.download_error ?? media.ingest_error ?? "Consulte os detalhes da mídia."}
+              </p>
+              <Link className="primary-button" to={`/media?project=${projectId}`}>
+                Ver detalhes e tentar novamente
+              </Link>
+            </>
+          )}
+          {!media && (
+            <>
+              <h2>Verificando a produção</h2>
+              <p>Carregando a etapa atual…</p>
+            </>
+          )}
         </div>
       )}
       {selectedCue && (

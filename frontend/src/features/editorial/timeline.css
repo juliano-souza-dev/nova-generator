@@ -479,6 +479,12 @@
   color: var(--muted);
   font-size: 0.78rem;
 }
+.editorial-empty .primary-button {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 0.5rem;
+  text-decoration: none;
+}
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
