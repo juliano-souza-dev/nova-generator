@@ -191,3 +191,53 @@ def test_semantic_word_group_uses_one_natural_translation_and_can_be_undone(
     assert [item["semantic_group_id"] for item in restored] == [None, None, None]
     assert [item["pt"] for item in restored] == individual
     assert [(item["start_ms"], item["end_ms"]) for item in restored] == original_timings
+
+
+def test_ai_semantic_units_are_saved_atomically_as_draft_without_changing_timings(
+    client: TestClient,
+) -> None:
+    repository, _, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    original_timings = [(word.start_ms, word.end_ms) for word in words]
+    response = client.put(
+        f"/api/editorial/cues/{cue.id}/words/semantic-units",
+        json={
+            "author": "editor",
+            "expected_revision": cue.revision,
+            "units": [
+                {
+                    "word_ids": [str(words[0].id), str(words[1].id), str(words[2].id)],
+                    "pt": "Não consigo ir?",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+    saved = response.json()
+    assert [item["pt"] for item in saved] == ["Não consigo ir?", None, None]
+    assert len({item["semantic_group_id"] for item in saved}) == 1
+    assert [(item["start_ms"], item["end_ms"]) for item in saved] == original_timings
+    changed_cue = repository.get_cue(cue.id)
+    assert changed_cue is not None
+    assert changed_cue.revision == cue.revision + 1
+    assert changed_cue.provenance["approval"] == "draft"
+
+    invalid = client.put(
+        f"/api/editorial/cues/{cue.id}/words/semantic-units",
+        json={
+            "author": "editor",
+            "expected_revision": changed_cue.revision,
+            "units": [
+                {"word_ids": [str(words[0].id), str(words[1].id)], "pt": "Primeira"},
+                {"word_ids": [str(words[1].id), str(words[2].id)], "pt": "Sobreposta"},
+            ],
+        },
+    )
+    assert invalid.status_code == 422
+    persisted = repository.get_cue_words(cue.id)
+    assert [word.provenance.get("pt") for word in persisted] == [
+        "Não consigo ir?",
+        None,
+        None,
+    ]
+    assert [(word.start_ms, word.end_ms) for word in persisted] == original_timings

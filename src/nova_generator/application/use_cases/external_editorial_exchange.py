@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import zipfile
+from dataclasses import asdict
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
@@ -10,6 +11,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from nova_generator.application.ports.editorial_assistant import (
     EditorialAssistanceResult,
+    EditorialSemanticUnit,
     EditorialSuggestion,
 )
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
@@ -20,16 +22,25 @@ from nova_generator.application.use_cases.editorial_assistance import (
 )
 
 
+class _ExternalSemanticUnit(BaseModel):
+    word_ids: list[str] = Field(min_length=2)
+    pt: str = Field(min_length=1)
+
+
 class _ExternalSuggestion(BaseModel):
     cue_id: str
     order: int
     approved_en: str = Field(min_length=1)
     approved_pt: str = Field(min_length=1)
     notes: str = ""
+    semantic_units: list[_ExternalSemanticUnit] = Field(default_factory=list)
 
 
 class _ExternalResult(BaseModel):
-    schema_version: Literal["nova-generator-editorial-suggestions/1.0"]
+    schema_version: Literal[
+        "nova-generator-editorial-suggestions/1.0",
+        "nova-generator-editorial-suggestions/1.1",
+    ]
     scene_id: UUID
     input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     suggestions: list[_ExternalSuggestion] = Field(min_length=1)
@@ -66,13 +77,13 @@ class ExternalEditorialExchange:
         directory.mkdir(parents=True, exist_ok=True)
         package = directory / f"scene-{scene_id}-external-ai.zip"
         source = {
-            "schema_version": "nova-generator-editorial-input/1.0",
+            "schema_version": "nova-generator-editorial-input/1.1",
             "scene_id": str(scene_id),
             "input_sha256": input_sha256,
-            "cues": [cue.__dict__ for cue in cues],
+            "cues": [asdict(cue) for cue in cues],
         }
         template = {
-            "schema_version": "nova-generator-editorial-suggestions/1.0",
+            "schema_version": "nova-generator-editorial-suggestions/1.1",
             "scene_id": str(scene_id),
             "input_sha256": input_sha256,
             "suggestions": [
@@ -82,6 +93,7 @@ class ExternalEditorialExchange:
                     "approved_en": cue.current_en or cue.original_en,
                     "approved_pt": cue.current_pt,
                     "notes": "",
+                    "semantic_units": [],
                 }
                 for cue in cues
             ],
@@ -126,6 +138,10 @@ class ExternalEditorialExchange:
                     approved_en=item.approved_en,
                     approved_pt=item.approved_pt,
                     notes=item.notes,
+                    semantic_units=tuple(
+                        EditorialSemanticUnit(tuple(unit.word_ids), unit.pt)
+                        for unit in item.semantic_units
+                    ),
                 )
                 for item in document.suggestions
             ),
@@ -151,7 +167,11 @@ def _instructions() -> str:
     return """# Assistência editorial externa
 
 Analise `scene.mp4` quando estiver presente e use `editorial_input.json` como fonte canônica.
-Preencha somente `approved_en`, `approved_pt` e `notes` no arquivo de modelo.
+Preencha `approved_en`, `approved_pt`, `notes` e `semantic_units` no arquivo de modelo.
+Cada unidade semântica deve ter `word_ids` contíguos, na ordem recebida, e uma única tradução
+brasileira natural em `pt`. Agrupe phrasal verbs, expressões, collocations, auxiliares/negações e
+sequências cuja tradução palavra por palavra soe mecânica. Exemplo: agrupe `Can I help?` e use
+`Posso ajudar?`, nunca `Posso eu ajudar?`. Não crie grupos de uma palavra nem grupos sobrepostos.
 Mantenha `scene_id`, `input_sha256`, `cue_id`, `order`, a quantidade e a ordem sem alterações.
 Corrija o inglês somente quando necessário e traduza para português brasileiro natural.
 Preserve nomes, acentos, apóstrofos, aspas, vírgulas, pontos, perguntas e reticências.

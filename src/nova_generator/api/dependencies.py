@@ -13,6 +13,7 @@ from nova_generator.application.use_cases.editorial_commands import (
     GroupWordTranslation,
     MergeCues,
     RealignCue,
+    ReplaceSemanticWordUnits,
     SplitCue,
     UndoEditorialRevision,
     UngroupWordTranslation,
@@ -137,6 +138,10 @@ def get_group_word_translation() -> GroupWordTranslation:
 
 def get_ungroup_word_translation() -> UngroupWordTranslation:
     return UngroupWordTranslation(_editorial_repository())
+
+
+def get_replace_semantic_word_units() -> ReplaceSemanticWordUnits:
+    return ReplaceSemanticWordUnits(_editorial_repository())
 
 
 def get_split_cue() -> SplitCue:

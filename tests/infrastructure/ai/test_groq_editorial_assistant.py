@@ -3,7 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from nova_generator.application.ports.editorial_assistant import EditorialCuePrompt
+from nova_generator.application.ports.editorial_assistant import (
+    EditorialCuePrompt,
+    EditorialWordPrompt,
+)
 from nova_generator.infrastructure.ai.groq_editorial_assistant import (
     EditorialAssistantUnavailable,
     GroqEditorialAssistant,
@@ -45,6 +48,7 @@ def test_groq_adapter_validates_json_and_exposes_dynamic_rate_headers() -> None:
                 "approved_en": "“Are you ready…?”",
                 "approved_pt": "“Você está pronto…?”",
                 "notes": "Pontuação preservada.",
+                "semantic_units": [{"word_ids": ["word-1", "word-2"], "pt": "Você está pronto?"}],
             }
         ],
     }
@@ -55,9 +59,23 @@ def test_groq_adapter_validates_json_and_exposes_dynamic_rate_headers() -> None:
     result = GroqEditorialAssistant(api_key=None, model="test-model", client=_Client(raw)).suggest(
         scene_id="scene-1",
         input_sha256="a" * 64,
-        cues=(EditorialCuePrompt("cue-1", 1, "Are you ready?", "", ""),),
+        cues=(
+            EditorialCuePrompt(
+                "cue-1",
+                1,
+                "Are you ready?",
+                "",
+                "",
+                (
+                    EditorialWordPrompt("word-1", 1, "Are"),
+                    EditorialWordPrompt("word-2", 2, "you"),
+                ),
+            ),
+        ),
     )
     assert result.suggestions[0].approved_pt == "“Você está pronto…?”"
+    assert result.suggestions[0].semantic_units[0].word_ids == ("word-1", "word-2")
+    assert result.suggestions[0].semantic_units[0].pt == "Você está pronto?"
     assert result.rate_limits == {"x-ratelimit-remaining-requests": "29"}
 
 

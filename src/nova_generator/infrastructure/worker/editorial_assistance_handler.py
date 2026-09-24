@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from uuid import UUID
 
 from nova_generator.application.use_cases.editorial_assistance import RunEditorialAssistance
@@ -23,5 +24,5 @@ class EditorialAssistanceJobHandler:
             "provider": result.provider,
             "model": result.model,
             "rate_limits": result.rate_limits,
-            "suggestions": [item.__dict__ for item in result.suggestions],
+            "suggestions": [asdict(item) for item in result.suggestions],
         }

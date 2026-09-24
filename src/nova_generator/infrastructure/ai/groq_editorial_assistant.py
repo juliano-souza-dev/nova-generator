@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
@@ -8,6 +9,7 @@ from pydantic import BaseModel, Field, ValidationError
 from nova_generator.application.ports.editorial_assistant import (
     EditorialAssistanceResult,
     EditorialCuePrompt,
+    EditorialSemanticUnit,
     EditorialSuggestion,
 )
 
@@ -19,12 +21,18 @@ class EditorialAssistantUnavailable(RuntimeError):
         self.retry_after_seconds = retry_after_seconds
 
 
+class _SemanticUnitPayload(BaseModel):
+    word_ids: list[str] = Field(min_length=2)
+    pt: str = Field(min_length=1)
+
+
 class _SuggestionPayload(BaseModel):
     cue_id: str
     order: int
     approved_en: str = Field(min_length=1)
     approved_pt: str = Field(min_length=1)
     notes: str = ""
+    semantic_units: list[_SemanticUnitPayload] = Field(default_factory=list)
 
 
 class _ResponsePayload(BaseModel):
@@ -68,7 +76,7 @@ class GroqEditorialAssistant:
         request = {
             "scene_id": scene_id,
             "input_sha256": input_sha256,
-            "cues": [cue.__dict__ for cue in cues],
+            "cues": [asdict(cue) for cue in cues],
         }
         try:
             raw = self._client.with_raw_response.chat.completions.create(
@@ -108,6 +116,10 @@ class GroqEditorialAssistant:
                     approved_en=item.approved_en,
                     approved_pt=item.approved_pt,
                     notes=item.notes,
+                    semantic_units=tuple(
+                        EditorialSemanticUnit(tuple(unit.word_ids), unit.pt)
+                        for unit in item.semantic_units
+                    ),
                 )
                 for item in parsed.suggestions
             ),
@@ -160,7 +172,12 @@ def _rate_limit_headers(headers: dict[str, str]) -> dict[str, str]:
 _SYSTEM_PROMPT = """You are an English-to-Brazilian-Portuguese subtitle editor.
 Return one JSON object only, with scene_id, input_sha256 and suggestions.
 For every input cue, return exactly one suggestion in the same order with cue_id, order,
-approved_en, approved_pt and notes. Correct the English only when needed. Preserve meaning,
-names, accents, apostrophes, quotation marks, commas, periods, questions and ellipses. Produce
-natural Brazilian Portuguese. Never merge, split, omit or invent cues. Copy scene_id,
-input_sha256, cue_id and order exactly."""
+approved_en, approved_pt, notes and semantic_units. Understand the whole cue before translating.
+Each semantic unit must contain contiguous word_ids in input order and one complete, natural
+Brazilian Portuguese translation in pt. Group phrasal verbs, idioms, collocations, auxiliary and
+negation structures, and any sequence whose word-by-word translation would sound mechanical.
+For example, group all words in "Can I help?" and translate the unit as "Posso ajudar?", never as
+"Posso eu ajudar?". Do not emit single-word units or overlapping units. Correct the English only
+when needed. Preserve meaning, names, accents, apostrophes, quotation marks, commas, periods,
+questions and ellipses. Never merge, split, omit or invent cues. Copy scene_id, input_sha256,
+cue_id, order and word_ids exactly."""

@@ -3,6 +3,7 @@ import type {
   EditorialCue,
   EditorialAssistance,
   EditorialAssistantStatus,
+  EditorialSemanticUnit,
   EditorialReviewContext,
   Health,
   Job,
@@ -140,6 +141,16 @@ export const studioApi = {
     apiRequest<WordTiming[]>(`/editorial/cues/${cueId}/words/ungroup`, {
       method: "POST",
       body: JSON.stringify({ word_id: wordId, author }),
+    }),
+  replaceSemanticUnits: (
+    cueId: string,
+    expectedRevision: number,
+    units: EditorialSemanticUnit[],
+    author: string,
+  ) =>
+    apiRequest<WordTiming[]>(`/editorial/cues/${cueId}/words/semantic-units`, {
+      method: "PUT",
+      body: JSON.stringify({ expected_revision: expectedRevision, units, author }),
     }),
   uploadStory: (file: File) => {
     const body = new FormData();

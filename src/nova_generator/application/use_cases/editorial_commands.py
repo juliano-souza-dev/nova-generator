@@ -174,8 +174,9 @@ class EditWordTranslation:
             provenance = dict(updated[position].provenance)
             provenance["pt"] = pt if position == lead else None
             updated[position] = replace(updated[position], provenance=provenance)
-        self._repository.save_cue(cue, updated)
-        _record(self._repository, cue, "edit_word_translation", author, before)
+        changed_cue = _word_edit_draft(cue)
+        self._repository.save_cue(changed_cue, updated)
+        _record(self._repository, changed_cue, "edit_word_translation", author, before)
         return updated
 
 
@@ -221,8 +222,9 @@ class GroupWordTranslation:
                 }
             )
             updated[position] = replace(updated[position], provenance=provenance)
-        self._repository.save_cue(cue, updated)
-        _record(self._repository, cue, "group_word_translation", author, before)
+        changed_cue = _word_edit_draft(cue)
+        self._repository.save_cue(changed_cue, updated)
+        _record(self._repository, changed_cue, "group_word_translation", author, before)
         return updated
 
 
@@ -246,9 +248,90 @@ class UngroupWordTranslation:
             provenance.pop("semantic_group_id", None)
             provenance.pop("semantic_group_role", None)
             updated[position] = replace(updated[position], provenance=provenance)
-        self._repository.save_cue(cue, updated)
-        _record(self._repository, cue, "ungroup_word_translation", author, before)
+        changed_cue = _word_edit_draft(cue)
+        self._repository.save_cue(changed_cue, updated)
+        _record(self._repository, changed_cue, "ungroup_word_translation", author, before)
         return updated
+
+
+class ReplaceSemanticWordUnits:
+    """Atomically replace every semantic unit of a cue without changing word timings."""
+
+    def __init__(self, repository: EditorialProjectRepository) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        cue_id: UUID,
+        *,
+        expected_revision: int,
+        units: list[dict[str, object]],
+        author: str,
+    ) -> list[WordTiming]:
+        cue, words = _cue_with_words(self._repository, cue_id)
+        if cue.revision != expected_revision:
+            raise EditorialCommandError("cue changed after the semantic suggestion was created")
+        positions_by_id = {str(word.id): index for index, word in enumerate(words)}
+        normalized: list[tuple[list[int], str]] = []
+        used: set[int] = set()
+        for unit in units:
+            raw_ids = unit.get("word_ids")
+            pt = unit.get("pt")
+            if not isinstance(raw_ids, list) or len(raw_ids) < 2:
+                raise EditorialCommandError("semantic units must contain at least two words")
+            if not isinstance(pt, str) or not pt.strip():
+                raise EditorialCommandError("semantic unit translation is required")
+            try:
+                positions = [positions_by_id[str(word_id)] for word_id in raw_ids]
+            except KeyError as error:
+                raise EditorialCommandError(
+                    "semantic unit references a word outside its cue"
+                ) from error
+            if len(set(positions)) != len(positions):
+                raise EditorialCommandError("semantic unit contains duplicate words")
+            if positions != list(range(positions[0], positions[0] + len(positions))):
+                raise EditorialCommandError("semantic units must use contiguous words in cue order")
+            if used.intersection(positions):
+                raise EditorialCommandError("semantic units cannot overlap")
+            used.update(positions)
+            normalized.append((positions, pt))
+
+        before = _scene_snapshot(self._repository, cue.scene_id)
+        updated = [_without_semantic_group(word) for word in words]
+        for positions, pt in normalized:
+            group_id = f"semantic-{uuid4()}"
+            for offset, position in enumerate(positions):
+                provenance = dict(updated[position].provenance)
+                provenance["pt_original"] = provenance.get("pt") or ""
+                provenance.update(
+                    {
+                        "semantic_group_id": group_id,
+                        "semantic_group_role": "lead" if offset == 0 else "member",
+                        "pt": pt if offset == 0 else None,
+                    }
+                )
+                updated[position] = replace(updated[position], provenance=provenance)
+        changed_cue = _word_edit_draft(cue)
+        self._repository.save_cue(changed_cue, updated)
+        _record(self._repository, changed_cue, "replace_semantic_word_units", author, before)
+        return updated
+
+
+def _without_semantic_group(word: WordTiming) -> WordTiming:
+    provenance = dict(word.provenance)
+    if "semantic_group_id" in provenance:
+        provenance["pt"] = provenance.pop("pt_original", provenance.get("pt") or "")
+    provenance.pop("semantic_group_id", None)
+    provenance.pop("semantic_group_role", None)
+    return replace(word, provenance=provenance)
+
+
+def _word_edit_draft(cue: Cue) -> Cue:
+    return replace(
+        cue,
+        revision=cue.revision + 1,
+        provenance={**cue.provenance, "approval": "draft"},
+    )
 
 
 def _semantic_group_id(word: WordTiming) -> str:

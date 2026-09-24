@@ -38,3 +38,5 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 - Logs JSON e métricas de jobs, cache e exportação não incluem tokens, texto editorial ou payloads.
 - Falha, indisponibilidade ou limite da Groq nunca bloqueia a revisão manual nem transforma
   sugestão em conteúdo aprovado.
+- Sugestões semânticas usam IDs estáveis e `expected_revision`; a substituição do conjunto é
+  transacional por cue e rejeita resultado obsoleto antes de alterar proveniência.
