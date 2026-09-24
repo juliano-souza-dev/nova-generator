@@ -234,7 +234,8 @@
   position: absolute;
   z-index: 2;
   right: 5.5%;
-  bottom: 7%;
+  /* The preview uses native video controls; keep both caption lines above them. */
+  bottom: 16%;
   left: 5.5%;
   text-align: center;
   pointer-events: none;
@@ -284,6 +285,7 @@
 .hub-preview-en span,
 .hub-preview-pt span {
   display: inline-block;
+  margin: 0 0.065em;
   opacity: 0.43;
   transition:
     color 0.1s linear,
