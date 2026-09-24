@@ -12,7 +12,11 @@ const cue = {
   subtitle_timing: { start_ms: 100, end_ms: 1800 },
   revision: 1,
   provenance: { approval: "draft" },
-  words: [{ id: "w1", order: 1, surface: "How", start_ms: 100, end_ms: 500 }],
+  words: [
+    { id: "w1", order: 1, surface: "How", start_ms: 100, end_ms: 500 },
+    { id: "w2", order: 2, surface: "are", start_ms: 510, end_ms: 750 },
+    { id: "w3", order: 3, surface: "you?", start_ms: 760, end_ms: 1100 },
+  ],
 };
 
 async function mockEditorialWorkstation(page: Page) {
@@ -53,6 +57,41 @@ async function mockEditorialWorkstation(page: Page) {
     route.fulfill({ json: { ...cue, provenance: { approval: "approved" } } }),
   );
   await page.route("**/api/editorial/cues/c1/timing", (route) => route.fulfill({ json: cue }));
+  await page.route("**/api/editorial/assistant/status", (route) =>
+    route.fulfill({
+      json: { groq_configured: true, groq_model: "test-model", fallback_available: true },
+    }),
+  );
+  await page.route("**/api/editorial/scenes/s1/assistance", (route) =>
+    route.fulfill({ status: 202, json: { job_id: "job-ai", status: "queued" } }),
+  );
+  await page.route("**/api/jobs/job-ai", (route) =>
+    route.fulfill({
+      json: {
+        status: "succeeded",
+        output: {
+          scene_id: "s1",
+          input_sha256: "a".repeat(64),
+          provider: "groq",
+          model: "test-model",
+          rate_limits: {},
+          suggestions: [
+            {
+              cue_id: "c1",
+              order: 1,
+              approved_en: "How are you?",
+              approved_pt: "Como você está?",
+              notes: "Tradução natural.",
+              semantic_units: [{ word_ids: ["w1", "w2", "w3"], pt: "Como você está?" }],
+            },
+          ],
+        },
+      },
+    }),
+  );
+  await page.route("**/api/editorial/cues/c1/words/semantic-units", (route) =>
+    route.fulfill({ json: cue.words }),
+  );
 }
 
 test("editor can operate the cue and word timeline", async ({ page }) => {
@@ -77,6 +116,19 @@ test("editor can operate the cue and word timeline", async ({ page }) => {
   await page.getByRole("button", { name: "Aprovar cue" }).click();
   await expect(page.locator(".review-message")).toContainText("Cue 1 aprovado");
   await expect(page.locator("body")).toHaveCSS("overflow-x", "visible");
+});
+
+test("AI semantic grouping remains a draft until save", async ({ page }) => {
+  await mockEditorialWorkstation(page);
+  await page.goto("/editorial?project=p1");
+  await page.getByRole("button", { name: "Sugerir com Groq" }).click();
+  await expect(page.getByLabel("Unidades sugeridas")).toContainText(
+    "How are you? → Como você está?",
+  );
+  await page.getByRole("button", { name: "Aplicar grupo" }).click();
+  await expect(page.getByText("Alterações não salvas", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Salvar alterações" }).click();
+  await expect(page.locator(".review-message")).toContainText("Alterações salvas");
 });
 
 for (const viewport of [

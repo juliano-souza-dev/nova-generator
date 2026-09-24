@@ -28,6 +28,9 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   concatenação mecânica das palavras. Preservar timing e tradução individual para desfazer.
 - Exibir sugestões de Groq ou de IA externa como rascunhos comparáveis; aplicar uma sugestão apenas
   preenche o editor e ainda exige salvamento ou aprovação explícita pelo operador.
+- Permitir que ambas as IAs proponham unidades semânticas contíguas por IDs de palavras. Mostrar a
+  expressão e a tradução natural, permitir ouvi-la e aplicá-la primeiro como rascunho local; salvar
+  não altera timing e aprovação permanece uma ação separada.
 
 ## Limites
 
@@ -48,6 +51,8 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   auditável e repetir a importação nunca apaga uma revisão.
 - Agrupar e desagrupar palavras contíguas preserva os IDs e tempos individuais; Espaço reproduz o
   intervalo completo da unidade selecionada e o editor mostra uma única tradução natural.
+- Sugestões semânticas inválidas, sobrepostas, não contíguas ou obsoletas são bloqueadas; salvar o
+  conjunto válido é atômico e deixa o cue em rascunho.
 
 ## Recorte da fonte
 

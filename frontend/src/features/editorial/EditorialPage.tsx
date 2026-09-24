@@ -16,6 +16,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import type {
   EditorialAssistance,
   EditorialAssistantStatus,
+  EditorialSemanticUnit,
   Project,
   ProjectMedia,
   Scene,
@@ -31,6 +32,19 @@ const formatTime = (timeMs: number) => {
   const seconds = Math.max(0, timeMs) / 1000;
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, "0")}`;
 };
+
+function semanticUnitsFromCue(cue: TimelineCue | undefined): EditorialSemanticUnit[] {
+  if (!cue) return [];
+  const groups = new Map<string, EditorialSemanticUnit>();
+  for (const word of cue.words) {
+    if (!word.semantic_group_id) continue;
+    const unit = groups.get(word.semantic_group_id) ?? { word_ids: [], pt: "" };
+    unit.word_ids.push(word.id);
+    if (word.semantic_group_role === "lead") unit.pt = word.pt ?? "";
+    groups.set(word.semantic_group_id, unit);
+  }
+  return [...groups.values()];
+}
 
 export function EditorialPage() {
   const [params] = useSearchParams();
@@ -61,6 +75,9 @@ export function EditorialPage() {
   const [assistance, setAssistance] = useState<EditorialAssistance>();
   const [assistantBusy, setAssistantBusy] = useState(false);
   const [assistantMessage, setAssistantMessage] = useState("");
+  const [semanticDraftUnits, setSemanticDraftUnits] = useState<EditorialSemanticUnit[] | null>(
+    null,
+  );
   const author = "local-editor";
 
   const project = projects.find((item) => item.id === projectId);
@@ -93,6 +110,12 @@ export function EditorialPage() {
     selectedWord?.pt ??
     "";
   const selectedSuggestion = assistance?.suggestions.find((item) => item.cue_id === selectedCueId);
+  const storedSemanticUnits = semanticUnitsFromCue(selectedCue);
+  const visibleSemanticUnits = semanticDraftUnits ?? storedSemanticUnits;
+  const semanticUnitsDirty = Boolean(
+    semanticDraftUnits &&
+    JSON.stringify(semanticDraftUnits) !== JSON.stringify(storedSemanticUnits),
+  );
   const approvedCount = cues.filter((cue) => cue.provenance?.approval === "approved").length;
   const textDirty = Boolean(
     selectedCue &&
@@ -119,7 +142,8 @@ export function EditorialPage() {
       )
     : cues;
   const timingDirty = history.length > 0;
-  const isDirty = textDirty || wordDirty || wordTranslationDirty || timingDirty;
+  const isDirty =
+    textDirty || wordDirty || wordTranslationDirty || semanticUnitsDirty || timingDirty;
   const cueStatus = selectedCue?.provenance?.approval === "approved" ? "Aprovado" : "Pendente";
 
   useEffect(() => {
@@ -197,6 +221,9 @@ export function EditorialPage() {
     setApprovedEn(selectedCue?.approved_en ?? "");
     setApprovedPt(selectedCue?.approved_pt ?? "");
   }, [selectedCue?.id, selectedCue?.approved_en, selectedCue?.approved_pt]);
+  useEffect(() => {
+    setSemanticDraftUnits(null);
+  }, [selectedCue?.id, selectedCue?.revision]);
   useEffect(() => {
     setWordStart(selectedWord ? selectedGroupStart : 0);
     setWordEnd(selectedWord ? selectedGroupEnd : 0);
@@ -332,6 +359,7 @@ export function EditorialPage() {
     setWordPt(
       originalGroup.find((item) => item.semantic_group_role === "lead")?.pt ?? word?.pt ?? "",
     );
+    setSemanticDraftUnits(null);
     setMessage("Alterações locais descartadas.");
   }
   function playRange(start: number, end: number) {
@@ -499,6 +527,13 @@ export function EditorialPage() {
       const expandedCue =
         candidate.speech_timing.end_ms - candidate.speech_timing.start_ms >
         originalCue.speech_timing.end_ms - originalCue.speech_timing.start_ms;
+      if (semanticUnitsDirty && semanticDraftUnits)
+        await studioApi.replaceSemanticUnits(
+          selectedCue.id,
+          selectedCue.revision,
+          semanticDraftUnits,
+          author,
+        );
       if (timingDirty)
         await studioApi.updateCueTiming(selectedCue.id, {
           author,
@@ -568,6 +603,10 @@ export function EditorialPage() {
   }
   async function groupSelectedWord(direction: "previous" | "next") {
     if (!selectedCue || !selectedWord || saving) return;
+    if (semanticUnitsDirty) {
+      setMessage("Salve ou descarte as unidades sugeridas antes de agrupar manualmente.");
+      return;
+    }
     if (!wordPt.trim()) {
       setMessage("Digite a tradução natural do grupo antes de agrupar.");
       return;
@@ -591,6 +630,10 @@ export function EditorialPage() {
   }
   async function ungroupSelectedWord() {
     if (!selectedCue || !selectedWord || saving) return;
+    if (semanticUnitsDirty) {
+      setMessage("Salve ou descarte as unidades sugeridas antes de desfazer grupos.");
+      return;
+    }
     setSaving(true);
     try {
       await studioApi.ungroupWordTranslation(selectedCue.id, selectedWord.id, author);
@@ -601,6 +644,45 @@ export function EditorialPage() {
     } finally {
       setSaving(false);
     }
+  }
+  function applySuggestedSemanticUnit(unit: EditorialSemanticUnit) {
+    if (!selectedCue || saving) return;
+    const positions = unit.word_ids.map((wordId) =>
+      selectedCue.words.findIndex((word) => word.id === wordId),
+    );
+    if (
+      positions.some((position) => position < 0) ||
+      positions.some((position, index) => position !== positions[0] + index)
+    ) {
+      setMessage("A unidade sugerida não corresponde mais às palavras atuais deste cue.");
+      return;
+    }
+    const ids = new Set(unit.word_ids);
+    const remaining = visibleSemanticUnits.filter(
+      (current) => !current.word_ids.some((wordId) => ids.has(wordId)),
+    );
+    setSemanticDraftUnits(
+      [...remaining, unit].sort((left, right) => {
+        const leftIndex = selectedCue.words.findIndex((word) => word.id === left.word_ids[0]);
+        const rightIndex = selectedCue.words.findIndex((word) => word.id === right.word_ids[0]);
+        return leftIndex - rightIndex;
+      }),
+    );
+    setMessage("Unidade aplicada ao rascunho. Salve para persistir; a cue não foi aprovada.");
+  }
+  function suggestedUnitLabel(unit: EditorialSemanticUnit) {
+    if (!selectedCue) return "";
+    return unit.word_ids
+      .map((wordId) => selectedCue.words.find((word) => word.id === wordId)?.surface ?? "?")
+      .join(" ");
+  }
+  function playSuggestedUnit(unit: EditorialSemanticUnit) {
+    if (!selectedCue) return;
+    const words = unit.word_ids
+      .map((wordId) => selectedCue.words.find((word) => word.id === wordId))
+      .filter((word) => word !== undefined);
+    if (words.length === unit.word_ids.length)
+      playRange(words[0].start_ms, words.at(-1)?.end_ms ?? words[0].end_ms);
   }
   function moveCue(offset: number) {
     const next = cues[selectedCueIndex + offset];
@@ -927,10 +1009,44 @@ export function EditorialPage() {
                 {assistantMessage && <p className="assistant-message">{assistantMessage}</p>}
                 {selectedSuggestion && (
                   <div className="assistant-suggestion">
-                    <div>
+                    <div className="assistant-suggestion-copy">
                       <strong>{selectedSuggestion.approved_en}</strong>
                       <span>{selectedSuggestion.approved_pt}</span>
                       {selectedSuggestion.notes && <small>{selectedSuggestion.notes}</small>}
+                      {(selectedSuggestion.semantic_units ?? []).length > 0 && (
+                        <section
+                          className="assistant-semantic-units"
+                          aria-label="Unidades sugeridas"
+                        >
+                          <strong>Unidades sugeridas</strong>
+                          <ul>
+                            {selectedSuggestion.semantic_units.map((unit) => (
+                              <li key={unit.word_ids.join(":")}>
+                                <span>
+                                  <b>{suggestedUnitLabel(unit)}</b> → {unit.pt}
+                                </span>
+                                <div>
+                                  <button
+                                    type="button"
+                                    className="secondary-button"
+                                    onClick={() => playSuggestedUnit(unit)}
+                                  >
+                                    <Play aria-hidden="true" /> Ouvir
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="secondary-button"
+                                    disabled={saving}
+                                    onClick={() => applySuggestedSemanticUnit(unit)}
+                                  >
+                                    Aplicar grupo
+                                  </button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -944,7 +1060,7 @@ export function EditorialPage() {
                         );
                       }}
                     >
-                      Aplicar como rascunho
+                      Aplicar texto como rascunho
                     </button>
                   </div>
                 )}
@@ -1058,6 +1174,10 @@ export function EditorialPage() {
                         item.semantic_group_id === selectedWord.semantic_group_id
                           ? " grouped"
                           : ""
+                      }${
+                        semanticDraftUnits?.some((unit) => unit.word_ids.includes(item.id))
+                          ? " semantic-draft"
+                          : ""
                       }`}
                       onClick={() => selectWord(item.id)}
                       aria-pressed={item.id === selectedWordId}
@@ -1110,7 +1230,7 @@ export function EditorialPage() {
                       <button
                         type="button"
                         className="secondary-button"
-                        disabled={saving || selectedGroupStartIndex === 0}
+                        disabled={saving || semanticUnitsDirty || selectedGroupStartIndex === 0}
                         onClick={() => void groupSelectedWord("previous")}
                       >
                         Agrupar anterior
@@ -1119,7 +1239,7 @@ export function EditorialPage() {
                         <button
                           type="button"
                           className="secondary-button"
-                          disabled={saving}
+                          disabled={saving || semanticUnitsDirty}
                           onClick={() => void ungroupSelectedWord()}
                         >
                           Desfazer grupo
@@ -1128,7 +1248,11 @@ export function EditorialPage() {
                       <button
                         type="button"
                         className="secondary-button"
-                        disabled={saving || selectedGroupEndIndex === selectedCue.words.length - 1}
+                        disabled={
+                          saving ||
+                          semanticUnitsDirty ||
+                          selectedGroupEndIndex === selectedCue.words.length - 1
+                        }
                         onClick={() => void groupSelectedWord("next")}
                       >
                         Agrupar próxima

@@ -129,7 +129,9 @@ export type EditorialSuggestion = {
   approved_en: string;
   approved_pt: string;
   notes: string;
+  semantic_units: EditorialSemanticUnit[];
 };
+export type EditorialSemanticUnit = { word_ids: string[]; pt: string };
 export type EditorialAssistance = {
   scene_id: string;
   input_sha256: string;

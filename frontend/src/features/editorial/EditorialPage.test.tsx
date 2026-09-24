@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   updateWordTranslation: vi.fn().mockResolvedValue({}),
   groupWordTranslation: vi.fn().mockResolvedValue({}),
   ungroupWordTranslation: vi.fn().mockResolvedValue({}),
+  replaceSemanticUnits: vi.fn().mockResolvedValue({}),
   realignCue: vi.fn().mockResolvedValue({}),
   editorialAssistantStatus: vi.fn().mockResolvedValue({
     groq_configured: false,
@@ -69,6 +70,7 @@ vi.mock("../../lib/studio-api", () => ({
     updateWordTranslation: mocks.updateWordTranslation,
     groupWordTranslation: mocks.groupWordTranslation,
     ungroupWordTranslation: mocks.ungroupWordTranslation,
+    replaceSemanticUnits: mocks.replaceSemanticUnits,
     realignCue: mocks.realignCue,
     editorialAssistantStatus: mocks.editorialAssistantStatus,
     externalEditorialPackageUrl: mocks.externalEditorialPackageUrl,
@@ -211,6 +213,66 @@ describe("EditorialPage", () => {
       ),
     );
     expect(screen.getByText(/Can I help.*Posso ajudar/)).toBeInTheDocument();
+  });
+
+  it("keeps AI semantic units local until the operator saves the draft", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    const words = [
+      { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350 },
+      { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480 },
+      { id: "w3", order: 3, surface: "help?", start_ms: 490, end_ms: 800 },
+    ];
+    mocks.editorialCues.mockResolvedValue([{ ...cue, original_en: "Can I help?", words }]);
+    mocks.editorialAssistantStatus.mockResolvedValueOnce({
+      groq_configured: true,
+      groq_model: "test-model",
+      fallback_available: true,
+    });
+    mocks.startEditorialAssistance.mockResolvedValueOnce({ job_id: "job-ai", status: "queued" });
+    mocks.job.mockResolvedValueOnce({
+      status: "succeeded",
+      output: {
+        scene_id: "s1",
+        input_sha256: "a".repeat(64),
+        provider: "groq",
+        model: "test-model",
+        rate_limits: {},
+        suggestions: [
+          {
+            cue_id: "c1",
+            order: 1,
+            approved_en: "Can I help?",
+            approved_pt: "Posso ajudar?",
+            notes: "Pergunta natural.",
+            semantic_units: [{ word_ids: ["w1", "w2", "w3"], pt: "Posso ajudar?" }],
+          },
+        ],
+      },
+    });
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const suggest = await screen.findByRole("button", { name: "Sugerir com Groq" });
+    await waitFor(() => expect(suggest).toBeEnabled());
+    fireEvent.click(suggest);
+    expect(await screen.findByLabelText("Unidades sugeridas")).toHaveTextContent(
+      "Can I help? → Posso ajudar?",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar grupo" }));
+    expect(mocks.replaceSemanticUnits).not.toHaveBeenCalled();
+    expect(screen.getByText("Alterações não salvas")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    await waitFor(() =>
+      expect(mocks.replaceSemanticUnits).toHaveBeenCalledWith(
+        "c1",
+        cue.revision,
+        [{ word_ids: ["w1", "w2", "w3"], pt: "Posso ajudar?" }],
+        "local-editor",
+      ),
+    );
+    expect(mocks.updateWordTiming).not.toHaveBeenCalled();
   });
 
   it("realigns the next cue to a 10 ms gap when G saves an expanded cue", async () => {

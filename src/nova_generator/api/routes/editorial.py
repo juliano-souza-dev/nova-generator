@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import asdict
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -19,6 +20,7 @@ from nova_generator.api.dependencies import (
     get_group_word_translation,
     get_merge_cues,
     get_realign_cue,
+    get_replace_semantic_word_units,
     get_review_asr_candidate,
     get_session_factory,
     get_split_cue,
@@ -38,6 +40,7 @@ from nova_generator.application.use_cases.editorial_commands import (
     GroupWordTranslation,
     MergeCues,
     RealignCue,
+    ReplaceSemanticWordUnits,
     SplitCue,
     UndoEditorialRevision,
     UngroupWordTranslation,
@@ -105,6 +108,16 @@ class GroupWordRequest(WordTranslationRequest):
 
 class UngroupWordRequest(ActorRequest):
     word_id: UUID
+
+
+class SemanticUnitInput(BaseModel):
+    word_ids: list[UUID] = Field(min_length=2)
+    pt: str = Field(min_length=1)
+
+
+class ReplaceSemanticUnitsRequest(ActorRequest):
+    expected_revision: int = Field(ge=1)
+    units: list[SemanticUnitInput]
 
 
 class CueText(BaseModel):
@@ -206,6 +219,7 @@ class EditorialSuggestionResponse(BaseModel):
     approved_en: str
     approved_pt: str
     notes: str
+    semantic_units: list[SemanticUnitInput] = Field(default_factory=list)
 
 
 class EditorialAssistanceResponse(BaseModel):
@@ -282,7 +296,9 @@ async def import_external_editorial_result(
         provider=result.provider,
         model=result.model,
         rate_limits=result.rate_limits,
-        suggestions=[EditorialSuggestionResponse(**item.__dict__) for item in result.suggestions],
+        suggestions=[
+            EditorialSuggestionResponse.model_validate(asdict(item)) for item in result.suggestions
+        ],
     )
 
 
@@ -482,6 +498,23 @@ def ungroup_word_translation(
     use_case: Annotated[UngroupWordTranslation, Depends(get_ungroup_word_translation)],
 ) -> list[dict[str, Any]]:
     words = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
+    return [_word_response(word) for word in words]
+
+
+@router.put("/cues/{cue_id}/words/semantic-units", response_model=list[WordResponse])
+def replace_semantic_word_units(
+    cue_id: UUID,
+    payload: ReplaceSemanticUnitsRequest,
+    use_case: Annotated[ReplaceSemanticWordUnits, Depends(get_replace_semantic_word_units)],
+) -> list[dict[str, Any]]:
+    words = _command(
+        lambda: use_case.execute(
+            cue_id,
+            expected_revision=payload.expected_revision,
+            units=[unit.model_dump(mode="json") for unit in payload.units],
+            author=payload.author,
+        )
+    )
     return [_word_response(word) for word in words]
 
 
