@@ -34,6 +34,20 @@ describe("EditorialHubPreview", () => {
     expect(pieces.filter((piece) => piece.startMs !== undefined)).toHaveLength(3);
   });
 
+  it("keeps visible separation between timed words", () => {
+    render(
+      <EditorialHubPreview
+        mediaUrl="/cut.mp4"
+        cues={[cue]}
+        initialTimeMs={100}
+        onClose={vi.fn()}
+      />,
+    );
+    const timedWords = document.querySelectorAll(".hub-preview-en span");
+    expect(timedWords).toHaveLength(3);
+    expect(getComputedStyle(timedWords[0]).marginRight).not.toBe("0px");
+  });
+
   it("uses reviewed word bounds and leaves real gaps outside any active word", () => {
     expect(cuePreviewBounds(cue)).toEqual({ startMs: 100, endMs: 800 });
     expect(activePreviewCue([cue], 99)).toBeUndefined();
@@ -58,6 +72,7 @@ describe("EditorialHubPreview", () => {
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Dual" })).toHaveAttribute("aria-pressed", "true");
+    expect(document.querySelector(".hub-preview-pt")).toHaveTextContent("“Posso ajudar?”");
     fireEvent.click(screen.getByRole("button", { name: "PT" }));
     expect(screen.getByRole("button", { name: "PT" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "EN" }));
