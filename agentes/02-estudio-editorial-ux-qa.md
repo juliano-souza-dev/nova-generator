@@ -31,6 +31,9 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Permitir que ambas as IAs proponham unidades semânticas contíguas por IDs de palavras. Mostrar a
   expressão e a tradução natural, permitir ouvi-la e aplicá-la primeiro como rascunho local; salvar
   não altera timing e aprovação permanece uma ação separada.
+- Oferecer uma prévia fiel do iHub diretamente na bancada: `Ctrl+Enter` parte da cue atual,
+  `Ctrl+Shift+Enter` parte do início, e o operador alterna EN, PT e Dual. A prévia usa o texto
+  editorial literal e os timings locais de word by word, inclusive antes de salvar.
 
 ## Limites
 
@@ -53,6 +56,8 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   intervalo completo da unidade selecionada e o editor mostra uma única tradução natural.
 - Sugestões semânticas inválidas, sobrepostas, não contíguas ou obsoletas são bloqueadas; salvar o
   conjunto válido é atômico e deixa o cue em rascunho.
+- A prévia do iHub preserva pontuação e Unicode, usa a primeira e a última word como janela visual,
+  não mantém uma word destacada durante gaps reais e interrompe a mídia ao fechar.
 
 ## Recorte da fonte
 

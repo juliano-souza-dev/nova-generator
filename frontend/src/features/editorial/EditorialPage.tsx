@@ -6,6 +6,7 @@ import {
   Clock3,
   Download,
   Film,
+  MonitorPlay,
   Play,
   Save,
   Undo2,
@@ -24,6 +25,7 @@ import type {
 import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { CueWordTimeline, type TimelineCue } from "./CueWordTimeline";
+import { EditorialHubPreview } from "./EditorialHubPreview";
 import { nudgeTiming, setTimingEdge, validateTimeline } from "./timeline";
 import "./timeline.css";
 import "./editorial-workspace.css";
@@ -75,6 +77,7 @@ export function EditorialPage() {
   const [assistance, setAssistance] = useState<EditorialAssistance>();
   const [assistantBusy, setAssistantBusy] = useState(false);
   const [assistantMessage, setAssistantMessage] = useState("");
+  const [hubPreviewStartMs, setHubPreviewStartMs] = useState<number | null>(null);
   const [semanticDraftUnits, setSemanticDraftUnits] = useState<EditorialSemanticUnit[] | null>(
     null,
   );
@@ -141,6 +144,9 @@ export function EditorialPage() {
           : cue,
       )
     : cues;
+  const hubPreviewCues = previewCues.map((cue) =>
+    cue.id === selectedCue?.id ? { ...cue, approved_en: approvedEn, approved_pt: approvedPt } : cue,
+  );
   const timingDirty = history.length > 0;
   const isDirty =
     textDirty || wordDirty || wordTranslationDirty || semanticUnitsDirty || timingDirty;
@@ -390,6 +396,17 @@ export function EditorialPage() {
   }, [playing]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (
+        event.key === "Enter" &&
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        !event.repeat
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        openHubPreview(event.shiftKey);
+        return;
+      }
       if (event.key.toLowerCase() === "s" && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         if (isDirty) void saveChanges();
@@ -409,6 +426,15 @@ export function EditorialPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+  function openHubPreview(fromStart = false) {
+    if (!selectedCue || !matchingMedia || !media?.cut_url) {
+      setMessage("A prévia do iHub será liberada quando o corte da cena estiver disponível.");
+      return;
+    }
+    mediaRef.current?.pause();
+    playbackEnd.current = null;
+    setHubPreviewStartMs(fromStart ? 0 : selectedCue.speech_timing.start_ms);
+  }
   function replaceCues(next: TimelineCue[]) {
     setHistory((value) => [...value, cues]);
     setCues(next);
@@ -885,6 +911,14 @@ export function EditorialPage() {
                   type="button"
                   className="secondary-button"
                   disabled={!matchingMedia || !media?.cut_url}
+                  onClick={() => openHubPreview()}
+                >
+                  <MonitorPlay aria-hidden="true" /> Prévia no iHub
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!matchingMedia || !media?.cut_url}
                   onClick={() =>
                     playRange(selectedCue.speech_timing.start_ms, selectedCue.speech_timing.end_ms)
                   }
@@ -903,6 +937,7 @@ export function EditorialPage() {
             </section>
           </div>
           <p className="review-keyboard-hints">
+            <kbd>Ctrl Enter</kbd> prévia iHub · <kbd>Ctrl Shift Enter</kbd> desde o início ·{" "}
             <kbd>Espaço</kbd> cue · <kbd>Shift Espaço</kbd> cena · <kbd>A</kbd> IN · <kbd>S</kbd>
             OUT · <kbd>G</kbd> salvar + próxima · <kbd>←/→</kbd> cursor
           </p>
@@ -1365,6 +1400,14 @@ export function EditorialPage() {
               <Check aria-hidden="true" /> Aprovar cue
             </button>
           </footer>
+          {hubPreviewStartMs !== null && matchingMedia && media?.cut_url && (
+            <EditorialHubPreview
+              mediaUrl={media.cut_url}
+              cues={hubPreviewCues}
+              initialTimeMs={hubPreviewStartMs}
+              onClose={() => setHubPreviewStartMs(null)}
+            />
+          )}
         </>
       )}
     </section>

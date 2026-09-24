@@ -131,6 +131,25 @@ test("AI semantic grouping remains a draft until save", async ({ page }) => {
   await expect(page.locator(".review-message")).toContainText("Alterações salvas");
 });
 
+test("Ctrl+Enter opens the iHub preview with EN, PT and Dual modes", async ({ page }) => {
+  await mockEditorialWorkstation(page);
+  await page.goto("/editorial?project=p1");
+  await expect(page.getByRole("button", { name: "Prévia no iHub" })).toBeEnabled();
+  await page.keyboard.press("Control+Enter");
+  const preview = page.getByRole("dialog", { name: "Vídeo e legendas sincronizadas" });
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Dual" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await preview.getByRole("button", { name: "PT" }).click();
+  await expect(preview.getByRole("button", { name: "PT" })).toHaveAttribute("aria-pressed", "true");
+  await preview.getByRole("button", { name: "EN" }).click();
+  await expect(preview.getByRole("button", { name: "EN" })).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Escape");
+  await expect(preview).toBeHidden();
+});
+
 for (const viewport of [
   { width: 1366, height: 768 },
   { width: 1440, height: 900 },

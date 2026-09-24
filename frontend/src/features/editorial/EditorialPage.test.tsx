@@ -301,4 +301,20 @@ describe("EditorialPage", () => {
     fireEvent.keyDown(window, { key: "g" });
     await waitFor(() => expect(mocks.realignCue).toHaveBeenCalledWith("c2", 1835, "local-editor"));
   });
+
+  it("opens the synchronized iHub preview from the current cue with Ctrl+Enter", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    await screen.findByLabelText("Player do corte da cena");
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    const preview = await screen.findByRole("dialog", { name: "Vídeo e legendas sincronizadas" });
+    expect(preview).toBeInTheDocument();
+    expect(screen.getByLabelText("Prévia do vídeo no iHub")).toHaveAttribute("src", "/api/cut.wav");
+    expect(screen.getByRole("button", { name: "Dual" })).toHaveAttribute("aria-pressed", "true");
+  });
 });
