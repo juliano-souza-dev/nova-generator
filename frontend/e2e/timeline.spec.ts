@@ -52,6 +52,7 @@ async function mockEditorialWorkstation(page: Page) {
   await page.route("**/api/editorial/cues/c1/text", (route) =>
     route.fulfill({ json: { ...cue, provenance: { approval: "approved" } } }),
   );
+  await page.route("**/api/editorial/cues/c1/timing", (route) => route.fulfill({ json: cue }));
 }
 
 test("editor can operate the cue and word timeline", async ({ page }) => {
@@ -62,6 +63,15 @@ test("editor can operate the cue and word timeline", async ({ page }) => {
   ).toBeVisible();
   await page.getByRole("button", { name: "Aumentar zoom" }).click();
   await expect(page.getByLabel("Zoom atual")).toHaveText("Zoom 2×");
+  const inHandle = page.locator(".timeline-edge-hit").first();
+  await inHandle.scrollIntoViewIfNeeded();
+  const handleBox = await inHandle.boundingBox();
+  if (!handleBox) throw new Error("IN handle is not visible");
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(handleBox.x - 20, handleBox.y + 10);
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: "Salvar alterações" })).toBeEnabled();
   await page.getByLabel("Português aprovado").fill("Como você vai?");
   await expect(page.getByText("Alterações não salvas", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Aprovar cue" }).click();
@@ -83,10 +93,19 @@ for (const viewport of [
       page.getByRole("img", { name: "Waveform, cues e tempos das palavras" }),
     ).toBeInViewport();
     await expect(page.getByRole("button", { name: "Aprovar cue" })).toBeInViewport();
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-      ),
-    ).toBe(true);
+    const overflow = await page.evaluate(() => {
+      const width = document.documentElement.clientWidth;
+      return Array.from(document.querySelectorAll<HTMLElement>("body *"))
+        .filter((element) => element.getBoundingClientRect().right > width + 1)
+        .slice(0, 8)
+        .map((element) => ({
+          tag: element.tagName,
+          className: element.className,
+          right: Math.round(element.getBoundingClientRect().right),
+          text: element.textContent?.trim().slice(0, 80),
+          html: element.outerHTML.slice(0, 160),
+        }));
+    });
+    expect(overflow).toEqual([]);
   });
 }

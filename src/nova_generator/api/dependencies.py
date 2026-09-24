@@ -9,9 +9,16 @@ from nova_generator.application.use_cases.editorial_commands import (
     AdjustCueTiming,
     AdjustWordTiming,
     EditApprovedText,
+    EditWordTranslation,
+    GroupWordTranslation,
     MergeCues,
+    RealignCue,
     SplitCue,
     UndoEditorialRevision,
+    UngroupWordTranslation,
+)
+from nova_generator.application.use_cases.external_editorial_exchange import (
+    ExternalEditorialExchange,
 )
 from nova_generator.application.use_cases.inspect_youtube_source import InspectYoutubeSource
 from nova_generator.application.use_cases.manage_jobs import (
@@ -116,6 +123,22 @@ def get_adjust_word_timing() -> AdjustWordTiming:
     return AdjustWordTiming(_editorial_repository())
 
 
+def get_realign_cue() -> RealignCue:
+    return RealignCue(_editorial_repository())
+
+
+def get_edit_word_translation() -> EditWordTranslation:
+    return EditWordTranslation(_editorial_repository())
+
+
+def get_group_word_translation() -> GroupWordTranslation:
+    return GroupWordTranslation(_editorial_repository())
+
+
+def get_ungroup_word_translation() -> UngroupWordTranslation:
+    return UngroupWordTranslation(_editorial_repository())
+
+
 def get_split_cue() -> SplitCue:
     return SplitCue(_editorial_repository())
 
@@ -126,6 +149,10 @@ def get_merge_cues() -> MergeCues:
 
 def get_undo_editorial_revision() -> UndoEditorialRevision:
     return UndoEditorialRevision(_editorial_repository())
+
+
+def get_external_editorial_exchange() -> ExternalEditorialExchange:
+    return ExternalEditorialExchange(_editorial_repository(), get_settings().project_root)
 
 
 def get_manage_voice_profiles() -> ManageVoiceProfiles:

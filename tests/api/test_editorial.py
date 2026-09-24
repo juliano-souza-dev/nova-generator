@@ -84,6 +84,17 @@ def test_split_merge_and_undo_keep_word_provenance_and_revision_history(client: 
     persisted = repository.get_scene_cues(scene_id)
     assert len(persisted) == 2
     assert repository.get_cue_words(persisted[0].id)[0].provenance["moved_from_cue"] == str(cue.id)
+    second_words_before = repository.get_cue_words(persisted[1].id)
+    target_start = persisted[0].speech_end_ms + 10
+    delta = target_start - persisted[1].speech_start_ms
+    realigned = client.post(
+        f"/api/editorial/cues/{right_id}/realign",
+        json={"author": "editor", "target_start_ms": target_start},
+    )
+    assert realigned.status_code == 200
+    assert realigned.json()["speech_timing"]["start_ms"] == target_start
+    second_words_after = repository.get_cue_words(persisted[1].id)
+    assert second_words_after[0].start_ms == second_words_before[0].start_ms + delta
     merge = client.post(
         "/api/editorial/cues/merge",
         json={
@@ -107,7 +118,7 @@ def test_split_merge_and_undo_keep_word_provenance_and_revision_history(client: 
     assert undo.status_code == 200
     assert [item["id"] for item in undo.json()] == [left_id, right_id]
     assert sum(len(item["words"]) for item in undo.json()) == 3
-    assert len(repository.list_revisions(scene_id)) == 4
+    assert len(repository.list_revisions(scene_id)) == 5
     assert left_id != right_id
 
 
@@ -124,3 +135,59 @@ def test_merge_requires_adjacent_cues(client: TestClient) -> None:
     )
     assert response.status_code == 422
     assert "consecutive" in response.json()["detail"]
+
+
+def test_semantic_word_group_uses_one_natural_translation_and_can_be_undone(
+    client: TestClient,
+) -> None:
+    repository, _, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    original_timings = [(word.start_ms, word.end_ms) for word in words]
+    individual = ["Eu", "não consigo", "ir?"]
+    for word, pt in zip(words, individual, strict=True):
+        response = client.put(
+            f"/api/editorial/cues/{cue.id}/words/translation",
+            json={"author": "editor", "word_id": str(word.id), "pt": pt},
+        )
+        assert response.status_code == 200
+
+    grouped = client.post(
+        f"/api/editorial/cues/{cue.id}/words/group",
+        json={
+            "author": "editor",
+            "word_id": str(words[0].id),
+            "direction": "next",
+            "pt": "Não consigo",
+        },
+    )
+    assert grouped.status_code == 200
+    first_group = grouped.json()
+    group_id = first_group[0]["semantic_group_id"]
+    assert group_id
+    assert first_group[0]["pt"] == "Não consigo"
+    assert first_group[1]["pt"] is None
+
+    expanded = client.post(
+        f"/api/editorial/cues/{cue.id}/words/group",
+        json={
+            "author": "editor",
+            "word_id": str(words[1].id),
+            "direction": "next",
+            "pt": "Não consigo ir?",
+        },
+    )
+    assert expanded.status_code == 200
+    semantic_unit = expanded.json()
+    assert len({item["semantic_group_id"] for item in semantic_unit}) == 1
+    assert [item["pt"] for item in semantic_unit] == ["Não consigo ir?", None, None]
+    assert [(item["start_ms"], item["end_ms"]) for item in semantic_unit] == original_timings
+
+    ungrouped = client.post(
+        f"/api/editorial/cues/{cue.id}/words/ungroup",
+        json={"author": "editor", "word_id": str(words[2].id)},
+    )
+    assert ungrouped.status_code == 200
+    restored = ungrouped.json()
+    assert [item["semantic_group_id"] for item in restored] == [None, None, None]
+    assert [item["pt"] for item in restored] == individual
+    assert [(item["start_ms"], item["end_ms"]) for item in restored] == original_timings

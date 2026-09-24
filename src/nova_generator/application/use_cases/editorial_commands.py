@@ -118,6 +118,151 @@ class AdjustWordTiming:
         return updated
 
 
+class RealignCue:
+    """Move a complete cue while preserving every internal duration and offset."""
+
+    def __init__(self, repository: EditorialProjectRepository) -> None:
+        self._repository = repository
+
+    def execute(self, cue_id: UUID, *, target_start_ms: int, author: str) -> Cue:
+        cue, words = _cue_with_words(self._repository, cue_id)
+        if target_start_ms < 0:
+            raise EditorialCommandError("target_start_ms must be non-negative")
+        project_id = self._repository.get_scene_project_id(cue.scene_id)
+        scenes = self._repository.get_project_scenes(project_id) if project_id else []
+        scene = next((item for item in scenes if item.id == cue.scene_id), None)
+        delta = target_start_ms - cue.speech_start_ms
+        shifted = replace(
+            cue,
+            speech_start_ms=cue.speech_start_ms + delta,
+            speech_end_ms=cue.speech_end_ms + delta,
+            subtitle_start_ms=cue.subtitle_start_ms + delta,
+            subtitle_end_ms=cue.subtitle_end_ms + delta,
+            revision=cue.revision + 1,
+        )
+        shifted_words = [
+            replace(word, start_ms=word.start_ms + delta, end_ms=word.end_ms + delta)
+            for word in words
+        ]
+        if scene is None or shifted.speech_end_ms > scene.duration_ms:
+            raise EditorialCommandError("realigned cue exceeds the scene duration")
+        before = _scene_snapshot(self._repository, cue.scene_id)
+        self._repository.save_cue(shifted, shifted_words)
+        _record(self._repository, shifted, "realign_cue", author, before)
+        return shifted
+
+
+class EditWordTranslation:
+    def __init__(self, repository: EditorialProjectRepository) -> None:
+        self._repository = repository
+
+    def execute(self, cue_id: UUID, *, word_id: UUID, pt: str, author: str) -> list[WordTiming]:
+        cue, words = _cue_with_words(self._repository, cue_id)
+        index = next((i for i, word in enumerate(words) if word.id == word_id), None)
+        if index is None:
+            raise EditorialCommandError("word not found in cue")
+        group_id = _semantic_group_id(words[index])
+        members = [i for i, word in enumerate(words) if _semantic_group_id(word) == group_id]
+        if not group_id:
+            members = [index]
+        if not pt:
+            raise EditorialCommandError("word or group translation is required")
+        before = _scene_snapshot(self._repository, cue.scene_id)
+        updated = list(words)
+        lead = min(members)
+        for position in members:
+            provenance = dict(updated[position].provenance)
+            provenance["pt"] = pt if position == lead else None
+            updated[position] = replace(updated[position], provenance=provenance)
+        self._repository.save_cue(cue, updated)
+        _record(self._repository, cue, "edit_word_translation", author, before)
+        return updated
+
+
+class GroupWordTranslation:
+    def __init__(self, repository: EditorialProjectRepository) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        cue_id: UUID,
+        *,
+        word_id: UUID,
+        direction: str,
+        pt: str,
+        author: str,
+    ) -> list[WordTiming]:
+        cue, words = _cue_with_words(self._repository, cue_id)
+        index = next((i for i, word in enumerate(words) if word.id == word_id), None)
+        if index is None:
+            raise EditorialCommandError("word not found in cue")
+        current = _semantic_members(words, index)
+        neighbor_index = min(current) - 1 if direction == "previous" else max(current) + 1
+        if direction not in {"previous", "next"} or not 0 <= neighbor_index < len(words):
+            raise EditorialCommandError("there is no adjacent unit to group")
+        members = sorted(set(current + _semantic_members(words, neighbor_index)))
+        if members != list(range(min(members), max(members) + 1)):
+            raise EditorialCommandError("only contiguous words can be grouped")
+        if not pt:
+            raise EditorialCommandError("group translation is required")
+        before = _scene_snapshot(self._repository, cue.scene_id)
+        group_id = f"semantic-{uuid4()}"
+        updated = list(words)
+        lead = members[0]
+        for position in members:
+            provenance = dict(updated[position].provenance)
+            if "pt_original" not in provenance:
+                provenance["pt_original"] = provenance.get("pt") or ""
+            provenance.update(
+                {
+                    "semantic_group_id": group_id,
+                    "semantic_group_role": "lead" if position == lead else "member",
+                    "pt": pt if position == lead else None,
+                }
+            )
+            updated[position] = replace(updated[position], provenance=provenance)
+        self._repository.save_cue(cue, updated)
+        _record(self._repository, cue, "group_word_translation", author, before)
+        return updated
+
+
+class UngroupWordTranslation:
+    def __init__(self, repository: EditorialProjectRepository) -> None:
+        self._repository = repository
+
+    def execute(self, cue_id: UUID, *, word_id: UUID, author: str) -> list[WordTiming]:
+        cue, words = _cue_with_words(self._repository, cue_id)
+        index = next((i for i, word in enumerate(words) if word.id == word_id), None)
+        if index is None:
+            raise EditorialCommandError("word not found in cue")
+        members = _semantic_members(words, index)
+        if len(members) < 2:
+            raise EditorialCommandError("word does not belong to a semantic group")
+        before = _scene_snapshot(self._repository, cue.scene_id)
+        updated = list(words)
+        for position in members:
+            provenance = dict(updated[position].provenance)
+            provenance["pt"] = provenance.pop("pt_original", "")
+            provenance.pop("semantic_group_id", None)
+            provenance.pop("semantic_group_role", None)
+            updated[position] = replace(updated[position], provenance=provenance)
+        self._repository.save_cue(cue, updated)
+        _record(self._repository, cue, "ungroup_word_translation", author, before)
+        return updated
+
+
+def _semantic_group_id(word: WordTiming) -> str:
+    value = word.provenance.get("semantic_group_id")
+    return value if isinstance(value, str) else ""
+
+
+def _semantic_members(words: list[WordTiming], index: int) -> list[int]:
+    group_id = _semantic_group_id(words[index])
+    if not group_id:
+        return [index]
+    return [i for i, word in enumerate(words) if _semantic_group_id(word) == group_id]
+
+
 class SplitCue:
     def __init__(self, repository: EditorialProjectRepository) -> None:
         self._repository = repository

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     ytdlp_executable: str = "yt-dlp"
     cloudflared_executable: str = "cloudflared"
     cloudflared_enabled: bool = False
+    groq_api_key: str | None = None
+    groq_editorial_model: str = "openai/gpt-oss-20b"
     api_prefix: str = "/api"
 
     @field_validator("database_url")
