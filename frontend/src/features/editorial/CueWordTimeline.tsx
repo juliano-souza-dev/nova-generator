@@ -22,17 +22,27 @@ type Props = {
   onSelectCue: (id: string) => void;
   onSelectWord: (id: string) => void;
   onSetEdge: (edge: "start" | "end") => void;
+  onEdgeDragStart: () => void;
+  onEdgeChange: (edge: "start" | "end", timeMs: number) => void;
   onNudge: (edge: "start" | "end", deltaMs: number) => void;
   onUndo: () => void;
 };
 
 export function CueWordTimeline(props: Props) {
   const root = useRef<HTMLDivElement>(null);
+  const svg = useRef<SVGSVGElement>(null);
+  const draggingEdgeRef = useRef<"start" | "end" | null>(null);
   const errors = useMemo(() => validateTimeline(props.cues), [props.cues]);
   const [viewStart, setViewStart] = useState(0);
+  const [draggingEdge, setDraggingEdge] = useState<"start" | "end" | null>(null);
   const selectedCue = props.cues.find((cue) => cue.id === props.selectedCueId);
   const selectedWord = selectedCue?.words.find((word) => word.id === props.selectedWordId);
-  const activeLabel = selectedWord ? "palavra" : "cue";
+  const selectedGroupWords = selectedWord?.semantic_group_id
+    ? (selectedCue?.words.filter(
+        (word) => word.semantic_group_id === selectedWord.semantic_group_id,
+      ) ?? [])
+    : [];
+  const activeLabel = selectedGroupWords.length > 1 ? "unidade" : selectedWord ? "palavra" : "cue";
   const visibleDuration = Math.max(1, props.durationMs) / Math.max(1, props.zoom);
   const windowStart = Math.max(0, Math.min(viewStart, props.durationMs - visibleDuration));
   const pct = (time: number) => timeToPercent(time - windowStart, visibleDuration);
@@ -101,6 +111,33 @@ export function CueWordTimeline(props: Props) {
       windowStart + ((event.clientX - bounds.left) / bounds.width) * visibleDuration,
     );
   }
+  function pointerTime(clientX: number) {
+    const bounds = svg.current?.getBoundingClientRect();
+    if (!bounds?.width) return windowStart;
+    return Math.max(
+      windowStart,
+      Math.min(
+        windowStart + visibleDuration,
+        windowStart + ((clientX - bounds.left) / bounds.width) * visibleDuration,
+      ),
+    );
+  }
+  function startEdgeDrag(edge: "start" | "end", event: React.PointerEvent<SVGElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    props.onEdgeDragStart();
+    draggingEdgeRef.current = edge;
+    setDraggingEdge(edge);
+    props.onPlayheadChange(pointerTime(event.clientX));
+    props.onEdgeChange(edge, pointerTime(event.clientX));
+  }
+  const activeRange = selectedWord
+    ? {
+        start_ms: selectedGroupWords[0]?.start_ms ?? selectedWord.start_ms,
+        end_ms: selectedGroupWords.at(-1)?.end_ms ?? selectedWord.end_ms,
+      }
+    : selectedCue?.speech_timing;
   return (
     <section
       className="timeline-panel"
@@ -243,11 +280,27 @@ export function CueWordTimeline(props: Props) {
       )}
       <div className="timeline-viewport">
         <svg
+          ref={svg}
           className="cue-timeline"
           viewBox="0 0 1000 210"
           role="img"
           aria-label="Waveform, cues e tempos das palavras"
           onClick={seek}
+          onPointerMove={(event) => {
+            const edge = draggingEdgeRef.current;
+            if (!edge) return;
+            const time = pointerTime(event.clientX);
+            props.onPlayheadChange(time);
+            props.onEdgeChange(edge, time);
+          }}
+          onPointerUp={() => {
+            draggingEdgeRef.current = null;
+            setDraggingEdge(null);
+          }}
+          onPointerCancel={() => {
+            draggingEdgeRef.current = null;
+            setDraggingEdge(null);
+          }}
         >
           <rect width="1000" height="210" className="timeline-bg" />
           {ticks.map((tick) => (
@@ -286,9 +339,12 @@ export function CueWordTimeline(props: Props) {
                     y="112"
                     height="30"
                     rx="3"
-                    className={
-                      word.id === props.selectedWordId ? "word-block word-selected" : "word-block"
-                    }
+                    className={`word-block${word.id === props.selectedWordId ? " word-selected" : ""}${
+                      selectedWord?.semantic_group_id &&
+                      word.semantic_group_id === selectedWord.semantic_group_id
+                        ? " word-grouped"
+                        : ""
+                    }`}
                     onClick={(event) => {
                       event.stopPropagation();
                       props.onSelectCue(cue.id);
@@ -310,6 +366,53 @@ export function CueWordTimeline(props: Props) {
               ))}
             </g>
           ))}
+          {activeRange && (
+            <g className="timeline-edge-handles">
+              <line
+                x1={pct(activeRange.start_ms) * 10}
+                x2={pct(activeRange.start_ms) * 10}
+                y1="20"
+                y2="195"
+                className={`timeline-edge timeline-edge-in${draggingEdge === "start" ? " dragging" : ""}`}
+              />
+              <rect
+                x={pct(activeRange.start_ms) * 10 - 7}
+                y="20"
+                width="14"
+                height="175"
+                className="timeline-edge-hit"
+                onPointerDown={(event) => startEdgeDrag("start", event)}
+                onClick={(event) => event.stopPropagation()}
+              />
+              <text x={pct(activeRange.start_ms) * 10 + 5} y="34" className="timeline-edge-label">
+                IN
+              </text>
+              <line
+                x1={pct(activeRange.end_ms) * 10}
+                x2={pct(activeRange.end_ms) * 10}
+                y1="20"
+                y2="195"
+                className={`timeline-edge timeline-edge-out${draggingEdge === "end" ? " dragging" : ""}`}
+              />
+              <rect
+                x={pct(activeRange.end_ms) * 10 - 7}
+                y="20"
+                width="14"
+                height="175"
+                className="timeline-edge-hit"
+                onPointerDown={(event) => startEdgeDrag("end", event)}
+                onClick={(event) => event.stopPropagation()}
+              />
+              <text
+                x={pct(activeRange.end_ms) * 10 - 5}
+                y="34"
+                textAnchor="end"
+                className="timeline-edge-label"
+              >
+                OUT
+              </text>
+            </g>
+          )}
           <line
             x1={pct(props.playheadMs) * 10}
             x2={pct(props.playheadMs) * 10}

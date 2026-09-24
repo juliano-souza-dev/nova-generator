@@ -55,6 +55,7 @@ class JobEventResponse(BaseModel):
 
 class JobDetailResponse(JobResponse):
     events: list[JobEventResponse]
+    output: dict[str, Any] | None = None
 
 
 class JobPageResponse(BaseModel):
@@ -92,7 +93,7 @@ def get_job_snapshot(
     job = use_case.execute(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
-    return JobDetailResponse(**_response(job).model_dump(), events=_events(job))
+    return JobDetailResponse(**_response(job).model_dump(), events=_events(job), output=job.output)
 
 
 @router.post("/{job_id}/cancel", response_model=JobResponse)
@@ -117,9 +118,14 @@ def _response(job: Job) -> JobResponse:
         kind=job.kind,
         status=job.status,
         attempt=job.attempt,
-        max_attempts=job.max_attempts, input=job.input, error_message=job.error_message,
-        created_at=job.created_at, started_at=job.started_at, finished_at=job.finished_at,
-        heartbeat_at=job.heartbeat_at, cancel_requested_at=job.cancel_requested_at,
+        max_attempts=job.max_attempts,
+        input=job.input,
+        error_message=job.error_message,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        heartbeat_at=job.heartbeat_at,
+        cancel_requested_at=job.cancel_requested_at,
         can_cancel=job.status in {"queued", "retryable", "running"},
         can_retry=job.status in {"failed", "cancelled"},
     )

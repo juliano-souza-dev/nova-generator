@@ -1,0 +1,1 @@
+"""Optional editorial AI adapters."""

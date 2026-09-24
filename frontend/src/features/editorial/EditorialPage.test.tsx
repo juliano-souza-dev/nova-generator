@@ -15,6 +15,19 @@ const mocks = vi.hoisted(() => ({
   updateCueText: vi.fn().mockResolvedValue({}),
   updateCueTiming: vi.fn().mockResolvedValue({}),
   updateWordTiming: vi.fn().mockResolvedValue({}),
+  updateWordTranslation: vi.fn().mockResolvedValue({}),
+  groupWordTranslation: vi.fn().mockResolvedValue({}),
+  ungroupWordTranslation: vi.fn().mockResolvedValue({}),
+  realignCue: vi.fn().mockResolvedValue({}),
+  editorialAssistantStatus: vi.fn().mockResolvedValue({
+    groq_configured: false,
+    groq_model: "openai/gpt-oss-20b",
+    fallback_available: true,
+  }),
+  externalEditorialPackageUrl: vi.fn().mockReturnValue("/api/external.zip"),
+  startEditorialAssistance: vi.fn(),
+  importExternalEditorialResult: vi.fn(),
+  job: vi.fn(),
   editorialCues: vi.fn().mockResolvedValue([
     {
       id: "c1",
@@ -53,6 +66,15 @@ vi.mock("../../lib/studio-api", () => ({
     updateCueText: mocks.updateCueText,
     updateCueTiming: mocks.updateCueTiming,
     updateWordTiming: mocks.updateWordTiming,
+    updateWordTranslation: mocks.updateWordTranslation,
+    groupWordTranslation: mocks.groupWordTranslation,
+    ungroupWordTranslation: mocks.ungroupWordTranslation,
+    realignCue: mocks.realignCue,
+    editorialAssistantStatus: mocks.editorialAssistantStatus,
+    externalEditorialPackageUrl: mocks.externalEditorialPackageUrl,
+    startEditorialAssistance: mocks.startEditorialAssistance,
+    importExternalEditorialResult: mocks.importExternalEditorialResult,
+    job: mocks.job,
   },
 }));
 
@@ -153,5 +175,68 @@ describe("EditorialPage", () => {
       target: { value: "125" },
     });
     expect(screen.getByRole("button", { name: "Salvar palavra" })).toBeEnabled();
+  });
+
+  it("groups contiguous words under one natural translation", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      {
+        ...cue,
+        original_en: "Can I help?",
+        words: [
+          { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350 },
+          { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480 },
+          { id: "w3", order: 3, surface: "help?", start_ms: 490, end_ms: 800 },
+        ],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const wordList = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(wordList).getByRole("button", { name: /Can/ }));
+    fireEvent.change(screen.getByLabelText("Tradução natural da unidade"), {
+      target: { value: "Posso ajudar?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Agrupar próxima" }));
+    await waitFor(() =>
+      expect(mocks.groupWordTranslation).toHaveBeenCalledWith(
+        "c1",
+        "w1",
+        "next",
+        "Posso ajudar?",
+        "local-editor",
+      ),
+    );
+    expect(screen.getByText(/Can I help.*Posso ajudar/)).toBeInTheDocument();
+  });
+
+  it("realigns the next cue to a 10 ms gap when G saves an expanded cue", async () => {
+    const first = (await mocks.editorialCues())[0];
+    const second = {
+      ...first,
+      id: "c2",
+      order: 2,
+      original_en: "Next.",
+      speech_timing: { start_ms: 1810, end_ms: 1950 },
+      subtitle_timing: { start_ms: 1810, end_ms: 1950 },
+      words: [{ id: "w2", order: 1, surface: "Next.", start_ms: 1810, end_ms: 1950 }],
+    };
+    mocks.editorialCues.mockResolvedValue([first, second]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    await screen.findByLabelText("Player do corte da cena");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Aumentar cue atrasando o fim em 25 milissegundos",
+      }),
+    );
+    fireEvent.keyDown(window, { key: "g" });
+    await waitFor(() => expect(mocks.realignCue).toHaveBeenCalledWith("c2", 1835, "local-editor"));
   });
 });

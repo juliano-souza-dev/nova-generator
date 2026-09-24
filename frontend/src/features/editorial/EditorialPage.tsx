@@ -1,7 +1,25 @@
-import { Check, ChevronLeft, ChevronRight, Clock3, Film, Play, Save, Undo2 } from "lucide-react";
+import {
+  Bot,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Download,
+  Film,
+  Play,
+  Save,
+  Undo2,
+  Upload,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import type { Project, ProjectMedia, Scene } from "../../lib/api.types";
+import type {
+  EditorialAssistance,
+  EditorialAssistantStatus,
+  Project,
+  ProjectMedia,
+  Scene,
+} from "../../lib/api.types";
 import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { CueWordTimeline, type TimelineCue } from "./CueWordTimeline";
@@ -35,9 +53,14 @@ export function EditorialPage() {
   const [approvedPt, setApprovedPt] = useState("");
   const [wordStart, setWordStart] = useState(0);
   const [wordEnd, setWordEnd] = useState(0);
+  const [wordPt, setWordPt] = useState("");
   const [saving, setSaving] = useState(false);
   const [startingMedia, setStartingMedia] = useState(false);
   const [mediaReload, setMediaReload] = useState(0);
+  const [assistantStatus, setAssistantStatus] = useState<EditorialAssistantStatus>();
+  const [assistance, setAssistance] = useState<EditorialAssistance>();
+  const [assistantBusy, setAssistantBusy] = useState(false);
+  const [assistantMessage, setAssistantMessage] = useState("");
   const author = "local-editor";
 
   const project = projects.find((item) => item.id === projectId);
@@ -49,14 +72,36 @@ export function EditorialPage() {
   const selectedCueIndex = cues.findIndex((cue) => cue.id === selectedCueId);
   const selectedCue = cues[selectedCueIndex];
   const selectedWord = selectedCue?.words.find((item) => item.id === selectedWordId);
+  const selectedGroupWords = selectedWord?.semantic_group_id
+    ? (selectedCue?.words.filter(
+        (item) => item.semantic_group_id === selectedWord.semantic_group_id,
+      ) ?? [])
+    : selectedWord
+      ? [selectedWord]
+      : [];
+  const selectedGroupStart = selectedGroupWords[0]?.start_ms ?? wordStart;
+  const selectedGroupEnd = selectedGroupWords.at(-1)?.end_ms ?? wordEnd;
+  const selectedUnitLabel = selectedGroupWords.map((item) => item.surface).join(" ");
+  const selectedGroupStartIndex = selectedCue
+    ? selectedCue.words.indexOf(selectedGroupWords[0] ?? selectedWord!)
+    : -1;
+  const selectedGroupEndIndex = selectedCue
+    ? selectedCue.words.indexOf(selectedGroupWords.at(-1) ?? selectedWord!)
+    : -1;
+  const storedWordPt =
+    selectedGroupWords.find((item) => item.semantic_group_role === "lead")?.pt ??
+    selectedWord?.pt ??
+    "";
+  const selectedSuggestion = assistance?.suggestions.find((item) => item.cue_id === selectedCueId);
   const approvedCount = cues.filter((cue) => cue.provenance?.approval === "approved").length;
   const textDirty = Boolean(
     selectedCue &&
     (approvedEn !== selectedCue.approved_en || approvedPt !== selectedCue.approved_pt),
   );
   const wordDirty = Boolean(
-    selectedWord && (wordStart !== selectedWord.start_ms || wordEnd !== selectedWord.end_ms),
+    selectedWord && (wordStart !== selectedGroupStart || wordEnd !== selectedGroupEnd),
   );
+  const wordTranslationDirty = Boolean(selectedWord && wordPt !== storedWordPt);
   const selectedWordIndex =
     selectedCue?.words.findIndex((word) => word.id === selectedWordId) ?? -1;
   const previewCues = selectedWord
@@ -64,17 +109,17 @@ export function EditorialPage() {
         cue.id === selectedCue.id
           ? {
               ...cue,
-              words: cue.words.map((word) =>
-                word.id === selectedWord.id
-                  ? { ...word, start_ms: wordStart, end_ms: wordEnd }
-                  : word,
-              ),
+              words: cue.words.map((word, index) => ({
+                ...word,
+                start_ms: index === selectedGroupStartIndex ? wordStart : word.start_ms,
+                end_ms: index === selectedGroupEndIndex ? wordEnd : word.end_ms,
+              })),
             }
           : cue,
       )
     : cues;
   const timingDirty = history.length > 0;
-  const isDirty = textDirty || wordDirty || timingDirty;
+  const isDirty = textDirty || wordDirty || wordTranslationDirty || timingDirty;
   const cueStatus = selectedCue?.provenance?.approval === "approved" ? "Aprovado" : "Pendente";
 
   useEffect(() => {
@@ -82,6 +127,12 @@ export function EditorialPage() {
       .projects()
       .then(setProjects)
       .catch((error: Error) => setMessage(error.message));
+  }, []);
+  useEffect(() => {
+    void studioApi
+      .editorialAssistantStatus()
+      .then(setAssistantStatus)
+      .catch(() => setAssistantMessage("Não foi possível consultar a configuração da Groq."));
   }, []);
   useEffect(() => {
     setScenes([]);
@@ -123,6 +174,8 @@ export function EditorialPage() {
     setCues([]);
     setSelectedCueId("");
     setHistory([]);
+    setAssistance(undefined);
+    setAssistantMessage("");
     if (!sceneId) return;
     let cancelled = false;
     void studioApi
@@ -145,9 +198,10 @@ export function EditorialPage() {
     setApprovedPt(selectedCue?.approved_pt ?? "");
   }, [selectedCue?.id, selectedCue?.approved_en, selectedCue?.approved_pt]);
   useEffect(() => {
-    setWordStart(selectedWord?.start_ms ?? 0);
-    setWordEnd(selectedWord?.end_ms ?? 0);
-  }, [selectedWord?.id, selectedWord?.start_ms, selectedWord?.end_ms]);
+    setWordStart(selectedWord ? selectedGroupStart : 0);
+    setWordEnd(selectedWord ? selectedGroupEnd : 0);
+    setWordPt(storedWordPt);
+  }, [selectedWord, selectedGroupStart, selectedGroupEnd, storedWordPt]);
 
   async function refreshCues(): Promise<TimelineCue[]> {
     if (!sceneId) return [];
@@ -155,6 +209,55 @@ export function EditorialPage() {
     setCues(refreshed);
     setHistory([]);
     return refreshed;
+  }
+  async function startEditorialAssistance() {
+    if (!sceneId || assistantBusy) return;
+    setAssistantBusy(true);
+    setAssistantMessage("Groq: preparando as sugestões da cena…");
+    try {
+      const started = await studioApi.startEditorialAssistance(sceneId);
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        const job = await studioApi.job(started.job_id);
+        if (job.status === "succeeded") {
+          const output = job.output as EditorialAssistance | null;
+          if (!output || !Array.isArray(output.suggestions))
+            throw new Error("A Groq terminou sem devolver sugestões válidas.");
+          setAssistance(output);
+          setAssistantMessage(
+            `${output.suggestions.length} sugestões recebidas. Revise e aplique uma por vez como rascunho.`,
+          );
+          return;
+        }
+        if (job.status === "failed" || job.status === "cancelled")
+          throw new Error(job.error_message || "A Groq não concluiu o processamento.");
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      throw new Error("A Groq ainda não concluiu. Consulte Jobs ou use a IA externa.");
+    } catch (error) {
+      setAssistantMessage(
+        `${error instanceof Error ? error.message : "Falha na Groq."} O pacote externo está disponível.`,
+      );
+    } finally {
+      setAssistantBusy(false);
+    }
+  }
+  async function importExternalResult(file: File) {
+    if (!sceneId || assistantBusy) return;
+    setAssistantBusy(true);
+    setAssistantMessage("Validando o retorno da IA externa…");
+    try {
+      const result = await studioApi.importExternalEditorialResult(sceneId, file);
+      setAssistance(result);
+      setAssistantMessage(
+        `${result.suggestions.length} sugestões externas validadas. Nada foi aprovado automaticamente.`,
+      );
+    } catch (error) {
+      setAssistantMessage(
+        error instanceof Error ? error.message : "O retorno externo não passou na validação.",
+      );
+    } finally {
+      setAssistantBusy(false);
+    }
   }
   function seek(timeMs: number) {
     const bounded = Math.max(0, Math.min(timeMs, durationMs));
@@ -176,27 +279,34 @@ export function EditorialPage() {
   }
   function selectWord(id: string) {
     if (saving || id === selectedWordId) return;
-    if (wordDirty) {
-      setMessage("Salve ou descarte o ajuste da palavra antes de selecionar outra.");
+    if (wordDirty || wordTranslationDirty) {
+      setMessage("Salve ou descarte a edição da palavra antes de selecionar outra.");
       return;
     }
     const word = selectedCue?.words.find((item) => item.id === id);
     if (word) {
       setSelectedWordId(id);
       seek(word.start_ms);
-      setMessage(`Editando palavra “${word.surface}”. Espaço ouve somente esta palavra.`);
+      const group = word.semantic_group_id
+        ? (selectedCue?.words.filter((item) => item.semantic_group_id === word.semantic_group_id) ??
+          [])
+        : [word];
+      setMessage(
+        `Editando “${group.map((item) => item.surface).join(" ")}”. Espaço ouve somente esta unidade.`,
+      );
     }
   }
   function moveWord(offset: number) {
-    if (!selectedCue || wordDirty) {
-      if (wordDirty) setMessage("Salve ou descarte o ajuste antes de trocar de palavra.");
+    if (!selectedCue || wordDirty || wordTranslationDirty) {
+      if (wordDirty || wordTranslationDirty)
+        setMessage("Salve ou descarte o ajuste antes de trocar de palavra.");
       return;
     }
     const next = selectedCue.words[selectedWordIndex + offset];
     if (next) selectWord(next.id);
   }
   function leaveWordMode() {
-    if (wordDirty) {
+    if (wordDirty || wordTranslationDirty) {
       setMessage("Salve ou descarte o ajuste da palavra antes de voltar ao cue.");
       return;
     }
@@ -214,6 +324,14 @@ export function EditorialPage() {
     const word = original?.words.find((item) => item.id === selectedWordId);
     setWordStart(word?.start_ms ?? 0);
     setWordEnd(word?.end_ms ?? 0);
+    const originalGroup = word?.semantic_group_id
+      ? (original?.words.filter((item) => item.semantic_group_id === word.semantic_group_id) ?? [])
+      : word
+        ? [word]
+        : [];
+    setWordPt(
+      originalGroup.find((item) => item.semantic_group_role === "lead")?.pt ?? word?.pt ?? "",
+    );
     setMessage("Alterações locais descartadas.");
   }
   function playRange(start: number, end: number) {
@@ -267,11 +385,14 @@ export function EditorialPage() {
     setHistory((value) => [...value, cues]);
     setCues(next);
   }
+  function beginEdgeDrag() {
+    if (!selectedWord && selectedCue && history.length === 0) setHistory([cues]);
+  }
   function nudge(edge: "start" | "end", deltaMs: number) {
     if (!selectedCue || saving) return;
     if (selectedWord) {
-      const prior = selectedCue.words[selectedWordIndex - 1];
-      const next = selectedCue.words[selectedWordIndex + 1];
+      const prior = selectedCue.words[selectedGroupStartIndex - 1];
+      const next = selectedCue.words[selectedGroupEndIndex + 1];
       if (edge === "start") {
         const minimum = Math.max(selectedCue.speech_timing.start_ms, prior?.end_ms ?? 0);
         setWordStart(Math.max(minimum, Math.min(wordStart + deltaMs, wordEnd - 1)));
@@ -289,41 +410,42 @@ export function EditorialPage() {
       ),
     );
   }
-  function markActiveEdge(edge: "start" | "end") {
+  function setActiveEdgeAt(edge: "start" | "end", timeMs: number, recordHistory: boolean) {
     if (!selectedCue || saving) return;
     if (selectedWord) {
-      const prior = selectedCue.words[selectedWordIndex - 1];
-      const next = selectedCue.words[selectedWordIndex + 1];
+      const prior = selectedCue.words[selectedGroupStartIndex - 1];
+      const next = selectedCue.words[selectedGroupEndIndex + 1];
       if (edge === "start") {
         const minimum = Math.max(selectedCue.speech_timing.start_ms, prior?.end_ms ?? 0);
-        setWordStart(Math.max(minimum, Math.min(Math.round(playheadMs), wordEnd - 1)));
+        setWordStart(Math.max(minimum, Math.min(Math.round(timeMs), wordEnd - 1)));
       } else {
         const maximum = Math.min(selectedCue.speech_timing.end_ms, next?.start_ms ?? durationMs);
-        setWordEnd(Math.min(maximum, Math.max(Math.round(playheadMs), wordStart + 1)));
+        setWordEnd(Math.min(maximum, Math.max(Math.round(timeMs), wordStart + 1)));
       }
       setMessage(
-        `${edge === "start" ? "IN" : "OUT"} da palavra “${selectedWord.surface}” marcado em ${formatTime(playheadMs)}.`,
+        `${edge === "start" ? "IN" : "OUT"} da unidade “${selectedUnitLabel}” marcado em ${formatTime(timeMs)}.`,
       );
       return;
     }
-    replaceCues(
-      cues.map((cue) =>
-        cue.id !== selectedCue.id
-          ? cue
-          : {
-              ...cue,
-              speech_timing: setTimingEdge(cue.speech_timing, edge, playheadMs, durationMs),
-            },
-      ),
+    const next = cues.map((cue) =>
+      cue.id !== selectedCue.id
+        ? cue
+        : {
+            ...cue,
+            speech_timing: setTimingEdge(cue.speech_timing, edge, timeMs, durationMs),
+          },
     );
-    setMessage(
-      `${edge === "start" ? "Início" : "Fim"} do cue marcado em ${formatTime(playheadMs)}.`,
-    );
+    if (recordHistory) replaceCues(next);
+    else setCues(next);
+    setMessage(`${edge === "start" ? "Início" : "Fim"} do cue marcado em ${formatTime(timeMs)}.`);
+  }
+  function markActiveEdge(edge: "start" | "end") {
+    setActiveEdgeAt(edge, playheadMs, true);
   }
   function undo() {
     if (wordDirty && selectedWord) {
-      setWordStart(selectedWord.start_ms);
-      setWordEnd(selectedWord.end_ms);
+      setWordStart(selectedGroupStart);
+      setWordEnd(selectedGroupEnd);
       setMessage("Ajuste da palavra desfeito.");
       return;
     }
@@ -337,8 +459,8 @@ export function EditorialPage() {
     if (!player || !selectedCue) return;
     if (player.paused)
       playRange(
-        selectedWord ? wordStart : selectedCue.speech_timing.start_ms,
-        selectedWord ? wordEnd : selectedCue.speech_timing.end_ms,
+        selectedWord ? selectedGroupStart : selectedCue.speech_timing.start_ms,
+        selectedWord ? selectedGroupEnd : selectedCue.speech_timing.end_ms,
       );
     else {
       playbackEnd.current = null;
@@ -373,6 +495,10 @@ export function EditorialPage() {
     }
     setSaving(true);
     try {
+      const originalCue = history[0]?.find((cue) => cue.id === selectedCue.id) ?? selectedCue;
+      const expandedCue =
+        candidate.speech_timing.end_ms - candidate.speech_timing.start_ms >
+        originalCue.speech_timing.end_ms - originalCue.speech_timing.start_ms;
       if (timingDirty)
         await studioApi.updateCueTiming(selectedCue.id, {
           author,
@@ -382,12 +508,14 @@ export function EditorialPage() {
       if (wordDirty && selectedWord)
         await studioApi.updateWordTiming(selectedCue.id, {
           author,
-          timings: selectedCue.words.map((item) => ({
+          timings: selectedCue.words.map((item, index) => ({
             id: item.id,
-            start_ms: item.id === selectedWord.id ? wordStart : item.start_ms,
-            end_ms: item.id === selectedWord.id ? wordEnd : item.end_ms,
+            start_ms: index === selectedGroupStartIndex ? wordStart : item.start_ms,
+            end_ms: index === selectedGroupEndIndex ? wordEnd : item.end_ms,
           })),
         });
+      if (wordTranslationDirty && selectedWord)
+        await studioApi.updateWordTranslation(selectedCue.id, selectedWord.id, wordPt, author);
       if (textDirty || approve)
         await studioApi.updateCueText(selectedCue.id, {
           author,
@@ -396,12 +524,17 @@ export function EditorialPage() {
           approve,
         });
       const nextWord =
-        advance && selectedWord ? selectedCue.words[selectedWordIndex + 1] : undefined;
+        advance && selectedWord ? selectedCue.words[selectedGroupEndIndex + 1] : undefined;
       const nextCueForWord =
         advance && selectedWord && !nextWord ? cues[selectedCueIndex + 1] : undefined;
       const refreshed = await refreshCues();
       const currentIndex = refreshed.findIndex((cue) => cue.id === selectedCue.id);
-      const nextCue = advance && !selectedWord ? refreshed[currentIndex + 1] : undefined;
+      let nextCue = advance && !selectedWord ? refreshed[currentIndex + 1] : undefined;
+      if (nextCue && expandedCue) {
+        await studioApi.realignCue(nextCue.id, candidate.speech_timing.end_ms + 10, author);
+        const realigned = await refreshCues();
+        nextCue = realigned.find((cue) => cue.id === nextCue?.id);
+      }
       if (nextWord) {
         setSelectedWordId(nextWord.id);
         seek(nextWord.start_ms);
@@ -429,6 +562,42 @@ export function EditorialPage() {
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha ao salvar revisão.");
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function groupSelectedWord(direction: "previous" | "next") {
+    if (!selectedCue || !selectedWord || saving) return;
+    if (!wordPt.trim()) {
+      setMessage("Digite a tradução natural do grupo antes de agrupar.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await studioApi.groupWordTranslation(
+        selectedCue.id,
+        selectedWord.id,
+        direction,
+        wordPt,
+        author,
+      );
+      await refreshCues();
+      setMessage("Unidade semântica agrupada. Os tempos individuais foram preservados.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível agrupar as palavras.");
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function ungroupSelectedWord() {
+    if (!selectedCue || !selectedWord || saving) return;
+    setSaving(true);
+    try {
+      await studioApi.ungroupWordTranslation(selectedCue.id, selectedWord.id, author);
+      await refreshCues();
+      setMessage("Grupo desfeito. Revise as traduções individuais.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível desfazer o grupo.");
     } finally {
       setSaving(false);
     }
@@ -672,6 +841,8 @@ export function EditorialPage() {
             onSelectCue={selectCue}
             onSelectWord={selectWord}
             onSetEdge={markActiveEdge}
+            onEdgeDragStart={beginEdgeDrag}
+            onEdgeChange={(edge, timeMs) => setActiveEdgeAt(edge, timeMs, false)}
             onNudge={nudge}
             onUndo={undo}
           />
@@ -708,6 +879,89 @@ export function EditorialPage() {
                 </div>
                 {isDirty && <span className="unsaved-badge">Alterações não salvas</span>}
               </div>
+              <section
+                className="editorial-assistance"
+                aria-labelledby="editorial-assistance-title"
+              >
+                <div className="editorial-assistance-heading">
+                  <div>
+                    <span className="eyebrow">Assistência opcional</span>
+                    <h3 id="editorial-assistance-title">Groq ou IA externa</h3>
+                  </div>
+                  <span className="assistant-provider-state">
+                    {assistantStatus?.groq_configured
+                      ? `Groq · ${assistantStatus.groq_model}`
+                      : "Groq não configurada"}
+                  </span>
+                </div>
+                <div className="editorial-assistance-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!assistantStatus?.groq_configured || assistantBusy}
+                    onClick={() => void startEditorialAssistance()}
+                  >
+                    <Bot aria-hidden="true" /> {assistantBusy ? "Processando…" : "Sugerir com Groq"}
+                  </button>
+                  <a
+                    className="secondary-button"
+                    href={studioApi.externalEditorialPackageUrl(sceneId)}
+                    download
+                  >
+                    <Download aria-hidden="true" /> Pacote para IA externa
+                  </a>
+                  <label className="secondary-button assistant-upload">
+                    <Upload aria-hidden="true" /> Importar retorno
+                    <input
+                      type="file"
+                      accept="application/json,.json"
+                      disabled={assistantBusy}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void importExternalResult(file);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                {assistantMessage && <p className="assistant-message">{assistantMessage}</p>}
+                {selectedSuggestion && (
+                  <div className="assistant-suggestion">
+                    <div>
+                      <strong>{selectedSuggestion.approved_en}</strong>
+                      <span>{selectedSuggestion.approved_pt}</span>
+                      {selectedSuggestion.notes && <small>{selectedSuggestion.notes}</small>}
+                    </div>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={saving}
+                      onClick={() => {
+                        setApprovedEn(selectedSuggestion.approved_en);
+                        setApprovedPt(selectedSuggestion.approved_pt);
+                        setMessage(
+                          "Sugestão aplicada como rascunho. Revise antes de salvar ou aprovar.",
+                        );
+                      }}
+                    >
+                      Aplicar como rascunho
+                    </button>
+                  </div>
+                )}
+                {assistance && Object.keys(assistance.rate_limits).length > 0 && (
+                  <details className="assistant-limits">
+                    <summary>Limites informados pela Groq</summary>
+                    <dl>
+                      {Object.entries(assistance.rate_limits).map(([name, value]) => (
+                        <div key={name}>
+                          <dt>{name.replace("x-ratelimit-", "")}</dt>
+                          <dd>{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </details>
+                )}
+              </section>
               <div className="asr-reference">
                 <span>Transcrição original</span>
                 <p>{selectedCue.original_en}</p>
@@ -778,7 +1032,11 @@ export function EditorialPage() {
             <aside className="panel word-inspector" aria-labelledby="word-inspector-title">
               <span className="eyebrow">Inspetor contextual</span>
               <h2 id="word-inspector-title">
-                {selectedWord ? `Palavra “${selectedWord.surface}”` : "Selecione uma palavra"}
+                {selectedWord
+                  ? selectedGroupWords.length > 1
+                    ? `Unidade “${selectedUnitLabel}”`
+                    : `Palavra “${selectedWord.surface}”`
+                  : "Selecione uma palavra"}
               </h2>
               {selectedWord && (
                 <div className="word-mode-status">
@@ -795,14 +1053,23 @@ export function EditorialPage() {
                   <li key={item.id}>
                     <button
                       type="button"
-                      className={item.id === selectedWordId ? "word-row selected" : "word-row"}
+                      className={`word-row${item.id === selectedWordId ? " selected" : ""}${
+                        selectedWord?.semantic_group_id &&
+                        item.semantic_group_id === selectedWord.semantic_group_id
+                          ? " grouped"
+                          : ""
+                      }`}
                       onClick={() => selectWord(item.id)}
                       aria-pressed={item.id === selectedWordId}
                     >
                       <strong>{item.surface}</strong>
                       <span>
-                        {formatTime(item.id === selectedWordId ? wordStart : item.start_ms)}–
-                        {formatTime(item.id === selectedWordId ? wordEnd : item.end_ms)}
+                        {item.semantic_group_role === "lead" && item.pt
+                          ? `${item.pt} · `
+                          : item.semantic_group_role === "member"
+                            ? "↳ mesmo grupo · "
+                            : ""}
+                        {formatTime(item.start_ms)}–{formatTime(item.end_ms)}
                       </span>
                     </button>
                   </li>
@@ -810,6 +1077,64 @@ export function EditorialPage() {
               </ol>
               {selectedWord && (
                 <div className="word-timing-editor">
+                  <section className="semantic-unit-editor" aria-label="Unidade semântica">
+                    <div className="semantic-unit-heading">
+                      <div>
+                        <span className="eyebrow">
+                          {selectedGroupWords.length > 1
+                            ? "Unidade semântica"
+                            : "Tradução da palavra"}
+                        </span>
+                        <strong>{selectedUnitLabel}</strong>
+                      </div>
+                      {selectedGroupWords.length > 1 && (
+                        <span className="semantic-group-badge">
+                          {selectedGroupWords.length} palavras
+                        </span>
+                      )}
+                    </div>
+                    <label>
+                      <span>Tradução natural da unidade</span>
+                      <input
+                        type="text"
+                        value={wordPt}
+                        onChange={(event) => setWordPt(event.target.value)}
+                        placeholder="Ex.: Posso ajudar?"
+                      />
+                    </label>
+                    <p>
+                      Traduza a expressão completa pelo sentido. Exemplo: “Can I help?” → “Posso
+                      ajudar?”.
+                    </p>
+                    <div className="semantic-unit-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={saving || selectedGroupStartIndex === 0}
+                        onClick={() => void groupSelectedWord("previous")}
+                      >
+                        Agrupar anterior
+                      </button>
+                      {selectedGroupWords.length > 1 && (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={saving}
+                          onClick={() => void ungroupSelectedWord()}
+                        >
+                          Desfazer grupo
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={saving || selectedGroupEndIndex === selectedCue.words.length - 1}
+                        onClick={() => void groupSelectedWord("next")}
+                      >
+                        Agrupar próxima
+                      </button>
+                    </div>
+                  </section>
                   <div className="word-timing-fields">
                     <label>
                       <span>IN (ms)</span>
@@ -841,9 +1166,9 @@ export function EditorialPage() {
                     <button
                       type="button"
                       className="secondary-button"
-                      onClick={() => playRange(wordStart, wordEnd)}
+                      onClick={() => playRange(selectedGroupStart, selectedGroupEnd)}
                     >
-                      <Play aria-hidden="true" /> Ouvir palavra
+                      <Play aria-hidden="true" /> Ouvir unidade
                     </button>
                     <button
                       type="button"

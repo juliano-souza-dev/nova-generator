@@ -13,6 +13,9 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 - Manter cache global de mídia por identidade canônica do YouTube; cada projeto guarda apenas seus cortes e artefatos próprios.
 - Validar a fonte e capturar metadados com yt-dlp sem download antes de criar uma produção; preservar título manual quando informado.
 - Definir políticas de armazenamento, hash, retenção, limpeza e recuperação.
+- Isolar provedores editoriais de IA atrás de portas; tratar a Groq como opcional, respeitar os
+  limites informados pelos headers da API e oferecer pacote externo versionado quando ela não
+  estiver configurada ou não concluir a tarefa.
 - Criar ADRs para fronteiras de contexto, schema, dependências e decisões irreversíveis.
 - Manter `INICIAR.bat` como ponto único de entrada local no Windows, com bootstrap idempotente,
   migrations, supervisão dos processos e diagnóstico por logs.
@@ -33,3 +36,5 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 - Configuração tipada falha com mensagem acionável para executáveis ou diretórios indisponíveis.
 - Uma instalação local limpa pode preparar e iniciar API, worker e frontend por um único clique.
 - Logs JSON e métricas de jobs, cache e exportação não incluem tokens, texto editorial ou payloads.
+- Falha, indisponibilidade ou limite da Groq nunca bloqueia a revisão manual nem transforma
+  sugestão em conteúdo aprovado.

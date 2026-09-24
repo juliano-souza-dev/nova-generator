@@ -16,7 +16,7 @@ export type Job = {
   can_retry: boolean;
 };
 export type JobEvent = { type: string; occurred_at: string; message: string };
-export type JobDetail = Job & { events: JobEvent[] };
+export type JobDetail = Job & { events: JobEvent[]; output: Record<string, unknown> | null };
 export type JobPage = { items: Job[]; offset: number; limit: number; total: number };
 export type Health = { status: "ok" | "degraded"; database: "ok" | "unavailable" };
 export type Cue = {
@@ -47,6 +47,9 @@ export type WordTiming = {
   surface: string;
   start_ms: number;
   end_ms: number;
+  pt?: string | null;
+  semantic_group_id?: string | null;
+  semantic_group_role?: "lead" | "member" | null;
 };
 export type Project = {
   id: string;
@@ -114,6 +117,26 @@ export type EditorialReviewContext = {
   scene: Scene;
   ingest_job_id: string;
   cut_url: string;
+};
+export type EditorialAssistantStatus = {
+  groq_configured: boolean;
+  groq_model: string;
+  fallback_available: boolean;
+};
+export type EditorialSuggestion = {
+  cue_id: string;
+  order: number;
+  approved_en: string;
+  approved_pt: string;
+  notes: string;
+};
+export type EditorialAssistance = {
+  scene_id: string;
+  input_sha256: string;
+  provider: "groq" | "external";
+  model: string;
+  rate_limits: Record<string, string>;
+  suggestions: EditorialSuggestion[];
 };
 export type MediaJobReference = { id: string; status: string };
 export type StoryHighlight = { text: string; type: string; pt: string; occurrence: number };

@@ -8,6 +8,8 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 
 - Usar exportadores, importadores e testes existentes em `legacy/generator-base/` para caracterizar compatibilidade antes de substituir uma integração.
 - Versionar schemas, exemplos válidos/inválidos e fixtures compartilhadas.
+- Validar pacotes de ida e volta para IA editorial externa por versão, hash da entrada, IDs e ordem
+  dos cues; rejeitar resultado obsoleto ou pertencente a outra cena.
 - Manter os contratos de reel Anki (`hub_final.json` e `ankiAudio`) e História (`immersionhub-text-audio` 1.1).
 - Publicar `hub_final.json` por projeto/exportação somente após APKG e reel concluídos e upload manual do reel; incluir cues, texto EN/PT aprovado, itens Anki, palavras revisadas e timeline do reel com ID validado do YouTube.
 - Exigir compatibilidade retroativa, migration ou janela de transição para mudanças públicas.

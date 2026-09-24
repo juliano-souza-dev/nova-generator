@@ -10,8 +10,10 @@ export class ApiError extends Error {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
+export const apiUrl = (path: string) => `${API_BASE_URL}${path}`;
+
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(apiUrl(path), {
     headers: {
       ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       ...init?.headers,

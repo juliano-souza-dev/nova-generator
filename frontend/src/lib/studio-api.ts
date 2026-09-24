@@ -1,6 +1,8 @@
 import type {
   Cue,
   EditorialCue,
+  EditorialAssistance,
+  EditorialAssistantStatus,
   EditorialReviewContext,
   Health,
   Job,
@@ -23,7 +25,7 @@ import type {
   VoiceReference,
   VoiceModelStatus,
 } from "./api.types";
-import { apiRequest } from "./api";
+import { apiRequest, apiUrl } from "./api";
 
 export const studioApi = {
   health: () => apiRequest<Health>("/health"),
@@ -74,6 +76,22 @@ export const studioApi = {
     }),
   editorialCues: (sceneId: string) =>
     apiRequest<EditorialCue[]>(`/editorial/scenes/${sceneId}/cues`),
+  editorialAssistantStatus: () =>
+    apiRequest<EditorialAssistantStatus>("/editorial/assistant/status"),
+  startEditorialAssistance: (sceneId: string) =>
+    apiRequest<{ job_id: string; status: string }>(`/editorial/scenes/${sceneId}/assistance`, {
+      method: "POST",
+    }),
+  externalEditorialPackageUrl: (sceneId: string) =>
+    apiUrl(`/editorial/scenes/${sceneId}/external-package`),
+  importExternalEditorialResult: (sceneId: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return apiRequest<EditorialAssistance>(`/editorial/scenes/${sceneId}/external-result`, {
+      method: "POST",
+      body,
+    });
+  },
   draftAsrCandidate: (projectId: string, jobId: string, author: string) =>
     apiRequest<Scene>(`/editorial/projects/${projectId}/candidates/${jobId}/draft`, {
       method: "POST",
@@ -96,6 +114,32 @@ export const studioApi = {
     apiRequest<WordTiming[]>(`/editorial/cues/${id}/words/timing`, {
       method: "PUT",
       body: JSON.stringify(input),
+    }),
+  realignCue: (id: string, targetStartMs: number, author: string) =>
+    apiRequest<Cue>(`/editorial/cues/${id}/realign`, {
+      method: "POST",
+      body: JSON.stringify({ target_start_ms: targetStartMs, author }),
+    }),
+  updateWordTranslation: (cueId: string, wordId: string, pt: string, author: string) =>
+    apiRequest<WordTiming[]>(`/editorial/cues/${cueId}/words/translation`, {
+      method: "PUT",
+      body: JSON.stringify({ word_id: wordId, pt, author }),
+    }),
+  groupWordTranslation: (
+    cueId: string,
+    wordId: string,
+    direction: "previous" | "next",
+    pt: string,
+    author: string,
+  ) =>
+    apiRequest<WordTiming[]>(`/editorial/cues/${cueId}/words/group`, {
+      method: "POST",
+      body: JSON.stringify({ word_id: wordId, direction, pt, author }),
+    }),
+  ungroupWordTranslation: (cueId: string, wordId: string, author: string) =>
+    apiRequest<WordTiming[]>(`/editorial/cues/${cueId}/words/ungroup`, {
+      method: "POST",
+      body: JSON.stringify({ word_id: wordId, author }),
     }),
   uploadStory: (file: File) => {
     const body = new FormData();

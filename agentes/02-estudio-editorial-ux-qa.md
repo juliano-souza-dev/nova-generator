@@ -23,6 +23,11 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   1 ms). Manter botões visíveis equivalentes e waveform para posicionamento preciso.
 - Reservar milissegundos para edição fina, exibir tempos legíveis durante a revisão e manter ajuda de
   atalhos recolhível.
+- Tratar phrasal verbs, expressões, auxiliares e outras sequências contíguas como unidades
+  semânticas no word by word: uma tradução natural pertence à unidade e não é formada pela
+  concatenação mecânica das palavras. Preservar timing e tradução individual para desfazer.
+- Exibir sugestões de Groq ou de IA externa como rascunhos comparáveis; aplicar uma sugestão apenas
+  preenche o editor e ainda exige salvamento ou aprovação explícita pelo operador.
 
 ## Limites
 
@@ -41,6 +46,8 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Regressões de texto e timing possuem fixtures bloqueadoras de release.
 - Candidatos ASR criam rascunhos separados do texto aprovado; a aprovação EN/PT é explícita,
   auditável e repetir a importação nunca apaga uma revisão.
+- Agrupar e desagrupar palavras contíguas preserva os IDs e tempos individuais; Espaço reproduz o
+  intervalo completo da unidade selecionada e o editor mostra uma única tradução natural.
 
 ## Recorte da fonte
 

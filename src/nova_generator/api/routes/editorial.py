@@ -4,29 +4,48 @@ from collections.abc import Callable
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from nova_generator.api.dependencies import (
     get_adjust_cue_timing,
     get_adjust_word_timing,
     get_edit_approved_text,
+    get_edit_word_translation,
     get_editorial_repository,
+    get_enqueue_job,
+    get_external_editorial_exchange,
+    get_group_word_translation,
     get_merge_cues,
+    get_realign_cue,
     get_review_asr_candidate,
     get_session_factory,
     get_split_cue,
     get_undo_editorial_revision,
+    get_ungroup_word_translation,
+)
+from nova_generator.application.use_cases.editorial_assistance import (
+    EditorialAssistanceError,
+    build_editorial_prompt,
 )
 from nova_generator.application.use_cases.editorial_commands import (
     AdjustCueTiming,
     AdjustWordTiming,
     EditApprovedText,
     EditorialCommandError,
+    EditWordTranslation,
+    GroupWordTranslation,
     MergeCues,
+    RealignCue,
     SplitCue,
     UndoEditorialRevision,
+    UngroupWordTranslation,
 )
+from nova_generator.application.use_cases.external_editorial_exchange import (
+    ExternalEditorialExchange,
+)
+from nova_generator.application.use_cases.manage_jobs import EnqueueJob
 from nova_generator.application.use_cases.review_asr_candidate import (
     CandidateReviewError,
     ReviewAsrCandidate,
@@ -71,6 +90,23 @@ class WordTimingRequest(ActorRequest):
     timings: list[WordTimingInput] = Field(min_length=1)
 
 
+class RealignCueRequest(ActorRequest):
+    target_start_ms: int = Field(ge=0)
+
+
+class WordTranslationRequest(ActorRequest):
+    word_id: UUID
+    pt: str = Field(min_length=1)
+
+
+class GroupWordRequest(WordTranslationRequest):
+    direction: str = Field(pattern="^(previous|next)$")
+
+
+class UngroupWordRequest(ActorRequest):
+    word_id: UUID
+
+
 class CueText(BaseModel):
     original_en: str
     approved_en: str
@@ -102,6 +138,9 @@ class WordResponse(BaseModel):
     original_start_ms: int
     original_end_ms: int
     provenance: dict[str, object]
+    pt: str | None = None
+    semantic_group_id: str | None = None
+    semantic_group_role: str | None = None
 
 
 class CueResponse(BaseModel):
@@ -148,6 +187,103 @@ class ReviewContextResponse(BaseModel):
     scene: SceneResponse
     ingest_job_id: UUID
     cut_url: str
+
+
+class EditorialAssistantStatusResponse(BaseModel):
+    groq_configured: bool
+    groq_model: str
+    fallback_available: bool = True
+
+
+class EditorialAssistanceJobResponse(BaseModel):
+    job_id: str
+    status: str
+
+
+class EditorialSuggestionResponse(BaseModel):
+    cue_id: str
+    order: int
+    approved_en: str
+    approved_pt: str
+    notes: str
+
+
+class EditorialAssistanceResponse(BaseModel):
+    scene_id: str
+    input_sha256: str
+    provider: str
+    model: str
+    rate_limits: dict[str, str]
+    suggestions: list[EditorialSuggestionResponse]
+
+
+@router.get("/assistant/status", response_model=EditorialAssistantStatusResponse)
+def editorial_assistant_status() -> EditorialAssistantStatusResponse:
+    settings = get_settings()
+    return EditorialAssistantStatusResponse(
+        groq_configured=bool(settings.groq_api_key), groq_model=settings.groq_editorial_model
+    )
+
+
+@router.post(
+    "/scenes/{scene_id}/assistance",
+    response_model=EditorialAssistanceJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def start_editorial_assistance(
+    scene_id: UUID,
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+    enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
+) -> EditorialAssistanceJobResponse:
+    try:
+        input_sha256, _ = build_editorial_prompt(repository, scene_id)
+    except EditorialAssistanceError as error:
+        raise HTTPException(
+            404 if str(error).endswith("not found") else 422, detail=str(error)
+        ) from error
+    project_id = repository.get_scene_project_id(scene_id)
+    assert project_id is not None
+    job = enqueue.execute(
+        kind="editorial_assistance",
+        input={"scene_id": str(scene_id), "project_id": str(project_id)},
+        idempotency_key=f"editorial-assistance:{scene_id}:{input_sha256}",
+        max_attempts=1,
+    )
+    return EditorialAssistanceJobResponse(job_id=str(job.id), status=job.status)
+
+
+@router.get("/scenes/{scene_id}/external-package")
+def download_external_editorial_package(
+    scene_id: UUID,
+    exchange: Annotated[ExternalEditorialExchange, Depends(get_external_editorial_exchange)],
+) -> FileResponse:
+    try:
+        package = exchange.build_package(scene_id)
+    except EditorialAssistanceError as error:
+        raise HTTPException(
+            404 if str(error).endswith("not found") else 422, detail=str(error)
+        ) from error
+    return FileResponse(package, media_type="application/zip", filename=package.name)
+
+
+@router.post("/scenes/{scene_id}/external-result", response_model=EditorialAssistanceResponse)
+async def import_external_editorial_result(
+    scene_id: UUID,
+    exchange: Annotated[ExternalEditorialExchange, Depends(get_external_editorial_exchange)],
+    file: Annotated[UploadFile, File()],
+) -> EditorialAssistanceResponse:
+    try:
+        result = exchange.import_result(scene_id, await file.read())
+    except EditorialAssistanceError as error:
+        raise HTTPException(422, detail=str(error)) from error
+    return EditorialAssistanceResponse(
+        scene_id=result.scene_id,
+        input_sha256=result.input_sha256,
+        provider=result.provider,
+        model=result.model,
+        rate_limits=result.rate_limits,
+        suggestions=[EditorialSuggestionResponse(**item.__dict__) for item in result.suggestions],
+    )
 
 
 @router.get("/projects/{project_id}/scenes", response_model=list[SceneResponse])
@@ -239,11 +375,7 @@ def open_latest_review(
         if isinstance(video_id, str)
         else None
     )
-    cut = (
-        get_settings().project_root / str(project_id) / "cuts" / f"{job.id}.mp4"
-        if job
-        else None
-    )
+    cut = get_settings().project_root / str(project_id) / "cuts" / f"{job.id}.mp4" if job else None
     if (
         job is None
         or not isinstance(job.output, dict)
@@ -263,9 +395,7 @@ def open_latest_review(
         status="ready",
         scene=SceneResponse.model_validate(scene, from_attributes=True),
         ingest_job_id=job.id,
-        cut_url=(
-            f"{get_settings().api_prefix}/projects/{project_id}/media/cuts/{job.id}"
-        ),
+        cut_url=(f"{get_settings().api_prefix}/projects/{project_id}/media/cuts/{job.id}"),
     )
 
 
@@ -312,6 +442,46 @@ def edit_word_timing(
             author=payload.author,
         )
     )
+    return [_word_response(word) for word in words]
+
+
+@router.post("/cues/{cue_id}/realign", response_model=CueResponse)
+def realign_cue(
+    cue_id: UUID,
+    payload: RealignCueRequest,
+    use_case: Annotated[RealignCue, Depends(get_realign_cue)],
+) -> dict[str, Any]:
+    cue = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
+    return _cue_response(cue)
+
+
+@router.put("/cues/{cue_id}/words/translation", response_model=list[WordResponse])
+def edit_word_translation(
+    cue_id: UUID,
+    payload: WordTranslationRequest,
+    use_case: Annotated[EditWordTranslation, Depends(get_edit_word_translation)],
+) -> list[dict[str, Any]]:
+    words = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
+    return [_word_response(word) for word in words]
+
+
+@router.post("/cues/{cue_id}/words/group", response_model=list[WordResponse])
+def group_word_translation(
+    cue_id: UUID,
+    payload: GroupWordRequest,
+    use_case: Annotated[GroupWordTranslation, Depends(get_group_word_translation)],
+) -> list[dict[str, Any]]:
+    words = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
+    return [_word_response(word) for word in words]
+
+
+@router.post("/cues/{cue_id}/words/ungroup", response_model=list[WordResponse])
+def ungroup_word_translation(
+    cue_id: UUID,
+    payload: UngroupWordRequest,
+    use_case: Annotated[UngroupWordTranslation, Depends(get_ungroup_word_translation)],
+) -> list[dict[str, Any]]:
+    words = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
     return [_word_response(word) for word in words]
 
 
@@ -393,6 +563,9 @@ def _word_response(word: WordTiming) -> dict[str, Any]:
         "original_start_ms": word.original_start_ms,
         "original_end_ms": word.original_end_ms,
         "provenance": word.provenance,
+        "pt": word.provenance.get("pt"),
+        "semantic_group_id": word.provenance.get("semantic_group_id"),
+        "semantic_group_role": word.provenance.get("semantic_group_role"),
     }
 
 

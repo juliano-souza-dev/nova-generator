@@ -10,11 +10,13 @@ from threading import Event
 
 from nova_generator.api.dependencies import get_session_factory
 from nova_generator.application.use_cases.download_youtube_source import DownloadYoutubeSource
+from nova_generator.application.use_cases.editorial_assistance import RunEditorialAssistance
 from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
 from nova_generator.application.use_cases.ingest_scene_media import IngestSceneMedia
 from nova_generator.application.use_cases.render_story import RenderStory
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.core.settings import get_settings
+from nova_generator.infrastructure.ai.groq_editorial_assistant import GroqEditorialAssistant
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
 )
@@ -41,6 +43,9 @@ from nova_generator.infrastructure.speech.chatterbox_nano_synthesizer import (
 )
 from nova_generator.infrastructure.speech.ffprobe_wav_probe import FfprobeWavProbe
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
+from nova_generator.infrastructure.worker.editorial_assistance_handler import (
+    EditorialAssistanceJobHandler,
+)
 from nova_generator.infrastructure.worker.ingest_scene_media_handler import (
     IngestSceneMediaJobHandler,
 )
@@ -102,6 +107,15 @@ def main() -> None:
             "export_materials": materials.export,
             "download_youtube": project_media.download,
             "ingest_scene_media": project_media.ingest,
+            "editorial_assistance": EditorialAssistanceJobHandler(
+                RunEditorialAssistance(
+                    SqlAlchemyEditorialProjectRepository(get_session_factory()),
+                    GroqEditorialAssistant(
+                        api_key=settings.groq_api_key,
+                        model=settings.groq_editorial_model,
+                    ),
+                )
+            ),
         },
     )
     stopped = Event()
