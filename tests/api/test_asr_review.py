@@ -1,7 +1,8 @@
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
@@ -42,6 +43,25 @@ def _seed_candidate() -> tuple[str, str]:
     return str(project_id), str(queued.id)
 
 
+def _mark_prepared(cue_id: str) -> None:
+    repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    cue = repository.get_cue(UUID(cue_id))
+    assert cue is not None
+    words = [
+        replace(word, provenance={**word.provenance, "pt": f"palavra {word.order}"})
+        for word in repository.get_cue_words(cue.id)
+    ]
+    repository.save_cue(
+        replace(
+            cue,
+            approved_en=cue.original_en,
+            approved_pt="“Não posso… ir?”",
+            provenance={**cue.provenance, "editorial_preparation": "complete"},
+        ),
+        words,
+    )
+
+
 def test_candidate_becomes_draft_then_literal_approval(client: TestClient) -> None:
     project_id, job_id = _seed_candidate()
     response = client.post(
@@ -59,6 +79,12 @@ def test_candidate_becomes_draft_then_literal_approval(client: TestClient) -> No
     assert cue["approved_en"] == cue["approved_pt"] == ""
     assert cue["provenance"]["approval"] == "draft"
     assert [word["surface"] for word in cue["words"]] == ["“I", "can't…", "go?”"]
+    blocked = client.put(
+        f"/api/editorial/cues/{cue['id']}/text",
+        json={"author": "editor", "approved_en": "“I can't… go?”", "approved_pt": ""},
+    )
+    assert blocked.status_code == 409
+    _mark_prepared(cue["id"])
     rejected = client.put(
         f"/api/editorial/cues/{cue['id']}/text",
         json={"author": "editor", "approved_en": "“I can't… go?”", "approved_pt": ""},
@@ -96,6 +122,7 @@ def test_save_draft_is_literal_incomplete_and_never_approves(client: TestClient)
         json={"author": "editor"},
     ).json()
     cue = client.get(f"/api/editorial/scenes/{scene['id']}/cues").json()[0]
+    _mark_prepared(cue["id"])
     url = f"/api/editorial/cues/{cue['id']}/text"
     payload = {
         "author": "editor",
@@ -104,9 +131,7 @@ def test_save_draft_is_literal_incomplete_and_never_approves(client: TestClient)
         "approve": False,
     }
     draft = client.put(url, json=payload)
-    assert draft.status_code == 200
-    assert draft.json()["approved_en"] == payload["approved_en"]
-    assert draft.json()["provenance"]["approval"] == "draft"
+    assert draft.status_code == 422
     assert client.put(url, json={**payload, "approve": True}).status_code == 422
     payload["approved_pt"] = "“Não posso… ir?”"
     assert client.put(url, json=payload).json()["provenance"]["approval"] == "draft"

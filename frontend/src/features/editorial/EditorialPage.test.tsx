@@ -36,13 +36,19 @@ const mocks = vi.hoisted(() => ({
       order: 1,
       speaker: "",
       original_en: "“I can't… go?”",
-      approved_en: "",
-      approved_pt: "",
+      approved_en: "“I can't… go?”",
+      approved_pt: "“Eu não consigo… ir?”",
       speech_timing: { start_ms: 100, end_ms: 1800 },
       subtitle_timing: { start_ms: 100, end_ms: 1800 },
       revision: 1,
-      provenance: { source: "asr_candidate", approval: "draft" },
-      words: [{ id: "w1", order: 1, surface: "can't…", start_ms: 100, end_ms: 1800 }],
+      provenance: {
+        source: "asr_candidate",
+        approval: "draft",
+        editorial_preparation: "complete",
+      },
+      words: [
+        { id: "w1", order: 1, surface: "can't…", start_ms: 100, end_ms: 1800, pt: "não consigo" },
+      ],
     },
   ]),
 }));
@@ -90,6 +96,35 @@ describe("EditorialPage", () => {
       cut_url: "/api/cut.wav",
       waveform: { sample_rate_hz: 8000, bucket_ms: 40, peaks: [0.3, 0.8] },
     });
+    mocks.editorialCues.mockResolvedValue([
+      {
+        id: "c1",
+        scene_id: "s1",
+        order: 1,
+        speaker: "",
+        original_en: "“I can't… go?”",
+        approved_en: "“I can't… go?”",
+        approved_pt: "“Eu não consigo… ir?”",
+        speech_timing: { start_ms: 100, end_ms: 1800 },
+        subtitle_timing: { start_ms: 100, end_ms: 1800 },
+        revision: 1,
+        provenance: {
+          source: "asr_candidate",
+          approval: "draft",
+          editorial_preparation: "complete",
+        },
+        words: [
+          {
+            id: "w1",
+            order: 1,
+            surface: "can't…",
+            start_ms: 100,
+            end_ms: 1800,
+            pt: "não consigo",
+          },
+        ],
+      },
+    ]);
   });
 
   it("presents a focused workstation and sends literal EN/PT approval", async () => {
@@ -122,25 +157,49 @@ describe("EditorialPage", () => {
     );
   });
 
-  it("saves incomplete text as a draft without approving it", async () => {
+  it("blocks the workstation while mandatory EN/PT preparation is incomplete", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([
+      {
+        ...cue,
+        approved_en: "",
+        approved_pt: "",
+        provenance: { source: "asr_candidate", approval: "draft" },
+      },
+    ]);
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1"]}>
         <EditorialPage />
       </MemoryRouter>,
     );
-    await screen.findByLabelText("Player do corte da cena");
-    fireEvent.change(screen.getByLabelText("Inglês aprovado"), {
-      target: { value: "Mike…" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
-    await waitFor(() =>
-      expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
-        author: "local-editor",
-        approved_en: "Mike…",
+    expect(
+      await screen.findByRole("heading", { name: "A cena ainda possui lacunas" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Player do corte da cena")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("link", { name: /Baixar pacote para IA externa/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers the external fallback when Groq status cannot be loaded", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([
+      {
+        ...cue,
         approved_pt: "",
-        approve: false,
-      }),
+        provenance: { source: "asr_candidate", approval: "draft" },
+      },
+    ]);
+    mocks.editorialAssistantStatus.mockRejectedValueOnce(new Error("offline"));
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
     );
+    expect(
+      await screen.findByText("Não foi possível consultar a Groq. Use o pacote para IA externa."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Baixar pacote para IA externa/ })).toBeInTheDocument();
   });
 
   it("explains a validated source and starts processing from the empty state", async () => {
@@ -218,9 +277,9 @@ describe("EditorialPage", () => {
   it("keeps AI semantic units local until the operator saves the draft", async () => {
     const cue = (await mocks.editorialCues())[0];
     const words = [
-      { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350 },
-      { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480 },
-      { id: "w3", order: 3, surface: "help?", start_ms: 490, end_ms: 800 },
+      { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350, pt: "Posso" },
+      { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480, pt: "eu" },
+      { id: "w3", order: 3, surface: "help?", start_ms: 490, end_ms: 800, pt: "ajudar?" },
     ];
     mocks.editorialCues.mockResolvedValue([{ ...cue, original_en: "Can I help?", words }]);
     mocks.editorialAssistantStatus.mockResolvedValueOnce({
@@ -244,6 +303,11 @@ describe("EditorialPage", () => {
             approved_en: "Can I help?",
             approved_pt: "Posso ajudar?",
             notes: "Pergunta natural.",
+            word_translations: [
+              { word_id: "w1", pt: "Posso" },
+              { word_id: "w2", pt: "eu" },
+              { word_id: "w3", pt: "ajudar?" },
+            ],
             semantic_units: [{ word_ids: ["w1", "w2", "w3"], pt: "Posso ajudar?" }],
           },
         ],

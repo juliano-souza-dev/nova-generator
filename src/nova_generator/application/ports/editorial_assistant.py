@@ -31,12 +31,19 @@ class EditorialSemanticUnit:
 
 
 @dataclass(frozen=True)
+class EditorialWordTranslation:
+    word_id: str
+    pt: str
+
+
+@dataclass(frozen=True)
 class EditorialSuggestion:
     cue_id: str
     order: int
     approved_en: str
     approved_pt: str
     notes: str = ""
+    word_translations: tuple[EditorialWordTranslation, ...] = field(default_factory=tuple)
     semantic_units: tuple[EditorialSemanticUnit, ...] = field(default_factory=tuple)
 
 
@@ -48,6 +55,7 @@ class EditorialAssistanceResult:
     model: str
     suggestions: tuple[EditorialSuggestion, ...]
     rate_limits: dict[str, str]
+    contract_version: str | None = None
 
 
 class EditorialAssistant(Protocol):

@@ -11,7 +11,7 @@ const cue = {
   speech_timing: { start_ms: 100, end_ms: 1800 },
   subtitle_timing: { start_ms: 100, end_ms: 1800 },
   revision: 1,
-  provenance: { approval: "draft" },
+  provenance: { approval: "draft", editorial_preparation: "complete" },
   words: [
     { id: "w1", order: 1, surface: "How", start_ms: 100, end_ms: 500 },
     { id: "w2", order: 2, surface: "are", start_ms: 510, end_ms: 750 },
@@ -82,6 +82,11 @@ async function mockEditorialWorkstation(page: Page) {
               approved_en: "How are you?",
               approved_pt: "Como você está?",
               notes: "Tradução natural.",
+              word_translations: [
+                { word_id: "w1", pt: "Como" },
+                { word_id: "w2", pt: "está" },
+                { word_id: "w3", pt: "você?" },
+              ],
               semantic_units: [{ word_ids: ["w1", "w2", "w3"], pt: "Como você está?" }],
             },
           ],

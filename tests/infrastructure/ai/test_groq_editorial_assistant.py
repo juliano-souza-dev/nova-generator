@@ -48,6 +48,10 @@ def test_groq_adapter_validates_json_and_exposes_dynamic_rate_headers() -> None:
                 "approved_en": "“Are you ready…?”",
                 "approved_pt": "“Você está pronto…?”",
                 "notes": "Pontuação preservada.",
+                "word_translations": [
+                    {"word_id": "word-1", "pt": "Está"},
+                    {"word_id": "word-2", "pt": "você"},
+                ],
                 "semantic_units": [{"word_ids": ["word-1", "word-2"], "pt": "Você está pronto?"}],
             }
         ],
@@ -74,6 +78,7 @@ def test_groq_adapter_validates_json_and_exposes_dynamic_rate_headers() -> None:
         ),
     )
     assert result.suggestions[0].approved_pt == "“Você está pronto…?”"
+    assert result.suggestions[0].word_translations[0].pt == "Está"
     assert result.suggestions[0].semantic_units[0].word_ids == ("word-1", "word-2")
     assert result.suggestions[0].semantic_units[0].pt == "Você está pronto?"
     assert result.rate_limits == {"x-ratelimit-remaining-requests": "29"}

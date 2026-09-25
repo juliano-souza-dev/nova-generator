@@ -859,3 +859,29 @@
     grid-row: auto;
   }
 }
+.editorial-preparation-gate {
+  width: min(760px, 100%);
+  margin: 4rem auto;
+  padding: 2rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.editorial-preparation-gate > svg {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--accent);
+}
+
+.editorial-preparation-gate h2 {
+  margin: 0.3rem 0 0.7rem;
+}
+
+.editorial-preparation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
