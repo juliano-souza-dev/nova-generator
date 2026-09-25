@@ -52,7 +52,8 @@ function cueNeedsEditorialTreatment(cue: TimelineCue): boolean {
   return (
     !cue.approved_en.trim() ||
     !cue.approved_pt.trim() ||
-    cue.provenance?.editorial_preparation !== "complete"
+    cue.provenance?.editorial_preparation !== "complete" ||
+    cue.words.some((word) => word.semantic_group_role !== "member" && !word.pt?.trim())
   );
 }
 

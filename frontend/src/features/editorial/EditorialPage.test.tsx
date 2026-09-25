@@ -157,14 +157,12 @@ describe("EditorialPage", () => {
     );
   });
 
-  it("blocks the workstation while mandatory EN/PT preparation is incomplete", async () => {
+  it("blocks the workstation while a mandatory word translation is missing", async () => {
     const cue = (await mocks.editorialCues())[0];
     mocks.editorialCues.mockResolvedValueOnce([
       {
         ...cue,
-        approved_en: "",
-        approved_pt: "",
-        provenance: { source: "asr_candidate", approval: "draft" },
+        words: cue.words.map((word) => ({ ...word, pt: undefined })),
       },
     ]);
     render(
@@ -245,9 +243,16 @@ describe("EditorialPage", () => {
         ...cue,
         original_en: "Can I help?",
         words: [
-          { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350 },
-          { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480 },
-          { id: "w3", order: 3, surface: "help?", start_ms: 490, end_ms: 800 },
+          { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350, pt: "Posso" },
+          { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480, pt: "eu" },
+          {
+            id: "w3",
+            order: 3,
+            surface: "help?",
+            start_ms: 490,
+            end_ms: 800,
+            pt: "ajudar?",
+          },
         ],
       },
     ]);
@@ -348,7 +353,9 @@ describe("EditorialPage", () => {
       original_en: "Next.",
       speech_timing: { start_ms: 1810, end_ms: 1950 },
       subtitle_timing: { start_ms: 1810, end_ms: 1950 },
-      words: [{ id: "w2", order: 1, surface: "Next.", start_ms: 1810, end_ms: 1950 }],
+      words: [
+        { id: "w2", order: 1, surface: "Next.", start_ms: 1810, end_ms: 1950, pt: "Próximo." },
+      ],
     };
     mocks.editorialCues.mockResolvedValue([first, second]);
     render(

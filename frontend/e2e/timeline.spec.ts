@@ -13,9 +13,9 @@ const cue = {
   revision: 1,
   provenance: { approval: "draft", editorial_preparation: "complete" },
   words: [
-    { id: "w1", order: 1, surface: "How", start_ms: 100, end_ms: 500 },
-    { id: "w2", order: 2, surface: "are", start_ms: 510, end_ms: 750 },
-    { id: "w3", order: 3, surface: "you?", start_ms: 760, end_ms: 1100 },
+    { id: "w1", order: 1, surface: "How", start_ms: 100, end_ms: 500, pt: "Como" },
+    { id: "w2", order: 2, surface: "are", start_ms: 510, end_ms: 750, pt: "está" },
+    { id: "w3", order: 3, surface: "you?", start_ms: 760, end_ms: 1100, pt: "você?" },
   ],
 };
 
