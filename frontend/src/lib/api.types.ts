@@ -129,6 +129,7 @@ export type EditorialSuggestion = {
   approved_en: string;
   approved_pt: string;
   notes: string;
+  word_translations: Array<{ word_id: string; pt: string }>;
   semantic_units: EditorialSemanticUnit[];
 };
 export type EditorialSemanticUnit = { word_ids: string[]; pt: string };

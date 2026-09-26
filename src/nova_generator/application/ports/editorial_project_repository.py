@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from nova_generator.domain.projects.entities import (
@@ -19,6 +19,13 @@ class EditorialProjectRepository(Protocol):
     def replace_scene_cues(
         self, scene_id: UUID, entries: list[tuple[Cue, list[WordTiming]]]
     ) -> None: ...
+    def replace_scene_cues_with_revision(
+        self,
+        scene_id: UUID,
+        expected_snapshot: dict[str, Any],
+        entries: list[tuple[Cue, list[WordTiming]]],
+        revision: EditorialRevision,
+    ) -> bool: ...
     def save_revision(self, revision: EditorialRevision) -> None: ...
     def get_project(self, project_id: UUID) -> Project | None: ...
     def list_projects(self) -> list[Project]: ...

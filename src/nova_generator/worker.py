@@ -95,6 +95,7 @@ def main() -> None:
         ),
         settings.project_root,
     )
+    editorial_repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
     worker = PersistentWorker(
         SqlAlchemyJobRepository(get_session_factory()),
         worker_id=f"local-{os.getpid()}",
@@ -109,12 +110,13 @@ def main() -> None:
             "ingest_scene_media": project_media.ingest,
             "editorial_assistance": EditorialAssistanceJobHandler(
                 RunEditorialAssistance(
-                    SqlAlchemyEditorialProjectRepository(get_session_factory()),
+                    editorial_repository,
                     GroqEditorialAssistant(
                         api_key=settings.groq_api_key,
                         model=settings.groq_editorial_model,
                     ),
-                )
+                ),
+                editorial_repository,
             ),
         },
     )

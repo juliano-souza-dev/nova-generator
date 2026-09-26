@@ -21,6 +21,7 @@ from nova_generator.api.dependencies import (
     get_merge_cues,
     get_realign_cue,
     get_replace_semantic_word_units,
+    get_retry_job,
     get_review_asr_candidate,
     get_session_factory,
     get_split_cue,
@@ -30,6 +31,8 @@ from nova_generator.api.dependencies import (
 from nova_generator.application.use_cases.editorial_assistance import (
     EditorialAssistanceError,
     build_editorial_prompt,
+    persist_editorial_preparation,
+    scene_is_editorially_prepared,
 )
 from nova_generator.application.use_cases.editorial_commands import (
     AdjustCueTiming,
@@ -48,7 +51,7 @@ from nova_generator.application.use_cases.editorial_commands import (
 from nova_generator.application.use_cases.external_editorial_exchange import (
     ExternalEditorialExchange,
 )
-from nova_generator.application.use_cases.manage_jobs import EnqueueJob
+from nova_generator.application.use_cases.manage_jobs import EnqueueJob, RetryJob
 from nova_generator.application.use_cases.review_asr_candidate import (
     CandidateReviewError,
     ReviewAsrCandidate,
@@ -213,12 +216,18 @@ class EditorialAssistanceJobResponse(BaseModel):
     status: str
 
 
+class EditorialWordTranslationResponse(BaseModel):
+    word_id: str
+    pt: str
+
+
 class EditorialSuggestionResponse(BaseModel):
     cue_id: str
     order: int
     approved_en: str
     approved_pt: str
     notes: str
+    word_translations: list[EditorialWordTranslationResponse] = Field(default_factory=list)
     semantic_units: list[SemanticUnitInput] = Field(default_factory=list)
 
 
@@ -248,6 +257,7 @@ def start_editorial_assistance(
     scene_id: UUID,
     repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
     enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
+    retry: Annotated[RetryJob, Depends(get_retry_job)],
 ) -> EditorialAssistanceJobResponse:
     try:
         input_sha256, _ = build_editorial_prompt(repository, scene_id)
@@ -259,10 +269,16 @@ def start_editorial_assistance(
     assert project_id is not None
     job = enqueue.execute(
         kind="editorial_assistance",
-        input={"scene_id": str(scene_id), "project_id": str(project_id)},
-        idempotency_key=f"editorial-assistance:{scene_id}:{input_sha256}",
+        input={
+            "scene_id": str(scene_id),
+            "project_id": str(project_id),
+            "input_sha256": input_sha256,
+        },
+        idempotency_key=f"editorial-assistance:v2:{scene_id}:{input_sha256}",
         max_attempts=1,
     )
+    if job.status in {"failed", "cancelled"}:
+        job = retry.execute(str(job.id)) or job
     return EditorialAssistanceJobResponse(job_id=str(job.id), status=job.status)
 
 
@@ -284,10 +300,20 @@ def download_external_editorial_package(
 async def import_external_editorial_result(
     scene_id: UUID,
     exchange: Annotated[ExternalEditorialExchange, Depends(get_external_editorial_exchange)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
     file: Annotated[UploadFile, File()],
 ) -> EditorialAssistanceResponse:
     try:
         result = exchange.import_result(scene_id, await file.read())
+        if result.contract_version != "nova-generator-editorial-suggestions/1.2":
+            raise EditorialAssistanceError(
+                "external result 1.2 is required to prepare every word translation"
+            )
+        persist_editorial_preparation(
+            repository=repository,
+            result=result,
+            author="external-editorial-assistant",
+        )
     except EditorialAssistanceError as error:
         raise HTTPException(422, detail=str(error)) from error
     return EditorialAssistanceResponse(
@@ -420,7 +446,9 @@ def edit_text(
     cue_id: UUID,
     payload: TextRequest,
     use_case: Annotated[EditApprovedText, Depends(get_edit_approved_text)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> dict[str, Any]:
+    _require_prepared_cue(repository, cue_id)
     cue = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
     return _cue_response(cue)
 
@@ -430,7 +458,9 @@ def edit_cue_timing(
     cue_id: UUID,
     payload: CueTimingRequest,
     use_case: Annotated[AdjustCueTiming, Depends(get_adjust_cue_timing)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> dict[str, Any]:
+    _require_prepared_cue(repository, cue_id)
     data = payload.model_dump()
     cue = _command(
         lambda: use_case.execute(
@@ -450,7 +480,9 @@ def edit_word_timing(
     cue_id: UUID,
     payload: WordTimingRequest,
     use_case: Annotated[AdjustWordTiming, Depends(get_adjust_word_timing)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> list[dict[str, Any]]:
+    _require_prepared_cue(repository, cue_id)
     words = _command(
         lambda: use_case.execute(
             cue_id,
@@ -466,7 +498,9 @@ def realign_cue(
     cue_id: UUID,
     payload: RealignCueRequest,
     use_case: Annotated[RealignCue, Depends(get_realign_cue)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> dict[str, Any]:
+    _require_prepared_cue(repository, cue_id)
     cue = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
     return _cue_response(cue)
 
@@ -476,7 +510,9 @@ def edit_word_translation(
     cue_id: UUID,
     payload: WordTranslationRequest,
     use_case: Annotated[EditWordTranslation, Depends(get_edit_word_translation)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> list[dict[str, Any]]:
+    _require_prepared_cue(repository, cue_id)
     words = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
     return [_word_response(word) for word in words]
 
@@ -486,7 +522,9 @@ def group_word_translation(
     cue_id: UUID,
     payload: GroupWordRequest,
     use_case: Annotated[GroupWordTranslation, Depends(get_group_word_translation)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> list[dict[str, Any]]:
+    _require_prepared_cue(repository, cue_id)
     words = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
     return [_word_response(word) for word in words]
 
@@ -496,7 +534,9 @@ def ungroup_word_translation(
     cue_id: UUID,
     payload: UngroupWordRequest,
     use_case: Annotated[UngroupWordTranslation, Depends(get_ungroup_word_translation)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> list[dict[str, Any]]:
+    _require_prepared_cue(repository, cue_id)
     words = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
     return [_word_response(word) for word in words]
 
@@ -506,7 +546,9 @@ def replace_semantic_word_units(
     cue_id: UUID,
     payload: ReplaceSemanticUnitsRequest,
     use_case: Annotated[ReplaceSemanticWordUnits, Depends(get_replace_semantic_word_units)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> list[dict[str, Any]]:
+    _require_prepared_cue(repository, cue_id)
     words = _command(
         lambda: use_case.execute(
             cue_id,
@@ -523,7 +565,9 @@ def split_cue(
     cue_id: UUID,
     payload: SplitCueRequest,
     use_case: Annotated[SplitCue, Depends(get_split_cue)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> list[dict[str, Any]]:
+    _require_prepared_cue(repository, cue_id)
     cues = _command(
         lambda: use_case.execute(
             cue_id,
@@ -540,7 +584,10 @@ def split_cue(
 def merge_cues(
     payload: MergeCueRequest,
     use_case: Annotated[MergeCues, Depends(get_merge_cues)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> dict[str, Any]:
+    _require_prepared_cue(repository, payload.first_cue_id)
+    _require_prepared_cue(repository, payload.second_cue_id)
     cue = _command(
         lambda: use_case.execute(
             payload.first_cue_id,
@@ -557,7 +604,9 @@ def undo(
     scene_id: UUID,
     payload: UndoRequest,
     use_case: Annotated[UndoEditorialRevision, Depends(get_undo_editorial_revision)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> list[dict[str, Any]]:
+    _require_prepared_scene(repository, scene_id)
     cues = _command(
         lambda: use_case.execute(scene_id, revision_id=payload.revision_id, author=payload.author)
     )
@@ -600,6 +649,27 @@ def _word_response(word: WordTiming) -> dict[str, Any]:
         "semantic_group_id": word.provenance.get("semantic_group_id"),
         "semantic_group_role": word.provenance.get("semantic_group_role"),
     }
+
+
+def _require_prepared_cue(
+    repository: SqlAlchemyEditorialProjectRepository, cue_id: UUID
+) -> None:
+    cue = repository.get_cue(cue_id)
+    if cue is None:
+        raise HTTPException(404, detail="cue not found")
+    _require_prepared_scene(repository, cue.scene_id)
+
+
+def _require_prepared_scene(
+    repository: SqlAlchemyEditorialProjectRepository, scene_id: UUID
+) -> None:
+    if not scene_is_editorially_prepared(repository, scene_id):
+        raise HTTPException(
+            409,
+            detail=(
+                "editorial preparation is incomplete; finish Groq or external AI processing first"
+            ),
+        )
 
 
 def _command(action: Callable[[], Any]) -> Any:

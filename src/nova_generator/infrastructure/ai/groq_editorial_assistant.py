@@ -11,6 +11,7 @@ from nova_generator.application.ports.editorial_assistant import (
     EditorialCuePrompt,
     EditorialSemanticUnit,
     EditorialSuggestion,
+    EditorialWordTranslation,
 )
 
 
@@ -26,12 +27,18 @@ class _SemanticUnitPayload(BaseModel):
     pt: str = Field(min_length=1)
 
 
+class _WordTranslationPayload(BaseModel):
+    word_id: str
+    pt: str = Field(min_length=1)
+
+
 class _SuggestionPayload(BaseModel):
     cue_id: str
     order: int
     approved_en: str = Field(min_length=1)
     approved_pt: str = Field(min_length=1)
     notes: str = ""
+    word_translations: list[_WordTranslationPayload]
     semantic_units: list[_SemanticUnitPayload] = Field(default_factory=list)
 
 
@@ -116,6 +123,10 @@ class GroqEditorialAssistant:
                     approved_en=item.approved_en,
                     approved_pt=item.approved_pt,
                     notes=item.notes,
+                    word_translations=tuple(
+                        EditorialWordTranslation(word.word_id, word.pt)
+                        for word in item.word_translations
+                    ),
                     semantic_units=tuple(
                         EditorialSemanticUnit(tuple(unit.word_ids), unit.pt)
                         for unit in item.semantic_units
@@ -172,7 +183,10 @@ def _rate_limit_headers(headers: dict[str, str]) -> dict[str, str]:
 _SYSTEM_PROMPT = """You are an English-to-Brazilian-Portuguese subtitle editor.
 Return one JSON object only, with scene_id, input_sha256 and suggestions.
 For every input cue, return exactly one suggestion in the same order with cue_id, order,
-approved_en, approved_pt, notes and semantic_units. Understand the whole cue before translating.
+approved_en, approved_pt, notes, word_translations and semantic_units. word_translations must
+contain every input word exactly once, in the original order, with word_id and its natural
+contextual pt.
+Understand the whole cue before translating.
 Each semantic unit must contain contiguous word_ids in input order and one complete, natural
 Brazilian Portuguese translation in pt. Group phrasal verbs, idioms, collocations, auxiliary and
 negation structures, and any sequence whose word-by-word translation would sound mechanical.

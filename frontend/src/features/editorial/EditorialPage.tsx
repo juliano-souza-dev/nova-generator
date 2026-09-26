@@ -12,7 +12,7 @@ import {
   Undo2,
   Upload,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type {
   EditorialAssistance,
@@ -48,6 +48,35 @@ function semanticUnitsFromCue(cue: TimelineCue | undefined): EditorialSemanticUn
   return [...groups.values()];
 }
 
+function cueNeedsEditorialTreatment(cue: TimelineCue): boolean {
+  return (
+    !cue.approved_en.trim() ||
+    !cue.approved_pt.trim() ||
+    cue.provenance?.editorial_preparation !== "complete" ||
+    cue.words.some((word) => word.semantic_group_role !== "member" && !word.pt?.trim())
+  );
+}
+
+function assistanceCoversPendingCues(
+  assistance: EditorialAssistance | undefined,
+  cues: TimelineCue[],
+): boolean {
+  const pending = cues.filter(cueNeedsEditorialTreatment);
+  if (pending.length === 0) return true;
+  if (!assistance) return false;
+  return pending.every((cue) => {
+    const suggestion = assistance.suggestions.find((item) => item.cue_id === cue.id);
+    if (!suggestion?.approved_en.trim() || !suggestion.approved_pt.trim()) return false;
+    return (
+      suggestion.word_translations.length === cue.words.length &&
+      suggestion.word_translations.every(
+        (translation, index) =>
+          translation.word_id === cue.words[index]?.id && Boolean(translation.pt.trim()),
+      )
+    );
+  });
+}
+
 export function EditorialPage() {
   const [params] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -78,6 +107,9 @@ export function EditorialPage() {
   const [assistantBusy, setAssistantBusy] = useState(false);
   const [assistantMessage, setAssistantMessage] = useState("");
   const [hubPreviewStartMs, setHubPreviewStartMs] = useState<number | null>(null);
+  const [assistantFallbackRequired, setAssistantFallbackRequired] = useState(false);
+  const [assistantStatusFailed, setAssistantStatusFailed] = useState(false);
+  const assistantAutoStartedForScene = useRef<string | undefined>(undefined);
   const [semanticDraftUnits, setSemanticDraftUnits] = useState<EditorialSemanticUnit[] | null>(
     null,
   );
@@ -113,6 +145,9 @@ export function EditorialPage() {
     selectedWord?.pt ??
     "";
   const selectedSuggestion = assistance?.suggestions.find((item) => item.cue_id === selectedCueId);
+  const pendingTreatmentCount = cues.filter(cueNeedsEditorialTreatment).length;
+  const assistanceComplete = assistanceCoversPendingCues(assistance, cues);
+  const editorialGateReady = pendingTreatmentCount === 0 || assistanceComplete;
   const storedSemanticUnits = semanticUnitsFromCue(selectedCue);
   const visibleSemanticUnits = semanticDraftUnits ?? storedSemanticUnits;
   const semanticUnitsDirty = Boolean(
@@ -161,8 +196,13 @@ export function EditorialPage() {
   useEffect(() => {
     void studioApi
       .editorialAssistantStatus()
-      .then(setAssistantStatus)
-      .catch(() => setAssistantMessage("Não foi possível consultar a configuração da Groq."));
+      .then((status) => {
+        setAssistantStatus(status);
+        setAssistantStatusFailed(false);
+      })
+      .catch(() => {
+        setAssistantStatusFailed(true);
+      });
   }, []);
   useEffect(() => {
     setScenes([]);
@@ -206,6 +246,8 @@ export function EditorialPage() {
     setHistory([]);
     setAssistance(undefined);
     setAssistantMessage("");
+    setAssistantFallbackRequired(false);
+    assistantAutoStartedForScene.current = undefined;
     if (!sceneId) return;
     let cancelled = false;
     void studioApi
@@ -228,6 +270,11 @@ export function EditorialPage() {
     setApprovedPt(selectedCue?.approved_pt ?? "");
   }, [selectedCue?.id, selectedCue?.approved_en, selectedCue?.approved_pt]);
   useEffect(() => {
+    if (!selectedCue || !selectedSuggestion || !assistanceComplete) return;
+    setApprovedEn(selectedCue.approved_en || selectedSuggestion.approved_en);
+    setApprovedPt(selectedCue.approved_pt || selectedSuggestion.approved_pt);
+  }, [assistanceComplete, selectedCue, selectedSuggestion]);
+  useEffect(() => {
     setSemanticDraftUnits(null);
   }, [selectedCue?.id, selectedCue?.revision]);
   useEffect(() => {
@@ -236,14 +283,14 @@ export function EditorialPage() {
     setWordPt(storedWordPt);
   }, [selectedWord, selectedGroupStart, selectedGroupEnd, storedWordPt]);
 
-  async function refreshCues(): Promise<TimelineCue[]> {
+  const refreshCues = useCallback(async (): Promise<TimelineCue[]> => {
     if (!sceneId) return [];
     const refreshed = await studioApi.editorialCues(sceneId);
     setCues(refreshed);
     setHistory([]);
     return refreshed;
-  }
-  async function startEditorialAssistance() {
+  }, [sceneId]);
+  const startEditorialAssistance = useCallback(async () => {
     if (!sceneId || assistantBusy) return;
     setAssistantBusy(true);
     setAssistantMessage("Groq: preparando as sugestões da cena…");
@@ -255,9 +302,13 @@ export function EditorialPage() {
           const output = job.output as EditorialAssistance | null;
           if (!output || !Array.isArray(output.suggestions))
             throw new Error("A Groq terminou sem devolver sugestões válidas.");
+          if (!assistanceCoversPendingCues(output, cues))
+            throw new Error("A Groq não preencheu todos os textos em inglês e português da cena.");
           setAssistance(output);
+          await refreshCues();
+          setAssistantFallbackRequired(false);
           setAssistantMessage(
-            `${output.suggestions.length} sugestões recebidas. Revise e aplique uma por vez como rascunho.`,
+            `${output.suggestions.length} cues tratados. A revisão editorial está liberada.`,
           );
           return;
         }
@@ -267,22 +318,29 @@ export function EditorialPage() {
       }
       throw new Error("A Groq ainda não concluiu. Consulte Jobs ou use a IA externa.");
     } catch (error) {
+      setAssistantFallbackRequired(true);
       setAssistantMessage(
-        `${error instanceof Error ? error.message : "Falha na Groq."} O pacote externo está disponível.`,
+        `${error instanceof Error ? error.message : "Falha na Groq."} Exporte o pacote e importe o retorno da IA externa.`,
       );
     } finally {
       setAssistantBusy(false);
     }
-  }
+  }, [assistantBusy, cues, refreshCues, sceneId]);
   async function importExternalResult(file: File) {
     if (!sceneId || assistantBusy) return;
     setAssistantBusy(true);
     setAssistantMessage("Validando o retorno da IA externa…");
     try {
       const result = await studioApi.importExternalEditorialResult(sceneId, file);
+      if (!assistanceCoversPendingCues(result, cues))
+        throw new Error(
+          "O retorno externo está incompleto. Todos os cues precisam de inglês, português e tradução contextual de cada palavra.",
+        );
       setAssistance(result);
+      await refreshCues();
+      setAssistantFallbackRequired(false);
       setAssistantMessage(
-        `${result.suggestions.length} sugestões externas validadas. Nada foi aprovado automaticamente.`,
+        `${result.suggestions.length} cues tratados pela IA externa. A revisão está liberada.`,
       );
     } catch (error) {
       setAssistantMessage(
@@ -292,6 +350,19 @@ export function EditorialPage() {
       setAssistantBusy(false);
     }
   }
+  useEffect(() => {
+    if (!sceneId || cues.length === 0 || pendingTreatmentCount === 0 || !assistantStatus) return;
+    if (!assistantStatus.groq_configured) {
+      setAssistantFallbackRequired(true);
+      setAssistantMessage(
+        "Groq não está configurada. Exporte o pacote e importe o retorno completo da IA externa.",
+      );
+      return;
+    }
+    if (assistantAutoStartedForScene.current === sceneId) return;
+    assistantAutoStartedForScene.current = sceneId;
+    void startEditorialAssistance();
+  }, [assistantStatus, cues, pendingTreatmentCount, sceneId, startEditorialAssistance]);
   function seek(timeMs: number) {
     const bounded = Math.max(0, Math.min(timeMs, durationMs));
     setPlayheadMs(bounded);
@@ -851,7 +922,60 @@ export function EditorialPage() {
           )}
         </div>
       )}
-      {selectedCue && (
+      {selectedCue && !editorialGateReady && (
+        <section className="editorial-preparation-gate panel" aria-live="polite">
+          <Bot aria-hidden="true" />
+          <div>
+            <span className="eyebrow">Preparação editorial obrigatória</span>
+            <h2>{assistantBusy ? "Tratando a cena com a Groq" : "A cena ainda possui lacunas"}</h2>
+            <p>
+              A revisão será liberada somente quando todos os cues tiverem inglês, português e
+              traduções contextuais para o word-by-word.
+            </p>
+            {assistantMessage && <p className="assistant-message">{assistantMessage}</p>}
+            {assistantStatusFailed && (
+              <p className="assistant-message">
+                Não foi possível consultar a Groq. Use o pacote para IA externa.
+              </p>
+            )}
+            {(assistantFallbackRequired || assistantStatusFailed) && (
+              <div className="editorial-preparation-actions">
+                <a
+                  className="primary-button"
+                  href={studioApi.externalEditorialPackageUrl(sceneId)}
+                  download
+                >
+                  <Download aria-hidden="true" /> Baixar pacote para IA externa
+                </a>
+                <label className="secondary-button assistant-upload">
+                  <Upload aria-hidden="true" /> Importar retorno completo
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    disabled={assistantBusy}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void importExternalResult(file);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+                {assistantStatus?.groq_configured && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={assistantBusy}
+                    onClick={() => void startEditorialAssistance()}
+                  >
+                    Tentar Groq novamente
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+      {selectedCue && editorialGateReady && (
         <>
           <div className="review-overview">
             <nav className="review-cue-list panel" aria-label="Lista de cues">
@@ -1002,7 +1126,7 @@ export function EditorialPage() {
               >
                 <div className="editorial-assistance-heading">
                   <div>
-                    <span className="eyebrow">Assistência opcional</span>
+                    <span className="eyebrow">Preparação editorial</span>
                     <h3 id="editorial-assistance-title">Groq ou IA externa</h3>
                   </div>
                   <span className="assistant-provider-state">

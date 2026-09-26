@@ -26,8 +26,9 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Tratar phrasal verbs, expressões, auxiliares e outras sequências contíguas como unidades
   semânticas no word by word: uma tradução natural pertence à unidade e não é formada pela
   concatenação mecânica das palavras. Preservar timing e tradução individual para desfazer.
-- Exibir sugestões de Groq ou de IA externa como rascunhos comparáveis; aplicar uma sugestão apenas
-  preenche o editor e ainda exige salvamento ou aprovação explícita pelo operador.
+- Exigir preparação completa de todos os cues antes de abrir a bancada: EN, PT e traduções
+  contextuais do word-by-word são persistidos como rascunho pela Groq ou pelo retorno externo.
+  Salvamento e aprovação continuam explícitos pelo operador.
 - Permitir que ambas as IAs proponham unidades semânticas contíguas por IDs de palavras. Mostrar a
   expressão e a tradução natural, permitir ouvi-la e aplicá-la primeiro como rascunho local; salvar
   não altera timing e aprovação permanece uma ação separada.
@@ -58,6 +59,8 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   conjunto válido é atômico e deixa o cue em rascunho.
 - A prévia do iHub preserva pontuação e Unicode, usa a primeira e a última word como janela visual,
   não mantém uma word destacada durante gaps reais e interrompe a mídia ao fechar.
+- A bancada e a prévia nunca abrem com EN, PT ou word-by-word incompletos; falha da Groq mostra o
+  pacote externo e só um retorno completo, atual e validado libera a revisão.
 
 ## Recorte da fonte
 

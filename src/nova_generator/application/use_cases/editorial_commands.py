@@ -29,12 +29,8 @@ class EditApprovedText:
         cue, words = _cue_with_words(self._repository, cue_id)
         _literal(approved_en, "approved_en")
         _literal(approved_pt, "approved_pt")
-        if (
-            approve
-            and cue.provenance.get("source") == "asr_candidate"
-            and (not approved_en or not approved_pt)
-        ):
-            raise EditorialCommandError("ASR approval requires non-empty EN and PT text")
+        if not approved_en.strip() or not approved_pt.strip():
+            raise EditorialCommandError("editorial text requires non-empty EN and PT text")
         before = _scene_snapshot(self._repository, cue.scene_id)
         updated = replace(
             cue,
@@ -445,7 +441,7 @@ class MergeCues:
             text["approved_en"],
             text["approved_pt"],
             max(first.revision, second.revision) + 1,
-            {"merged_from": [str(first.id), str(second.id)]},
+            {**first.provenance, "merged_from": [str(first.id), str(second.id)]},
         )
         all_cues = self._repository.get_scene_cues(first.scene_id)
         replacement: list[tuple[Cue, list[WordTiming]]] = []

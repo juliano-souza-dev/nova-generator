@@ -1,4 +1,6 @@
 import json
+from dataclasses import replace
+from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
@@ -12,9 +14,10 @@ from nova_generator.application.use_cases.import_legacy_editorial_project import
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
 )
+from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
 
 
-def _seed(client: TestClient):
+def _seed(client: TestClient, *, prepared: bool = True):
     fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
     repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
     ImportLegacyEditorialProject(repository).execute(
@@ -24,7 +27,58 @@ def _seed(client: TestClient):
     )
     scene_id = uuid5(NAMESPACE_URL, "nova-generator/scene/api-editorial/1")
     cue = repository.get_scene_cues(scene_id)[0]
+    if prepared:
+        words = [
+            replace(word, provenance={**word.provenance, "pt": f"palavra {word.order}"})
+            for word in repository.get_cue_words(cue.id)
+        ]
+        cue = replace(
+            cue,
+            provenance={
+                **cue.provenance,
+                "editorial_preparation": "complete",
+                "editorial_preparation_sha256": "test",
+            },
+        )
+        repository.save_cue(cue, words)
     return repository, scene_id, cue
+
+
+def test_editorial_commands_are_blocked_before_required_preparation(client: TestClient) -> None:
+    _, _, cue = _seed(client, prepared=False)
+    response = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "Ready.",
+            "approved_pt": "Pronto.",
+        },
+    )
+    assert response.status_code == 409
+    assert "preparation is incomplete" in response.json()["detail"]
+
+
+def test_failed_editorial_assistance_job_can_be_retried_with_the_same_scene(
+    client: TestClient,
+) -> None:
+    _, scene_id, _ = _seed(client, prepared=False)
+    first = client.post(f"/api/editorial/scenes/{scene_id}/assistance")
+    assert first.status_code == 202
+    repository = SqlAlchemyJobRepository(get_session_factory())
+    claimed = repository.claim_next(worker_id="test-worker", now=datetime.now(UTC))
+    assert claimed is not None
+    assert str(claimed.id) == first.json()["job_id"]
+    assert repository.fail(
+        job_id=str(claimed.id),
+        worker_id="test-worker",
+        error_message="Groq rate limit",
+        now=datetime.now(UTC),
+    )
+
+    retried = client.post(f"/api/editorial/scenes/{scene_id}/assistance")
+
+    assert retried.status_code == 202
+    assert retried.json() == {"job_id": str(claimed.id), "status": "queued"}
 
 
 def test_text_and_word_timing_commands_preserve_literals_and_reject_overlap(

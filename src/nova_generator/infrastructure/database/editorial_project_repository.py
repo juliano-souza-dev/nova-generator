@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import asdict
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
 from nova_generator.domain.projects.entities import (
@@ -93,25 +94,40 @@ class SqlAlchemyEditorialProjectRepository:
                 session.add_all(_word_record(word) for word in words)
             session.commit()
 
+    def replace_scene_cues_with_revision(
+        self,
+        scene_id: UUID,
+        expected_snapshot: dict[str, Any],
+        entries: list[tuple[Cue, list[WordTiming]]],
+        revision: EditorialRevision,
+    ) -> bool:
+        """Compare, replace and record one preparation in the same transaction."""
+        with self._session_factory() as session:
+            # SQLite defers a transaction until the first write by default. Acquiring
+            # the reserved lock here keeps another writer from changing the scene
+            # between the snapshot comparison and replacement.
+            session.execute(text("BEGIN IMMEDIATE"))
+            if _scene_snapshot(session, scene_id) != expected_snapshot:
+                session.rollback()
+                return False
+            cue_ids = list(
+                session.scalars(select(CueRecord.id).where(CueRecord.scene_id == scene_id))
+            )
+            if cue_ids:
+                session.execute(
+                    delete(WordTimingRecord).where(WordTimingRecord.cue_id.in_(cue_ids))
+                )
+            session.execute(delete(CueRecord).where(CueRecord.scene_id == scene_id))
+            for cue, words in entries:
+                session.add(_cue_record(cue))
+                session.add_all(_word_record(word) for word in words)
+            session.add(_revision_record(revision))
+            session.commit()
+            return True
+
     def save_revision(self, revision: EditorialRevision) -> None:
         with self._session_factory() as session:
-            session.merge(
-                EditorialRevisionRecord(
-                    id=revision.id,
-                    project_id=revision.project_id,
-                    scene_id=revision.scene_id,
-                    cue_id=revision.cue_id,
-                    sequence=revision.sequence,
-                    command=revision.command,
-                    author=revision.author,
-                    origin=revision.origin,
-                    before_snapshot_json=_dump(revision.before_snapshot),
-                    after_snapshot_json=_dump(revision.after_snapshot),
-                    before_sha256=revision.before_sha256,
-                    after_sha256=revision.after_sha256,
-                    created_at=revision.created_at,
-                )
-            )
+            session.merge(_revision_record(revision))
             session.commit()
 
     def get_project(self, project_id: UUID) -> Project | None:
@@ -222,6 +238,45 @@ def _word_record(value: WordTiming) -> WordTimingRecord:
         original_end_ms=value.original_end_ms,
         provenance_json=_dump(value.provenance),
     )
+
+
+def _revision_record(value: EditorialRevision) -> EditorialRevisionRecord:
+    return EditorialRevisionRecord(
+        id=value.id,
+        project_id=value.project_id,
+        scene_id=value.scene_id,
+        cue_id=value.cue_id,
+        sequence=value.sequence,
+        command=value.command,
+        author=value.author,
+        origin=value.origin,
+        before_snapshot_json=_dump(value.before_snapshot),
+        after_snapshot_json=_dump(value.after_snapshot),
+        before_sha256=value.before_sha256,
+        after_sha256=value.after_sha256,
+        created_at=value.created_at,
+    )
+
+
+def _scene_snapshot(session: Session, scene_id: UUID) -> dict[str, Any]:
+    cue_records = session.scalars(
+        select(CueRecord).where(CueRecord.scene_id == scene_id).order_by(CueRecord.order)
+    ).all()
+    entries: list[dict[str, Any]] = []
+    for cue_record in cue_records:
+        cue = _cue(cue_record)
+        word_records = session.scalars(
+            select(WordTimingRecord)
+            .where(WordTimingRecord.cue_id == cue.id)
+            .order_by(WordTimingRecord.order)
+        ).all()
+        cue_data = {**asdict(cue), "id": str(cue.id), "scene_id": str(cue.scene_id)}
+        word_data = [
+            {**asdict(word), "id": str(word.id), "cue_id": str(word.cue_id)}
+            for word in (_word(record) for record in word_records)
+        ]
+        entries.append({"cue": cue_data, "words": word_data})
+    return {"cues": entries}
 
 
 def _project(value: ProjectRecord) -> Project:
