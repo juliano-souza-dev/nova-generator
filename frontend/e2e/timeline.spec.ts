@@ -140,7 +140,17 @@ test("Ctrl+Enter opens the iHub preview with EN, PT and Dual modes", async ({ pa
   await mockEditorialWorkstation(page);
   await page.goto("/editorial?project=p1");
   await expect(page.getByRole("button", { name: "Prévia no iHub" })).toBeEnabled();
-  await page.keyboard.press("Control+Enter");
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
   const preview = page.getByRole("dialog", { name: "Vídeo e legendas sincronizadas" });
   await expect(preview).toBeVisible();
   await expect(preview.getByRole("button", { name: "Dual" })).toHaveAttribute(
