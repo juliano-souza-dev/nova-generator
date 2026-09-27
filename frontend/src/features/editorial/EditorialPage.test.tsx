@@ -200,6 +200,46 @@ describe("EditorialPage", () => {
     expect(screen.getByRole("link", { name: /Baixar pacote para IA externa/ })).toBeInTheDocument();
   });
 
+  it("imports an external editorial result dropped into the import area", async () => {
+    mocks.importExternalEditorialResult.mockResolvedValueOnce({
+      scene_id: "s1",
+      input_sha256: "a".repeat(64),
+      provider: "external",
+      model: "external-ai",
+      rate_limits: {},
+      suggestions: [
+        {
+          cue_id: "c1",
+          order: 1,
+          approved_en: "“I can't… go?”",
+          approved_pt: "“Eu não consigo… ir?”",
+          notes: "Conferido.",
+          word_translations: [{ word_id: "w1", pt: "não consigo" }],
+          semantic_units: [],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const file = new File(
+      ['{"schema_version":"nova-generator-editorial-suggestions/1.3"}'],
+      "retorno.json",
+      {
+        type: "application/json",
+      },
+    );
+    fireEvent.drop(await screen.findByLabelText("Importar retorno editorial"), {
+      dataTransfer: { files: [file] },
+    });
+    await waitFor(() =>
+      expect(mocks.importExternalEditorialResult).toHaveBeenCalledWith("s1", file),
+    );
+    expect(await screen.findByText(/cues tratados pela IA externa/)).toBeInTheDocument();
+  });
+
   it("explains a validated source and starts processing from the empty state", async () => {
     mocks.projectMedia.mockResolvedValueOnce({ state: "source_validated", can_review: false });
     render(

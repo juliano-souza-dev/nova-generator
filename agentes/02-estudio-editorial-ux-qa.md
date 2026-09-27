@@ -29,6 +29,8 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Exigir preparação completa de todos os cues antes de abrir a bancada: EN, PT e traduções
   contextuais do word-by-word são persistidos como rascunho pela Groq ou pelo retorno externo.
   Salvamento e aprovação continuam explícitos pelo operador.
+- Oferecer o fallback externo como fluxo físico simples: baixar o pacote, arrastar ou escolher o
+  retorno JSON e receber a validação na mesma tela, sem exigir navegação por arquivos técnicos.
 - No contrato editorial 1.3, exigir que `approved_en` seja reconstruído byte a byte por
   `leading + surface` de todas as palavras e pelo `trailing` final. A revisão automática pode
   corrigir superfície e timing mantendo IDs, ordem e tempos originais; mudança de cardinalidade

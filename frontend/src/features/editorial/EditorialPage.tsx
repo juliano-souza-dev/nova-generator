@@ -30,6 +30,67 @@ import { nudgeTiming, setTimingEdge, validateTimeline } from "./timeline";
 import "./timeline.css";
 import "./editorial-workspace.css";
 
+type EditorialImportDropzoneProps = {
+  disabled: boolean;
+  onImport: (file: File) => void;
+};
+
+function EditorialImportDropzone({ disabled, onImport }: EditorialImportDropzoneProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const receiveFile = (file: File | undefined) => {
+    if (!file || disabled) return;
+    onImport(file);
+  };
+
+  return (
+    <label
+      className={`editorial-import-dropzone${dragging ? " is-dragging" : ""}`}
+      aria-label="Importar retorno editorial"
+      aria-disabled={disabled}
+      tabIndex={disabled ? -1 : 0}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && !disabled) {
+          event.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        if (!disabled) setDragging(true);
+      }}
+      onDragOver={(event) => event.preventDefault()}
+      onDragLeave={(event) => {
+        event.preventDefault();
+        setDragging(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragging(false);
+        receiveFile(event.dataTransfer.files[0]);
+      }}
+    >
+      <Upload aria-hidden="true" />
+      <span>
+        <strong>Arraste o retorno JSON aqui</strong>
+        <small>ou clique para escolher o arquivo</small>
+      </span>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="application/json,.json"
+        disabled={disabled}
+        tabIndex={-1}
+        onChange={(event) => {
+          receiveFile(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
+    </label>
+  );
+}
+
 const formatTime = (timeMs: number) => {
   const seconds = Math.max(0, timeMs) / 1000;
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, "0")}`;
@@ -947,19 +1008,10 @@ export function EditorialPage() {
                 >
                   <Download aria-hidden="true" /> Baixar pacote para IA externa
                 </a>
-                <label className="secondary-button assistant-upload">
-                  <Upload aria-hidden="true" /> Importar retorno completo
-                  <input
-                    type="file"
-                    accept="application/json,.json"
-                    disabled={assistantBusy}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void importExternalResult(file);
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
+                <EditorialImportDropzone
+                  disabled={assistantBusy}
+                  onImport={(file) => void importExternalResult(file)}
+                />
                 {assistantStatus?.groq_configured && (
                   <button
                     type="button"
@@ -1151,19 +1203,10 @@ export function EditorialPage() {
                   >
                     <Download aria-hidden="true" /> Pacote para IA externa
                   </a>
-                  <label className="secondary-button assistant-upload">
-                    <Upload aria-hidden="true" /> Importar retorno
-                    <input
-                      type="file"
-                      accept="application/json,.json"
-                      disabled={assistantBusy}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) void importExternalResult(file);
-                        event.target.value = "";
-                      }}
-                    />
-                  </label>
+                  <EditorialImportDropzone
+                    disabled={assistantBusy}
+                    onImport={(file) => void importExternalResult(file)}
+                  />
                 </div>
                 {assistantMessage && <p className="assistant-message">{assistantMessage}</p>}
                 {selectedSuggestion && (
