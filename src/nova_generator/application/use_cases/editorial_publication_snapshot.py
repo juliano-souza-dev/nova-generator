@@ -42,6 +42,7 @@ def editorial_publication_sha256(
                 "original_en": cue.original_en,
                 "approved_en": cue.approved_en,
                 "approved_pt": cue.approved_pt,
+                "trailing": cue.provenance.get("editorial_preparation_trailing", ""),
                 "tags": cue.provenance.get("tags"),
                 "words": [
                     {

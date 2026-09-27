@@ -67,6 +67,16 @@ class PublishAnkiReel:
         cues = self._approved_cues(project_id, job, export)
         scenes = self._repository.get_project_scenes(project_id)
         editorial_cards = [(cue, self._repository.get_cue_words(cue.id)) for cue in cues]
+        if any(
+            "".join(word.surface for word in words)
+            + str(cue.provenance.get("editorial_preparation_trailing", ""))
+            != cue.approved_en
+            for cue, words in editorial_cards
+        ):
+            raise AnkiPublicationError(
+                "O inglês aprovado diverge do word-by-word. "
+                "Reconcilie as palavras antes de publicar."
+            )
         if editorial_publication_sha256(project, scenes, editorial_cards) != job.input.get(
             "editorial_sha256"
         ):
@@ -117,6 +127,7 @@ class PublishAnkiReel:
                     "approved_en": cue.approved_en,
                     "final_en": cue.approved_en,
                     "pt": cue.approved_pt,
+                    "trailing": str(cue.provenance.get("editorial_preparation_trailing", "")),
                     "start": (timing[0] - timeline_origin) / 1000,
                     "end": (timing[1] - timeline_origin) / 1000,
                     "speech_start_ms": timing[0] - timeline_origin,

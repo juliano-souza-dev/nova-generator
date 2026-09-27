@@ -49,10 +49,27 @@ def test_groq_adapter_validates_json_and_exposes_dynamic_rate_headers() -> None:
                 "approved_pt": "“Você está pronto…?”",
                 "notes": "Pontuação preservada.",
                 "word_translations": [
-                    {"word_id": "word-1", "pt": "Está"},
-                    {"word_id": "word-2", "pt": "você"},
+                    {
+                        "word_id": "word-1",
+                        "order": 1,
+                        "leading": "“",
+                        "surface": "Are",
+                        "start_ms": 100,
+                        "end_ms": 400,
+                        "pt": "Está",
+                    },
+                    {
+                        "word_id": "word-2",
+                        "order": 2,
+                        "leading": " ",
+                        "surface": "you ready…?",
+                        "start_ms": 450,
+                        "end_ms": 900,
+                        "pt": "você",
+                    },
                 ],
                 "semantic_units": [{"word_ids": ["word-1", "word-2"], "pt": "Você está pronto?"}],
+                "trailing": "”",
             }
         ],
     }

@@ -3,6 +3,7 @@ import zipfile
 from dataclasses import replace
 from pathlib import Path
 
+import jsonschema
 import pytest
 
 from nova_generator.application.ports.editorial_assistant import (
@@ -52,14 +53,20 @@ def test_external_package_round_trip_is_versioned_and_stale_safe(tmp_path: Path)
         )
         template = json.loads(archive.read("editorial_result_template.json"))
         source = json.loads(archive.read("editorial_input.json"))
-    assert source["schema_version"] == "nova-generator-editorial-input/1.2"
+    assert source["schema_version"] == "nova-generator-editorial-input/1.3"
     assert source["cues"][0]["words"][0]["surface"] == "I"
+    assert source["cues"][0]["words"][0]["start_ms"] == 100
+    assert source["cues"][0]["words"][0]["original_start_ms"] == 100
+    assert "confidence" in source["cues"][0]["words"][0]
+    contract_root = Path(__file__).parents[2] / "contracts" / "editorial-ai" / "v1.3"
+    jsonschema.validate(
+        source,
+        json.loads((contract_root / "input.schema.json").read_text(encoding="utf-8")),
+    )
     template["suggestions"][0]["approved_pt"] = "“Não posso… ir?”"
-    for suggestion, cue in zip(template["suggestions"], source["cues"], strict=True):
-        suggestion["word_translations"] = [
-            {"word_id": word["id"], "pt": f"tradução {index}"}
-            for index, word in enumerate(cue["words"], 1)
-        ]
+    for suggestion, _cue in zip(template["suggestions"], source["cues"], strict=True):
+        for index, word in enumerate(suggestion["word_translations"], 1):
+            word["pt"] = f"tradução {index}"
     word_ids = [word["id"] for word in source["cues"][0]["words"][:2]]
     template["suggestions"][0]["semantic_units"] = [{"word_ids": word_ids, "pt": "Não posso"}]
     result = exchange.import_result(
@@ -76,6 +83,8 @@ def test_external_package_round_trip_is_versioned_and_stale_safe(tmp_path: Path)
         scene.id, json.dumps(legacy_result, ensure_ascii=False).encode("utf-8")
     )
     assert compatible.suggestions[0].semantic_units == ()
+    with pytest.raises(EditorialAssistanceError, match="contract 1.3"):
+        persist_editorial_preparation(repository, compatible, author="test")
     template["input_sha256"] = "0" * 64
     with pytest.raises(EditorialAssistanceError, match="stale"):
         exchange.import_result(scene.id, json.dumps(template, ensure_ascii=False).encode("utf-8"))
@@ -118,9 +127,18 @@ def test_external_package_round_trip_is_versioned_and_stale_safe(tmp_path: Path)
                 approved_en=cue.current_en or cue.original_en,
                 approved_pt=cue.current_pt,
                 word_translations=tuple(
-                    EditorialWordTranslation(word.id, f"nova {word.order}")
+                    EditorialWordTranslation(
+                        word.id,
+                        f"nova {word.order}",
+                        word.order,
+                        word.leading,
+                        word.surface,
+                        word.start_ms,
+                        word.end_ms,
+                    )
                     for word in cue.words
                 ),
+                trailing=cue.trailing,
             )
             for cue in prompts
         ),
@@ -148,13 +166,114 @@ def test_external_result_rejects_overlapping_semantic_units(tmp_path: Path) -> N
         source = json.loads(archive.read("editorial_input.json"))
     ids = [word["id"] for word in source["cues"][0]["words"]]
     template["suggestions"][0]["approved_pt"] = "Natural"
-    template["suggestions"][0]["word_translations"] = [
-        {"word_id": word_id, "pt": f"tradução {index}"}
-        for index, word_id in enumerate(ids, 1)
-    ]
+    for index, word in enumerate(template["suggestions"][0]["word_translations"], 1):
+        word["pt"] = f"tradução {index}"
     template["suggestions"][0]["semantic_units"] = [
         {"word_ids": ids[:2], "pt": "Primeira"},
         {"word_ids": ids[1:], "pt": "Sobreposta"},
     ]
     with pytest.raises(EditorialAssistanceError, match="overlap"):
         exchange.import_result(scene.id, json.dumps(template, ensure_ascii=False).encode("utf-8"))
+
+
+def test_external_13_rejects_unknown_fields_and_coerced_order(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'strict.db'}")
+    Base.metadata.create_all(engine)
+    repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repository).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="external-strict",
+        imported_by="test",
+    )
+    scene = repository.get_project_scenes(project_id)[0]
+    exchange = ExternalEditorialExchange(repository, tmp_path)
+    with zipfile.ZipFile(exchange.build_package(scene.id)) as archive:
+        template = json.loads(archive.read("editorial_result_template.json"))
+    for suggestion in template["suggestions"]:
+        suggestion["approved_pt"] = "Tradução natural."
+        for word in suggestion["word_translations"]:
+            word["pt"] = "tradução"
+
+    with_extra = json.loads(json.dumps(template))
+    with_extra["unexpected"] = True
+    with pytest.raises(EditorialAssistanceError, match="contract"):
+        exchange.import_result(scene.id, json.dumps(with_extra, ensure_ascii=False).encode("utf-8"))
+    coerced = json.loads(json.dumps(template))
+    coerced["suggestions"][0]["order"] = "1"
+    with pytest.raises(EditorialAssistanceError, match="contract"):
+        exchange.import_result(scene.id, json.dumps(coerced, ensure_ascii=False).encode("utf-8"))
+
+
+def test_package_marks_preexisting_text_word_divergence(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'divergent.db'}")
+    Base.metadata.create_all(engine)
+    repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repository).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="external-divergence",
+        imported_by="test",
+    )
+    scene = repository.get_project_scenes(project_id)[0]
+    cue = repository.get_scene_cues(scene.id)[0]
+    repository.save_cue(
+        replace(cue, approved_en="“I cannot… go?”"), repository.get_cue_words(cue.id)
+    )
+    with zipfile.ZipFile(
+        ExternalEditorialExchange(repository, tmp_path).build_package(scene.id)
+    ) as archive:
+        source = json.loads(archive.read("editorial_input.json"))
+        template = json.loads(archive.read("editorial_result_template.json"))
+
+    assert source["cues"][0]["requires_reconciliation"] is True
+    assert source["cues"][0]["current_en"] == "“I cannot… go?”"
+    assert template["suggestions"][0]["approved_en"] == source["cues"][0]["word_by_word_en"]
+
+
+def test_external_13_reconciles_literal_word_surface_and_rejects_divergence(
+    tmp_path: Path,
+) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'reconcile.db'}")
+    Base.metadata.create_all(engine)
+    repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repository).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="external-reconcile",
+        imported_by="test",
+    )
+    scene = repository.get_project_scenes(project_id)[0]
+    exchange = ExternalEditorialExchange(repository, tmp_path)
+    with zipfile.ZipFile(exchange.build_package(scene.id)) as archive:
+        template = json.loads(archive.read("editorial_result_template.json"))
+    suggestion = template["suggestions"][0]
+    suggestion["approved_pt"] = "“Eu não posso… ir?”"
+    suggestion["notes"] = "Correção conferida no áudio."
+    for index, word in enumerate(suggestion["word_translations"], 1):
+        word["pt"] = f"palavra {index}"
+    suggestion["word_translations"][1]["surface"] = "cannot"
+    suggestion["approved_en"] = "“I cannot go?”"
+    suggestion["word_translations"][1]["leading"] = " "
+    suggestion["word_translations"][2]["surface"] = "go?"
+    suggestion["word_translations"][2]["leading"] = " "
+    suggestion["trailing"] = "”"
+
+    result = exchange.import_result(
+        scene.id, json.dumps(template, ensure_ascii=False).encode("utf-8")
+    )
+    assert persist_editorial_preparation(repository, result, author="test")
+    prepared = repository.get_scene_cues(scene.id)[0]
+    words = repository.get_cue_words(prepared.id)
+    assert prepared.approved_en == "“I cannot go?”"
+    assert "".join(word.surface for word in words) + suggestion["trailing"] == prepared.approved_en
+    assert prepared.provenance["editorial_preparation_notes"] == "Correção conferida no áudio."
+
+    stale_hash, _ = build_editorial_prompt(repository, scene.id)
+    invalid = replace(result, input_sha256=stale_hash)
+    invalid = replace(
+        invalid,
+        suggestions=(replace(invalid.suggestions[0], approved_en="Texto divergente"),),
+    )
+    with pytest.raises(EditorialAssistanceError, match="exactly match"):
+        persist_editorial_preparation(repository, invalid, author="test")

@@ -129,8 +129,17 @@ export type EditorialSuggestion = {
   approved_en: string;
   approved_pt: string;
   notes: string;
-  word_translations: Array<{ word_id: string; pt: string }>;
+  word_translations: Array<{
+    word_id: string;
+    pt: string;
+    order?: number;
+    leading?: string;
+    surface?: string;
+    start_ms?: number;
+    end_ms?: number;
+  }>;
   semantic_units: EditorialSemanticUnit[];
+  trailing?: string;
 };
 export type EditorialSemanticUnit = { word_ids: string[]; pt: string };
 export type EditorialAssistance = {

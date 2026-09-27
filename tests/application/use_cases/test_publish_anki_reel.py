@@ -35,12 +35,12 @@ def test_publication_keeps_literal_text_words_and_card_timeline(
         100,
         700,
         "Ana",
-        "Café?",
-        "Café?",
+        "“Café?”",
+        "“Café?”",
         "Café!",
-        provenance={"tags": ["lesson"]},
+        provenance={"tags": ["lesson"], "editorial_preparation_trailing": "”"},
     )
-    word = WordTiming(uuid4(), cue_id, 1, "Café?", 100, 700, 100, 700)
+    word = WordTiming(uuid4(), cue_id, 1, "“Café?", 100, 700, 100, 700)
     voice = VoiceProfile(uuid4(), "Ana", 1, "nano", "a" * 64).snapshot()
     repository = Mock()
     repository.get_project.return_value = Project(
@@ -128,9 +128,15 @@ def test_publication_keeps_literal_text_words_and_card_timeline(
     document = json.loads(published.path.read_text(encoding="utf-8"))
     assert document["kit"]["contentType"] == ("music" if content_type == "music" else "immersion")
     assert document["kit"]["scene_start_ms"] == 10_100
-    assert document["cues"][0]["final_en"] == "Café?"
+    assert document["cues"][0]["final_en"] == "“Café?”"
     assert document["cues"][0]["pt"] == "Café!"
-    assert document["cues"][0]["words"][0]["text"] == "Café?"
+    assert document["cues"][0]["words"][0]["text"] == "“Café?"
+    assert document["cues"][0]["trailing"] == "”"
+    assert (
+        "".join(word["text"] for word in document["cues"][0]["words"])
+        + document["cues"][0]["trailing"]
+        == document["cues"][0]["final_en"]
+    )
     assert document["cues"][0]["start"] == expected_start_ms / 1000
     assert document["cues"][0]["end"] == (expected_start_ms + 600) / 1000
     assert document["cues"][0]["words"][0]["start_ms"] == expected_start_ms
@@ -138,7 +144,7 @@ def test_publication_keeps_literal_text_words_and_card_timeline(
     ihub_offset = document["kit"]["scene_start_ms"] if content_type == "music" else 0
     assert round(document["cues"][0]["start"] * 1000) + ihub_offset == 10_100
     assert document["cues"][0]["words"][0]["start_ms"] + ihub_offset == 10_100
-    assert document["cues"][0]["anki"]["items"][0]["focus"] == "Café?"
+    assert document["cues"][0]["anki"]["items"][0]["focus"] == "“Café?”"
     assert document["ankiAudio"]["youtube"]["video_id"] == "bbbbbbbbbbb"
     assert document["ankiAudio"]["cues"][0]["start_ms"] == 0
     assert document["generator"]["editorial_sha256"] == job.input["editorial_sha256"]

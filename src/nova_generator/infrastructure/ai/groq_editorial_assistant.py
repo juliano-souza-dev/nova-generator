@@ -4,7 +4,7 @@ import json
 from dataclasses import asdict
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from nova_generator.application.ports.editorial_assistant import (
     EditorialAssistanceResult,
@@ -23,16 +23,27 @@ class EditorialAssistantUnavailable(RuntimeError):
 
 
 class _SemanticUnitPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     word_ids: list[str] = Field(min_length=2)
     pt: str = Field(min_length=1)
 
 
 class _WordTranslationPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     word_id: str
+    order: int = Field(ge=1)
+    leading: str
+    surface: str = Field(min_length=1)
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
     pt: str = Field(min_length=1)
 
 
 class _SuggestionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     cue_id: str
     order: int
     approved_en: str = Field(min_length=1)
@@ -40,9 +51,12 @@ class _SuggestionPayload(BaseModel):
     notes: str = ""
     word_translations: list[_WordTranslationPayload]
     semantic_units: list[_SemanticUnitPayload] = Field(default_factory=list)
+    trailing: str = ""
 
 
 class _ResponsePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     scene_id: str
     input_sha256: str
     suggestions: list[_SuggestionPayload]
@@ -124,17 +138,27 @@ class GroqEditorialAssistant:
                     approved_pt=item.approved_pt,
                     notes=item.notes,
                     word_translations=tuple(
-                        EditorialWordTranslation(word.word_id, word.pt)
+                        EditorialWordTranslation(
+                            word.word_id,
+                            word.pt,
+                            word.order,
+                            word.leading,
+                            word.surface,
+                            word.start_ms,
+                            word.end_ms,
+                        )
                         for word in item.word_translations
                     ),
                     semantic_units=tuple(
                         EditorialSemanticUnit(tuple(unit.word_ids), unit.pt)
                         for unit in item.semantic_units
                     ),
+                    trailing=item.trailing,
                 )
                 for item in parsed.suggestions
             ),
             rate_limits=_rate_limit_headers(headers),
+            contract_version="nova-generator-editorial-suggestions/1.3",
         )
 
 
@@ -184,8 +208,11 @@ _SYSTEM_PROMPT = """You are an English-to-Brazilian-Portuguese subtitle editor.
 Return one JSON object only, with scene_id, input_sha256 and suggestions.
 For every input cue, return exactly one suggestion in the same order with cue_id, order,
 approved_en, approved_pt, notes, word_translations and semantic_units. word_translations must
-contain every input word exactly once, in the original order, with word_id and its natural
-contextual pt.
+contain every input word exactly once, in the original order, with unchanged word_id/order and
+with leading, surface, start_ms, end_ms and its natural contextual pt. Correct a surface or timing
+when the audio requires it. Do not overlap timings or move them outside the cue speech range.
+approved_en must equal the byte-for-byte concatenation of leading + surface for every returned
+word plus trailing, preserving all spaces and punctuation. Return trailing even when it is empty.
 Understand the whole cue before translating.
 Each semantic unit must contain contiguous word_ids in input order and one complete, natural
 Brazilian Portuguese translation in pt. Group phrasal verbs, idioms, collocations, auxiliary and

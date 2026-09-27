@@ -29,7 +29,11 @@ def _seed(client: TestClient, *, prepared: bool = True):
     cue = repository.get_scene_cues(scene_id)[0]
     if prepared:
         words = [
-            replace(word, provenance={**word.provenance, "pt": f"palavra {word.order}"})
+            replace(
+                word,
+                surface=("" if word.order == 1 else " ") + word.surface,
+                provenance={**word.provenance, "pt": f"palavra {word.order}"},
+            )
             for word in repository.get_cue_words(cue.id)
         ]
         cue = replace(
@@ -38,6 +42,8 @@ def _seed(client: TestClient, *, prepared: bool = True):
                 **cue.provenance,
                 "editorial_preparation": "complete",
                 "editorial_preparation_sha256": "test",
+                "editorial_preparation_contract": "nova-generator-editorial-suggestions/1.3",
+                "editorial_preparation_trailing": "",
             },
         )
         repository.save_cue(cue, words)

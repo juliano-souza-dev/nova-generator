@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -28,27 +29,31 @@ def build_editorial_prompt(
 ) -> tuple[str, tuple[EditorialCuePrompt, ...]]:
     if repository.get_scene_project_id(scene_id) is None:
         raise EditorialAssistanceError("scene not found")
-    cues = tuple(
-        EditorialCuePrompt(
-            id=str(cue.id),
-            order=cue.order,
-            original_en=cue.original_en,
-            current_en=cue.approved_en,
-            current_pt=cue.approved_pt,
-            words=tuple(
-                EditorialWordPrompt(
-                    str(word.id),
-                    word.order,
-                    word.surface,
-                    _optional_string(word.provenance.get("pt")),
-                    _optional_string(word.provenance.get("semantic_group_id")),
-                    _optional_string(word.provenance.get("semantic_group_role")),
-                )
-                for word in repository.get_cue_words(cue.id)
-            ),
+    prompts: list[EditorialCuePrompt] = []
+    for cue in repository.get_scene_cues(scene_id):
+        words, trailing = _word_prompts(
+            repository.get_cue_words(cue.id), cue.approved_en or cue.original_en
         )
-        for cue in repository.get_scene_cues(scene_id)
-    )
+        word_by_word_en = "".join(f"{word.leading}{word.surface}" for word in words) + trailing
+        current_literal = cue.approved_en or cue.original_en
+        prompts.append(
+            EditorialCuePrompt(
+                id=str(cue.id),
+                order=cue.order,
+                original_en=cue.original_en,
+                current_en=cue.approved_en,
+                current_pt=cue.approved_pt,
+                words=words,
+                speech_start_ms=cue.speech_start_ms,
+                speech_end_ms=cue.speech_end_ms,
+                subtitle_start_ms=cue.subtitle_start_ms,
+                subtitle_end_ms=cue.subtitle_end_ms,
+                trailing=trailing,
+                word_by_word_en=word_by_word_en,
+                requires_reconciliation=word_by_word_en != current_literal,
+            )
+        )
+    cues = tuple(prompts)
     if not cues:
         raise EditorialAssistanceError("scene has no cues")
     canonical = json.dumps(
@@ -67,6 +72,7 @@ def validate_editorial_result(
     input_sha256: str,
     cues: tuple[EditorialCuePrompt, ...],
     require_word_translations: bool = False,
+    require_word_revisions: bool = False,
 ) -> EditorialAssistanceResult:
     if result.scene_id != str(scene_id):
         raise EditorialAssistanceError("assistant returned a different scene_id")
@@ -79,18 +85,26 @@ def validate_editorial_result(
             "assistant must return every cue once, in the original order"
         )
     if any(
-        not item.approved_en.strip() or not item.approved_pt.strip()
-        for item in result.suggestions
+        not item.approved_en.strip() or not item.approved_pt.strip() for item in result.suggestions
     ):
         raise EditorialAssistanceError("assistant returned an empty English or Portuguese text")
     for cue, suggestion in zip(cues, result.suggestions, strict=True):
-        _validate_word_translations(cue, suggestion, required=require_word_translations)
+        _validate_word_translations(
+            cue,
+            suggestion,
+            required=require_word_translations,
+            require_revisions=require_word_revisions,
+        )
         _validate_semantic_units(cue, suggestion.semantic_units)
     return result
 
 
 def _validate_word_translations(
-    cue: EditorialCuePrompt, suggestion: EditorialSuggestion, *, required: bool
+    cue: EditorialCuePrompt,
+    suggestion: EditorialSuggestion,
+    *,
+    required: bool,
+    require_revisions: bool,
 ) -> None:
     if not suggestion.word_translations and not required:
         return
@@ -102,6 +116,46 @@ def _validate_word_translations(
         )
     if any(not item.pt.strip() for item in suggestion.word_translations):
         raise EditorialAssistanceError("assistant returned an empty word translation")
+    if not require_revisions:
+        return
+    for expected_word, returned_word in zip(cue.words, suggestion.word_translations, strict=True):
+        if returned_word.order != expected_word.order:
+            raise EditorialAssistanceError("assistant changed a word order")
+        if returned_word.leading is None or returned_word.surface is None:
+            raise EditorialAssistanceError("assistant must return every word surface and separator")
+        if not returned_word.surface:
+            raise EditorialAssistanceError("assistant returned an empty word surface")
+        if returned_word.start_ms is None or returned_word.end_ms is None:
+            raise EditorialAssistanceError("assistant must return every word timing")
+    _validate_revised_word_timings(cue, suggestion.word_translations)
+    reconstructed = (
+        "".join(f"{word.leading}{word.surface}" for word in suggestion.word_translations)
+        + suggestion.trailing
+    )
+    if reconstructed != suggestion.approved_en:
+        raise EditorialAssistanceError(
+            "approved English must exactly match the reconstructed word surfaces"
+        )
+
+
+def _validate_revised_word_timings(
+    cue: EditorialCuePrompt, words: tuple[EditorialWordTranslation, ...]
+) -> None:
+    previous_end = cue.speech_start_ms
+    for word in words:
+        start, end = word.start_ms, word.end_ms
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or start < previous_end
+            or end <= start
+            or start < cue.speech_start_ms
+            or end > cue.speech_end_ms
+        ):
+            raise EditorialAssistanceError("assistant returned invalid or overlapping word timing")
+        previous_end = end
 
 
 def _validate_semantic_units(
@@ -157,6 +211,7 @@ class RunEditorialAssistance:
             input_sha256=input_sha256,
             cues=cues,
             require_word_translations=True,
+            require_word_revisions=True,
         )
 
 
@@ -167,6 +222,10 @@ def persist_editorial_preparation(
     author: str,
 ) -> bool:
     """Persist one complete AI preparation as a scene-level atomic draft."""
+    if result.contract_version != "nova-generator-editorial-suggestions/1.3":
+        raise EditorialAssistanceError(
+            "editorial contract 1.3 is required to reconcile every word and timing"
+        )
     scene_id = UUID(result.scene_id)
     already_applied = load_persisted_editorial_preparation(
         repository, scene_id, result.input_sha256
@@ -181,6 +240,7 @@ def persist_editorial_preparation(
         input_sha256=input_sha256,
         cues=prompts,
         require_word_translations=True,
+        require_word_revisions=True,
     )
     project_id = repository.get_scene_project_id(scene_id)
     if project_id is None:
@@ -203,6 +263,9 @@ def persist_editorial_preparation(
                 "editorial_preparation_provider": result.provider,
                 "editorial_preparation_model": result.model,
                 "editorial_preparation_sha256": result.input_sha256,
+                "editorial_preparation_notes": suggestion.notes,
+                "editorial_preparation_trailing": suggestion.trailing,
+                "editorial_preparation_contract": result.contract_version,
             },
         )
         entries.append((changed, translated))
@@ -227,14 +290,14 @@ def persist_editorial_preparation(
     return True
 
 
-def scene_is_editorially_prepared(
-    repository: EditorialProjectRepository, scene_id: UUID
-) -> bool:
+def scene_is_editorially_prepared(repository: EditorialProjectRepository, scene_id: UUID) -> bool:
     cues = repository.get_scene_cues(scene_id)
     return bool(cues) and all(
         cue.approved_en.strip()
         and cue.approved_pt.strip()
         and cue.provenance.get("editorial_preparation") == "complete"
+        and cue.provenance.get("editorial_preparation_contract")
+        == "nova-generator-editorial-suggestions/1.3"
         and all(
             (
                 isinstance(word.provenance.get("pt"), str)
@@ -254,6 +317,8 @@ def load_persisted_editorial_preparation(
     if not cues or any(
         cue.provenance.get("editorial_preparation") != "complete"
         or cue.provenance.get("editorial_preparation_sha256") != input_sha256
+        or cue.provenance.get("editorial_preparation_contract")
+        != "nova-generator-editorial-suggestions/1.3"
         for cue in cues
     ):
         return None
@@ -266,7 +331,18 @@ def load_persisted_editorial_preparation(
             pt = word.provenance.get("pt_original", word.provenance.get("pt"))
             if not isinstance(pt, str) or not pt.strip():
                 return None
-            translations.append(EditorialWordTranslation(str(word.id), pt))
+            leading, surface = _split_word_surface(word.surface)
+            translations.append(
+                EditorialWordTranslation(
+                    str(word.id),
+                    pt,
+                    word.order,
+                    leading,
+                    surface,
+                    word.start_ms,
+                    word.end_ms,
+                )
+            )
             group_id = word.provenance.get("semantic_group_id")
             if isinstance(group_id, str):
                 groups.setdefault(group_id, []).append(word)
@@ -290,8 +366,10 @@ def load_persisted_editorial_preparation(
                 order=cue.order,
                 approved_en=cue.approved_en,
                 approved_pt=cue.approved_pt,
+                notes=str(cue.provenance.get("editorial_preparation_notes", "")),
                 word_translations=tuple(translations),
                 semantic_units=tuple(units),
+                trailing=str(cue.provenance.get("editorial_preparation_trailing", "")),
             )
         )
     first = cues[0].provenance
@@ -302,16 +380,29 @@ def load_persisted_editorial_preparation(
         model=str(first.get("editorial_preparation_model", "persisted")),
         suggestions=tuple(suggestions),
         rate_limits={},
+        contract_version="nova-generator-editorial-suggestions/1.3",
     )
 
 
 def _prepared_words(
     words: list[WordTiming], suggestion: EditorialSuggestion, input_sha256: str
 ) -> list[WordTiming]:
-    translations = {item.word_id: item.pt for item in suggestion.word_translations}
+    translations = {item.word_id: item for item in suggestion.word_translations}
     updated = [
         replace(
             word,
+            surface=(translations[str(word.id)].leading or "")
+            + (translations[str(word.id)].surface or word.surface),
+            start_ms=(
+                translations[str(word.id)].start_ms
+                if translations[str(word.id)].start_ms is not None
+                else word.start_ms
+            ),
+            end_ms=(
+                translations[str(word.id)].end_ms
+                if translations[str(word.id)].end_ms is not None
+                else word.end_ms
+            ),
             provenance={
                 **{
                     key: value
@@ -323,7 +414,7 @@ def _prepared_words(
                         "pt_original",
                     }
                 },
-                "pt": translations[str(word.id)],
+                "pt": translations[str(word.id)].pt,
             },
         )
         for word in words
@@ -351,9 +442,68 @@ def _prepared_words(
     return updated
 
 
-def _scene_snapshot(
-    repository: EditorialProjectRepository, scene_id: UUID
-) -> dict[str, object]:
+def _word_prompt(word: WordTiming, *, leading: str, surface: str) -> EditorialWordPrompt:
+    confidence = word.provenance.get("asr_confidence")
+    if (
+        not isinstance(confidence, (int, float))
+        or isinstance(confidence, bool)
+        or not 0 <= confidence <= 1
+    ):
+        confidence = None
+    return EditorialWordPrompt(
+        id=str(word.id),
+        order=word.order,
+        surface=surface,
+        current_pt=_optional_string(word.provenance.get("pt")),
+        semantic_group_id=_optional_string(word.provenance.get("semantic_group_id")),
+        semantic_group_role=_optional_string(word.provenance.get("semantic_group_role")),
+        leading=leading,
+        start_ms=word.start_ms,
+        end_ms=word.end_ms,
+        original_start_ms=word.original_start_ms,
+        original_end_ms=word.original_end_ms,
+        confidence=float(confidence) if confidence is not None else None,
+    )
+
+
+def _word_prompts(
+    words: list[WordTiming], literal: str
+) -> tuple[tuple[EditorialWordPrompt, ...], str]:
+    split = [_split_word_surface(word.surface) for word in words]
+    leading_values: list[str] = []
+    cursor = 0
+    aligned = True
+    for _, surface in split:
+        position = literal.find(surface, cursor)
+        if position < cursor or any(character.isalnum() for character in literal[cursor:position]):
+            aligned = False
+            break
+        leading_values.append(literal[cursor:position])
+        cursor = position + len(surface)
+    trailing = literal[cursor:] if aligned else ""
+    if aligned and any(character.isalnum() for character in trailing):
+        aligned = False
+        trailing = ""
+    if not aligned:
+        leading_values = [
+            raw_leading or ("" if index == 0 else " ")
+            for index, (raw_leading, _) in enumerate(split)
+        ]
+    prompts = tuple(
+        _word_prompt(word, leading=leading_values[index], surface=split[index][1])
+        for index, word in enumerate(words)
+    )
+    return prompts, trailing
+
+
+def _split_word_surface(value: str) -> tuple[str, str]:
+    match = re.match(r"\s*", value)
+    leading = match.group(0) if match else ""
+    surface = value[len(leading) :]
+    return leading, surface
+
+
+def _scene_snapshot(repository: EditorialProjectRepository, scene_id: UUID) -> dict[str, object]:
     return {
         "cues": [
             {
