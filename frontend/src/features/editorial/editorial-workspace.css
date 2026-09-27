@@ -484,6 +484,7 @@
 }
 
 .editorial-import-dropzone {
+  position: relative;
   display: inline-flex;
   min-height: 2.75rem;
   align-items: center;
@@ -495,6 +496,7 @@
   background: rgb(15 23 42 / 55%);
   text-align: left;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .editorial-import-dropzone:hover,
