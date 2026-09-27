@@ -219,6 +219,11 @@ class EditorialAssistanceJobResponse(BaseModel):
 class EditorialWordTranslationResponse(BaseModel):
     word_id: str
     pt: str
+    order: int | None = None
+    leading: str | None = None
+    surface: str | None = None
+    start_ms: int | None = None
+    end_ms: int | None = None
 
 
 class EditorialSuggestionResponse(BaseModel):
@@ -229,6 +234,7 @@ class EditorialSuggestionResponse(BaseModel):
     notes: str
     word_translations: list[EditorialWordTranslationResponse] = Field(default_factory=list)
     semantic_units: list[SemanticUnitInput] = Field(default_factory=list)
+    trailing: str = ""
 
 
 class EditorialAssistanceResponse(BaseModel):
@@ -274,7 +280,7 @@ def start_editorial_assistance(
             "project_id": str(project_id),
             "input_sha256": input_sha256,
         },
-        idempotency_key=f"editorial-assistance:v2:{scene_id}:{input_sha256}",
+        idempotency_key=f"editorial-assistance:v3:{scene_id}:{input_sha256}",
         max_attempts=1,
     )
     if job.status in {"failed", "cancelled"}:
@@ -305,9 +311,9 @@ async def import_external_editorial_result(
 ) -> EditorialAssistanceResponse:
     try:
         result = exchange.import_result(scene_id, await file.read())
-        if result.contract_version != "nova-generator-editorial-suggestions/1.2":
+        if result.contract_version != "nova-generator-editorial-suggestions/1.3":
             raise EditorialAssistanceError(
-                "external result 1.2 is required to prepare every word translation"
+                "external result 1.3 is required to reconcile every word and timing"
             )
         persist_editorial_preparation(
             repository=repository,
@@ -651,9 +657,7 @@ def _word_response(word: WordTiming) -> dict[str, Any]:
     }
 
 
-def _require_prepared_cue(
-    repository: SqlAlchemyEditorialProjectRepository, cue_id: UUID
-) -> None:
+def _require_prepared_cue(repository: SqlAlchemyEditorialProjectRepository, cue_id: UUID) -> None:
     cue = repository.get_cue(cue_id)
     if cue is None:
         raise HTTPException(404, detail="cue not found")

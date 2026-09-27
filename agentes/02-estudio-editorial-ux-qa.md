@@ -29,6 +29,10 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Exigir preparação completa de todos os cues antes de abrir a bancada: EN, PT e traduções
   contextuais do word-by-word são persistidos como rascunho pela Groq ou pelo retorno externo.
   Salvamento e aprovação continuam explícitos pelo operador.
+- No contrato editorial 1.3, exigir que `approved_en` seja reconstruído byte a byte por
+  `leading + surface` de todas as palavras e pelo `trailing` final. A revisão automática pode
+  corrigir superfície e timing mantendo IDs, ordem e tempos originais; mudança de cardinalidade
+  volta à reconciliação humana de split/merge.
 - Permitir que ambas as IAs proponham unidades semânticas contíguas por IDs de palavras. Mostrar a
   expressão e a tradução natural, permitir ouvi-la e aplicá-la primeiro como rascunho local; salvar
   não altera timing e aprovação permanece uma ação separada.
@@ -61,6 +65,8 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   não mantém uma word destacada durante gaps reais e interrompe a mídia ao fechar.
 - A bancada e a prévia nunca abrem com EN, PT ou word-by-word incompletos; falha da Groq mostra o
   pacote externo e só um retorno completo, atual e validado libera a revisão.
+- O gate rejeita qualquer retorno cujo inglês aprovado divirja das palavras, cujos intervalos se
+  sobreponham ou saiam da fala da cue, ou que perca espaços, Unicode e pontuação literal.
 
 ## Recorte da fonte
 

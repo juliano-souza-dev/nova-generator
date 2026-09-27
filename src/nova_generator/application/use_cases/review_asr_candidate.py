@@ -119,7 +119,11 @@ def _candidate_entries(
                     word_finish,
                     word_start,
                     word_finish,
-                    {"source": "asr_candidate", "ingest_job_id": str(job_id)},
+                    {
+                        "source": "asr_candidate",
+                        "ingest_job_id": str(job_id),
+                        "asr_confidence": item.get("probability"),
+                    },
                 )
             )
             word_end = word_finish

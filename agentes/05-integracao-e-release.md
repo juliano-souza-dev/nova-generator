@@ -10,9 +10,9 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Versionar schemas, exemplos válidos/inválidos e fixtures compartilhadas.
 - Validar pacotes de ida e volta para IA editorial externa por versão, hash da entrada, IDs e ordem
   dos cues; rejeitar resultado obsoleto ou pertencente a outra cena.
-- Manter compatibilidade de leitura com sugestões editoriais 1.0 sem unidades e 1.1 com
-  `semantic_units`. O contrato 1.2 inclui `word_translations`; somente um retorno 1.2 completo pode
-  liberar a bancada, sempre sem incluir nem aceitar alterações de timing.
+- Manter compatibilidade de leitura com sugestões editoriais 1.0 sem unidades, 1.1 com
+  `semantic_units` e 1.2 com traduções. O contrato 1.3 reconcilia cada superfície e timing com o
+  inglês aprovado; somente um retorno 1.3 completo pode liberar a bancada.
 - Manter os contratos de reel Anki (`hub_final.json` e `ankiAudio`) e História (`immersionhub-text-audio` 1.1).
 - Publicar `hub_final.json` por projeto/exportação somente após APKG e reel concluídos e upload manual do reel; incluir cues, texto EN/PT aprovado, itens Anki, palavras revisadas e timeline do reel com ID validado do YouTube.
 - Exigir compatibilidade retroativa, migration ou janela de transição para mudanças públicas.
@@ -33,6 +33,8 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 ## Critérios de aceite
 
 - Todo contrato possui versão, proprietário, fixture válida, fixture inválida e política de compatibilidade.
+- O contrato editorial 1.3 preserva IDs, ordem, tempos originais e literal UTF-8; o servidor
+  reconstrói `approved_en` das palavras e rejeita divergência antes de qualquer persistência.
 - Generator produz um pacote que o iHub importa em teste automatizado ou ambiente de validação.
 - Publicação Anki rejeita alterações de texto EN/PT ou WAV após a exportação e não troca o vídeo vinculado à mesma exportação.
 - Materiais, worker e publicação rejeitam cues explicitamente em rascunho, inclusive se voltarem a rascunho depois de enfileirar; cues legados sem estado de aprovação permanecem compatíveis.

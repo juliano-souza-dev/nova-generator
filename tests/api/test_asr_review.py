@@ -48,7 +48,11 @@ def _mark_prepared(cue_id: str) -> None:
     cue = repository.get_cue(UUID(cue_id))
     assert cue is not None
     words = [
-        replace(word, provenance={**word.provenance, "pt": f"palavra {word.order}"})
+        replace(
+            word,
+            surface=("" if word.order == 1 else " ") + word.surface,
+            provenance={**word.provenance, "pt": f"palavra {word.order}"},
+        )
         for word in repository.get_cue_words(cue.id)
     ]
     repository.save_cue(
@@ -56,7 +60,12 @@ def _mark_prepared(cue_id: str) -> None:
             cue,
             approved_en=cue.original_en,
             approved_pt="“Não posso… ir?”",
-            provenance={**cue.provenance, "editorial_preparation": "complete"},
+            provenance={
+                **cue.provenance,
+                "editorial_preparation": "complete",
+                "editorial_preparation_contract": "nova-generator-editorial-suggestions/1.3",
+                "editorial_preparation_trailing": "",
+            },
         ),
         words,
     )
@@ -79,6 +88,7 @@ def test_candidate_becomes_draft_then_literal_approval(client: TestClient) -> No
     assert cue["approved_en"] == cue["approved_pt"] == ""
     assert cue["provenance"]["approval"] == "draft"
     assert [word["surface"] for word in cue["words"]] == ["“I", "can't…", "go?”"]
+    assert cue["words"][0]["provenance"]["asr_confidence"] == 0.97
     blocked = client.put(
         f"/api/editorial/cues/{cue['id']}/text",
         json={"author": "editor", "approved_en": "“I can't… go?”", "approved_pt": ""},

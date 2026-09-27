@@ -12,6 +12,12 @@ class EditorialWordPrompt:
     current_pt: str | None = None
     semantic_group_id: str | None = None
     semantic_group_role: str | None = None
+    leading: str = ""
+    start_ms: int = 0
+    end_ms: int = 0
+    original_start_ms: int = 0
+    original_end_ms: int = 0
+    confidence: float | None = None
 
 
 @dataclass(frozen=True)
@@ -22,6 +28,13 @@ class EditorialCuePrompt:
     current_en: str
     current_pt: str
     words: tuple[EditorialWordPrompt, ...] = ()
+    speech_start_ms: int = 0
+    speech_end_ms: int = 0
+    subtitle_start_ms: int = 0
+    subtitle_end_ms: int = 0
+    trailing: str = ""
+    word_by_word_en: str = ""
+    requires_reconciliation: bool = False
 
 
 @dataclass(frozen=True)
@@ -34,6 +47,11 @@ class EditorialSemanticUnit:
 class EditorialWordTranslation:
     word_id: str
     pt: str
+    order: int | None = None
+    leading: str | None = None
+    surface: str | None = None
+    start_ms: int | None = None
+    end_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +63,7 @@ class EditorialSuggestion:
     notes: str = ""
     word_translations: tuple[EditorialWordTranslation, ...] = field(default_factory=tuple)
     semantic_units: tuple[EditorialSemanticUnit, ...] = field(default_factory=tuple)
+    trailing: str = ""
 
 
 @dataclass(frozen=True)

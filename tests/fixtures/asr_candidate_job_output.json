@@ -11,7 +11,7 @@
         "end_ms": 1800,
         "text": "“I can't… go?”",
         "words": [
-          { "surface": "“I", "start_ms": 100, "end_ms": 450 },
+          { "surface": "“I", "start_ms": 100, "end_ms": 450, "probability": 0.97 },
           { "surface": "can't…", "start_ms": 500, "end_ms": 1200 },
           { "surface": "go?”", "start_ms": 1250, "end_ms": 1800 }
         ]
