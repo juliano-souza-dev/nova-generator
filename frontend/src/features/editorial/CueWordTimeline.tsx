@@ -1,5 +1,5 @@
 import { Pause, Play, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Cue, WordTiming } from "../../lib/api.types";
 import { timeToPercent, validateTimeline } from "./timeline";
 
@@ -29,11 +29,13 @@ type Props = {
 };
 
 export function CueWordTimeline(props: Props) {
+  const { durationMs, onZoomChange } = props;
   const root = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
   const draggingEdgeRef = useRef<"start" | "end" | null>(null);
   const errors = useMemo(() => validateTimeline(props.cues), [props.cues]);
   const [viewStart, setViewStart] = useState(0);
+  const [focusActive, setFocusActive] = useState(false);
   const [draggingEdge, setDraggingEdge] = useState<"start" | "end" | null>(null);
   const selectedCue = props.cues.find((cue) => cue.id === props.selectedCueId);
   const selectedWord = selectedCue?.words.find((word) => word.id === props.selectedWordId);
@@ -43,8 +45,8 @@ export function CueWordTimeline(props: Props) {
       ) ?? [])
     : [];
   const activeLabel = selectedGroupWords.length > 1 ? "unidade" : selectedWord ? "palavra" : "cue";
-  const visibleDuration = Math.max(1, props.durationMs) / Math.max(1, props.zoom);
-  const windowStart = Math.max(0, Math.min(viewStart, props.durationMs - visibleDuration));
+  const visibleDuration = Math.max(1, durationMs) / Math.max(1, props.zoom);
+  const windowStart = Math.max(0, Math.min(viewStart, durationMs - visibleDuration));
   const pct = (time: number) => timeToPercent(time - windowStart, visibleDuration);
   const timeLabel = (time: number) => `${(Math.max(0, time) / 1000).toFixed(2)} s`;
   const ticks = Array.from({ length: 6 }, (_, index) => ({
@@ -65,6 +67,20 @@ export function CueWordTimeline(props: Props) {
       return { x: index * 6.25, y1: 95 - peak * 75, y2: 95 + peak * 75 };
     });
   }, [props.waveform, visibleDuration, windowStart]);
+  const focusSelectedRange = useCallback(() => {
+    if (!selectedCue) return;
+    const range = selectedWord ?? selectedCue.speech_timing;
+    const start = range.start_ms;
+    const end = range.end_ms;
+    const length = Math.max(100, end - start);
+    const zoom = Math.max(1, Math.min(64, Math.floor(durationMs / (length * 1.5))));
+    onZoomChange(zoom);
+    setViewStart(Math.max(0, start - length * 0.25));
+  }, [durationMs, onZoomChange, selectedCue, selectedWord]);
+  useEffect(() => {
+    if (!focusActive) return;
+    focusSelectedRange();
+  }, [focusActive, props.selectedCueId, props.selectedWordId, focusSelectedRange]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target instanceof Element ? event.target : null;
@@ -243,23 +259,19 @@ export function CueWordTimeline(props: Props) {
           className="secondary-button"
           disabled={!props.selectedCueId}
           onClick={() => {
-            if (!selectedCue) return;
-            const range = selectedWord ?? selectedCue.speech_timing;
-            const start = range.start_ms;
-            const end = range.end_ms;
-            const length = Math.max(100, end - start);
-            const zoom = Math.max(1, Math.min(64, Math.floor(props.durationMs / (length * 1.5))));
-            props.onZoomChange(zoom);
-            setViewStart(Math.max(0, start - length * 0.25));
+            setFocusActive(true);
+            focusSelectedRange();
           }}
+          aria-pressed={focusActive}
         >
-          Focar {activeLabel}
+          {focusActive ? "Foco ativo" : `Focar ${activeLabel}`}
         </button>
         <button
           type="button"
           className="secondary-button"
           onClick={() => {
-            props.onZoomChange(1);
+            setFocusActive(false);
+            onZoomChange(1);
             setViewStart(0);
           }}
         >
