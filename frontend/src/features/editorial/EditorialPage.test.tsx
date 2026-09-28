@@ -287,6 +287,24 @@ describe("EditorialPage", () => {
     expect(screen.getByRole("button", { name: "Salvar palavra" })).toBeEnabled();
   });
 
+  it("focuses and plays the selected cue when Space is pressed in the cue list", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByLabelText("Player do corte da cena");
+    const cueButton = within(
+      screen.getByRole("navigation", { name: "Lista de cues" }),
+    ).getAllByRole("button")[0];
+    fireEvent.keyDown(cueButton, { key: " " });
+
+    await waitFor(() => expect(screen.getByLabelText("Timeline de cues e palavras")).toHaveFocus());
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
   it("groups contiguous words under one natural translation", async () => {
     const cue = (await mocks.editorialCues())[0];
     mocks.editorialCues.mockResolvedValue([

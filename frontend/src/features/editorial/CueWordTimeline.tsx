@@ -12,6 +12,7 @@ type Props = {
   playheadMs: number;
   playing: boolean;
   zoom: number;
+  focusRequest?: number;
   selectedCueId?: string;
   selectedWordId?: string;
   onPlayToggle: () => void;
@@ -77,6 +78,9 @@ export function CueWordTimeline(props: Props) {
     if (!focusActive) return;
     focusSelectedRange();
   }, [focusActive, props.selectedCueId, props.selectedWordId, focusSelectedRange]);
+  useEffect(() => {
+    if (props.focusRequest) root.current?.focus({ preventScroll: true });
+  }, [props.focusRequest]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target instanceof Element ? event.target : null;

@@ -152,6 +152,7 @@ export function EditorialPage() {
   const [history, setHistory] = useState<TimelineCue[][]>([]);
   const [selectedCueId, setSelectedCueId] = useState("");
   const [selectedWordId, setSelectedWordId] = useState<string>();
+  const [timelineFocusRequest, setTimelineFocusRequest] = useState(0);
   const [playheadMs, setPlayheadMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -430,7 +431,11 @@ export function EditorialPage() {
     if (mediaRef.current) mediaRef.current.currentTime = bounded / 1000;
   }
   function selectCue(id: string) {
-    if (id === selectedCueId || saving) return;
+    if (saving) return;
+    if (id === selectedCueId) {
+      setTimelineFocusRequest((value) => value + 1);
+      return;
+    }
     if (id !== selectedCueId && isDirty) {
       setMessage("Salve ou desfaça as alterações antes de trocar de cue.");
       return;
@@ -439,6 +444,7 @@ export function EditorialPage() {
     playbackEnd.current = null;
     setSelectedCueId(id);
     setSelectedWordId(undefined);
+    setTimelineFocusRequest((value) => value + 1);
     const cue = cues.find((item) => item.id === id);
     if (cue) seek(cue.speech_timing.start_ms);
   }
@@ -1060,6 +1066,16 @@ export function EditorialPage() {
                       type="button"
                       aria-current={cue.id === selectedCueId ? "true" : undefined}
                       onClick={() => selectCue(cue.id)}
+                      onKeyDown={(event) => {
+                        if (event.key !== " ") return;
+                        event.preventDefault();
+                        if (cue.id !== selectedCueId) {
+                          selectCue(cue.id);
+                          return;
+                        }
+                        setTimelineFocusRequest((value) => value + 1);
+                        togglePlayback();
+                      }}
                       disabled={saving}
                     >
                       <span className="review-cue-number">{cue.order}</span>
@@ -1144,6 +1160,7 @@ export function EditorialPage() {
             playheadMs={playheadMs}
             playing={playing}
             zoom={zoom}
+            focusRequest={timelineFocusRequest}
             selectedCueId={selectedCueId}
             selectedWordId={selectedWordId}
             onPlayToggle={togglePlayback}
