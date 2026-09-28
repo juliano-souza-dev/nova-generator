@@ -437,6 +437,50 @@ describe("EditorialPage", () => {
     expect(pause).toHaveBeenCalledTimes(1);
   });
 
+  it("saves the selected word and opens the next word with Enter", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      {
+        ...cue,
+        original_en: "Can I help?",
+        words: [
+          { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350, pt: "Posso" },
+          { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480, pt: "eu" },
+          { id: "w3", order: 3, surface: "help?", start_ms: 490, end_ms: 800, pt: "ajudar?" },
+        ],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+
+    const wordList = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(wordList).getByRole("button", { name: /I/ }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "IN (ms)" }), {
+      target: { value: "370" },
+    });
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(mocks.updateWordTiming).toHaveBeenCalledWith("c1", {
+        author: "local-editor",
+        timings: [
+          { id: "w1", start_ms: 100, end_ms: 350 },
+          { id: "w2", start_ms: 370, end_ms: 480 },
+          { id: "w3", start_ms: 490, end_ms: 800 },
+        ],
+      }),
+    );
+    await waitFor(() =>
+      expect(within(wordList).getByRole("button", { name: /help/ })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+  });
+
   it("keeps AI semantic units local until the operator saves the draft", async () => {
     const cue = (await mocks.editorialCues())[0];
     const words = [

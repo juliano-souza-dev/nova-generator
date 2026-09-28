@@ -546,6 +546,20 @@ export function EditorialPage() {
       }
       const target = event.target;
       if (
+        event.key === "Enter" &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.repeat &&
+        selectedWord &&
+        !saving &&
+        !(target instanceof HTMLButtonElement)
+      ) {
+        event.preventDefault();
+        void saveChanges(false, true);
+        return;
+      }
+      if (
         target instanceof HTMLElement &&
         target.closest("input, textarea, select, [contenteditable=true]")
       )
@@ -1120,7 +1134,8 @@ export function EditorialPage() {
           <p className="review-keyboard-hints">
             <kbd>Ctrl Enter</kbd> prévia iHub · <kbd>Ctrl Shift Enter</kbd> desde o início ·{" "}
             <kbd>Espaço</kbd> cue · <kbd>Shift Espaço</kbd> cena · <kbd>A</kbd> IN · <kbd>S</kbd>
-            OUT · <kbd>G</kbd> salvar + próxima · <kbd>←/→</kbd> cursor
+            OUT · <kbd>Enter</kbd> salvar palavra + próxima · <kbd>G</kbd> salvar + próxima ·{" "}
+            <kbd>←/→</kbd> cursor
           </p>
           <CueWordTimeline
             cues={previewCues}
