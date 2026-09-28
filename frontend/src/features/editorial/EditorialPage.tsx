@@ -221,7 +221,7 @@ export function EditorialPage() {
     (approvedEn !== selectedCue.approved_en || approvedPt !== selectedCue.approved_pt),
   );
   const wordDirty = Boolean(
-    selectedWord && (wordStart !== selectedGroupStart || wordEnd !== selectedGroupEnd),
+    selectedWord && (wordStart !== selectedWord.start_ms || wordEnd !== selectedWord.end_ms),
   );
   const wordTranslationDirty = Boolean(selectedWord && wordPt !== storedWordPt);
   const selectedWordIndex =
@@ -233,8 +233,8 @@ export function EditorialPage() {
               ...cue,
               words: cue.words.map((word, index) => ({
                 ...word,
-                start_ms: index === selectedGroupStartIndex ? wordStart : word.start_ms,
-                end_ms: index === selectedGroupEndIndex ? wordEnd : word.end_ms,
+                start_ms: index === selectedWordIndex ? wordStart : word.start_ms,
+                end_ms: index === selectedWordIndex ? wordEnd : word.end_ms,
               })),
             }
           : cue,
@@ -339,10 +339,10 @@ export function EditorialPage() {
     setSemanticDraftUnits(null);
   }, [selectedCue?.id, selectedCue?.revision]);
   useEffect(() => {
-    setWordStart(selectedWord ? selectedGroupStart : 0);
-    setWordEnd(selectedWord ? selectedGroupEnd : 0);
+    setWordStart(selectedWord?.start_ms ?? 0);
+    setWordEnd(selectedWord?.end_ms ?? 0);
     setWordPt(storedWordPt);
-  }, [selectedWord, selectedGroupStart, selectedGroupEnd, storedWordPt]);
+  }, [selectedWord, storedWordPt]);
 
   const refreshCues = useCallback(async (): Promise<TimelineCue[]> => {
     if (!sceneId) return [];
@@ -577,8 +577,8 @@ export function EditorialPage() {
   function nudge(edge: "start" | "end", deltaMs: number) {
     if (!selectedCue || saving) return;
     if (selectedWord) {
-      const prior = selectedCue.words[selectedGroupStartIndex - 1];
-      const next = selectedCue.words[selectedGroupEndIndex + 1];
+      const prior = selectedCue.words[selectedWordIndex - 1];
+      const next = selectedCue.words[selectedWordIndex + 1];
       if (edge === "start") {
         const minimum = Math.max(selectedCue.speech_timing.start_ms, prior?.end_ms ?? 0);
         setWordStart(Math.max(minimum, Math.min(wordStart + deltaMs, wordEnd - 1)));
@@ -599,8 +599,8 @@ export function EditorialPage() {
   function setActiveEdgeAt(edge: "start" | "end", timeMs: number, recordHistory: boolean) {
     if (!selectedCue || saving) return;
     if (selectedWord) {
-      const prior = selectedCue.words[selectedGroupStartIndex - 1];
-      const next = selectedCue.words[selectedGroupEndIndex + 1];
+      const prior = selectedCue.words[selectedWordIndex - 1];
+      const next = selectedCue.words[selectedWordIndex + 1];
       if (edge === "start") {
         const minimum = Math.max(selectedCue.speech_timing.start_ms, prior?.end_ms ?? 0);
         setWordStart(Math.max(minimum, Math.min(Math.round(timeMs), wordEnd - 1)));
@@ -609,7 +609,7 @@ export function EditorialPage() {
         setWordEnd(Math.min(maximum, Math.max(Math.round(timeMs), wordStart + 1)));
       }
       setMessage(
-        `${edge === "start" ? "IN" : "OUT"} da unidade “${selectedUnitLabel}” marcado em ${formatTime(timeMs)}.`,
+        `${edge === "start" ? "IN" : "OUT"} da palavra “${selectedWord.surface}” marcado em ${formatTime(timeMs)}.`,
       );
       return;
     }
@@ -630,8 +630,8 @@ export function EditorialPage() {
   }
   function undo() {
     if (wordDirty && selectedWord) {
-      setWordStart(selectedGroupStart);
-      setWordEnd(selectedGroupEnd);
+      setWordStart(selectedWord.start_ms);
+      setWordEnd(selectedWord.end_ms);
       setMessage("Ajuste da palavra desfeito.");
       return;
     }
@@ -703,8 +703,8 @@ export function EditorialPage() {
           author,
           timings: selectedCue.words.map((item, index) => ({
             id: item.id,
-            start_ms: index === selectedGroupStartIndex ? wordStart : item.start_ms,
-            end_ms: index === selectedGroupEndIndex ? wordEnd : item.end_ms,
+            start_ms: index === selectedWordIndex ? wordStart : item.start_ms,
+            end_ms: index === selectedWordIndex ? wordEnd : item.end_ms,
           })),
         });
       if (wordTranslationDirty && selectedWord)

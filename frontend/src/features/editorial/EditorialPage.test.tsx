@@ -330,6 +330,69 @@ describe("EditorialPage", () => {
     expect(screen.getByText(/Can I help.*Posso ajudar/)).toBeInTheDocument();
   });
 
+  it("adjusts only the selected word timing inside a semantic unit", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      {
+        ...cue,
+        original_en: "Can I help?",
+        words: [
+          {
+            id: "w1",
+            order: 1,
+            surface: "Can",
+            start_ms: 100,
+            end_ms: 350,
+            pt: "Posso ajudar?",
+            semantic_group_id: "unit-1",
+            semantic_group_role: "lead",
+          },
+          {
+            id: "w2",
+            order: 2,
+            surface: "I",
+            start_ms: 360,
+            end_ms: 480,
+            semantic_group_id: "unit-1",
+            semantic_group_role: "member",
+          },
+          {
+            id: "w3",
+            order: 3,
+            surface: "help?",
+            start_ms: 490,
+            end_ms: 800,
+            semantic_group_id: "unit-1",
+            semantic_group_role: "member",
+          },
+        ],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+
+    const wordList = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(wordList).getByRole("button", { name: /I/ }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "IN (ms)" }), {
+      target: { value: "370" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar palavra" }));
+
+    await waitFor(() =>
+      expect(mocks.updateWordTiming).toHaveBeenCalledWith("c1", {
+        author: "local-editor",
+        timings: [
+          { id: "w1", start_ms: 100, end_ms: 350 },
+          { id: "w2", start_ms: 370, end_ms: 480 },
+          { id: "w3", start_ms: 490, end_ms: 800 },
+        ],
+      }),
+    );
+  });
+
   it("keeps AI semantic units local until the operator saves the draft", async () => {
     const cue = (await mocks.editorialCues())[0];
     const words = [
@@ -433,6 +496,9 @@ describe("EditorialPage", () => {
       </MemoryRouter>,
     );
     await screen.findByLabelText("Player do corte da cena");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Prévia no iHub" })).toBeEnabled(),
+    );
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     const preview = await screen.findByRole("dialog", { name: "Vídeo e legendas sincronizadas" });
     expect(preview).toBeInTheDocument();
