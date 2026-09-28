@@ -67,6 +67,22 @@
   height: 6px;
   accent-color: var(--editorial-approved);
 }
+.review-preparation {
+  grid-column: 1 / -1;
+  width: fit-content;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.review-preparation.ready {
+  color: #bbf7d0;
+  background: rgb(74 222 128 / 14%);
+}
+.review-preparation.pending {
+  color: #fde68a;
+  background: rgb(251 191 36 / 14%);
+}
 .review-message {
   margin: 0 0 1rem;
   padding: 0.65rem 0.85rem;

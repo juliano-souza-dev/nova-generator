@@ -127,6 +127,17 @@ describe("EditorialPage", () => {
     ]);
   });
 
+  it("separates AI preparation from manual cue approval in the review context", async () => {
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("0 de 1 aprovados")).toBeInTheDocument();
+    expect(screen.getByText("Preparação de IA completa")).toBeInTheDocument();
+  });
+
   it("presents a focused workstation and sends literal EN/PT approval", async () => {
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1&ingest_job=j1"]}>

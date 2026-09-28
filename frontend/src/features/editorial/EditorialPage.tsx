@@ -907,9 +907,14 @@ export function EditorialPage() {
         >
           <span>{project?.title ?? "Escolha a produção"}</span>
           <strong>
-            {cues.length ? `${approvedCount} de ${cues.length} cues` : "Sem revisão ativa"}
+            {cues.length ? `${approvedCount} de ${cues.length} aprovados` : "Sem revisão ativa"}
           </strong>
           <progress max={Math.max(cues.length, 1)} value={approvedCount} />
+          {cues.length > 0 && (
+            <span className={`review-preparation ${editorialGateReady ? "ready" : "pending"}`}>
+              {editorialGateReady ? "Preparação de IA completa" : "Preparação de IA pendente"}
+            </span>
+          )}
         </div>
       </header>
       {message && (
