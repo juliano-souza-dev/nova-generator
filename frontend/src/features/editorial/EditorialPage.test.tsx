@@ -393,6 +393,50 @@ describe("EditorialPage", () => {
     );
   });
 
+  it("replays a selected word using its unsaved IN and OUT marks", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      {
+        ...cue,
+        original_en: "Can I help?",
+        words: [
+          { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350, pt: "Posso" },
+          { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480, pt: "eu" },
+          { id: "w3", order: 3, surface: "help?", start_ms: 490, end_ms: 800, pt: "ajudar?" },
+        ],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+
+    const player = (await screen.findByLabelText("Player do corte da cena")) as HTMLVideoElement;
+    const wordList = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(wordList).getByRole("button", { name: /I/ }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "IN (ms)" }), {
+      target: { value: "375" },
+    });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "OUT (ms)" }), {
+      target: { value: "475" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Reproduzir palavra" }));
+
+    expect(player.currentTime).toBeCloseTo(0.375, 4);
+    expect(play).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(player, "currentTime", {
+      configurable: true,
+      value: 0.476,
+      writable: true,
+    });
+    fireEvent.timeUpdate(player);
+    expect(pause).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps AI semantic units local until the operator saves the draft", async () => {
     const cue = (await mocks.editorialCues())[0];
     const words = [

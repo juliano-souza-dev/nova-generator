@@ -645,8 +645,8 @@ export function EditorialPage() {
     if (!player || !selectedCue) return;
     if (player.paused)
       playRange(
-        selectedWord ? selectedGroupStart : selectedCue.speech_timing.start_ms,
-        selectedWord ? selectedGroupEnd : selectedCue.speech_timing.end_ms,
+        selectedWord ? wordStart : selectedCue.speech_timing.start_ms,
+        selectedWord ? wordEnd : selectedCue.speech_timing.end_ms,
       );
     else {
       playbackEnd.current = null;
