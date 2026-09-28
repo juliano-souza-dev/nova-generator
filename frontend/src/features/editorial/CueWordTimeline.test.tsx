@@ -45,9 +45,11 @@ describe("CueWordTimeline", () => {
 
     const ruler = screen.getByLabelText("Intervalo visível");
     expect(within(ruler).getByText("0.00 s")).toBeInTheDocument();
-    fireEvent.wheel(screen.getByRole("img", { name: "Waveform, cues e tempos das palavras" }), {
-      deltaY: 100,
-    });
+    const wheelWasNotAllowedToScroll = fireEvent.wheel(
+      screen.getByRole("img", { name: "Waveform, cues e tempos das palavras" }),
+      { deltaY: 100 },
+    );
+    expect(wheelWasNotAllowedToScroll).toBe(false);
     expect(within(ruler).getByText("0.50 s")).toBeInTheDocument();
   });
 });

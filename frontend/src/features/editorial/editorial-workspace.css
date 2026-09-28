@@ -378,6 +378,10 @@
   text-align: center;
 }
 
+.timeline-viewport {
+  overscroll-behavior: contain;
+}
+
 .timeline-word-label {
   overflow: hidden;
   color: #fff;

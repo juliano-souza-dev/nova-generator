@@ -31,6 +31,7 @@ type Props = {
 export function CueWordTimeline(props: Props) {
   const { durationMs, onZoomChange } = props;
   const root = useRef<HTMLDivElement>(null);
+  const viewport = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
   const draggingEdgeRef = useRef<"start" | "end" | null>(null);
   const errors = useMemo(() => validateTimeline(props.cues), [props.cues]);
@@ -133,18 +134,25 @@ export function CueWordTimeline(props: Props) {
       ),
     );
   }
-  function panWithWheel(event: React.WheelEvent<HTMLDivElement>) {
-    const maxStart = Math.max(0, durationMs - visibleDuration);
-    if (maxStart <= 0) return;
-    const rawDelta = event.deltaX || event.deltaY;
-    if (!rawDelta) return;
-    event.preventDefault();
-    const deltaMs = Math.max(
-      -visibleDuration * 0.25,
-      Math.min(visibleDuration * 0.25, (rawDelta * visibleDuration) / 1000),
-    );
-    setViewStart((current) => Math.max(0, Math.min(maxStart, current + deltaMs)));
-  }
+  useEffect(() => {
+    const element = viewport.current;
+    if (!element) return;
+    const onWheel = (event: WheelEvent) => {
+      // React's delegated wheel event may be passive in some browsers. A native,
+      // non-passive listener is required so the page never scrolls with the waveform.
+      event.preventDefault();
+      const maxStart = Math.max(0, durationMs - visibleDuration);
+      const rawDelta = event.deltaX || event.deltaY;
+      if (maxStart <= 0 || !rawDelta) return;
+      const deltaMs = Math.max(
+        -visibleDuration * 0.25,
+        Math.min(visibleDuration * 0.25, (rawDelta * visibleDuration) / 1000),
+      );
+      setViewStart((current) => Math.max(0, Math.min(maxStart, current + deltaMs)));
+    };
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => element.removeEventListener("wheel", onWheel);
+  }, [durationMs, visibleDuration]);
   function startEdgeDrag(edge: "start" | "end", event: React.PointerEvent<SVGElement>) {
     event.preventDefault();
     event.stopPropagation();
@@ -293,7 +301,7 @@ export function CueWordTimeline(props: Props) {
       {waveBars.length === 0 && (
         <p className="editorial-waveform-missing">Waveform indisponível para este corte.</p>
       )}
-      <div className="timeline-viewport" onWheel={panWithWheel}>
+      <div className="timeline-viewport" ref={viewport}>
         <svg
           ref={svg}
           className="cue-timeline"
