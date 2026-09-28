@@ -133,6 +133,18 @@ export function CueWordTimeline(props: Props) {
       ),
     );
   }
+  function panWithWheel(event: React.WheelEvent<HTMLDivElement>) {
+    const maxStart = Math.max(0, durationMs - visibleDuration);
+    if (maxStart <= 0) return;
+    const rawDelta = event.deltaX || event.deltaY;
+    if (!rawDelta) return;
+    event.preventDefault();
+    const deltaMs = Math.max(
+      -visibleDuration * 0.25,
+      Math.min(visibleDuration * 0.25, (rawDelta * visibleDuration) / 1000),
+    );
+    setViewStart((current) => Math.max(0, Math.min(maxStart, current + deltaMs)));
+  }
   function startEdgeDrag(edge: "start" | "end", event: React.PointerEvent<SVGElement>) {
     event.preventDefault();
     event.stopPropagation();
@@ -270,7 +282,7 @@ export function CueWordTimeline(props: Props) {
         </button>
         <span>
           Espaço: cue · Shift + Espaço: cena · A/S: IN/OUT · G: salvar + próxima · ←/→: cursor 10 ms
-          · Shift: 100 ms · Alt: 1 ms
+          · Shift: 100 ms · Alt: 1 ms · Roda: navegar visão
         </span>
       </div>
       <div className="editorial-timeline-ruler" aria-label="Intervalo visível">
@@ -281,7 +293,7 @@ export function CueWordTimeline(props: Props) {
       {waveBars.length === 0 && (
         <p className="editorial-waveform-missing">Waveform indisponível para este corte.</p>
       )}
-      <div className="timeline-viewport">
+      <div className="timeline-viewport" onWheel={panWithWheel}>
         <svg
           ref={svg}
           className="cue-timeline"
