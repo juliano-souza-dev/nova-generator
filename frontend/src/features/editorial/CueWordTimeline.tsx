@@ -79,8 +79,11 @@ export function CueWordTimeline(props: Props) {
     focusSelectedRange();
   }, [focusActive, props.selectedCueId, props.selectedWordId, focusSelectedRange]);
   useEffect(() => {
-    if (props.focusRequest) root.current?.focus({ preventScroll: true });
-  }, [props.focusRequest]);
+    if (!props.focusRequest) return;
+    root.current?.focus({ preventScroll: true });
+    setFocusActive(true);
+    focusSelectedRange();
+  }, [props.focusRequest, focusSelectedRange]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target instanceof Element ? event.target : null;
