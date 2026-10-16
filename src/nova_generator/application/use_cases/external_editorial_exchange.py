@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from nova_generator.application.ports.editorial_assistant import (
     EditorialAssistanceResult,
+    EditorialCuePrompt,
     EditorialSemanticUnit,
     EditorialSuggestion,
     EditorialWordTranslation,
@@ -19,6 +20,7 @@ from nova_generator.application.ports.editorial_project_repository import Editor
 from nova_generator.application.use_cases.editorial_assistance import (
     EditorialAssistanceError,
     build_editorial_prompt,
+    persist_editorial_chunk_preparation,
     validate_editorial_result,
 )
 
@@ -63,13 +65,17 @@ class _ExternalResult(BaseModel):
         "nova-generator-editorial-suggestions/1.1",
         "nova-generator-editorial-suggestions/1.2",
         "nova-generator-editorial-suggestions/1.3",
+        "nova-generator-editorial-suggestions/1.4",
     ]
     scene_id: UUID
     input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    chunk_id: str | None = None
     suggestions: list[_ExternalSuggestion] = Field(min_length=1)
 
 
 class ExternalEditorialExchange:
+    _CUES_PER_CHUNK = 8
+
     def __init__(
         self,
         repository: EditorialProjectRepository,
@@ -100,58 +106,62 @@ class ExternalEditorialExchange:
         directory.mkdir(parents=True, exist_ok=True)
         package = directory / f"scene-{scene_id}-external-ai.zip"
         source = {
-            "schema_version": "nova-generator-editorial-input/1.3",
+            "schema_version": "nova-generator-editorial-input/1.4",
             "scene_id": str(scene_id),
             "input_sha256": input_sha256,
             "cues": [asdict(cue) for cue in cues],
         }
-        template = {
-            "schema_version": "nova-generator-editorial-suggestions/1.3",
+        chunks = [
+            cues[index : index + self._CUES_PER_CHUNK]
+            for index in range(0, len(cues), self._CUES_PER_CHUNK)
+        ]
+        manifest = {
+            "schema_version": "nova-generator-editorial-exchange/1.4",
             "scene_id": str(scene_id),
             "input_sha256": input_sha256,
-            "suggestions": [
+            "chunks": [
                 {
-                    "cue_id": cue.id,
-                    "order": cue.order,
-                    "approved_en": cue.word_by_word_en,
-                    "approved_pt": cue.current_pt,
-                    "notes": "",
-                    "word_translations": [
-                        {
-                            "word_id": word.id,
-                            "order": word.order,
-                            "leading": word.leading,
-                            "surface": word.surface,
-                            "start_ms": word.start_ms,
-                            "end_ms": word.end_ms,
-                            "pt": "",
-                        }
-                        for word in cue.words
-                    ],
-                    "semantic_units": [],
-                    "trailing": cue.trailing,
+                    "id": f"chunk-{index:03d}",
+                    "index": index,
+                    "cue_ids": [cue.id for cue in chunk],
+                    "cue_orders": [cue.order for cue in chunk],
                 }
-                for cue in cues
+                for index, chunk in enumerate(chunks, start=1)
             ],
         }
-        ingest_job_id = scene.provenance.get("ingest_job_id")
-        cut = (
-            self._project_root / str(project_id) / "cuts" / f"{ingest_job_id}.mp4"
-            if isinstance(ingest_job_id, str)
-            else None
+        (directory / f"scene-{scene_id}-external-ai-manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         with zipfile.ZipFile(package, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr(
+                "manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+            )
+            archive.writestr("INSTRUCOES.md", _instructions())
+            legacy_source = {**source, "schema_version": "nova-generator-editorial-input/1.3"}
+            legacy_template = _template(scene_id, input_sha256, "", cues) | {
+                "schema_version": "nova-generator-editorial-suggestions/1.3"
+            }
+            archive.writestr(
                 "editorial_input.json",
-                json.dumps(source, ensure_ascii=False, indent=2) + "\n",
+                json.dumps(legacy_source, ensure_ascii=False, indent=2) + "\n",
             )
             archive.writestr(
                 "editorial_result_template.json",
-                json.dumps(template, ensure_ascii=False, indent=2) + "\n",
+                json.dumps(legacy_template, ensure_ascii=False, indent=2) + "\n",
             )
-            archive.writestr("INSTRUCOES.md", _instructions())
-            if cut is not None and cut.is_file() and cut.stat().st_size:
-                archive.write(cut, arcname="scene.mp4", compress_type=zipfile.ZIP_STORED)
+            for item, chunk in zip(manifest["chunks"], chunks, strict=True):
+                chunk_source = {**source, "chunk": item, "cues": [asdict(cue) for cue in chunk]}
+                template = _template(scene_id, input_sha256, item["id"], chunk)
+                prefix = f"chunks/{item['index']:03d}-{item['id']}"
+                archive.writestr(
+                    f"{prefix}-input.json",
+                    json.dumps(chunk_source, ensure_ascii=False, indent=2) + "\n",
+                )
+                archive.writestr(
+                    f"{prefix}-result.json",
+                    json.dumps(template, ensure_ascii=False, indent=2) + "\n",
+                )
+                archive.writestr(f"{prefix}-prompt.md", _chunk_prompt(chunk_source, template))
         return package
 
     def import_result(self, scene_id: UUID, content: bytes) -> EditorialAssistanceResult:
@@ -161,42 +171,10 @@ class ExternalEditorialExchange:
             document = _ExternalResult.model_validate_json(content)
         except ValidationError as error:
             raise EditorialAssistanceError("external result does not match the contract") from error
+        if document.schema_version == "nova-generator-editorial-suggestions/1.4":
+            return self._import_chunk(scene_id, document, content)
         input_sha256, cues = build_editorial_prompt(self._repository, scene_id)
-        result = EditorialAssistanceResult(
-            scene_id=str(document.scene_id),
-            input_sha256=document.input_sha256,
-            provider="external",
-            model="external-ai",
-            suggestions=tuple(
-                EditorialSuggestion(
-                    cue_id=item.cue_id,
-                    order=item.order,
-                    approved_en=item.approved_en,
-                    approved_pt=item.approved_pt,
-                    notes=item.notes,
-                    word_translations=tuple(
-                        EditorialWordTranslation(
-                            word.word_id,
-                            word.pt,
-                            word.order,
-                            word.leading,
-                            word.surface,
-                            word.start_ms,
-                            word.end_ms,
-                        )
-                        for word in item.word_translations
-                    ),
-                    semantic_units=tuple(
-                        EditorialSemanticUnit(tuple(unit.word_ids), unit.pt)
-                        for unit in item.semantic_units
-                    ),
-                    trailing=item.trailing,
-                )
-                for item in document.suggestions
-            ),
-            rate_limits={},
-            contract_version=document.schema_version,
-        )
+        result = _as_result(document)
         validated = validate_editorial_result(
             result,
             scene_id=scene_id,
@@ -217,11 +195,69 @@ class ExternalEditorialExchange:
         destination.write_bytes(content)
         return validated
 
+    def _import_chunk(
+        self, scene_id: UUID, document: _ExternalResult, content: bytes
+    ) -> EditorialAssistanceResult:
+        if not document.chunk_id:
+            raise EditorialAssistanceError("external chunk result is missing chunk_id")
+        project_id = self._repository.get_scene_project_id(scene_id)
+        if project_id is None:
+            raise EditorialAssistanceError("scene not found")
+        manifest_path = (
+            self._project_root
+            / str(project_id)
+            / "editorial-ai"
+            / f"scene-{scene_id}-external-ai-manifest.json"
+        )
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise EditorialAssistanceError(
+                "export a current external text package before importing chunks"
+            ) from error
+        if document.scene_id != scene_id or document.input_sha256 != manifest.get("input_sha256"):
+            raise EditorialAssistanceError(
+                "external chunk is stale for the current exported package"
+            )
+        chunk = next(
+            (item for item in manifest.get("chunks", []) if item.get("id") == document.chunk_id),
+            None,
+        )
+        if not isinstance(chunk, dict):
+            raise EditorialAssistanceError("external chunk is not part of this package")
+        _current_hash, all_cues = build_editorial_prompt(self._repository, scene_id)
+        expected_ids = chunk.get("cue_ids", [])
+        expected = tuple(cue for cue in all_cues if cue.id in expected_ids)
+        if [cue.id for cue in expected] != expected_ids:
+            raise EditorialAssistanceError("scene changed; export a new external text package")
+        result = _as_result(document)
+        validated = validate_editorial_result(
+            result,
+            scene_id=scene_id,
+            input_sha256=document.input_sha256,
+            cues=expected,
+            require_word_translations=True,
+            require_word_revisions=True,
+        )
+        destination = (
+            manifest_path.parent / f"scene-{scene_id}-{document.chunk_id}-external-result.json"
+        )
+        destination.write_bytes(content)
+        persist_editorial_chunk_preparation(
+            self._repository, validated, author="external-editorial-assistant"
+        )
+        return validated
+
 
 def _instructions() -> str:
-    return """# Assistência editorial externa
+    return """# Assistência editorial externa em blocos
 
-Analise `scene.mp4` quando estiver presente e use `editorial_input.json` como fonte canônica.
+Este pacote contém somente texto: não há vídeo nem áudio. Abra cada arquivo
+`chunks/*-prompt.md`, cole-o em uma conversa nova da Groq e salve a resposta como JSON no
+arquivo `chunks/*-result.json` correspondente. Envie os retornos um a um ao Generator; cada
+bloco é validado e aplicado imediatamente. Nunca misture cues de blocos diferentes.
+
+Use o `*-input.json` como fonte canônica.
 Preencha `approved_en`, `approved_pt`, `notes`, `word_translations` e `semantic_units` no arquivo
 de modelo. `word_translations` é a revisão completa do word-by-word. Deve conter todas as palavras
 na ordem recebida, com `word_id` e `order` inalterados; preserve ou corrija `leading`, `surface`,
@@ -246,3 +282,102 @@ Preserve nomes, acentos, apóstrofos, aspas, vírgulas, pontos, perguntas e reti
 Não una, divida, omita ou invente cues.
 Devolva somente o JSON preenchido. O Generator o importará como sugestão de rascunho.
 """
+
+
+def _template(
+    scene_id: UUID, input_sha256: str, chunk_id: str, cues: tuple[EditorialCuePrompt, ...]
+) -> dict[str, object]:
+    return {
+        "schema_version": "nova-generator-editorial-suggestions/1.4",
+        "scene_id": str(scene_id),
+        "input_sha256": input_sha256,
+        "chunk_id": chunk_id,
+        "suggestions": [
+            {
+                "cue_id": cue.id,
+                "order": cue.order,
+                "approved_en": cue.word_by_word_en,
+                "approved_pt": cue.current_pt,
+                "notes": "",
+                "word_translations": [
+                    {
+                        "word_id": word.id,
+                        "order": word.order,
+                        "leading": word.leading,
+                        "surface": word.surface,
+                        "start_ms": word.start_ms,
+                        "end_ms": word.end_ms,
+                        "pt": "",
+                    }
+                    for word in cue.words
+                ],
+                "semantic_units": [],
+                "trailing": cue.trailing,
+            }
+            for cue in cues
+        ],
+    }
+
+
+def _chunk_prompt(source: dict[str, object], template: dict[str, object]) -> str:
+    return (
+        """Você é o revisor editorial bilíngue do Nova Generator. Devolva SOMENTE um JSON válido,
+sem markdown e sem explicações. Complete o JSON de resposta abaixo sem alterar schema_version,
+scene_id, input_sha256, chunk_id, cue_id, ordem ou ids. Preserve literalmente pontuação e espaços.
+Use português brasileiro natural e crie unidades semânticas para expressões como phrasal verbs;
+por exemplo, “Can I help?” deve ser “Posso ajudar?”, nunca uma tradução mecânica palavra a palavra.
+Cada palavra precisa manter seu tempo dentro do cue e ter uma tradução contextual.
+
+ENTRADA CANÔNICA:
+```json
+"""
+        + json.dumps(source, ensure_ascii=False, separators=(",", ":"))
+        + """
+```
+
+JSON A PREENCHER:
+```json
+"""
+        + json.dumps(template, ensure_ascii=False, separators=(",", ":"))
+        + """
+```
+"""
+    )
+
+
+def _as_result(document: _ExternalResult) -> EditorialAssistanceResult:
+    return EditorialAssistanceResult(
+        scene_id=str(document.scene_id),
+        input_sha256=document.input_sha256,
+        provider="external",
+        model="external-ai",
+        suggestions=tuple(
+            EditorialSuggestion(
+                cue_id=item.cue_id,
+                order=item.order,
+                approved_en=item.approved_en,
+                approved_pt=item.approved_pt,
+                notes=item.notes,
+                word_translations=tuple(
+                    EditorialWordTranslation(
+                        word.word_id,
+                        word.pt,
+                        word.order,
+                        word.leading,
+                        word.surface,
+                        word.start_ms,
+                        word.end_ms,
+                    )
+                    for word in item.word_translations
+                ),
+                semantic_units=tuple(
+                    EditorialSemanticUnit(tuple(unit.word_ids), unit.pt)
+                    for unit in item.semantic_units
+                ),
+                trailing=item.trailing,
+            )
+            for item in document.suggestions
+        ),
+        rate_limits={},
+        contract_version=document.schema_version,
+    )

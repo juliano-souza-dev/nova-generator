@@ -277,3 +277,33 @@ def test_external_13_reconciles_literal_word_surface_and_rejects_divergence(
     )
     with pytest.raises(EditorialAssistanceError, match="exactly match"):
         persist_editorial_preparation(repository, invalid, author="test")
+
+
+def test_external_text_chunks_are_small_and_apply_progressively(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'chunks.db'}")
+    Base.metadata.create_all(engine)
+    repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repository).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="external-chunks",
+        imported_by="test",
+    )
+    scene = repository.get_project_scenes(project_id)[0]
+    exchange = ExternalEditorialExchange(repository, tmp_path)
+    exchange._CUES_PER_CHUNK = 1
+    with zipfile.ZipFile(exchange.build_package(scene.id)) as archive:
+        names = archive.namelist()
+        assert "scene.mp4" not in names
+        assert "manifest.json" in names
+        result_names = [name for name in names if name.endswith("-result.json")]
+        assert len(result_names) == len(repository.get_scene_cues(scene.id))
+        first = json.loads(archive.read(result_names[0]))
+    for suggestion in first["suggestions"]:
+        suggestion["approved_pt"] = "Tradução natural."
+        for word in suggestion["word_translations"]:
+            word["pt"] = "tradução"
+    imported = exchange.import_result(scene.id, json.dumps(first).encode("utf-8"))
+    assert imported.contract_version.endswith("/1.4")
+    changed = repository.get_scene_cues(scene.id)[0]
+    assert changed.provenance["editorial_preparation_contract"].endswith("/1.4")

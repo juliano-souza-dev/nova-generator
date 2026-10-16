@@ -290,6 +290,73 @@ def persist_editorial_preparation(
     return True
 
 
+def persist_editorial_chunk_preparation(
+    repository: EditorialProjectRepository,
+    result: EditorialAssistanceResult,
+    *,
+    author: str,
+) -> bool:
+    """Persist one already validated external text chunk and retain a revision.
+
+    Chunked providers cannot safely return a complete scene in one response.  The
+    exchange validates the chunk against the immutable exported manifest before
+    calling this function; here we update only those cue ids and replace the
+    complete scene atomically so a partial import is still auditable.
+    """
+    if result.contract_version != "nova-generator-editorial-suggestions/1.4":
+        raise EditorialAssistanceError("editorial chunk contract 1.4 is required")
+    scene_id = UUID(result.scene_id)
+    before = _scene_snapshot(repository, scene_id)
+    suggestions = {item.cue_id: item for item in result.suggestions}
+    if not suggestions:
+        raise EditorialAssistanceError("editorial chunk has no suggestions")
+    project_id = repository.get_scene_project_id(scene_id)
+    if project_id is None:
+        raise EditorialAssistanceError("scene not found")
+    entries: list[tuple[Cue, list[WordTiming]]] = []
+    for cue in repository.get_scene_cues(scene_id):
+        suggestion = suggestions.get(str(cue.id))
+        words = repository.get_cue_words(cue.id)
+        if suggestion is None:
+            entries.append((cue, words))
+            continue
+        changed = replace(
+            cue,
+            approved_en=suggestion.approved_en,
+            approved_pt=suggestion.approved_pt,
+            revision=cue.revision + 1,
+            provenance={
+                **cue.provenance,
+                "approval": "draft",
+                "editorial_preparation": "complete",
+                "editorial_preparation_provider": result.provider,
+                "editorial_preparation_model": result.model,
+                "editorial_preparation_sha256": result.input_sha256,
+                "editorial_preparation_notes": suggestion.notes,
+                "editorial_preparation_trailing": suggestion.trailing,
+                "editorial_preparation_contract": result.contract_version,
+            },
+        )
+        entries.append((changed, _prepared_words(words, suggestion, result.input_sha256)))
+    after = _entries_snapshot(entries)
+    revision = EditorialRevision(
+        uuid4(),
+        project_id,
+        scene_id,
+        None,
+        max((item.sequence for item in repository.list_revisions(scene_id)), default=0) + 1,
+        "prepare_editorial_chunk",
+        author,
+        result.provider,
+        before,
+        after,
+        datetime.now(UTC),
+    )
+    if not repository.replace_scene_cues_with_revision(scene_id, before, entries, revision):
+        raise EditorialAssistanceError("scene changed while the external chunk was imported")
+    return True
+
+
 def scene_is_editorially_prepared(repository: EditorialProjectRepository, scene_id: UUID) -> bool:
     cues = repository.get_scene_cues(scene_id)
     return bool(cues) and all(
@@ -297,7 +364,10 @@ def scene_is_editorially_prepared(repository: EditorialProjectRepository, scene_
         and cue.approved_pt.strip()
         and cue.provenance.get("editorial_preparation") == "complete"
         and cue.provenance.get("editorial_preparation_contract")
-        == "nova-generator-editorial-suggestions/1.3"
+        in {
+            "nova-generator-editorial-suggestions/1.3",
+            "nova-generator-editorial-suggestions/1.4",
+        }
         and all(
             (
                 isinstance(word.provenance.get("pt"), str)

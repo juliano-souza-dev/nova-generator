@@ -311,15 +311,16 @@ async def import_external_editorial_result(
 ) -> EditorialAssistanceResponse:
     try:
         result = exchange.import_result(scene_id, await file.read())
-        if result.contract_version != "nova-generator-editorial-suggestions/1.3":
-            raise EditorialAssistanceError(
-                "external result 1.3 is required to reconcile every word and timing"
+        if result.contract_version == "nova-generator-editorial-suggestions/1.3":
+            persist_editorial_preparation(
+                repository=repository,
+                result=result,
+                author="external-editorial-assistant",
             )
-        persist_editorial_preparation(
-            repository=repository,
-            result=result,
-            author="external-editorial-assistant",
-        )
+        elif result.contract_version != "nova-generator-editorial-suggestions/1.4":
+            raise EditorialAssistanceError(
+                "external result must use contract 1.3 or chunked contract 1.4"
+            )
     except EditorialAssistanceError as error:
         raise HTTPException(422, detail=str(error)) from error
     return EditorialAssistanceResponse(

@@ -73,8 +73,8 @@ function EditorialImportDropzone({ disabled, onImport }: EditorialImportDropzone
     >
       <Upload aria-hidden="true" />
       <span>
-        <strong>Arraste o retorno JSON aqui</strong>
-        <small>ou clique para escolher o arquivo</small>
+        <strong>Arraste um retorno JSON aqui</strong>
+        <small>importe um bloco por vez</small>
       </span>
       <input
         ref={inputRef}
@@ -171,7 +171,6 @@ export function EditorialPage() {
   const [hubPreviewStartMs, setHubPreviewStartMs] = useState<number | null>(null);
   const [assistantFallbackRequired, setAssistantFallbackRequired] = useState(false);
   const [assistantStatusFailed, setAssistantStatusFailed] = useState(false);
-  const assistantAutoStartedForScene = useRef<string | undefined>(undefined);
   const [semanticDraftUnits, setSemanticDraftUnits] = useState<EditorialSemanticUnit[] | null>(
     null,
   );
@@ -309,7 +308,6 @@ export function EditorialPage() {
     setAssistance(undefined);
     setAssistantMessage("");
     setAssistantFallbackRequired(false);
-    assistantAutoStartedForScene.current = undefined;
     if (!sceneId) return;
     let cancelled = false;
     void studioApi
@@ -394,15 +392,14 @@ export function EditorialPage() {
     setAssistantMessage("Validando o retorno da IA externa…");
     try {
       const result = await studioApi.importExternalEditorialResult(sceneId, file);
-      if (!assistanceCoversPendingCues(result, cues))
-        throw new Error(
-          "O retorno externo está incompleto. Todos os cues precisam de inglês, português e tradução contextual de cada palavra.",
-        );
       setAssistance(result);
-      await refreshCues();
-      setAssistantFallbackRequired(false);
+      const refreshed = await refreshCues();
+      const remaining = refreshed.filter(cueNeedsEditorialTreatment).length;
+      setAssistantFallbackRequired(remaining > 0);
       setAssistantMessage(
-        `${result.suggestions.length} cues tratados pela IA externa. A revisão está liberada.`,
+        remaining > 0
+          ? `Bloco importado: ${result.suggestions.length} cues tratados. Restam ${remaining} cues; envie o próximo JSON.`
+          : "Todos os blocos foram validados. A revisão editorial está liberada.",
       );
     } catch (error) {
       setAssistantMessage(
@@ -414,17 +411,13 @@ export function EditorialPage() {
   }
   useEffect(() => {
     if (!sceneId || cues.length === 0 || pendingTreatmentCount === 0 || !assistantStatus) return;
-    if (!assistantStatus.groq_configured) {
-      setAssistantFallbackRequired(true);
-      setAssistantMessage(
-        "Groq não está configurada. Exporte o pacote e importe o retorno completo da IA externa.",
-      );
-      return;
-    }
-    if (assistantAutoStartedForScene.current === sceneId) return;
-    assistantAutoStartedForScene.current = sceneId;
-    void startEditorialAssistance();
-  }, [assistantStatus, cues, pendingTreatmentCount, sceneId, startEditorialAssistance]);
+    setAssistantFallbackRequired(true);
+    setAssistantMessage(
+      assistantStatus.groq_configured
+        ? "Escolha Groq para processar a cena aqui ou use uma IA externa em blocos de texto."
+        : "Groq não está configurada. Use uma IA externa em blocos de texto.",
+    );
+  }, [assistantStatus, cues.length, pendingTreatmentCount, sceneId]);
   function seek(timeMs: number) {
     const bounded = Math.max(0, Math.min(timeMs, durationMs));
     setPlayheadMs(bounded);
@@ -1026,27 +1019,30 @@ export function EditorialPage() {
             )}
             {(assistantFallbackRequired || assistantStatusFailed) && (
               <div className="editorial-preparation-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={assistantBusy || !assistantStatus?.groq_configured}
+                  title={
+                    assistantStatus?.groq_configured
+                      ? undefined
+                      : "Configure GROQ_API_KEY para usar a Groq neste computador."
+                  }
+                  onClick={() => void startEditorialAssistance()}
+                >
+                  <Bot aria-hidden="true" /> Processar com Groq
+                </button>
                 <a
                   className="primary-button"
                   href={studioApi.externalEditorialPackageUrl(sceneId)}
                   download
                 >
-                  <Download aria-hidden="true" /> Baixar pacote para IA externa
+                  <Download aria-hidden="true" /> Baixar blocos de texto para IA externa
                 </a>
                 <EditorialImportDropzone
                   disabled={assistantBusy}
                   onImport={(file) => void importExternalResult(file)}
                 />
-                {assistantStatus?.groq_configured && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={assistantBusy}
-                    onClick={() => void startEditorialAssistance()}
-                  >
-                    Tentar Groq novamente
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -1238,7 +1234,7 @@ export function EditorialPage() {
                     href={studioApi.externalEditorialPackageUrl(sceneId)}
                     download
                   >
-                    <Download aria-hidden="true" /> Pacote para IA externa
+                    <Download aria-hidden="true" /> Blocos de texto para IA externa
                   </a>
                   <EditorialImportDropzone
                     disabled={assistantBusy}

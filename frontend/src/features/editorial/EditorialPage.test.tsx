@@ -186,7 +186,7 @@ describe("EditorialPage", () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Player do corte da cena")).not.toBeInTheDocument();
     expect(
-      await screen.findByRole("link", { name: /Baixar pacote para IA externa/ }),
+      await screen.findByRole("link", { name: /Baixar blocos de texto para IA externa/ }),
     ).toBeInTheDocument();
   });
 
@@ -208,7 +208,9 @@ describe("EditorialPage", () => {
     expect(
       await screen.findByText("Não foi possível consultar a Groq. Use o pacote para IA externa."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Baixar pacote para IA externa/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Baixar blocos de texto para IA externa/ }),
+    ).toBeInTheDocument();
   });
 
   it("imports an external editorial result dropped into the import area", async () => {
@@ -248,7 +250,7 @@ describe("EditorialPage", () => {
     await waitFor(() =>
       expect(mocks.importExternalEditorialResult).toHaveBeenCalledWith("s1", file),
     );
-    expect(await screen.findByText(/cues tratados pela IA externa/)).toBeInTheDocument();
+    expect(await screen.findByText(/Todos os blocos foram validados/)).toBeInTheDocument();
   });
 
   it("explains a validated source and starts processing from the empty state", async () => {
