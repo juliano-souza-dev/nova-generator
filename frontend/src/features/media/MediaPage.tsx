@@ -108,6 +108,7 @@ export function MediaPage() {
                 </p>
               )}
               <JourneySteps media={media.data} />
+              <NextMediaAction media={media.data} />
               <div className="media-cut-workspace">
                 {media.data.source_ready && (
                   <MediaPlayer
@@ -134,9 +135,7 @@ export function MediaPage() {
                   {ingest.error.message}
                 </p>
               )}
-              {media.data.transcript_candidate && (
-                <TranscriptReview projectId={selected.id} media={media.data} />
-              )}
+              {media.data.transcript_candidate && <TranscriptReview media={media.data} />}
             </>
           )}
         </>
@@ -196,6 +195,57 @@ function SourceStatus({
       )}
     </section>
   );
+}
+
+function NextMediaAction({ media }: { media: ProjectMedia }) {
+  const processing = ACTIVE.has(media.ingest_status ?? "");
+  if (media.can_review && media.review_url) {
+    return (
+      <section className="media-next-action panel" aria-label="Próxima ação">
+        <div>
+          <span className="eyebrow">Próximo passo</span>
+          <h2>Revise a legenda</h2>
+          <p>
+            O corte e a transcrição estão prontos. Abra a revisão editorial para ajustar as falas.
+          </p>
+        </div>
+        <Link className="primary-button" to={media.review_url}>
+          Revisar legenda
+        </Link>
+      </section>
+    );
+  }
+  if (processing) {
+    return (
+      <section className="media-next-action panel" aria-label="Próxima ação">
+        <div>
+          <span className="eyebrow">Processando</span>
+          <h2>Cortando e transcrevendo</h2>
+          <p>
+            Você pode acompanhar o status em Jobs. A revisão editorial será liberada ao terminar.
+          </p>
+        </div>
+        <Link className="secondary-button" to="/jobs">
+          Ver jobs
+        </Link>
+      </section>
+    );
+  }
+  if (media.can_cut) {
+    return (
+      <section className="media-next-action panel" aria-label="Próxima ação">
+        <div>
+          <span className="eyebrow">Próximo passo</span>
+          <h2>Escolha o trecho que será estudado</h2>
+          <p>
+            Use a waveform abaixo para definir IN e OUT. Depois, clique em “Extrair corte e
+            transcrever”.
+          </p>
+        </div>
+      </section>
+    );
+  }
+  return null;
 }
 
 function JourneySteps({ media }: { media: ProjectMedia }) {
@@ -410,7 +460,7 @@ function CutWaveform({ peaks, bucketMs }: { peaks: number[]; bucketMs: number })
   );
 }
 
-function TranscriptReview({ projectId, media }: { projectId: string; media: ProjectMedia }) {
+function TranscriptReview({ media }: { media: ProjectMedia }) {
   const candidate = media.transcript_candidate;
   if (!candidate || !media.can_review) return null;
   return (
@@ -429,12 +479,6 @@ function TranscriptReview({ projectId, media }: { projectId: string; media: Proj
           </li>
         ))}
       </ol>
-      <Link
-        className="primary-button"
-        to={media.review_url ?? `/editorial?project=${encodeURIComponent(projectId)}`}
-      >
-        Revisar legenda
-      </Link>
     </section>
   );
 }
