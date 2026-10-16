@@ -127,12 +127,26 @@ function Ensure-Backend([object]$PythonCommand) {
     $expected = Get-ManifestHash @((Join-Path $ProjectRoot "pyproject.toml"))
     $stamp = Join-Path $RuntimeRoot "backend.sha256"
     $current = if (Test-Path -LiteralPath $stamp) { (Get-Content -Raw $stamp).Trim() } else { "" }
-    if ($current -ne $expected) {
+    $rootStamp = Join-Path $RuntimeRoot "backend-project-root.txt"
+    $installedRoot = if (Test-Path -LiteralPath $rootStamp) { (Get-Content -Raw $rootStamp).Trim() } else { "" }
+    $importWorks = $false
+    if (Test-Path -LiteralPath $BackendPython) {
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            & $BackendPython -c "import nova_generator" 2>$null
+            $importWorks = $LASTEXITCODE -eq 0
+        } finally {
+            $ErrorActionPreference = $previousPreference
+        }
+    }
+    if ($current -ne $expected -or $installedRoot -ne $ProjectRoot -or -not $importWorks) {
         & $BackendPython -m pip install --upgrade pip
         if ($LASTEXITCODE -ne 0) { throw "Falha ao atualizar pip do backend." }
         & $BackendPython -m pip install -e "$ProjectRoot[asr]"
         if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar backend/ASR." }
         Set-Content -LiteralPath $stamp -Value $expected -Encoding ASCII
+        Set-Content -LiteralPath $rootStamp -Value $ProjectRoot -Encoding UTF8
     }
 }
 
