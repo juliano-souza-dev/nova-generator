@@ -1225,29 +1225,6 @@ export function EditorialPage() {
             OUT · <kbd>Enter</kbd> salvar palavra + próxima · <kbd>G</kbd> salvar + próxima ·{" "}
             <kbd>←/→</kbd> cursor
           </p>
-          <CueWordTimeline
-            cues={previewCues}
-            waveform={matchingMedia ? media?.waveform : null}
-            durationMs={durationMs}
-            playheadMs={playheadMs}
-            playing={playing}
-            zoom={zoom}
-            focusRequest={timelineFocusRequest}
-            selectedCueId={selectedCueId}
-            selectedWordId={selectedWordId}
-            onPlayToggle={togglePlayback}
-            onContinuousPlayToggle={toggleContinuousPlayback}
-            onSaveAndNext={() => void saveChanges(false, true)}
-            onPlayheadChange={seek}
-            onZoomChange={setZoom}
-            onSelectCue={selectCue}
-            onSelectWord={selectWord}
-            onSetEdge={markActiveEdge}
-            onEdgeDragStart={beginEdgeDrag}
-            onEdgeChange={(edge, timeMs) => setActiveEdgeAt(edge, timeMs, false)}
-            onNudge={nudge}
-            onUndo={undo}
-          />
           <nav className="cue-navigation cue-navigation-secondary" aria-label="Navegação entre cues">
             <button
               type="button"
@@ -1720,6 +1697,29 @@ export function EditorialPage() {
               <Check aria-hidden="true" /> Aprovar cue
             </button>
           </footer>
+          <CueWordTimeline
+            cues={previewCues}
+            waveform={matchingMedia ? media?.waveform : null}
+            durationMs={durationMs}
+            playheadMs={playheadMs}
+            playing={playing}
+            zoom={zoom}
+            focusRequest={timelineFocusRequest}
+            selectedCueId={selectedCueId}
+            selectedWordId={selectedWordId}
+            onPlayToggle={togglePlayback}
+            onContinuousPlayToggle={toggleContinuousPlayback}
+            onSaveAndNext={() => void saveChanges(false, true)}
+            onPlayheadChange={seek}
+            onZoomChange={setZoom}
+            onSelectCue={selectCue}
+            onSelectWord={selectWord}
+            onSetEdge={markActiveEdge}
+            onEdgeDragStart={beginEdgeDrag}
+            onEdgeChange={(edge, timeMs) => setActiveEdgeAt(edge, timeMs, false)}
+            onNudge={nudge}
+            onUndo={undo}
+          />
           {hubPreviewStartMs !== null && matchingMedia && media?.cut_url && (
             <EditorialHubPreview
               mediaUrl={media.cut_url}
