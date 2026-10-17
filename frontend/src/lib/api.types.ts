@@ -257,3 +257,29 @@ export type ShadowingPlan = {
   status: "draft" | "approved";
   blocks: ShadowingBlock[];
 };
+
+export type MaterialAiSection = {
+  id: string;
+  title: string;
+  paragraphs: string[];
+  exercises: Array<{ prompt: string; answer: string }>;
+};
+export type MaterialAiDocument = {
+  contract: string;
+  project_id: string;
+  source_sha256: string;
+  title: string;
+  sections: MaterialAiSection[];
+  anki_cards: Array<{
+    cue_id: string;
+    front_en: string;
+    back_pt: string;
+    explanation_pt: string;
+    tags: string[];
+  }>;
+};
+export type MaterialAiReview = {
+  status: "pending" | "draft" | "approved";
+  source_sha256: string;
+  document: MaterialAiDocument | null;
+};
