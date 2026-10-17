@@ -84,7 +84,14 @@
       "explanation_pt": "Cumprimento neutro, apropriado para contextos formais e informais.",
       "tags": [
         "greetings"
-      ]
+      ],
+      "card_type": "EXPRESSION",
+      "focus_text": "Hello.",
+      "meaning": "Olá.",
+      "marked_en": "Hello.",
+      "marked_pt": "Olá.",
+      "example_en": "Hello, everyone!",
+      "example_pt": "Olá, pessoal!"
     }
   ]
 }
