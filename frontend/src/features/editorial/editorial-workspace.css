@@ -6,8 +6,9 @@
 }
 
 .review-cue-list {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  max-height: 238px;
   padding: 0.75rem;
   overflow: hidden;
 }
@@ -26,7 +27,8 @@
 
 .review-cue-list ol {
   display: grid;
-  max-height: 185px;
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 0.25rem;
   margin: 0;
   padding: 0 0.2rem 0 0;
@@ -806,10 +808,13 @@
   }
 
   .review-cue-list {
+    display: block;
     max-height: 190px;
   }
 
   .review-cue-list ol {
+    display: grid;
+    max-height: 137px;
     max-height: 137px;
   }
 }
@@ -839,11 +844,13 @@
   }
 
   .review-cue-list {
+    display: block;
     max-height: 150px;
     padding: 0.55rem;
   }
 
   .review-cue-list ol {
+    display: grid;
     max-height: 102px;
   }
 
