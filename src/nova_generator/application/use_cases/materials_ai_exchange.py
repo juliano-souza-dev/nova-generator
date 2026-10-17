@@ -87,7 +87,9 @@ class MaterialsAiExchange:
         scenes = []
         for scene in self.repository.get_project_scenes(project_id):
             cues = []
-            for cue in sorted(self.repository.get_scene_cues(scene.id), key=lambda item: item.order):
+            for cue in sorted(
+                self.repository.get_scene_cues(scene.id), key=lambda item: item.order
+            ):
                 if cue.provenance.get("approval") == "draft":
                     raise MaterialsAiError("editorial approval is required for all cues")
                 cues.append({
@@ -113,7 +115,9 @@ class MaterialsAiExchange:
                 "order": scene.order,
                 "duration_ms": scene.duration_ms,
                 "cues": cues,
-                "shadowing": next(plan for plan in plans if plan["scene_id"] == str(scene.id))["blocks"],
+                "shadowing": next(
+                    plan for plan in plans if plan["scene_id"] == str(scene.id)
+                )["blocks"],
             })
         source = {
             "project_id": str(project.id),
@@ -133,7 +137,8 @@ class MaterialsAiExchange:
                 "required_section_ids_in_order": list(SECTION_IDS),
                 "language": "Português do Brasil para explicações; preserve inglês da fonte.",
                 "policy": (
-                    "Gere texto pedagógico real para cada seção, incluindo exercícios com respostas. "
+                    "Gere texto pedagógico real para cada seção, incluindo "
+                    "exercícios com respostas. "
                     "Os cards Anki devem usar cue_id existentes, e front_en/back_pt precisam "
                     "ser idênticos ao texto EN/PT aprovado. Não altere IDs, tempos ou shadowing. "
                     "Retorne apenas JSON validado pelo contrato de saída."
@@ -152,11 +157,16 @@ class MaterialsAiExchange:
         if output.source_sha256 != source["source_sha256"]:
             raise MaterialsAiError("editorial or shadowing content changed; export a new package")
         if tuple(section.id for section in output.sections) != SECTION_IDS:
-            raise MaterialsAiError("the seven pedagogical sections must be present in contract order")
+            raise MaterialsAiError(
+                "the seven pedagogical sections must be present in contract order"
+            )
         if any(not all(p.strip() for p in section.paragraphs) for section in output.sections):
             raise MaterialsAiError("each material paragraph must contain useful content")
         for section in output.sections:
-            if section.id in {"guided_practice", "activities", "challenge"} and not section.exercises:
+            if (
+                section.id in {"guided_practice", "activities", "challenge"}
+                and not section.exercises
+            ):
                 raise MaterialsAiError(f"section {section.id} requires exercises and answers")
         cue_by_id = {
             cue["id"]: cue
@@ -172,7 +182,10 @@ class MaterialsAiExchange:
             if cue_id in used:
                 raise MaterialsAiError(f"Anki cue_id {cue_id} repeated")
             used.add(cue_id)
-            if card.front_en != source_cue["approved_en"] or card.back_pt != source_cue["approved_pt"]:
+            if (
+                card.front_en != source_cue["approved_en"]
+                or card.back_pt != source_cue["approved_pt"]
+            ):
                 raise MaterialsAiError(f"Anki card {cue_id} changed the approved literal text")
         document = output.model_dump(mode="json")
         # A new import reopens review even when the prior material was approved.
