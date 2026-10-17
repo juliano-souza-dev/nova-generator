@@ -482,6 +482,31 @@
   background: rgb(15 23 42 / 55%);
 }
 
+.preparation-source-toggle,
+.preparation-source-dismiss {
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.74rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.preparation-source-toggle {
+  margin: -0.15rem 0 0.7rem;
+  padding: 0;
+}
+
+.preparation-source-dismiss {
+  justify-self: start;
+  padding: 0;
+}
+
+.preparation-source-toggle:hover,
+.preparation-source-dismiss:hover {
+  color: var(--accent);
+}
+
 .editorial-assistance-heading,
 .editorial-assistance-actions,
 .assistant-suggestion {
@@ -844,14 +869,13 @@
   }
 
   .review-cue-list {
-    display: block;
-    max-height: 150px;
+    display: flex;
+    max-height: none;
     padding: 0.55rem;
   }
 
   .review-cue-list ol {
-    display: grid;
-    max-height: 102px;
+    max-height: none;
   }
 
   .review-player {

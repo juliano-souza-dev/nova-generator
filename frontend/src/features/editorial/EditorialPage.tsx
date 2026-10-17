@@ -171,6 +171,7 @@ export function EditorialPage() {
   const [hubPreviewStartMs, setHubPreviewStartMs] = useState<number | null>(null);
   const [assistantFallbackRequired, setAssistantFallbackRequired] = useState(false);
   const [assistantStatusFailed, setAssistantStatusFailed] = useState(false);
+  const [showPreparationTools, setShowPreparationTools] = useState(false);
   const [semanticDraftUnits, setSemanticDraftUnits] = useState<EditorialSemanticUnit[] | null>(
     null,
   );
@@ -1205,10 +1206,20 @@ export function EditorialPage() {
                 </div>
                 {isDirty && <span className="unsaved-badge">Alterações não salvas</span>}
               </div>
-              <section
-                className="editorial-assistance"
-                aria-labelledby="editorial-assistance-title"
-              >
+              {!showPreparationTools && (
+                <button
+                  type="button"
+                  className="preparation-source-toggle"
+                  onClick={() => setShowPreparationTools(true)}
+                >
+                  Trocar fonte de preparação
+                </button>
+              )}
+              {showPreparationTools && (
+                <section
+                  className="editorial-assistance"
+                  aria-labelledby="editorial-assistance-title"
+                >
                 <div className="editorial-assistance-heading">
                   <div>
                     <span className="eyebrow">Preparação editorial</span>
@@ -1312,7 +1323,15 @@ export function EditorialPage() {
                     </dl>
                   </details>
                 )}
-              </section>
+                  <button
+                    type="button"
+                    className="preparation-source-dismiss"
+                    onClick={() => setShowPreparationTools(false)}
+                  >
+                    Ocultar opções
+                  </button>
+                </section>
+              )}
               <div className="asr-reference">
                 <span>Transcrição original</span>
                 <p>{selectedCue.original_en}</p>
