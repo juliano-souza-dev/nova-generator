@@ -170,8 +170,7 @@ export const studioApi = {
       method: "POST",
       body: JSON.stringify({ youtube }),
     }),
-  shadowing: (projectId: string) =>
-    apiRequest<ShadowingPlan[]>(`/projects/${projectId}/shadowing`),
+  shadowing: (projectId: string) => apiRequest<ShadowingPlan[]>(`/projects/${projectId}/shadowing`),
   approveShadowing: (projectId: string, sceneId: string, source_sha256: string) =>
     apiRequest<ShadowingPlan>(`/projects/${projectId}/shadowing/${sceneId}/approval`, {
       method: "POST",
