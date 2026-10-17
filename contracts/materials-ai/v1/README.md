@@ -37,3 +37,41 @@ Cada seção tem um título e pelo menos um parágrafo. As seções de prática,
 - Testes da máquina de estados: `python -m pytest tests/application/test_post_editorial_materials.py`.
 
 **Estado de implementação:** geração e validação de dados, prévia de Shadowing e revisão dos materiais estão sendo entregues nesta etapa. A transformação desse novo conteúdo no PDF final e a associação dos cards enriquecidos com o exportador Anki existente exigem uma entrega posterior e teste integrado.
+
+## Prévia fiel dos cards no iHub
+
+O componente `frontend/src/features/materials/IHubCardPreview.tsx` foi comparado com a implementação real do Hub:
+
+- `ihub-english/public/index.html` (faces, mini lesson, rating);
+- `ihub-english/public/css/components.css` (cores, dimensões, tipografia e virada 3D);
+- `ihub-english/public/js/features/cards.js` (`renderCurrentCard`, `revealCurrentCard`);
+- `ihub-english/public/js/features/card-presentation.js` (reel Anki dedicado);
+- `ihub-english/src/Cards/CardSyncRepository.php` (campos de catálogo/API).
+
+A UI Generator abre a prévia diretamente na tabela de Materiais com `Ver como no iHub`.
+Se houver resposta aprovada da IA, o componente mostra os campos correspondentes
+do resultado `anki_cards`. Na ausência de resposta, apresenta apenas o texto aprovado,
+o primeiro destaque semântico e uma explicação **indicada como provisória**.
+
+| Campo novo opcional no `anki_cards` | Destino visual no Hub |
+| --- | --- |
+| `card_type` | Etiqueta do tipo de card na mini lesson |
+| `focus_text` | Expressão principal |
+| `meaning` | Significado principal |
+| `marked_en`, `marked_pt` | Destaque amarelo na frase da frente/verso |
+| `explanation_pt` | HOW TO UNDERSTAND / USE |
+| `example_en`, `example_pt` | ANOTHER EXAMPLE |
+
+A validação impede que `marked_en/marked_pt` apontem para texto ausente da cue
+ou que a IA forneça apenas um idioma do exemplo. Campos extras foram introduzidos
+de forma compatível com documentos anteriores v1.0.
+
+**Áudio:** na prévia local, o botão utiliza apenas o WAV canônico se já disponível.
+No Hub, ambos os controles usam somente o vídeo reel Anki dedicado. A prévia
+nunca usa áudio original do vídeo da cena como fallback. Botões de avaliação
+na prévia são simulados, sem atualizar a revisão real do aluno.
+
+**Limite da entrega:** reproduzir visualmente o componente não significa que
+os campos adicionais estejam sendo publicados no `hub_final.json`. A conexão
+da mini lesson enriquecida com o contrato final Hub ainda deve ser validada
+como etapa de integração antes de liberar o produto.
