@@ -101,6 +101,11 @@ describe("MaterialsPage", () => {
     expect(screen.getByText("Posso ajudar?")).toBeInTheDocument();
     expect(screen.getByLabelText("Áudio do card 1.1")).toHaveAttribute("src", card.audio_url);
     expect(screen.getByText("0.00 s–0.60 s")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ver como no iHub" }));
+    expect(screen.getByRole("dialog", { name: "Prévia do card no iHub" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show answer" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Fechar prévia" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: "Incluir card 1.1" }));
     await waitFor(() =>
       expect(studioApi.updateMaterial).toHaveBeenCalledWith("project-1", "cue-1", false),
