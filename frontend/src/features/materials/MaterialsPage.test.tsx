@@ -8,6 +8,10 @@ import { MaterialsPage } from "./MaterialsPage";
 vi.mock("../../lib/studio-api", () => ({
   studioApi: {
     projects: vi.fn(),
+    externalMaterialsReview: vi.fn(),
+    externalMaterialsPackageUrl: vi.fn(),
+    importExternalMaterials: vi.fn(),
+    approveExternalMaterials: vi.fn(),
     voices: vi.fn(),
     materials: vi.fn(),
     updateMaterial: vi.fn(),
@@ -53,6 +57,12 @@ function mount() {
 
 describe("MaterialsPage", () => {
   it("shows literal approved text, canonical preview, reel interval and submits selection", async () => {
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "approved",
+      source_sha256: "a".repeat(64),
+      document: null,
+    });
+    vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
     vi.mocked(studioApi.projects).mockResolvedValue([
       { id: "project-1", title: "Lesson" } as never,
     ]);
