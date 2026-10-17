@@ -1180,6 +1180,30 @@ export function EditorialPage() {
               </div>
             </section>
           </div>
+          <nav className="cue-navigation cue-navigation-primary" aria-label="Navegação entre cues">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => moveCue(-1)}
+              disabled={selectedCueIndex <= 0}
+            >
+              <ChevronLeft aria-hidden="true" /> Anterior
+            </button>
+            <div>
+              <strong>Cue {selectedCue.order} de {cues.length}</strong>
+              <span className={`cue-state cue-state-${cueStatus.toLowerCase().replace(" ", "-")}`}>
+                {cueStatus}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => moveCue(1)}
+              disabled={selectedCueIndex >= cues.length - 1}
+            >
+              Próxima <ChevronRight aria-hidden="true" />
+            </button>
+          </nav>
           {allCuesApproved && (
             <section className="editorial-next-stage panel" aria-label="Próxima etapa">
               <div>
@@ -1224,7 +1248,7 @@ export function EditorialPage() {
             onNudge={nudge}
             onUndo={undo}
           />
-          <nav className="cue-navigation" aria-label="Navegação entre cues">
+          <nav className="cue-navigation cue-navigation-secondary" aria-label="Navegação entre cues">
             <button
               type="button"
               className="secondary-button"
@@ -1412,6 +1436,32 @@ export function EditorialPage() {
                     rows={3}
                   />
                 </label>
+              </div>
+              <div className="cue-text-actions" aria-label="Ações do texto do cue">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={discardChanges}
+                  disabled={!isDirty || saving}
+                >
+                  <Undo2 aria-hidden="true" /> Descartar texto
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void saveChanges()}
+                  disabled={!isDirty || saving}
+                >
+                  <Save aria-hidden="true" /> Salvar texto
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => void saveChanges(true, true)}
+                  disabled={saving}
+                >
+                  <Check aria-hidden="true" /> Aprovar e ir para a próxima
+                </button>
               </div>
 
               <details className="technical-details">
