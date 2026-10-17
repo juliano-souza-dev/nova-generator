@@ -56,7 +56,9 @@ describe("iHub card reproduction", () => {
 
   it("never offers scene audio as a fallback and labels missing pedagogical content", () => {
     render(<IHubCardPreview card={{ ...demo, pedagogical: null }} onClose={() => undefined} />);
-    expect(screen.queryByRole("button", { name: "Listen to pronunciation" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Listen to pronunciation" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(/explicação provisória/)).toBeInTheDocument();
     expect(screen.getByText(/reel Anki publicado/)).toBeInTheDocument();
   });
