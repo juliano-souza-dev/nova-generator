@@ -102,7 +102,7 @@ export function ShadowingPage() {
       {projects.isError && (
         <ErrorState message={projects.error.message} retry={() => void projects.refetch()} />
       )}
-      {projects.data?.length === 0 && <EmptyState title="Nenhum projeto encontrado" />}
+      {projects.data?.length === 0 && <EmptyState title="Nenhum projeto encontrado">Crie um projeto antes de preparar o Shadowing.</EmptyState>}
       {Boolean(projects.data?.length) && (
         <div className="shadowing-controls panel">
           <label>
