@@ -34,12 +34,19 @@ class PrepareShadowing:
     def scenes(self, project_id: UUID) -> list[dict[str, Any]]:
         if self.repository.get_project(project_id) is None:
             raise ShadowingError("project not found")
-        return [self.scene(project_id, scene.id) for scene in self.repository.get_project_scenes(project_id)]
+        return [
+            self.scene(project_id, scene.id)
+            for scene in self.repository.get_project_scenes(project_id)
+        ]
 
     def scene(self, project_id: UUID, scene_id: UUID) -> dict[str, Any]:
         project = self.repository.get_project(project_id)
         scene = next(
-            (item for item in self.repository.get_project_scenes(project_id) if item.id == scene_id),
+            (
+                item
+                for item in self.repository.get_project_scenes(project_id)
+                if item.id == scene_id
+            ),
             None,
         ) if project is not None else None
         if scene is None:
