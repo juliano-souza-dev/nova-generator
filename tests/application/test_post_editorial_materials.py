@@ -122,6 +122,16 @@ def test_material_contract_requires_shadowing_and_exact_approved_text(tmp_path):
     with pytest.raises(MaterialsAiError, match="changed"):
         exchange.import_result(PROJECT, modified)
 
+    modified = material_result(package["source_sha256"])
+    modified["anki_cards"][0]["marked_en"] = "nonexistent expression"
+    with pytest.raises(MaterialsAiError, match="marked_en"):
+        exchange.import_result(PROJECT, modified)
+
+    modified = material_result(package["source_sha256"])
+    modified["anki_cards"][0]["example_en"] = "How are you?"
+    with pytest.raises(MaterialsAiError, match="both example_en and example_pt"):
+        exchange.import_result(PROJECT, modified)
+
     imported = exchange.import_result(PROJECT, result)
     assert imported["status"] == "draft"
     assert exchange.status(PROJECT)["status"] == "draft"
