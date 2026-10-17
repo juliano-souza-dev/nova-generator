@@ -9,6 +9,7 @@ from nova_generator.api.routes.editorial import router as editorial_router
 from nova_generator.api.routes.health import router as health_router
 from nova_generator.api.routes.jobs import router as jobs_router
 from nova_generator.api.routes.materials import router as materials_router
+from nova_generator.api.routes.materials_ai import router as materials_ai_router
 from nova_generator.api.routes.project_media import router as project_media_router
 from nova_generator.api.routes.projects import router as projects_router
 from nova_generator.api.routes.stories import router as stories_router
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(editorial_router, prefix=settings.api_prefix)
     app.include_router(jobs_router, prefix=settings.api_prefix)
     app.include_router(materials_router, prefix=settings.api_prefix)
+    app.include_router(materials_ai_router, prefix=settings.api_prefix)
     app.include_router(projects_router, prefix=settings.api_prefix)
     app.include_router(project_media_router, prefix=settings.api_prefix)
     app.include_router(voices_router, prefix=settings.api_prefix)
