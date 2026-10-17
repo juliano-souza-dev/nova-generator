@@ -117,42 +117,78 @@ export function IHubCardPreview({
   }
 
   return (
-    <div className="ihub-preview-overlay" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
-    }}>
-      <section className="ihub-preview-dialog" role="dialog" aria-modal="true" aria-label="Prévia do card no iHub">
+    <div
+      className="ihub-preview-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="ihub-preview-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Prévia do card no iHub"
+      >
         <header className="ihub-preview-toolbar">
           <div>
             <strong>Prévia fiel ao iHub</strong>
             <span>Somente visualização. As avaliações não salvam progresso.</span>
           </div>
-          <button type="button" onClick={onClose} aria-label="Fechar prévia">✕</button>
+          <button type="button" onClick={onClose} aria-label="Fechar prévia">
+            ✕
+          </button>
         </header>
         {typeof position === "number" && typeof total === "number" && (
           <div className="ihub-preview-navigation">
-            <button type="button" onClick={onPrevious} disabled={!onPrevious}>← Card anterior</button>
-            <span>{position} / {total}</span>
-            <button type="button" onClick={onNext} disabled={!onNext}>Próximo card →</button>
+            <button type="button" onClick={onPrevious} disabled={!onPrevious}>
+              ← Card anterior
+            </button>
+            <span>
+              {position} / {total}
+            </span>
+            <button type="button" onClick={onNext} disabled={!onNext}>
+              Próximo card →
+            </button>
           </div>
         )}
         <article className="ihub-immersion-flashcard">
-          <div className="ihub-flashcard-flip-stage" data-card-face={face === "front" || face === "turning" ? "front" : "back"}>
+          <div
+            className="ihub-flashcard-flip-stage"
+            data-card-face={face === "front" || face === "turning" ? "front" : "back"}
+          >
             {(face === "front" || face === "turning") && (
               <section className={`ihub-flashcard-face ${face === "turning" ? "is-flip-out" : ""}`}>
                 <div className="ihub-flashcard-front">
                   {card.audio_url && (
-                    <button className="ihub-flashcard-audio" type="button" onClick={playAudio} title="Listen to pronunciation" aria-label="Listen to pronunciation">▶</button>
+                    <button
+                      className="ihub-flashcard-audio"
+                      type="button"
+                      onClick={playAudio}
+                      title="Listen to pronunciation"
+                      aria-label="Listen to pronunciation"
+                    >
+                      ▶
+                    </button>
                   )}
                   <span className="ihub-flashcard-direction">EN → PT</span>
                   <h2 className="ihub-flashcard-sentence">
                     <MarkedSentence sentence={front} target={markedEn} />
                   </h2>
                 </div>
-                <button className="ihub-flashcard-reveal" type="button" onClick={reveal} disabled={face !== "front"}>Show answer</button>
+                <button
+                  className="ihub-flashcard-reveal"
+                  type="button"
+                  onClick={reveal}
+                  disabled={face !== "front"}
+                >
+                  Show answer
+                </button>
               </section>
             )}
             {(face === "revealing" || face === "back") && (
-              <section className={`ihub-flashcard-face ${face === "revealing" ? "is-flip-in" : ""}`}>
+              <section
+                className={`ihub-flashcard-face ${face === "revealing" ? "is-flip-in" : ""}`}
+              >
                 <div className="ihub-flashcard-answer">
                   <div className="ihub-flashcard-answer-primary">
                     <h3 className="ihub-flashcard-sentence is-pt">
@@ -178,11 +214,17 @@ export function IHubCardPreview({
                         <small>{pedagogical.example_pt}</small>
                       </section>
                     )}
-                    {card.speaker && <p className="ihub-flashcard-speaker">Speaker: <span>{card.speaker}</span></p>}
+                    {card.speaker && (
+                      <p className="ihub-flashcard-speaker">
+                        Speaker: <span>{card.speaker}</span>
+                      </p>
+                    )}
                     {card.audio_url && (
                       <div className="ihub-flashcard-scene-audio">
                         <span>Card audio:</span>
-                        <button type="button" onClick={playAudio} aria-label="Listen to card audio">▶</button>
+                        <button type="button" onClick={playAudio} aria-label="Listen to card audio">
+                          ▶
+                        </button>
                       </div>
                     )}
                   </div>
@@ -199,24 +241,30 @@ export function IHubCardPreview({
                 disabled={face !== "back"}
                 onClick={() => setRating(option.title)}
               >
-                <span className="ihub-flashcard-rating-icon" aria-hidden="true">{option.icon}</span>
+                <span className="ihub-flashcard-rating-icon" aria-hidden="true">
+                  {option.icon}
+                </span>
                 <strong>{option.title}</strong>
                 <small>{option.interval}</small>
               </button>
             ))}
           </div>
         </article>
-        {rating && <p className="ihub-preview-feedback" role="status">Simulação: {rating}. Nenhuma avaliação foi registrada.</p>}
+        {rating && (
+          <p className="ihub-preview-feedback" role="status">
+            Simulação: {rating}. Nenhuma avaliação foi registrada.
+          </p>
+        )}
         {!pedagogical && (
           <p className="ihub-preview-feedback">
-            Conteúdo pedagógico ainda não importado. A mini lesson está exibindo uma
-            explicação provisória, não um texto aprovado pela IA.
+            Conteúdo pedagógico ainda não importado. A mini lesson está exibindo uma explicação
+            provisória, não um texto aprovado pela IA.
           </p>
         )}
         {!card.audio_url && (
           <p className="ihub-preview-feedback">
-            O botão de áudio aparecerá após preparar o WAV canônico. No iHub,
-            ele reproduz exclusivamente o reel Anki publicado.
+            O botão de áudio aparecerá após preparar o WAV canônico. No iHub, ele reproduz
+            exclusivamente o reel Anki publicado.
           </p>
         )}
       </section>
