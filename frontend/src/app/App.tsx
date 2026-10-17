@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { StudioShell } from "../components/StudioShell";
+import { ShadowingPage } from "../features/shadowing/ShadowingPage";
 import { EditorialPage } from "../features/editorial/EditorialPage";
 import { MediaPage } from "../features/media/MediaPage";
 import { MaterialsPage } from "../features/materials/MaterialsPage";
@@ -16,6 +17,7 @@ export function App() {
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/editorial" element={<EditorialPage />} />
         <Route path="/media" element={<MediaPage />} />
+        <Route path="/shadowing" element={<ShadowingPage />} />
         <Route path="/materials" element={<MaterialsPage />} />
         <Route path="/jobs" element={<JobsPage />} />
         <Route path="/story" element={<StoryPage />} />
