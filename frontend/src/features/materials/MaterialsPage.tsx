@@ -180,7 +180,11 @@ export function MaterialsPage() {
           {!materialReview.isError && (
             <>
               <div className="materials-ai-actions">
-                <a className="secondary-button" href={studioApi.externalMaterialsPackageUrl(projectId)} download>
+                <a
+                  className="secondary-button"
+                  href={studioApi.externalMaterialsPackageUrl(projectId)}
+                  download
+                >
                   <Download aria-hidden="true" /> Baixar contrato para IA externa
                 </a>
                 <label className="materials-ai-import">
@@ -522,7 +526,8 @@ function HighlightedCueText({
       parts.push({ value: text.slice(cursor), highlighted: false });
       break;
     }
-    if (match.index > cursor) parts.push({ value: text.slice(cursor, match.index), highlighted: false });
+    if (match.index > cursor)
+      parts.push({ value: text.slice(cursor, match.index), highlighted: false });
     parts.push({ value: match.term, highlighted: true });
     cursor = match.index + match.term.length;
   }
