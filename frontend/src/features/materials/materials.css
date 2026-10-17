@@ -185,3 +185,26 @@
   display: grid;
   gap: 0.4rem;
 }
+
+.material-card-preview-button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #59a2c0;
+  border-radius: 9px;
+  background: rgba(24, 102, 140, 0.18);
+  color: #ccf2ff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.material-card-preview-button:hover:not(:disabled) {
+  background: rgba(24, 102, 140, 0.32);
+}
+.material-card-preview-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
