@@ -18,7 +18,6 @@ from nova_generator.application.use_cases.materials_ai_exchange import (
 )
 from nova_generator.core.settings import get_settings
 
-
 router = APIRouter(prefix="/projects/{project_id}/materials-ai", tags=["materials-ai"])
 
 
@@ -62,7 +61,7 @@ def materials_review(
 async def import_external_materials(
     project_id: UUID,
     repository: Annotated[EditorialProjectRepository, Depends(get_editorial_repository)],
-    file: UploadFile = File(...),
+    file: Annotated[UploadFile, File()],
 ) -> dict:
     content = await file.read(3_000_001)
     if len(content) > 3_000_000:
