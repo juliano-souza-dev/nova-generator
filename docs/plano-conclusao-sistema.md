@@ -38,32 +38,40 @@ O Nova Generator só pode ser considerado pronto quando **cada jornada de usuár
 
 **Aceite:** instalação e recuperação executáveis por um operador seguindo somente `README.md` e `docs/operacao-local.md`.
 
-## Etapa 2 · Jornada Mídia → Editorial
+## Etapa 2 · Editorial (congelado)
 
-**Responsável:** 02 Estúdio Editorial. **Revisores:** 01 Arquitetura; 03 Mídia; 05 Integração.
+**Decisão do responsável pelo produto:** O Editorial já está concluído e não será modificado nesta rodada. Testes existentes continuam servindo como regressão, mas a implementação nova concentra-se após sua aprovação.
 
-- [ ] Criar projeto, resolver vídeo YouTube/cache, baixar e selecionar corte com FFmpeg/FFprobe reais.
-- [ ] Transcrever com Faster-Whisper e carregar candidato ASR do projeto/cena certos.
-- [ ] Tratar automaticamente EN, PT e word-by-word via Groq, com fallback externo validado por schema e hash.
-- [ ] Revisar, salvar e aprovar cues, timings e unidades semânticas sem perda literal de Unicode.
-- [ ] Reabrir/recarregar página e validar persistência de drafts, aprovações e mudanças.
-- [ ] Validar timeline, atalhos, player, acessibilidade, overflow e navegação em 1366×768/1440×900 e mobile.
+## Etapa 3 · Shadowing e contrato de conteúdo pedagógico externo
 
-**Aceite:** pelo menos um projeto real percorre a jornada sem copiar IDs técnicos e sem aprovar silenciosamente sugestões de IA.
+**Responsáveis:** 03 Mídia e TTS Local; 05 Integração e Release.
 
-## Etapa 3 · Vozes, Materiais e Anki
+- [x] Gerar blocos pré-produzidos e pausas a partir dos cues aprovados sem mudar texto/timing editorial.
+- [x] Proteger aprovação por hash de fonte e invalidar automaticamente após alteração.
+- [x] Incluir prévia e aprovação explícita da sequência na interface.
+- [x] Definir contrato da IA externa que exige workbook completo com sete seções, exercícios e respostas, mais cards Anki comentados.
+- [x] Rejeitar resposta desatualizada, projeto errado, conteúdo faltante e card que altere textos aprovados.
+- [x] Exibir retorno importado para revisão/aprovação de materiais.
+- [ ] Rodar testes backend, frontend, Playwright e validação em projeto real.
+- [ ] Permitir ajustes humanos nos blocos automáticos de Shadowing e salvar esse plano sem alterar o Editorial.
+- [ ] Incorporar o conteúdo aprovado da IA externa à renderização PDF e aos cards exportados, preservando hashes, aprovação e compatibilidade.
+
+**Connected Speech:** retirado definitivamente do caminho obrigatório.
+
+## Etapa 4 · Vozes, PDF, Materiais e Anki
 
 **Responsável:** 03 Mídia e TTS Local. **Revisores:** 01 Arquitetura; 05 Integração.
 
-- [ ] Criar perfil de voz e referência WAV; verificar hashes e reprodução do áudio canônico Chatterbox.
-- [ ] Bloquear prévia/exportação de cue incompleto ou em rascunho, sem quebrar compatibilidade com conteúdo legado aprovado.
-- [ ] Testar reprocessamento e idempotência dos jobs com uma falha de TTS e uma falha de FFmpeg.
-- [ ] Validar APKG em leitor Anki, manifesto, reel, duração/sincronia e arquivos disponíveis.
-- [ ] Publicar após upload manual do reel, validar ID do YouTube, gerar `hub_final.json` e recusar alterações após snapshot.
+- [ ] Testar referência WAV e perfil Chatterbox, modelos e hashes reais.
+- [ ] Conectar conteúdo de `materials-ai/v1` ao renderer PDF e às notas Anki, não apenas ao formulário de prévia.
+- [ ] Garantir que um APKG e um reel venham de WAVs canônicos idênticos.
+- [ ] Rejeitar exportações se o workbook ainda estiver em rascunho ou se o hash for obsoleto.
+- [ ] Validar PDF renderizado (sete seções), APKG no Anki, manifesto e arquivo `hub_final.json`.
+- [ ] Testar falha/reprocessamento de TTS e FFmpeg, idempotência e publicação por ID do YouTube.
 
-**Aceite:** pacote Anki reproduz áudios corretos e exportação é idêntica nos metadados de texto e sincronização; reprocessar não troca conteúdo publicado.
+**Aceite:** workbook e cards produzidos pela IA aparecem nos artefatos finais, com conteúdo revisado e tempos/áudios consistentes.
 
-## Etapa 4 · Jornada História
+## Etapa 5 · Jornada História
 
 **Responsável:** 04 Modo História. **Revisores:** 03 Mídia; 05 Integração.
 
@@ -74,7 +82,7 @@ O Nova Generator só pode ser considerado pronto quando **cada jornada de usuár
 
 **Aceite:** pacote de História renderizado e aceito pelo consumidor iHub sem edição manual do JSON.
 
-## Etapa 5 · Integração iHub e liberação
+## Etapa 6 · Integração iHub e liberação
 
 **Responsável:** 05 Integração e Release. **Revisores:** todas as frentes.
 
