@@ -175,6 +175,8 @@ class MaterialsAiExchange:
             if card.front_en != source_cue["approved_en"] or card.back_pt != source_cue["approved_pt"]:
                 raise MaterialsAiError(f"Anki card {cue_id} changed the approved literal text")
         document = output.model_dump(mode="json")
+        # A new import reopens review even when the prior material was approved.
+        self._path(project_id, "approved.json").unlink(missing_ok=True)
         self._write(project_id, "external-draft.json", document)
         return {"status": "draft", "source_sha256": source["source_sha256"], "document": document}
 
