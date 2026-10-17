@@ -130,6 +130,34 @@
             "items": {
               "type": "string"
             }
+          },
+          "card_type": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "focus_text": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "meaning": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "marked_en": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "marked_pt": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "example_en": {
+            "type": "string",
+            "maxLength": 1500
+          },
+          "example_pt": {
+            "type": "string",
+            "maxLength": 1500
           }
         }
       }
