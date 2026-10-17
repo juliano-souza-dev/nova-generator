@@ -275,6 +275,13 @@ export type MaterialAiDocument = {
     front_en: string;
     back_pt: string;
     explanation_pt: string;
+    card_type?: string;
+    focus_text?: string;
+    meaning?: string;
+    marked_en?: string;
+    marked_pt?: string;
+    example_en?: string;
+    example_pt?: string;
     tags: string[];
   }>;
 };
