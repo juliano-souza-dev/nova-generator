@@ -218,6 +218,7 @@ export function EditorialPage() {
     JSON.stringify(semanticDraftUnits) !== JSON.stringify(storedSemanticUnits),
   );
   const approvedCount = cues.filter((cue) => cue.provenance?.approval === "approved").length;
+  const allCuesApproved = cues.length > 0 && approvedCount === cues.length;
   const textDirty = Boolean(
     selectedCue &&
     (approvedEn !== selectedCue.approved_en || approvedPt !== selectedCue.approved_pt),
@@ -1179,6 +1180,21 @@ export function EditorialPage() {
               </div>
             </section>
           </div>
+          {allCuesApproved && (
+            <section className="editorial-next-stage panel" aria-label="Próxima etapa">
+              <div>
+                <span className="eyebrow">Revisão concluída</span>
+                <h2>Próxima etapa: preparar o shadowing</h2>
+                <p>
+                  Escolha a voz e gere os áudios canônicos dos cards para praticar repetição e
+                  montar os materiais do projeto.
+                </p>
+              </div>
+              <Link className="primary-button" to={`/materials?project=${projectId}`}>
+                Preparar shadowing
+              </Link>
+            </section>
+          )}
           <p className="review-keyboard-hints">
             <kbd>Ctrl Enter</kbd> prévia iHub · <kbd>Ctrl Shift Enter</kbd> desde o início ·{" "}
             <kbd>Espaço</kbd> cue · <kbd>Shift Espaço</kbd> cena · <kbd>A</kbd> IN · <kbd>S</kbd>
