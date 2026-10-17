@@ -16,7 +16,6 @@ from nova_generator.application.use_cases.prepare_shadowing import (
 )
 from nova_generator.core.settings import get_settings
 
-
 router = APIRouter(prefix="/projects/{project_id}/shadowing", tags=["shadowing"])
 
 
@@ -37,7 +36,9 @@ def list_shadowing(
     project_id: UUID,
     repository: Annotated[EditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> list[dict]:
-    return _execute(lambda: PrepareShadowing(repository, get_settings().project_root).scenes(project_id))
+    return _execute(
+        lambda: PrepareShadowing(repository, get_settings().project_root).scenes(project_id)
+    )
 
 
 @router.get("/{scene_id}")
@@ -47,7 +48,9 @@ def get_shadowing(
     repository: Annotated[EditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> dict:
     return _execute(
-        lambda: PrepareShadowing(repository, get_settings().project_root).scene(project_id, scene_id)
+        lambda: PrepareShadowing(repository, get_settings().project_root).scene(
+            project_id, scene_id
+        )
     )
 
 
