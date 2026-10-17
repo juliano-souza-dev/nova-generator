@@ -91,7 +91,7 @@ export function MaterialsPage() {
   const cards = materials.data?.cards ?? [];
   const selected = cards.filter((card) => card.included);
   const unprepared = cards.filter((card) => !card.editorial_ready);
-  const pedagogicalReady = !materialReview.data || materialReview.data.status === "approved";
+  const pedagogicalReady = materialReview.data?.status === "approved";
   const ready =
     selected.length > 0 &&
     pedagogicalReady &&
