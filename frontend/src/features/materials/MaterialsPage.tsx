@@ -17,28 +17,28 @@ export function MaterialsPage() {
   const [youtube, setYoutube] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const client = useQueryClient();
-  const materialReview = useQuery({
-    queryKey: ["materials-ai-review", (params.get("project") ?? "")],
-    queryFn: () => studioApi.externalMaterialsReview((params.get("project") ?? "")),
-    enabled: Boolean(params.get("project")),
-    retry: false,
-  });
-  const importMaterial = useMutation({
-    mutationFn: (file: File) => studioApi.importExternalMaterials((params.get("project") ?? ""), file),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["materials-ai-review"] }),
-  });
-  const approveMaterial = useMutation({
-    mutationFn: (sourceSha256: string) =>
-      studioApi.approveExternalMaterials((params.get("project") ?? ""), sourceSha256),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["materials-ai-review"] }),
-  });
-
   const projects = useQuery({
     queryKey: ["projects", "materials"],
     queryFn: () => studioApi.projects(),
   });
   const voices = useQuery({ queryKey: ["voices"], queryFn: studioApi.voices });
   const projectId = params.get("project") ?? projects.data?.[0]?.id ?? "";
+  const materialReview = useQuery({
+    queryKey: ["materials-ai-review", projectId],
+    queryFn: () => studioApi.externalMaterialsReview(projectId),
+    enabled: Boolean(projectId),
+    retry: false,
+  });
+  const importMaterial = useMutation({
+    mutationFn: (file: File) => studioApi.importExternalMaterials(projectId, file),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["materials-ai-review"] }),
+  });
+  const approveMaterial = useMutation({
+    mutationFn: (sourceSha256: string) =>
+      studioApi.approveExternalMaterials(projectId, sourceSha256),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["materials-ai-review"] }),
+  });
+
   const project = useMemo(
     () => projects.data?.find((item) => item.id === projectId),
     [projects.data, projectId],
@@ -91,8 +91,7 @@ export function MaterialsPage() {
   const cards = materials.data?.cards ?? [];
   const selected = cards.filter((card) => card.included);
   const unprepared = cards.filter((card) => !card.editorial_ready);
-  const pedagogicalReady =
-    !materialReview.data || materialReview.data.status === "approved";
+  const pedagogicalReady = !materialReview.data || materialReview.data.status === "approved";
   const ready =
     selected.length > 0 &&
     pedagogicalReady &&
