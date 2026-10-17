@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MaterialAiDocument, MaterialCard } from "../../lib/api.types";
 import "./ihub-card-preview.css";
+import { splitIHubHighlight } from "./ihub-card-presentation";
 
 export type IHubPreviewSource = Pick<
   MaterialCard,
@@ -8,17 +9,6 @@ export type IHubPreviewSource = Pick<
 > & {
   pedagogical?: MaterialAiDocument["anki_cards"][number] | null;
 };
-
-export function splitIHubHighlight(source: string, target: string) {
-  // This reproduces iHub's first, case-insensitive substring match only.
-  const index = source.toLocaleLowerCase().indexOf(target.toLocaleLowerCase());
-  if (!target || index < 0) return [{ text: source, marked: false }];
-  return [
-    { text: source.slice(0, index), marked: false },
-    { text: source.slice(index, index + target.length), marked: true },
-    { text: source.slice(index + target.length), marked: false },
-  ].filter((part) => part.text);
-}
 
 function MarkedSentence({ sentence, target }: { sentence: string; target: string }) {
   return (
