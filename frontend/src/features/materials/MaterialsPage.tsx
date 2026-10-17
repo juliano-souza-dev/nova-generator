@@ -17,6 +17,22 @@ export function MaterialsPage() {
   const [youtube, setYoutube] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const client = useQueryClient();
+  const materialReview = useQuery({
+    queryKey: ["materials-ai-review", (params.get("project") ?? "")],
+    queryFn: () => studioApi.externalMaterialsReview((params.get("project") ?? "")),
+    enabled: Boolean(params.get("project")),
+    retry: false,
+  });
+  const importMaterial = useMutation({
+    mutationFn: (file: File) => studioApi.importExternalMaterials((params.get("project") ?? ""), file),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["materials-ai-review"] }),
+  });
+  const approveMaterial = useMutation({
+    mutationFn: (sourceSha256: string) =>
+      studioApi.approveExternalMaterials((params.get("project") ?? ""), sourceSha256),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["materials-ai-review"] }),
+  });
+
   const projects = useQuery({
     queryKey: ["projects", "materials"],
     queryFn: () => studioApi.projects(),
@@ -75,8 +91,12 @@ export function MaterialsPage() {
   const cards = materials.data?.cards ?? [];
   const selected = cards.filter((card) => card.included);
   const unprepared = cards.filter((card) => !card.editorial_ready);
+  const pedagogicalReady =
+    !materialReview.data || materialReview.data.status === "approved";
   const ready =
-    selected.length > 0 && selected.every((card) => card.audio_ready && card.editorial_ready);
+    selected.length > 0 &&
+    pedagogicalReady &&
+    selected.every((card) => card.audio_ready && card.editorial_ready);
 
   useEffect(() => {
     if (!voiceId && voices.data?.length) setVoiceId(voices.data[0].id);
@@ -137,6 +157,101 @@ export function MaterialsPage() {
             <RefreshCw aria-hidden="true" /> Atualizar
           </button>
         </div>
+      )}
+      {project && (
+        <section className="materials-ai-panel panel" aria-label="Materiais da IA externa">
+          <div className="materials-ai-heading">
+            <div>
+              <span className="eyebrow">Depois do Shadowing</span>
+              <h2>Conteúdo pedagógico da IA externa</h2>
+              <p>
+                O contrato inclui sete seções didáticas, exercícios com respostas e cards Anki.
+                Primeiro aprove o Shadowing, depois envie o JSON à sua IA e importe o resultado.
+              </p>
+            </div>
+            <Link className="secondary-button" to={`/shadowing?project=${projectId}`}>
+              Revisar Shadowing
+            </Link>
+          </div>
+          {materialReview.isError && (
+            <p role="alert">
+              A preparação ainda não está liberada. Aprove todas as cenas no Shadowing.
+            </p>
+          )}
+          {!materialReview.isError && (
+            <>
+              <div className="materials-ai-actions">
+                <a className="secondary-button" href={studioApi.externalMaterialsPackageUrl(projectId)} download>
+                  <Download aria-hidden="true" /> Baixar contrato para IA externa
+                </a>
+                <label className="materials-ai-import">
+                  Importar conteúdo produzido (.json)
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    disabled={importMaterial.isPending}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) importMaterial.mutate(file);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+                <strong>
+                  {materialReview.data?.status === "approved"
+                    ? "Material aprovado"
+                    : materialReview.data?.status === "draft"
+                      ? "Aguardando revisão"
+                      : "Aguardando conteúdo"}
+                </strong>
+              </div>
+              {materialReview.data?.document && (
+                <div className="materials-ai-review">
+                  <h3>{materialReview.data.document.title}</h3>
+                  {materialReview.data.document.sections.map((section) => (
+                    <article key={section.id}>
+                      <h4>{section.title}</h4>
+                      {section.paragraphs.map((paragraph, index) => (
+                        <p key={index}>{paragraph}</p>
+                      ))}
+                      {section.exercises.map((exercise, index) => (
+                        <div key={index} className="materials-ai-exercise">
+                          <strong>{exercise.prompt}</strong>
+                          <span>Resposta: {exercise.answer}</span>
+                        </div>
+                      ))}
+                    </article>
+                  ))}
+                  <h4>Cards Anki gerados ({materialReview.data.document.anki_cards.length})</h4>
+                  <div className="materials-ai-cards">
+                    {materialReview.data.document.anki_cards.map((card) => (
+                      <article key={card.cue_id}>
+                        <strong>{card.front_en}</strong>
+                        <span>{card.back_pt}</span>
+                        <small>{card.explanation_pt}</small>
+                      </article>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={
+                      materialReview.data.status === "approved" || approveMaterial.isPending
+                    }
+                    onClick={() => approveMaterial.mutate(materialReview.data!.source_sha256)}
+                  >
+                    Aprovar conteúdo pedagógico
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+          {(importMaterial.error || approveMaterial.error) && (
+            <p className="field-error" role="alert">
+              {(importMaterial.error ?? approveMaterial.error)?.message}
+            </p>
+          )}
+        </section>
       )}
       {voices.isError && (
         <ErrorState message={voices.error.message} retry={() => void voices.refetch()} />
