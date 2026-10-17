@@ -116,3 +116,72 @@
     display: grid;
   }
 }
+
+.materials-ai-panel {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+}
+
+.materials-ai-heading,
+.materials-ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.materials-ai-heading h2 {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.materials-ai-heading p {
+  max-width: 670px;
+  color: var(--muted);
+}
+
+.materials-ai-import {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.materials-ai-review {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.materials-ai-review > article,
+.materials-ai-cards > article {
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.materials-ai-review h4 {
+  margin: 0.2rem 0 0.5rem;
+}
+
+.materials-ai-exercise {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.materials-ai-exercise span,
+.materials-ai-cards small {
+  color: var(--muted);
+}
+
+.materials-ai-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 0.7rem;
+}
+
+.materials-ai-cards article {
+  display: grid;
+  gap: 0.4rem;
+}
