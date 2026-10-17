@@ -5,6 +5,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
 import { ApiError } from "../../lib/api";
+import { IHubCardPreview } from "./IHubCardPreview";
 import type { MaterialCard } from "../../lib/api.types";
 import { studioApi } from "../../lib/studio-api";
 import "./materials.css";
@@ -16,6 +17,7 @@ export function MaterialsPage() {
   const [audioJobIds, setAudioJobIds] = useState<Record<string, string>>({});
   const [youtube, setYoutube] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [previewCueId, setPreviewCueId] = useState<string | null>(null);
   const client = useQueryClient();
   const projects = useQuery({
     queryKey: ["projects", "materials"],
@@ -91,6 +93,11 @@ export function MaterialsPage() {
   const cards = materials.data?.cards ?? [];
   const selected = cards.filter((card) => card.included);
   const unprepared = cards.filter((card) => !card.editorial_ready);
+  const previewIndex = cards.findIndex((card) => card.cue_id === previewCueId);
+  const previewCard = previewIndex >= 0 ? cards[previewIndex] : null;
+  const previewPedagogical = materialReview.data?.document?.anki_cards.find(
+    (card) => card.cue_id === previewCueId,
+  );
   const pedagogicalReady = materialReview.data?.status === "approved";
   const ready =
     selected.length > 0 &&
@@ -126,6 +133,7 @@ export function MaterialsPage() {
                 setParams({ project: event.target.value });
                 setExportJobId(null);
                 setAudioJobIds({});
+                setPreviewCueId(null);
               }}
             >
               {projects.data?.map((item) => (
@@ -229,6 +237,14 @@ export function MaterialsPage() {
                   <div className="materials-ai-cards">
                     {materialReview.data.document.anki_cards.map((card) => (
                       <article key={card.cue_id}>
+                        <button
+                          type="button"
+                          className="material-card-preview-button"
+                          disabled={!cards.some((item) => item.cue_id === card.cue_id)}
+                          onClick={() => setPreviewCueId(card.cue_id)}
+                        >
+                          Ver como no iHub
+                        </button>
                         <strong>{card.front_en}</strong>
                         <span>{card.back_pt}</span>
                         <small>{card.explanation_pt}</small>
@@ -304,6 +320,7 @@ export function MaterialsPage() {
                   audioBusy={audio.isPending}
                   audioJobId={audioJobIds[card.cue_id]}
                   voiceSelected={!!voiceId}
+                  onPreview={() => setPreviewCueId(card.cue_id)}
                 />
               ))}
             </tbody>
@@ -340,6 +357,23 @@ export function MaterialsPage() {
             {exportCards.isPending ? "Enfileirando…" : "Exportar APKG"}
           </button>
         </section>
+      )}
+      {previewCard && (
+        <IHubCardPreview
+          key={previewCard.cue_id}
+          card={{ ...previewCard, pedagogical: previewPedagogical }}
+          position={previewIndex + 1}
+          total={cards.length}
+          onClose={() => setPreviewCueId(null)}
+          onPrevious={
+            previewIndex > 0 ? () => setPreviewCueId(cards[previewIndex - 1].cue_id) : undefined
+          }
+          onNext={
+            previewIndex < cards.length - 1
+              ? () => setPreviewCueId(cards[previewIndex + 1].cue_id)
+              : undefined
+          }
+        />
       )}
       {exportStatus.data && (
         <section className="materials-result panel" aria-live="polite">
@@ -408,6 +442,7 @@ function MaterialRow({
   audioBusy,
   audioJobId,
   voiceSelected,
+  onPreview,
 }: {
   card: MaterialCard;
   voiceName: string;
@@ -417,6 +452,7 @@ function MaterialRow({
   audioBusy: boolean;
   audioJobId?: string;
   voiceSelected: boolean;
+  onPreview: () => void;
 }) {
   const audioJob = useQuery({
     queryKey: ["material-audio-job", audioJobId],
@@ -442,6 +478,9 @@ function MaterialRow({
           Cena {card.scene_order} · cue {card.cue_order} · fala {formatMs(card.speech_start_ms)}–
           {formatMs(card.speech_end_ms)}
         </small>
+        <button className="material-card-preview-button" type="button" onClick={onPreview}>
+          Ver como no iHub
+        </button>
       </td>
       <td>
         {card.editorial_ready ? (
