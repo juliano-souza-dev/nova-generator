@@ -74,6 +74,8 @@ def test_material_selection_keeps_approved_text_and_export_freezes_cards(
     cards = response.json()["cards"]
     assert [card["reel_start_ms"] for card in cards] == [0, 600]
     assert cards[0]["tags"] == ["lesson"]
+    assert cards[0]["editorial_ready"] is False
+    assert cards[0]["highlights"] == []
     assert client.get(cards[0]["audio_url"]).content == b"RIFF-canonical-Caf\xc3\xa9?"
 
     changed = client.patch(f"{base}/{second_id}", json={"included": False})

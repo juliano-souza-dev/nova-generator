@@ -35,6 +35,8 @@ const card = {
   audio_ready: true,
   audio_url: "/api/projects/project-1/materials/cue-1/audio?voice_id=voice-1&voice_version=2",
   audio_error: null,
+  editorial_ready: true,
+  highlights: [{ en: "Can I help?", pt: "Posso ajudar?", kind: "unidade semântica" }],
 };
 
 function mount() {
@@ -85,6 +87,8 @@ describe("MaterialsPage", () => {
     });
     mount();
     expect(await screen.findByText("Café?")).toBeInTheDocument();
+    expect(screen.getByText("Can I help?")).toBeInTheDocument();
+    expect(screen.getByText("Posso ajudar?")).toBeInTheDocument();
     expect(screen.getByLabelText("Áudio do card 1.1")).toHaveAttribute("src", card.audio_url);
     expect(screen.getByText("0.00 s–0.60 s")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: "Incluir card 1.1" }));

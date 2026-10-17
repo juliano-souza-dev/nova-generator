@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, RefreshCw, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
 import { ApiError } from "../../lib/api";
@@ -74,7 +74,9 @@ export function MaterialsPage() {
   });
   const cards = materials.data?.cards ?? [];
   const selected = cards.filter((card) => card.included);
-  const ready = selected.length > 0 && selected.every((card) => card.audio_ready);
+  const unprepared = cards.filter((card) => !card.editorial_ready);
+  const ready =
+    selected.length > 0 && selected.every((card) => card.audio_ready && card.editorial_ready);
 
   useEffect(() => {
     if (!voiceId && voices.data?.length) setVoiceId(voices.data[0].id);
@@ -84,7 +86,7 @@ export function MaterialsPage() {
     <section>
       <PageHeader
         title="Materiais e Anki"
-        description="Revise os cards aprovados, ouça o WAV canônico e exporte o pacote com o manifesto do reel."
+        description="Valide os cards já preparados pela IA, ouça o WAV canônico e exporte o pacote com o manifesto do reel."
       />
       {projects.isPending && <LoadingState label="Carregando projetos" />}
       {projects.isError && (
@@ -148,14 +150,26 @@ export function MaterialsPage() {
           Revise as cues no Editorial antes da exportação.
         </EmptyState>
       )}
-      {cards.length > 0 && (
+      {unprepared.length > 0 && (
+        <section className="materials-preparation-warning panel" role="alert">
+          <strong>A preparação editorial ainda não está completa.</strong>
+          <span>
+            {unprepared.length} {unprepared.length === 1 ? "card precisa" : "cards precisam"} de
+            tratamento pela Groq ou IA externa antes da validação e da geração de áudio.
+          </span>
+          <Link className="secondary-button" to={`/editorial?project=${projectId}`}>
+            Voltar para a preparação editorial
+          </Link>
+        </section>
+      )}
+      {cards.length > 0 && unprepared.length === 0 && (
         <div className="materials-table-wrap panel">
           <table className="materials-table">
             <thead>
               <tr>
                 <th>Incluir</th>
                 <th>Card EN / PT</th>
-                <th>Tags e voz</th>
+                <th>Destaques e voz</th>
                 <th>Áudio canônico</th>
                 <th>Intervalo do reel</th>
               </tr>
@@ -190,7 +204,7 @@ export function MaterialsPage() {
             retry={() => void latestExport.refetch()}
           />
         )}
-      {cards.length > 0 && (
+      {cards.length > 0 && unprepared.length === 0 && (
         <section className="materials-export panel" aria-label="Exportação Anki">
           <div>
             <h2>Exportar Anki</h2>
@@ -304,7 +318,7 @@ function MaterialRow({
         />
       </td>
       <td>
-        <strong>{card.approved_en}</strong>
+        <HighlightedCueText text={card.approved_en} highlights={card.highlights} />
         <p>{card.approved_pt}</p>
         <small>
           Cena {card.scene_order} · cue {card.cue_order} · fala {formatMs(card.speech_start_ms)}–
@@ -312,7 +326,25 @@ function MaterialRow({
         </small>
       </td>
       <td>
-        {card.tags.length ? card.tags.join(", ") : "Sem tags"}
+        {card.editorial_ready ? (
+          <>
+            {card.highlights.length > 0 ? (
+              <ul className="material-highlights" aria-label="Destaques pedagógicos">
+                {card.highlights.map((highlight) => (
+                  <li key={`${highlight.en}:${highlight.pt}`}>
+                    <mark>{highlight.en}</mark>
+                    <span>{highlight.pt}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="material-ready-note">Preparado · sem expressão agrupada</span>
+            )}
+            {card.tags.length > 0 && <small>{card.tags.join(", ")}</small>}
+          </>
+        ) : (
+          <span className="material-missing-preparation">Preparação pendente</span>
+        )}
         <small>
           {voiceName}
           {voiceVersion ? ` · v${voiceVersion}` : ""}
@@ -327,7 +359,12 @@ function MaterialRow({
             aria-label={`Áudio do card ${card.scene_order}.${card.cue_order}`}
           />
         ) : (
-          <button type="button" disabled={!voiceSelected || audioBusy} onClick={onAudio}>
+          <button
+            type="button"
+            disabled={!card.editorial_ready || !voiceSelected || audioBusy}
+            title={card.editorial_ready ? undefined : "Conclua a preparação editorial primeiro."}
+            onClick={onAudio}
+          >
             <Volume2 aria-hidden="true" /> Preparar WAV
           </button>
         )}
@@ -344,6 +381,43 @@ function MaterialRow({
           : "Após preparar WAV"}
       </td>
     </tr>
+  );
+}
+
+function HighlightedCueText({
+  text,
+  highlights,
+}: {
+  text: string;
+  highlights: MaterialCard["highlights"];
+}) {
+  const terms = highlights
+    .map((highlight) => highlight.en)
+    .filter((term) => term.length > 0)
+    .sort((left, right) => right.length - left.length);
+  if (terms.length === 0) return <strong>{text}</strong>;
+
+  const parts: Array<{ value: string; highlighted: boolean }> = [];
+  let cursor = 0;
+  while (cursor < text.length) {
+    const match = terms
+      .map((term) => ({ term, index: text.indexOf(term, cursor) }))
+      .filter((item) => item.index >= 0)
+      .sort((left, right) => left.index - right.index || right.term.length - left.term.length)[0];
+    if (!match) {
+      parts.push({ value: text.slice(cursor), highlighted: false });
+      break;
+    }
+    if (match.index > cursor) parts.push({ value: text.slice(cursor, match.index), highlighted: false });
+    parts.push({ value: match.term, highlighted: true });
+    cursor = match.index + match.term.length;
+  }
+  return (
+    <strong className="material-card-text">
+      {parts.map((part, index) =>
+        part.highlighted ? <mark key={`${part.value}:${index}`}>{part.value}</mark> : part.value,
+      )}
+    </strong>
   );
 }
 

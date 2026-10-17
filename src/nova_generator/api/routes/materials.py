@@ -27,7 +27,7 @@ from nova_generator.application.use_cases.publish_anki_reel import (
     PublishAnkiReel,
 )
 from nova_generator.core.settings import get_settings
-from nova_generator.domain.projects.entities import Cue, utf8_sha256
+from nova_generator.domain.projects.entities import Cue, WordTiming, utf8_sha256
 from nova_generator.domain.voices import VoiceProfileSnapshot
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
@@ -71,6 +71,14 @@ class CardResponse(BaseModel):
     audio_ready: bool
     audio_url: str | None
     audio_error: str | None = None
+    editorial_ready: bool
+    highlights: list["PedagogicalHighlightResponse"]
+
+
+class PedagogicalHighlightResponse(BaseModel):
+    en: str
+    pt: str
+    kind: str
 
 
 class MaterialListResponse(BaseModel):
@@ -173,6 +181,8 @@ def _card(
         cache = FileSpeechCache(get_settings().media_cache_root)
         key = cache.cache_key(text=cue.approved_en, profile=voice, parameters={})
         speech = cache.find(key)
+    repository = _repository()
+    words = repository.get_cue_words(cue.id)
     tags = cue.provenance.get("tags", [])
     return CardResponse(
         cue_id=cue.id,
@@ -194,7 +204,57 @@ def _card(
             if speech and voice
             else None
         ),
+        editorial_ready=_cue_is_editorially_prepared(cue, words),
+        highlights=_highlights(words),
     )
+
+
+def _cue_is_editorially_prepared(cue: Cue, words: list[WordTiming]) -> bool:
+    return (
+        cue.provenance.get("editorial_preparation") == "complete"
+        and cue.provenance.get("editorial_preparation_contract")
+        in {
+            "nova-generator-editorial-suggestions/1.3",
+            "nova-generator-editorial-suggestions/1.4",
+        }
+        and all(
+            (
+                isinstance(word.provenance.get("pt"), str)
+                and bool(str(word.provenance["pt"]).strip())
+            )
+            or word.provenance.get("semantic_group_role") == "member"
+            for word in words
+        )
+    )
+
+
+def _highlights(words: list[WordTiming]) -> list[PedagogicalHighlightResponse]:
+    groups: dict[str, list[WordTiming]] = {}
+    for word in words:
+        group_id = word.provenance.get("semantic_group_id")
+        if isinstance(group_id, str):
+            groups.setdefault(group_id, []).append(word)
+
+    highlights: list[PedagogicalHighlightResponse] = []
+    for group_words in groups.values():
+        if len(group_words) < 2:
+            continue
+        ordered = sorted(group_words, key=lambda item: item.order)
+        lead = next(
+            (item for item in ordered if item.provenance.get("semantic_group_role") == "lead"),
+            None,
+        )
+        pt = lead.provenance.get("pt") if lead else None
+        if not isinstance(pt, str) or not pt.strip():
+            continue
+        highlights.append(
+            PedagogicalHighlightResponse(
+                en="".join(word.surface for word in ordered).strip(),
+                pt=pt.strip(),
+                kind="unidade semântica",
+            )
+        )
+    return highlights
 
 
 @router.get("", response_model=MaterialListResponse)

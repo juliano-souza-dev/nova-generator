@@ -185,6 +185,12 @@ export type MaterialCard = {
   audio_ready: boolean;
   audio_url: string | null;
   audio_error: string | null;
+  editorial_ready: boolean;
+  highlights: Array<{
+    en: string;
+    pt: string;
+    kind: string;
+  }>;
 };
 export type MaterialList = {
   cards: MaterialCard[];
