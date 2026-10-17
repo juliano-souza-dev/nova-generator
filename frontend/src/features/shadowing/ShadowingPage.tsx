@@ -18,7 +18,10 @@ export function ShadowingPage() {
   const [previewError, setPreviewError] = useState("");
   const playerRef = useRef<HTMLVideoElement>(null);
   const client = useQueryClient();
-  const projects = useQuery({ queryKey: ["projects", "shadowing"], queryFn: () => studioApi.projects() });
+  const projects = useQuery({
+    queryKey: ["projects", "shadowing"],
+    queryFn: () => studioApi.projects(),
+  });
   const projectId = params.get("project") ?? projects.data?.[0]?.id ?? "";
   const plans = useQuery({
     queryKey: ["shadowing", projectId],
@@ -102,7 +105,11 @@ export function ShadowingPage() {
       {projects.isError && (
         <ErrorState message={projects.error.message} retry={() => void projects.refetch()} />
       )}
-      {projects.data?.length === 0 && <EmptyState title="Nenhum projeto encontrado">Crie um projeto antes de preparar o Shadowing.</EmptyState>}
+      {projects.data?.length === 0 && (
+        <EmptyState title="Nenhum projeto encontrado">
+          Crie um projeto antes de preparar o Shadowing.
+        </EmptyState>
+      )}
       {Boolean(projects.data?.length) && (
         <div className="shadowing-controls panel">
           <label>
@@ -115,7 +122,9 @@ export function ShadowingPage() {
               }}
             >
               {projects.data?.map((item) => (
-                <option key={item.id} value={item.id}>{item.title}</option>
+                <option key={item.id} value={item.id}>
+                  {item.title}
+                </option>
               ))}
             </select>
           </label>
@@ -126,10 +135,7 @@ export function ShadowingPage() {
       )}
       {plans.isPending && Boolean(projectId) && <LoadingState label="Preparando blocos" />}
       {plans.isError && (
-        <ErrorState
-          message={plans.error.message}
-          retry={() => void plans.refetch()}
-        />
+        <ErrorState message={plans.error.message} retry={() => void plans.refetch()} />
       )}
       {active && (
         <>
@@ -142,7 +148,8 @@ export function ShadowingPage() {
               >
                 {plans.data?.map((item, index) => (
                   <option key={item.scene_id} value={item.scene_id}>
-                    Cena {index + 1} · {item.status === "approved" ? "aprovada" : "aguardando prévia"}
+                    Cena {index + 1} ·{" "}
+                    {item.status === "approved" ? "aprovada" : "aguardando prévia"}
                   </option>
                 ))}
               </select>
@@ -169,24 +176,39 @@ export function ShadowingPage() {
                   <small>{active.blocks[previewIndex].pt}</small>
                 </>
               )}
-              {phase === "finished" && <strong>Prévia concluída. Você pode aprovar o plano.</strong>}
+              {phase === "finished" && (
+                <strong>Prévia concluída. Você pode aprovar o plano.</strong>
+              )}
             </div>
             <div className="shadowing-preview-actions">
               <button
                 type="button"
                 onClick={startPreview}
-                disabled={!media.data?.cut_url || !active.blocks.length || phase === "playing" || phase === "pause"}
+                disabled={
+                  !media.data?.cut_url ||
+                  !active.blocks.length ||
+                  phase === "playing" ||
+                  phase === "pause"
+                }
               >
-                <Play aria-hidden="true" /> {phase === "finished" ? "Repetir prévia" : "Reproduzir prévia completa"}
+                <Play aria-hidden="true" />{" "}
+                {phase === "finished" ? "Repetir prévia" : "Reproduzir prévia completa"}
               </button>
-              <span>{previewIndex < 0 ? "Não iniciada" : `Bloco ${previewIndex + 1}/${active.blocks.length}`}</span>
+              <span>
+                {previewIndex < 0
+                  ? "Não iniciada"
+                  : `Bloco ${previewIndex + 1}/${active.blocks.length}`}
+              </span>
               <button
                 type="button"
                 className="primary-button"
                 onClick={() => approval.mutate(active)}
-                disabled={active.status === "approved" || phase !== "finished" || approval.isPending}
+                disabled={
+                  active.status === "approved" || phase !== "finished" || approval.isPending
+                }
               >
-                <Check aria-hidden="true" /> {active.status === "approved" ? "Shadowing aprovado" : "Aprovar Shadowing"}
+                <Check aria-hidden="true" />{" "}
+                {active.status === "approved" ? "Shadowing aprovado" : "Aprovar Shadowing"}
               </button>
             </div>
             {previewError && <p role="alert">{previewError}</p>}
@@ -195,7 +217,10 @@ export function ShadowingPage() {
           <div className="shadowing-blocks">
             {active.blocks.map((block, index) => (
               <article key={block.id} className="panel">
-                <strong>Bloco {index + 1} · {(block.start_ms / 1000).toFixed(2)}–{(block.end_ms / 1000).toFixed(2)} s</strong>
+                <strong>
+                  Bloco {index + 1} · {(block.start_ms / 1000).toFixed(2)}–
+                  {(block.end_ms / 1000).toFixed(2)} s
+                </strong>
                 <p>{block.en}</p>
                 <small>{block.pt}</small>
                 <span>Pausa de repetição: {(block.pause_duration_ms / 1000).toFixed(1)} s</span>
