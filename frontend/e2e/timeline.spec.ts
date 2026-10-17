@@ -126,7 +126,6 @@ test("editor can operate the cue and word timeline", async ({ page }) => {
 test("AI semantic grouping remains a draft until save", async ({ page }) => {
   await mockEditorialWorkstation(page);
   await page.goto("/editorial?project=p1");
-  await page.getByRole("button", { name: "Trocar fonte de preparação" }).click();
   await page.getByRole("button", { name: "Sugerir com Groq" }).click();
   await expect(page.getByLabel("Unidades sugeridas")).toContainText(
     "How are you? → Como você está?",
@@ -176,16 +175,10 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     await mockEditorialWorkstation(page);
     await page.goto("/editorial?project=p1");
-    // The timeline follows the cue editor. Both controls must be reachable
-    // through ordinary page scrolling at supported desktop viewport sizes.
-    const timeline = page.getByRole("img", {
-      name: "Waveform, cues e tempos das palavras",
-    });
-    await timeline.scrollIntoViewIfNeeded();
-    await expect(timeline).toBeInViewport();
-    const approveButton = page.getByRole("button", { name: "Aprovar cue" });
-    await approveButton.scrollIntoViewIfNeeded();
-    await expect(approveButton).toBeInViewport();
+    await expect(
+      page.getByRole("img", { name: "Waveform, cues e tempos das palavras" }),
+    ).toBeInViewport();
+    await expect(page.getByRole("button", { name: "Aprovar cue" })).toBeInViewport();
     const overflow = await page.evaluate(() => {
       const width = document.documentElement.clientWidth;
       return Array.from(document.querySelectorAll<HTMLElement>("body *"))
