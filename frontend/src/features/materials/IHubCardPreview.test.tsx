@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { IHubCardPreview, splitIHubHighlight } from "./IHubCardPreview";
+import { IHubCardPreview } from "./IHubCardPreview";
+import { splitIHubHighlight } from "./ihub-card-presentation";
 
 const demo = {
   cue_id: "cue-1",
