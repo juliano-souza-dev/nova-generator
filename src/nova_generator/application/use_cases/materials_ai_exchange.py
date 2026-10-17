@@ -55,6 +55,14 @@ class MaterialCard(StrictModel):
     front_en: str = Field(min_length=1)
     back_pt: str = Field(min_length=1)
     explanation_pt: str = Field(min_length=1, max_length=3000)
+    # Same fields used by iHub's flashcard renderer. Optional for old v1 responses.
+    card_type: str = Field(default="EXPRESSION", max_length=80)
+    focus_text: str = Field(default="", max_length=255)
+    meaning: str = Field(default="", max_length=500)
+    marked_en: str = Field(default="", max_length=255)
+    marked_pt: str = Field(default="", max_length=255)
+    example_en: str = Field(default="", max_length=1500)
+    example_pt: str = Field(default="", max_length=1500)
     tags: list[str] = Field(default_factory=list, max_length=12)
 
 
@@ -140,7 +148,11 @@ class MaterialsAiExchange:
                     "Gere texto pedagógico real para cada seção, incluindo "
                     "exercícios com respostas. "
                     "Os cards Anki devem usar cue_id existentes, e front_en/back_pt precisam "
-                    "ser idênticos ao texto EN/PT aprovado. Não altere IDs, tempos ou shadowing. "
+                    "ser idênticos ao texto EN/PT aprovado. Inclua card_type, focus_text, "
+                    "meaning, marked_en, marked_pt, explanation_pt, example_en e example_pt "
+                    "para reproduzir a mini lesson do iHub. O marked_en/marked_pt deve existir "
+                    "literalmente na frase aprovada; os exemplos devem ter EN e PT. "
+                    "Não altere IDs, tempos ou shadowing. "
                     "Retorne apenas JSON validado pelo contrato de saída."
                 ),
             },
@@ -187,6 +199,12 @@ class MaterialsAiExchange:
                 or card.back_pt != source_cue["approved_pt"]
             ):
                 raise MaterialsAiError(f"Anki card {cue_id} changed the approved literal text")
+            if card.marked_en and card.marked_en.casefold() not in card.front_en.casefold():
+                raise MaterialsAiError(f"Anki card {cue_id} has marked_en outside the approved cue")
+            if card.marked_pt and card.marked_pt.casefold() not in card.back_pt.casefold():
+                raise MaterialsAiError(f"Anki card {cue_id} has marked_pt outside the approved cue")
+            if bool(card.example_en.strip()) != bool(card.example_pt.strip()):
+                raise MaterialsAiError(f"Anki card {cue_id} needs both example_en and example_pt")
         document = output.model_dump(mode="json")
         # A new import reopens review even when the prior material was approved.
         self._path(project_id, "approved.json").unlink(missing_ok=True)
