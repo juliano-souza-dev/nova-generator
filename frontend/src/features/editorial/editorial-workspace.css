@@ -1,6 +1,7 @@
 .review-overview {
   display: grid;
   grid-template-columns: minmax(230px, 0.34fr) minmax(0, 1fr);
+  align-items: start;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
 }
@@ -9,6 +10,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: min(60vh, 540px);
   padding: 0.75rem;
   overflow: hidden;
 }
@@ -834,6 +836,7 @@
 
   .review-cue-list {
     display: block;
+    height: auto;
     max-height: 190px;
   }
 
@@ -870,6 +873,7 @@
 
   .review-cue-list {
     display: flex;
+    height: min(60vh, 540px);
     max-height: none;
     padding: 0.55rem;
   }

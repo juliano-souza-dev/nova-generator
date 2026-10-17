@@ -244,6 +244,7 @@ describe("EditorialPage", () => {
         type: "application/json",
       },
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Trocar fonte de preparação" }));
     fireEvent.drop(await screen.findByLabelText("Importar retorno editorial"), {
       dataTransfer: { files: [file] },
     });
@@ -545,6 +546,7 @@ describe("EditorialPage", () => {
         <EditorialPage />
       </MemoryRouter>,
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Trocar fonte de preparação" }));
     const suggest = await screen.findByRole("button", { name: "Sugerir com Groq" });
     await waitFor(() => expect(suggest).toBeEnabled());
     fireEvent.click(suggest);

@@ -143,6 +143,7 @@ export function EditorialPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [media, setMedia] = useState<ProjectMedia | null>(null);
   const mediaRef = useRef<HTMLVideoElement>(null);
+  const continuousPlayback = useRef(false);
   const playbackEnd = useRef<number | null>(null);
   const [projectId, setProjectId] = useState(params.get("project") ?? "");
   const [scenes, setScenes] = useState<Scene[]>([]);
@@ -503,6 +504,7 @@ export function EditorialPage() {
   function playRange(start: number, end: number) {
     const player = mediaRef.current;
     if (!player || end <= start) return;
+    continuousPlayback.current = false;
     seek(start);
     playbackEnd.current = end;
     void player.play().catch(() => setMessage("Não foi possível reproduzir o corte."));
@@ -671,9 +673,22 @@ export function EditorialPage() {
     const player = mediaRef.current;
     if (!player) return;
     playbackEnd.current = null;
-    if (player.paused)
+    if (player.paused) {
+      continuousPlayback.current = true;
       void player.play().catch(() => setMessage("Não foi possível reproduzir a cena."));
-    else player.pause();
+    } else {
+      continuousPlayback.current = false;
+      player.pause();
+    }
+  }
+
+  function playSelectedCueFromPlayer(player: HTMLVideoElement) {
+    if (continuousPlayback.current || !selectedCue) return;
+    const start = selectedCue.speech_timing.start_ms;
+    const end = selectedCue.speech_timing.end_ms;
+    if (player.currentTime * 1000 < start || player.currentTime * 1000 >= end)
+      player.currentTime = start / 1000;
+    playbackEnd.current = end;
   }
   async function saveChanges(approve = false, advance = false) {
     if (!selectedCue || saving) return;
@@ -731,12 +746,14 @@ export function EditorialPage() {
           approve,
         });
       const nextWord =
-        advance && selectedWord ? selectedCue.words[selectedGroupEndIndex + 1] : undefined;
+        advance && selectedWord && !approve
+          ? selectedCue.words[selectedGroupEndIndex + 1]
+          : undefined;
       const nextCueForWord =
-        advance && selectedWord && !nextWord ? cues[selectedCueIndex + 1] : undefined;
+        advance && selectedWord && !approve && !nextWord ? cues[selectedCueIndex + 1] : undefined;
       const refreshed = await refreshCues();
       const currentIndex = refreshed.findIndex((cue) => cue.id === selectedCue.id);
-      let nextCue = advance && !selectedWord ? refreshed[currentIndex + 1] : undefined;
+      let nextCue = advance && (!selectedWord || approve) ? refreshed[currentIndex + 1] : undefined;
       if (nextCue && expandedCue) {
         await studioApi.realignCue(nextCue.id, candidate.speech_timing.end_ms + 10, author);
         const realigned = await refreshCues();
@@ -1104,8 +1121,14 @@ export function EditorialPage() {
                   controls
                   preload="metadata"
                   aria-label="Player do corte da cena"
-                  onPlay={() => setPlaying(true)}
-                  onPause={() => setPlaying(false)}
+                  onPlay={(event) => {
+                    playSelectedCueFromPlayer(event.currentTarget);
+                    setPlaying(true);
+                  }}
+                  onPause={() => {
+                    continuousPlayback.current = false;
+                    setPlaying(false);
+                  }}
                   onTimeUpdate={(event) => syncPlayback(event.currentTarget)}
                   onEnded={() => setPlaying(false)}
                 />
@@ -1132,6 +1155,14 @@ export function EditorialPage() {
                   }
                 >
                   <Play aria-hidden="true" /> Ouvir cue
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!matchingMedia || !media?.cut_url}
+                  onClick={toggleContinuousPlayback}
+                >
+                  <Play aria-hidden="true" /> Ouvir cena inteira
                 </button>
                 <button
                   type="button"
@@ -1613,7 +1644,7 @@ export function EditorialPage() {
             <button
               type="button"
               className="primary-button"
-              onClick={() => void saveChanges(true)}
+              onClick={() => void saveChanges(true, true)}
               disabled={saving}
             >
               <Check aria-hidden="true" /> Aprovar cue
