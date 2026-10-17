@@ -72,7 +72,7 @@ class CardResponse(BaseModel):
     audio_url: str | None
     audio_error: str | None = None
     editorial_ready: bool
-    highlights: list["PedagogicalHighlightResponse"]
+    highlights: list[PedagogicalHighlightResponse]
 
 
 class PedagogicalHighlightResponse(BaseModel):
