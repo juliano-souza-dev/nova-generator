@@ -12,6 +12,7 @@ from nova_generator.api.routes.materials import router as materials_router
 from nova_generator.api.routes.project_media import router as project_media_router
 from nova_generator.api.routes.projects import router as projects_router
 from nova_generator.api.routes.stories import router as stories_router
+from nova_generator.api.routes.shadowing import router as shadowing_router
 from nova_generator.api.routes.voices import router as voices_router
 from nova_generator.core.observability import configure_json_logging
 from nova_generator.core.settings import get_settings
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(project_media_router, prefix=settings.api_prefix)
     app.include_router(voices_router, prefix=settings.api_prefix)
     app.include_router(stories_router, prefix=settings.api_prefix)
+    app.include_router(shadowing_router, prefix=settings.api_prefix)
     return app
 
 
