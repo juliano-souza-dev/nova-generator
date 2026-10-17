@@ -1074,8 +1074,10 @@ export function EditorialPage() {
                 Cues <span>{cues.length}</span>
               </h2>
               <ol>
-                {cues.map((cue) => (
-                  <li key={cue.id}>
+                {cues.map((cue) => {
+                  const status = cue.provenance?.approval === "approved" ? "approved" : "pending";
+                  return (
+                  <li key={cue.id} data-status={status}>
                     <button
                       type="button"
                       aria-current={cue.id === selectedCueId ? "true" : undefined}
@@ -1095,14 +1097,16 @@ export function EditorialPage() {
                       <span className="review-cue-number">{cue.order}</span>
                       <span className="review-cue-copy">
                         <strong>{cue.approved_en || cue.original_en}</strong>
-                        <small>
+                        <small className="review-cue-status">
+                          <i aria-hidden="true" />
                           {formatTime(cue.speech_timing.start_ms)} ·{" "}
-                          {cue.provenance?.approval === "approved" ? "Aprovado" : "Pendente"}
+                          {status === "approved" ? "Aprovado" : "Pendente"}
                         </small>
                       </span>
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ol>
             </nav>
             <section className="review-player panel" aria-labelledby="cut-player-title">

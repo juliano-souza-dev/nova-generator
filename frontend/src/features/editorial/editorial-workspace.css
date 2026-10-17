@@ -89,6 +89,39 @@
   color: var(--muted);
 }
 
+.review-cue-status {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.review-cue-status i {
+  width: 0.46rem;
+  height: 0.46rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #fbbf24;
+  box-shadow: 0 0 0 3px rgb(251 191 36 / 12%);
+}
+
+.review-cue-list li[data-status="approved"] .review-cue-number {
+  color: #ecfdf5;
+  background: #047857;
+}
+
+.review-cue-list li[data-status="approved"] .review-cue-status {
+  color: #86efac;
+}
+
+.review-cue-list li[data-status="approved"] .review-cue-status i {
+  background: #34d399;
+  box-shadow: 0 0 0 3px rgb(52 211 153 / 12%);
+}
+
+.review-cue-list li[data-status="pending"] .review-cue-status {
+  color: #fcd34d;
+}
+
 .review-overview .review-player {
   margin: 0;
 }
