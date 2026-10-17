@@ -1,0 +1,39 @@
+name: Temporary formatter inspection
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Print formatted content for post-editorial changes
+        run: |
+          node --input-type=module <<'JS'
+          import * as prettier from 'prettier';
+          import { readFileSync } from 'node:fs';
+          const paths = [
+            'src/features/materials/MaterialsPage.tsx',
+            'src/features/shadowing/ShadowingPage.tsx',
+            'src/lib/studio-api.ts',
+          ];
+          for (const path of paths) {
+            const source = readFileSync(path, 'utf8');
+            const config = await prettier.resolveConfig(path);
+            const content = await prettier.format(source, {...config, filepath: path});
+            console.log('FORMAT_JSON=' + JSON.stringify({path: 'frontend/' + path, content}));
+          }
+          JS
