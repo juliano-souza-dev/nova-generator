@@ -10,6 +10,8 @@ import type {
   JobDetail,
   JobPage,
   MaterialCard,
+  MaterialAiReview,
+  ShadowingPlan,
   MaterialExport,
   MaterialList,
   MaterialPublication,
@@ -167,6 +169,30 @@ export const studioApi = {
     apiRequest<Record<string, unknown>>(`/stories/${id}/publication`, {
       method: "POST",
       body: JSON.stringify({ youtube }),
+    }),
+  shadowing: (projectId: string) =>
+    apiRequest<ShadowingPlan[]>(`/projects/${projectId}/shadowing`),
+  approveShadowing: (projectId: string, sceneId: string, source_sha256: string) =>
+    apiRequest<ShadowingPlan>(`/projects/${projectId}/shadowing/${sceneId}/approval`, {
+      method: "POST",
+      body: JSON.stringify({ source_sha256 }),
+    }),
+  externalMaterialsPackageUrl: (projectId: string) =>
+    apiUrl(`/projects/${projectId}/materials-ai/package`),
+  externalMaterialsReview: (projectId: string) =>
+    apiRequest<MaterialAiReview>(`/projects/${projectId}/materials-ai/review`),
+  importExternalMaterials: (projectId: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return apiRequest<MaterialAiReview>(`/projects/${projectId}/materials-ai/import`, {
+      method: "POST",
+      body,
+    });
+  },
+  approveExternalMaterials: (projectId: string, source_sha256: string) =>
+    apiRequest<MaterialAiReview>(`/projects/${projectId}/materials-ai/approval`, {
+      method: "POST",
+      body: JSON.stringify({ source_sha256 }),
     }),
   materials: (projectId: string, voiceId?: string) =>
     apiRequest<MaterialList>(
