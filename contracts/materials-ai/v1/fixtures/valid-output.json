@@ -1,0 +1,90 @@
+{
+  "contract": "nova-generator-materials-output/1.0",
+  "project_id": "00000000-0000-4000-8000-000000000101",
+  "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "title": "Olá em inglês",
+  "sections": [
+    {
+      "id": "learning_path",
+      "title": "Como estudar",
+      "paragraphs": [
+        "Use 'Hello.' para iniciar uma conversa simples. Observe a pronúncia antes de repetir."
+      ],
+      "exercises": []
+    },
+    {
+      "id": "vocabulary",
+      "title": "Vocabulário em contexto",
+      "paragraphs": [
+        "Use 'Hello.' para iniciar uma conversa simples. Observe a pronúncia antes de repetir."
+      ],
+      "exercises": []
+    },
+    {
+      "id": "structures",
+      "title": "Estruturas úteis",
+      "paragraphs": [
+        "Use 'Hello.' para iniciar uma conversa simples. Observe a pronúncia antes de repetir."
+      ],
+      "exercises": []
+    },
+    {
+      "id": "guided_practice",
+      "title": "Prática guiada",
+      "paragraphs": [
+        "Use 'Hello.' para iniciar uma conversa simples. Observe a pronúncia antes de repetir."
+      ],
+      "exercises": [
+        {
+          "prompt": "Como você cumprimentaria um colega em inglês?",
+          "answer": "Hello."
+        }
+      ]
+    },
+    {
+      "id": "activities",
+      "title": "Atividades",
+      "paragraphs": [
+        "Use 'Hello.' para iniciar uma conversa simples. Observe a pronúncia antes de repetir."
+      ],
+      "exercises": [
+        {
+          "prompt": "Como você cumprimentaria um colega em inglês?",
+          "answer": "Hello."
+        }
+      ]
+    },
+    {
+      "id": "challenge",
+      "title": "Desafio final",
+      "paragraphs": [
+        "Use 'Hello.' para iniciar uma conversa simples. Observe a pronúncia antes de repetir."
+      ],
+      "exercises": [
+        {
+          "prompt": "Como você cumprimentaria um colega em inglês?",
+          "answer": "Hello."
+        }
+      ]
+    },
+    {
+      "id": "review",
+      "title": "Revisão",
+      "paragraphs": [
+        "Use 'Hello.' para iniciar uma conversa simples. Observe a pronúncia antes de repetir."
+      ],
+      "exercises": []
+    }
+  ],
+  "anki_cards": [
+    {
+      "cue_id": "00000000-0000-4000-8000-000000000103",
+      "front_en": "Hello.",
+      "back_pt": "Olá.",
+      "explanation_pt": "Cumprimento neutro, apropriado para contextos formais e informais.",
+      "tags": [
+        "greetings"
+      ]
+    }
+  ]
+}
