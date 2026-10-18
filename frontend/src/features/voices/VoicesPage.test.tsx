@@ -72,7 +72,7 @@ describe("VoicesPage", () => {
       </QueryClientProvider>,
     );
     await screen.findByText("Modelo Chatterbox Nano disponível.");
-    fireEvent.change(screen.getByLabelText("Enviar WAV de referência (1 a 30 segundos)"), {
+    fireEvent.change(screen.getByLabelText("Enviar áudio de referência (1 a 30 segundos)"), {
       target: { files: [new File(["wav"], "speaker.wav", { type: "audio/wav" })] },
     });
     await waitFor(() => expect(studioApi.uploadVoiceReference).toHaveBeenCalled());
@@ -125,7 +125,7 @@ describe("VoicesPage", () => {
     const wav = new File(["wav"], "minha-voz.WAV", { type: "audio/wav" });
     fireEvent.dragEnter(zone, { dataTransfer: { files: [wav] } });
     expect(zone).toHaveClass("is-dragging");
-    expect(screen.getByText("Solte o WAV aqui")).toBeInTheDocument();
+    expect(screen.getByText("Solte o áudio aqui")).toBeInTheDocument();
     fireEvent.drop(zone, { dataTransfer: { files: [wav] } });
 
     await waitFor(() => {
@@ -136,7 +136,41 @@ describe("VoicesPage", () => {
     expect(screen.getByText(/Arquivo selecionado: minha-voz.WAV/)).toBeInTheDocument();
   });
 
-  it("rejects non-WAV drops without uploading them", () => {
+  it.each([
+    ["sample.mp3", "audio/mpeg"],
+    ["sample.ogg", "audio/ogg"],
+  ])("accepts %s dropped into the upload area", async (filename, type) => {
+    const digest = "f".repeat(64);
+    const reference = {
+      sha256: digest,
+      duration_ms: 2000,
+      sample_rate: 24000,
+      channels: 1,
+      size_bytes: 96044,
+      audio_url: `/api/voices/references/${digest}`,
+    };
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: true,
+      model_sha256: "a".repeat(64),
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([reference]);
+    vi.mocked(studioApi.uploadVoiceReference).mockClear();
+    vi.mocked(studioApi.uploadVoiceReference).mockResolvedValue(reference);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+    const file = new File(["encoded audio"], filename, { type });
+    fireEvent.drop(screen.getByTestId("voice-reference-dropzone"), {
+      dataTransfer: { files: [file] },
+    });
+    await waitFor(() => expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(file));
+    await waitFor(() => expect(screen.getByLabelText("Áudio de referência")).toHaveValue(digest));
+  });
+
+  it("rejects unsupported file types without uploading them", () => {
     vi.mocked(studioApi.uploadVoiceReference).mockClear();
     vi.mocked(studioApi.voices).mockResolvedValue([]);
     vi.mocked(studioApi.voiceModel).mockResolvedValue({
@@ -154,7 +188,7 @@ describe("VoicesPage", () => {
     fireEvent.drop(zone, {
       dataTransfer: { files: [new File(["mp3"], "sample.mp3", { type: "audio/mpeg" })] },
     });
-    expect(screen.getByRole("alert")).toHaveTextContent("Selecione um arquivo WAV (.wav).");
+    expect(screen.getByRole("alert")).toHaveTextContent("Selecione um áudio WAV, MP3 ou OGG.");
     expect(studioApi.uploadVoiceReference).not.toHaveBeenCalled();
   });
 
