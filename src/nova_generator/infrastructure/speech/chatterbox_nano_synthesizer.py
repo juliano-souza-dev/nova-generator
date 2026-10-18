@@ -9,7 +9,10 @@ from typing import Any
 
 from nova_generator.application.ports.wav_probe import WavProbe
 from nova_generator.domain.voices import SynthesizedSpeech, VoiceProfileSnapshot
-from nova_generator.infrastructure.filesystem.voice_references import FileVoiceReferenceStore
+from nova_generator.infrastructure.filesystem.voice_references import (
+    FileVoiceReferenceStore,
+    validate_reference_duration,
+)
 from nova_generator.infrastructure.speech.ffprobe_wav_probe import FfprobeWavProbe
 
 logger = logging.getLogger(__name__)
@@ -51,6 +54,7 @@ class ChatterboxNanoSynthesizer:
             stored = store.get(profile.reference_audio_sha256)
             if stored is None:
                 raise ValueError("WAV de referência do perfil ausente ou alterado.")
+            validate_reference_duration(stored[0].duration_ms)
             reference_root = str(store.root.resolve())
         request = {
             "text": text,
