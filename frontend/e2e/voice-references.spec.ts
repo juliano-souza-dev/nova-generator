@@ -10,10 +10,10 @@ test("uploads a WAV and creates a selectable voice without entering hashes", asy
   await page.route("**/api/voices/references", async (route) => {
     const reference = {
       sha256: digest,
-      duration_ms: 2000,
+      duration_ms: 7000,
       sample_rate: 16000,
       channels: 1,
-      size_bytes: 64044,
+      size_bytes: 224044,
       audio_url: `/api/voices/references/${digest}`,
     };
     if (route.request().method() === "POST") {
@@ -68,8 +68,8 @@ test("uploads a WAV and creates a selectable voice without entering hashes", asy
   await page.route("**/api/voices/references/*", (route) => route.fulfill({ body: "audio" }));
 
   await page.goto("/voices");
-  await expect(page.getByText("Modelo Chatterbox Nano disponível.")).toBeVisible();
-  await page.getByLabel("Enviar WAV de referência (1 a 30 segundos)").setInputFiles({
+  await expect(page.getByText("Modelo Chatterbox Turbo disponível.")).toBeVisible();
+  await page.getByLabel("Enviar áudio de referência (6 a 30 segundos)").setInputFiles({
     name: "speaker.wav",
     mimeType: "audio/wav",
     buffer: Buffer.from("wav"),
@@ -91,10 +91,10 @@ test("uploads a WAV dropped into the reference area without opening the file pic
   await page.route("**/api/voices/references", async (route) => {
     const reference = {
       sha256: digest,
-      duration_ms: 2000,
+      duration_ms: 7000,
       sample_rate: 16000,
       channels: 1,
-      size_bytes: 64044,
+      size_bytes: 224044,
       audio_url: `/api/voices/references/${digest}`,
     };
     if (route.request().method() === "POST") {
