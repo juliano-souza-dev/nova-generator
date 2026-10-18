@@ -251,6 +251,7 @@ function VoiceForm({
         >
           <input
             id="voice-reference-upload"
+            aria-label="Enviar WAV de referência (1 a 30 segundos)"
             className="voice-file-input"
             type="file"
             accept=".wav,audio/wav,audio/x-wav,audio/wave"
