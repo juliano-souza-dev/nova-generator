@@ -114,6 +114,7 @@ function mount() {
 describe("ShadowingPage", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     vi.mocked(studioApi.projects).mockResolvedValue([
       { id: "project-1", title: "Dialogue" } as never,
     ]);
@@ -179,6 +180,32 @@ describe("ShadowingPage", () => {
       expect(studioApi.editShadowing).toHaveBeenCalledWith(
         "project-1", "scene-1", plan.source_sha256, plan.plan_sha256,
         [["cue-1"], ["cue-2"], ["cue-3", "cue-4"]],
+      ),
+    );
+  });
+
+  it("joins adjacent short cues from the same speaker", async () => {
+    vi.mocked(studioApi.shadowing).mockResolvedValue([
+      {
+        ...plan,
+        blocks: [
+          { ...plan.blocks[1], id: "block-1", cue_ids: ["cue-3"], end_ms: 4100, en: "Come here.", pt: "Venha aqui.", word_count: 2 },
+          { ...plan.blocks[1], id: "block-2", cue_ids: ["cue-4"], start_ms: 4300, en: "Right now!", pt: "Agora mesmo!", word_count: 2 },
+        ],
+        excluded_cues: [cues[0], cues[1]].map((cue) => ({
+          ...cue,
+          reason: "Não selecionado",
+        })),
+      },
+    ]);
+    mount();
+    const merge = await screen.findAllByRole("button", { name: "Juntar com próxima" });
+    expect(merge[0]).toBeEnabled();
+    fireEvent.click(merge[0]);
+    await waitFor(() =>
+      expect(studioApi.editShadowing).toHaveBeenCalledWith(
+        "project-1", "scene-1", plan.source_sha256, plan.plan_sha256,
+        [["cue-3", "cue-4"]],
       ),
     );
   });
