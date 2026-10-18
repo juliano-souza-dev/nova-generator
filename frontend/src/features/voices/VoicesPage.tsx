@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Mic2, Plus, Volume2 } from "lucide-react";
-import { useState } from "react";
+import { Mic2, Plus, UploadCloud, Volume2 } from "lucide-react";
+import { useRef, useState, type DragEvent } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
@@ -176,6 +176,52 @@ function VoiceForm({
       void queryClient.invalidateQueries({ queryKey: ["voice-references"] });
     },
   });
+  const [isDragging, setIsDragging] = useState(false);
+  const [fileName, setFileName] = useState("");
+  const [fileError, setFileError] = useState("");
+  const dragDepth = useRef(0);
+
+  function submitReference(file: File | undefined) {
+    if (!file || upload.isPending) return;
+    if (!/\\.wav$/i.test(file.name)) {
+      setFileError("Selecione um arquivo WAV (.wav).");
+      setFileName("");
+      return;
+    }
+    setFileError("");
+    setFileName(file.name);
+    upload.mutate(file);
+  }
+
+  function onDragEnter(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (upload.isPending) return;
+    dragDepth.current += 1;
+    setIsDragging(true);
+  }
+
+  function onDragLeave(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setIsDragging(false);
+  }
+
+  function onDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = upload.isPending ? "none" : "copy";
+  }
+
+  function onDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth.current = 0;
+    setIsDragging(false);
+    if (!upload.isPending) submitReference(event.dataTransfer.files?.[0]);
+  }
+
   const selectedReference = references.data?.find(
     (reference) => reference.sha256 === form.watch("reference_audio_sha256"),
   );
@@ -193,17 +239,44 @@ function VoiceForm({
             ? "Modelo Chatterbox Nano disponível."
             : (model.data?.message ?? model.error?.message)}
       </p>
-      <label htmlFor="voice-reference-upload">Enviar WAV de referência (1 a 30 segundos)</label>
-      <input
-        id="voice-reference-upload"
-        type="file"
-        accept=".wav,audio/wav"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) upload.mutate(file);
-        }}
-      />
-      {upload.isPending && <p>Validando áudio…</p>}
+      <div className="voice-upload-field">
+        <span className="voice-upload-title">Enviar WAV de referência (1 a 30 segundos)</span>
+        <div
+          className={`voice-dropzone${isDragging ? " is-dragging" : ""}${upload.isPending ? " is-uploading" : ""}`}
+          onDragEnter={onDragEnter}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          data-testid="voice-reference-dropzone"
+        >
+          <input
+            id="voice-reference-upload"
+            className="voice-file-input"
+            type="file"
+            accept=".wav,audio/wav,audio/x-wav,audio/wave"
+            disabled={upload.isPending}
+            onChange={(event) => {
+              submitReference(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+          />
+          <label className="voice-dropzone-label" htmlFor="voice-reference-upload">
+            <UploadCloud aria-hidden="true" />
+            <strong>
+              {isDragging ? "Solte o WAV aqui" : "Arraste seu arquivo WAV para cá"}
+            </strong>
+            <span>ou clique aqui para escolher um arquivo</span>
+            <small>Formato .wav · áudio de 1 a 30 segundos</small>
+          </label>
+        </div>
+        {fileName && (
+          <p className="voice-upload-filename" role="status">
+            {upload.isPending ? "Enviando" : upload.isError ? "Falha ao enviar" : "Arquivo selecionado"}: {fileName}
+          </p>
+        )}
+        {fileError && <p className="field-error" role="alert">{fileError}</p>}
+      </div>
+      {upload.isPending && <p role="status">Validando áudio…</p>}
       {upload.isError && (
         <p role="alert" className="field-error">
           {upload.error.message}
