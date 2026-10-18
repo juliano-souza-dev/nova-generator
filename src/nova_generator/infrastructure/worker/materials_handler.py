@@ -121,11 +121,13 @@ class MaterialsJobHandler:
             project, self._repository.get_project_scenes(project_id), editorial_cards
         ) != job.input.get("editorial_sha256"):
             raise ValueError("editorial timing or words changed; enqueue a new export")
+        rich_cards = job.input.get("rich_cards")
         result = self._exporter.execute(
             cues=cues,
             voice=voice,
             output_directory=self._export_root / str(job.id),
             deck_name=project.title,
+            **({"rich_cards": rich_cards} if isinstance(rich_cards, dict) else {}),
         )
         execution.heartbeat()
         return {
@@ -197,6 +199,11 @@ class MaterialsJobHandler:
                 **job.input,
                 "generate_complete": False,
                 "audio_hashes": audio_hashes,
+                "rich_cards": {
+                    card["cue_id"]: card
+                    for card in document["anki_cards"]
+                    if card["cue_id"] in set(map(str, raw_ids))
+                },
             },
         )
         output = self.export(export_job, execution)
