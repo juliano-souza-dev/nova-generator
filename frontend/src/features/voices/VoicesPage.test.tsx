@@ -90,6 +90,7 @@ describe("VoicesPage", () => {
       ),
     );
   });
+
   it("accepts a WAV dropped on the area and automatically selects the uploaded reference", async () => {
     const digest = "d".repeat(64);
     vi.mocked(studioApi.uploadVoiceReference).mockClear();
@@ -166,8 +167,12 @@ describe("VoicesPage", () => {
     fireEvent.drop(screen.getByTestId("voice-reference-dropzone"), {
       dataTransfer: { files: [file] },
     });
-    await waitFor(() => expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(file, expect.anything()));
-    await waitFor(() => expect(screen.getByLabelText("Áudio de referência")).toHaveValue(digest));
+    await waitFor(() =>
+      expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(file, expect.anything()),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Áudio de referência")).toHaveValue(digest),
+    );
   });
 
   it("rejects unsupported file types without uploading them", () => {
