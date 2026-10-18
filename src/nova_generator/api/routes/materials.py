@@ -21,8 +21,8 @@ from nova_generator.application.use_cases.editorial_publication_snapshot import 
     editorial_publication_sha256,
 )
 from nova_generator.application.use_cases.manage_jobs import EnqueueJob, GetJob
-from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
 from nova_generator.application.use_cases.manage_voice_profiles import ManageVoiceProfiles
+from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
 from nova_generator.application.use_cases.publish_anki_reel import (
     AnkiPublicationError,
     PublishAnkiReel,
@@ -414,7 +414,9 @@ def generate_complete_material(
     except ValueError as error:
         raise HTTPException(409, detail=str(error)) from error
     if review["status"] != "approved":
-        raise HTTPException(409, detail="Revise e aprove o conteúdo pedagógico antes de gerar o material.")
+        raise HTTPException(
+            409, detail="Revise e aprove o conteúdo pedagógico antes de gerar o material."
+        )
     selected = [
         cue for _, cue in _project_cues(project_id)
         if cue.provenance.get("anki_included") is not False
