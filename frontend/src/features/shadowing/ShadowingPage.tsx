@@ -65,12 +65,7 @@ export function ShadowingPage() {
 
   const approval = useMutation({
     mutationFn: (plan: ShadowingPlan) =>
-      studioApi.approveShadowing(
-        projectId,
-        plan.scene_id,
-        plan.source_sha256,
-        plan.plan_sha256,
-      ),
+      studioApi.approveShadowing(projectId, plan.scene_id, plan.source_sha256, plan.plan_sha256),
     onSuccess: () => {
       setActionNotice("Plano de Shadowing aprovado.");
       refreshPlans();
@@ -289,8 +284,8 @@ export function ShadowingPage() {
               </select>
             </label>
             <span className="shadowing-info">
-              {active.blocks.length} práticas curtas · {active.excluded_cues.length} cues fora
-              · {SOURCE_LABELS[active.origin] ?? "Proposta salva"}
+              {active.blocks.length} práticas curtas · {active.excluded_cues.length} cues fora ·{" "}
+              {SOURCE_LABELS[active.origin] ?? "Proposta salva"}
             </span>
           </div>
 
@@ -346,7 +341,11 @@ export function ShadowingPage() {
             {selectedFileName && <small role="status">Arquivo: {selectedFileName}</small>}
             {importAi.isPending && <p role="status">Validando a proposta da IA externa…</p>}
             {groq.isPending && <p role="status">A Groq está selecionando as melhores falas…</p>}
-            {actionError && <p className="field-error" role="alert">{actionError.message}</p>}
+            {actionError && (
+              <p className="field-error" role="alert">
+                {actionError.message}
+              </p>
+            )}
             {actionNotice && <p role="status">{actionNotice}</p>}
           </section>
 
@@ -429,10 +428,12 @@ export function ShadowingPage() {
               {active.blocks.map((block, index) => (
                 <article key={block.id} className="panel shadowing-block">
                   <div className="shadowing-block-heading">
-                    <strong>Prática {index + 1} · {block.speaker}</strong>
+                    <strong>
+                      Prática {index + 1} · {block.speaker}
+                    </strong>
                     <small>
-                      {((block.end_ms - block.start_ms) / 1000).toFixed(1)} s ·{" "}
-                      {block.word_count} palavras
+                      {((block.end_ms - block.start_ms) / 1000).toFixed(1)} s · {block.word_count}{" "}
+                      palavras
                     </small>
                   </div>
                   <p>{block.en}</p>
@@ -447,7 +448,9 @@ export function ShadowingPage() {
                         const cue = active.source_cues.find((item) => item.id === cueId);
                         return (
                           <div key={cueId}>
-                            <span>Cue {cue?.order}: {cue?.en}</span>
+                            <span>
+                              Cue {cue?.order}: {cue?.en}
+                            </span>
                             {position < block.cue_ids.length - 1 && (
                               <button
                                 type="button"
@@ -485,8 +488,8 @@ export function ShadowingPage() {
             <div className="shadowing-section-heading">
               <h2>Cues fora desta prática ({active.excluded_cues.length})</h2>
               <p>
-                Excluir um grupo não apaga nada do Editorial. Falas longas precisam ser
-                divididas na origem para virar práticas fáceis de repetir.
+                Excluir um grupo não apaga nada do Editorial. Falas longas precisam ser divididas na
+                origem para virar práticas fáceis de repetir.
               </p>
             </div>
             {active.excluded_cues.length === 0 && <p>Todos os cues estão selecionados.</p>}
@@ -494,7 +497,9 @@ export function ShadowingPage() {
               {active.excluded_cues.map((cue) => (
                 <div className="shadowing-excluded-item" key={cue.id}>
                   <div>
-                    <strong>Cue {cue.order} · {cue.speaker}</strong>
+                    <strong>
+                      Cue {cue.order} · {cue.speaker}
+                    </strong>
                     <p>{cue.en}</p>
                     <small>{cue.reason}</small>
                   </div>
