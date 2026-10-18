@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from dataclasses import replace
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -8,11 +11,13 @@ from nova_generator.application.use_cases.editorial_publication_snapshot import 
     editorial_publication_sha256,
 )
 from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
+from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.domain.exports import ExportCue
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.projects.entities import utf8_sha256
 from nova_generator.domain.voices import VoiceProfileSnapshot
+from nova_generator.infrastructure.exports.material_workbook_pdf import render_material_workbook
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
 )
@@ -28,12 +33,14 @@ class MaterialsJobHandler:
         synthesis: SynthesizeSpeech,
         exporter: ExportAnkiReel,
         export_root: Path,
+        project_root: Path | None = None,
     ) -> None:
         self._repository = repository
         self._cache = cache
         self._synthesis = synthesis
         self._exporter = exporter
         self._export_root = export_root
+        self._project_root = project_root or Path("data/projects")
 
     def synthesize(self, job: Job, execution: JobExecution) -> dict[str, Any]:
         execution.raise_if_cancelled()
@@ -66,6 +73,8 @@ class MaterialsJobHandler:
 
     def export(self, job: Job, execution: JobExecution) -> dict[str, Any]:
         execution.raise_if_cancelled()
+        if job.input.get("generate_complete"):
+            return self._generate_complete(job, execution)
         project_id = UUID(str(job.input["project_id"]))
         voice = _snapshot(job.input["voice_snapshot"])
         raw_ids = job.input["cue_ids"]
@@ -124,6 +133,88 @@ class MaterialsJobHandler:
             "manifest": str(result.manifest_path),
             "reel": str(result.reel_path),
             "cards": len(cues),
+        }
+
+
+    def _generate_complete(self, job: Job, execution: JobExecution) -> dict[str, Any]:
+        """Reuse verified canonical WAVs; synthesize missing ones before the Anki exporter."""
+        project_id = UUID(str(job.input["project_id"]))
+        exchange = MaterialsAiExchange(self._repository, self._project_root)
+        review = exchange.status(project_id)
+        if review["status"] != "approved":
+            raise ValueError("O conteúdo pedagógico não está aprovado. Revise antes de gerar.")
+        document = review["document"]
+        digest = sha256(
+            json.dumps(
+                document, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
+        ).hexdigest()
+        if (
+            digest != job.input.get("materials_sha256")
+            or review["source_sha256"] != job.input.get("materials_source_sha256")
+        ):
+            raise ValueError("O material aprovado mudou depois do pedido. Gere novamente.")
+
+        raw_ids = job.input["cue_ids"]
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise ValueError("Nenhum card selecionado para gerar material.")
+        selected_cards = {card["cue_id"] for card in document["anki_cards"]}
+        if not set(map(str, raw_ids)).issubset(selected_cards):
+            raise ValueError("O conteúdo aprovado não contém todos os cards selecionados.")
+        voice = _snapshot(job.input["voice_snapshot"])
+        cues = []
+        for raw_id in raw_ids:
+            cue = self._repository.get_cue(UUID(str(raw_id)))
+            if cue is None or self._repository.get_scene_project_id(cue.scene_id) != project_id:
+                raise ValueError(f"Card {raw_id} não pertence mais ao projeto.")
+            if (
+                cue.provenance.get("approval") == "draft"
+                or cue.provenance.get("anki_included") is False
+                or cue.approved_en_sha256 != job.input["text_hashes"].get(str(raw_id))
+                or utf8_sha256(cue.approved_pt) != job.input["pt_hashes"].get(str(raw_id))
+            ):
+                raise ValueError("Cards alterados durante a preparação. Gere novamente.")
+            cues.append(cue)
+        project = self._repository.get_project(project_id)
+        if project is None:
+            raise ValueError("Projeto indisponível.")
+        snapshot = editorial_publication_sha256(
+            project, self._repository.get_project_scenes(project_id),
+            [(cue, self._repository.get_cue_words(cue.id)) for cue in cues],
+        )
+        if snapshot != job.input.get("editorial_sha256"):
+            raise ValueError("O conteúdo ou timings do Editorial mudaram. Gere novamente.")
+
+        audio_hashes: dict[str, str] = {}
+        for cue in cues:
+            execution.raise_if_cancelled()
+            speech = self._synthesis.execute(text=cue.approved_en, profile=voice)
+            audio_hashes[str(cue.id)] = sha256(Path(speech.audio_path).read_bytes()).hexdigest()
+            execution.heartbeat()
+
+        export_job = replace(
+            job, input={
+                **job.input,
+                "generate_complete": False,
+                "audio_hashes": audio_hashes,
+            },
+        )
+        output = self.export(export_job, execution)
+        execution.raise_if_cancelled()
+        directory = self._export_root / str(job.id)
+        workbook = render_material_workbook(document, directory / "material-didatico.pdf")
+        snapshot_path = directory / "material-pedagogico.json"
+        snapshot_path.write_text(
+            json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        execution.heartbeat()
+        return {
+            **output,
+            "workbook": str(workbook),
+            "materials_sha256": digest,
+            "audio_hashes": audio_hashes,
+            "pedagogical_snapshot": str(snapshot_path),
+            "sections": len(document["sections"]),
         }
 
 
