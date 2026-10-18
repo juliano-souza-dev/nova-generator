@@ -237,7 +237,8 @@ function VoiceForm({
   const selectedReference = availableReferences.find(
     (reference) => reference.sha256 === currentReference,
   );
-  const referenceTooShort = !!selectedReference && selectedReference.duration_ms < 6000;
+  const referenceTooShort =
+    !!selectedReference && selectedReference.duration_ms < 6000;
   const cannotCreate =
     busy ||
     !model.data?.available ||
