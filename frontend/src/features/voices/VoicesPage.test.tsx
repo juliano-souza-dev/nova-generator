@@ -129,7 +129,7 @@ describe("VoicesPage", () => {
     fireEvent.drop(zone, { dataTransfer: { files: [wav] } });
 
     await waitFor(() => {
-      expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(wav);
+      expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(wav, expect.anything());
       expect(screen.getByLabelText("Áudio de referência")).toHaveValue(digest);
     });
     expect(zone).not.toHaveClass("is-dragging");
@@ -166,7 +166,7 @@ describe("VoicesPage", () => {
     fireEvent.drop(screen.getByTestId("voice-reference-dropzone"), {
       dataTransfer: { files: [file] },
     });
-    await waitFor(() => expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(file));
+    await waitFor(() => expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(file, expect.anything()));
     await waitFor(() => expect(screen.getByLabelText("Áudio de referência")).toHaveValue(digest));
   });
 
@@ -186,7 +186,7 @@ describe("VoicesPage", () => {
 
     const zone = screen.getByTestId("voice-reference-dropzone");
     fireEvent.drop(zone, {
-      dataTransfer: { files: [new File(["mp3"], "sample.mp3", { type: "audio/mpeg" })] },
+      dataTransfer: { files: [new File(["flac"], "sample.flac", { type: "audio/flac" })] },
     });
     expect(screen.getByRole("alert")).toHaveTextContent("Selecione um áudio WAV, MP3 ou OGG.");
     expect(studioApi.uploadVoiceReference).not.toHaveBeenCalled();
