@@ -201,21 +201,24 @@ export function ShadowingPage() {
     changeGroups(next);
   }
 
-  function canMerge(index: number): boolean {
-    if (!active || index >= active.blocks.length - 1) return false;
+  function mergeBlockReason(index: number): string | null {
+    if (!active || index >= active.blocks.length - 1) return "Não há próxima prática para juntar.";
     const left = active.blocks[index];
     const right = active.blocks[index + 1];
     const first = active.source_cues.findIndex((cue) => cue.id === left.cue_ids.at(-1));
     const second = active.source_cues.findIndex((cue) => cue.id === right.cue_ids[0]);
-    return (
-      left.speaker === right.speaker &&
-      first >= 0 &&
-      second === first + 1 &&
-      right.start_ms >= left.end_ms &&
-      right.start_ms - left.end_ms <= 1000 &&
-      right.end_ms - left.start_ms <= 6500 &&
-      left.word_count + right.word_count <= 14
-    );
+    if (left.speaker !== right.speaker) return "Os cues têm locutores diferentes.";
+    if (first < 0 || second !== first + 1) {
+      return "Existe uma cue intermediária; só é possível juntar cues consecutivos.";
+    }
+    if (right.start_ms < left.end_ms) return "Os cues se sobrepõem no tempo.";
+    if (right.start_ms - left.end_ms > 1000) return "O intervalo entre os cues passa de 1 segundo.";
+    const durationMs = right.end_ms - left.start_ms;
+    if (durationMs > 6500)
+      return `A prática combinada teria ${(durationMs / 1000).toFixed(1)} s; o limite é 6,5 s.`;
+    const words = left.word_count + right.word_count;
+    if (words > 14) return `A prática combinada teria ${words} palavras; o limite é 14.`;
+    return null;
   }
 
   return (
@@ -416,7 +419,10 @@ export function ShadowingPage() {
           <section className="shadowing-review" aria-label="Revisar práticas">
             <div className="shadowing-section-heading">
               <h2>Práticas selecionadas</h2>
-              <p>Juntar exige cues consecutivos, o mesmo locutor informado e limites curtos. Quando ambos estiverem sem locutor, a junção é uma decisão manual.</p>
+              <p>
+                Juntar exige cues consecutivos, o mesmo locutor informado e limites curtos. Quando
+                ambos estiverem sem locutor, a junção é uma decisão manual.
+              </p>
             </div>
             {active.blocks.length === 0 && (
               <p className="panel">
@@ -424,62 +430,65 @@ export function ShadowingPage() {
               </p>
             )}
             <div className="shadowing-blocks">
-              {active.blocks.map((block, index) => (
-                <article key={block.id} className="panel shadowing-block">
-                  <div className="shadowing-block-heading">
-                    <strong>
-                      Prática {index + 1} · {block.speaker}
-                    </strong>
-                    <small>
-                      {((block.end_ms - block.start_ms) / 1000).toFixed(1)} s · {block.word_count}{" "}
-                      palavras
-                    </small>
-                  </div>
-                  <p>{block.en}</p>
-                  <small>{block.pt}</small>
-                  <span>
-                    {formatTime(block.start_ms)}–{formatTime(block.end_ms)} · Pausa{" "}
-                    {(block.pause_duration_ms / 1000).toFixed(1)} s
-                  </span>
-                  {block.cue_ids.length > 1 && (
-                    <div className="shadowing-cue-pieces">
-                      {block.cue_ids.map((cueId, position) => {
-                        const cue = active.source_cues.find((item) => item.id === cueId);
-                        return (
-                          <div key={cueId}>
-                            <span>
-                              Cue {cue?.order}: {cue?.en}
-                            </span>
-                            {position < block.cue_ids.length - 1 && (
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() => splitAfter(index, position)}
-                                aria-label={`Separar após cue ${cue?.order}`}
-                              >
-                                <Scissors aria-hidden="true" /> Separar aqui
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
+              {active.blocks.map((block, index) => {
+                const mergeReason = mergeBlockReason(index);
+                return (
+                  <article key={block.id} className="panel shadowing-block">
+                    <div className="shadowing-block-heading">
+                      <strong>
+                        Prática {index + 1} · {block.speaker}
+                      </strong>
+                      <small>
+                        {((block.end_ms - block.start_ms) / 1000).toFixed(1)} s · {block.word_count}{" "}
+                        palavras
+                      </small>
                     </div>
-                  )}
-                  <div className="shadowing-block-actions">
-                    <button
-                      type="button"
-                      disabled={isBusy || !canMerge(index)}
-                      onClick={() => mergeWithNext(index)}
-                      title="Une apenas cues consecutivos da mesma voz, respeitando o limite curto"
-                    >
-                      <Merge aria-hidden="true" /> Juntar com próxima
-                    </button>
-                    <button type="button" disabled={isBusy} onClick={() => omitBlock(index)}>
-                      <Trash2 aria-hidden="true" /> Excluir grupo
-                    </button>
-                  </div>
-                </article>
-              ))}
+                    <p>{block.en}</p>
+                    <small>{block.pt}</small>
+                    <span>
+                      {formatTime(block.start_ms)}–{formatTime(block.end_ms)} · Pausa{" "}
+                      {(block.pause_duration_ms / 1000).toFixed(1)} s
+                    </span>
+                    {block.cue_ids.length > 1 && (
+                      <div className="shadowing-cue-pieces">
+                        {block.cue_ids.map((cueId, position) => {
+                          const cue = active.source_cues.find((item) => item.id === cueId);
+                          return (
+                            <div key={cueId}>
+                              <span>
+                                Cue {cue?.order}: {cue?.en}
+                              </span>
+                              {position < block.cue_ids.length - 1 && (
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => splitAfter(index, position)}
+                                  aria-label={`Separar após cue ${cue?.order}`}
+                                >
+                                  <Scissors aria-hidden="true" /> Separar aqui
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="shadowing-block-actions">
+                      <button
+                        type="button"
+                        disabled={isBusy || Boolean(mergeReason)}
+                        onClick={() => mergeWithNext(index)}
+                        title={mergeReason ?? "Juntar com a próxima prática"}
+                      >
+                        <Merge aria-hidden="true" /> Juntar com próxima
+                      </button>
+                      <button type="button" disabled={isBusy} onClick={() => omitBlock(index)}>
+                        <Trash2 aria-hidden="true" /> Excluir grupo
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </section>
 
