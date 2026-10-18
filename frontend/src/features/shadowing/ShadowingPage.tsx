@@ -51,6 +51,9 @@ export function ShadowingPage() {
   const [durationFilter, setDurationFilter] = useState("all");
   const [wordFilter, setWordFilter] = useState("all");
   const [usedExpanded, setUsedExpanded] = useState(false);
+  const [reviewedPlans, setReviewedPlans] = useState<Record<string, string>>({});
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const bulkGuard = useRef(false);
   const [historyVersion, setHistoryVersion] = useState(0);
   const undoHistory = useRef<UndoEntry[]>([]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,7 +92,20 @@ export function ShadowingPage() {
   const missingSpeakers =
     active?.blocks.some((block) => !block.speaker.trim() || block.speaker === "Não identificado") ??
     false;
-  const activeReady = Boolean(active?.blocks.length) && !missingSpeakers && phase === "finished";
+  const activeReviewed = !!active && (
+    phase === "finished" || reviewedPlans[active.scene_id] === active.plan_sha256
+  );
+  const activeReady = Boolean(active?.blocks.length) && !missingSpeakers && activeReviewed;
+  const scenesReadyForApproval = !!plans.data?.length && plans.data.every((item) =>
+    item.status === "approved" ||
+      (item.blocks.length > 0 &&
+        item.blocks.every((block) => block.speaker.trim() && block.speaker !== "Não identificado") &&
+        reviewedPlans[item.scene_id] === item.plan_sha256),
+  );
+  const scenesPendingApproval = plans.data?.filter((item) => item.status !== "approved") ?? [];
+  const practicesPendingApproval = scenesPendingApproval.reduce(
+    (count, item) => count + item.blocks.length, 0,
+  );
   const previewLabel =
     phase === "finished"
       ? "Revisada"
@@ -113,6 +129,8 @@ export function ShadowingPage() {
     },
     [],
   );
+
+  useEffect(() => setReviewedPlans({}), [projectId]);
 
   useEffect(() => {
     undoHistory.current = [];
@@ -210,7 +228,8 @@ export function ShadowingPage() {
       importGuard.current = false;
     },
   });
-  const isBusy = editing.isPending || groq.isPending || importAi.isPending || approval.isPending;
+  const isBusy = editing.isPending || groq.isPending || importAi.isPending ||
+    approval.isPending || bulkBusy;
   busy.current = isBusy;
   const historyCount = historyVersion >= 0 ? undoHistory.current.length : 0;
 
@@ -246,6 +265,7 @@ export function ShadowingPage() {
       const nextIndex = previewIndex + 1;
       if (nextIndex >= active.blocks.length) {
         setPhase("finished");
+        setReviewedPlans((current) => ({ ...current, [active.scene_id]: active.plan_sha256 }));
         return;
       }
       setPreviewIndex(nextIndex);
@@ -323,6 +343,37 @@ export function ShadowingPage() {
       return;
     stopPreview();
     editing.mutate({ plan: active, groups: prior.groups, undo: true });
+  }
+
+  async function approveAllScenes() {
+    if (!scenesReadyForApproval || !scenesPendingApproval.length ||
+        isBusy || bulkGuard.current) return;
+    const confirmed = window.confirm(
+      `Aprovar ${scenesPendingApproval.length} cenas e ${practicesPendingApproval} práticas revisadas? ` +
+      "Essa aprovação não pode ser desfeita pela interface atual.",
+    );
+    if (!confirmed) return;
+    bulkGuard.current = true;
+    setBulkBusy(true);
+    try {
+      for (const plan of scenesPendingApproval) {
+        await studioApi.approveShadowing(
+          projectId, plan.scene_id, plan.source_sha256, plan.plan_sha256,
+        );
+      }
+      showToast({
+        tone: "success",
+        text: `${scenesPendingApproval.length} cenas aprovadas. ${practicesPendingApproval} práticas incluídas.`,
+      });
+      refreshPlans();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao aprovar cenas.";
+      showToast({ tone: "error", text: `Aprovação parcial ou interrompida: ${message}. Atualize as cenas.` });
+      refreshPlans();
+    } finally {
+      bulkGuard.current = false;
+      setBulkBusy(false);
+    }
   }
 
   function mergeWithNext(index: number) {
