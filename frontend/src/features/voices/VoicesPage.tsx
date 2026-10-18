@@ -183,7 +183,7 @@ function VoiceForm({
 
   function submitReference(file: File | undefined) {
     if (!file || upload.isPending) return;
-    if (!/\\.wav$/i.test(file.name)) {
+    if (!/\.wav$/i.test(file.name)) {
       setFileError("Selecione um arquivo WAV (.wav).");
       setFileName("");
       return;
