@@ -190,12 +190,10 @@ function Ensure-Tts([object]$PythonCommand) {
     if ($LASTEXITCODE -ne 0) { throw "Falha ao atualizar pip do Chatterbox." }
     & $TtsPython -m pip install "torch==2.6.0" "torchaudio==2.6.0" --index-url "https://download.pytorch.org/whl/cpu"
     if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar PyTorch CPU do Chatterbox." }
-    # Do not silently switch to Turbo. Install a known Nano-capable revision.
-    & $TtsPython -m pip install --upgrade --force-reinstall --no-deps "git+https://github.com/resemble-ai/chatterbox.git@$ChatterboxNanoCommit"
+    # Direct VCS installation replaces the incompatible PyPI wheel and also
+    # resolves the upstream dependencies on a clean environment.
+    & $TtsPython -m pip install --upgrade "git+https://github.com/resemble-ai/chatterbox.git@$ChatterboxNanoCommit"
     if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Chatterbox Nano do código-fonte." }
-    # Source dependencies beyond PyTorch may be missing on a fresh machine.
-    & $TtsPython -m pip install "git+https://github.com/resemble-ai/chatterbox.git@$ChatterboxNanoCommit"
-    if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar dependências do Chatterbox Nano." }
     if (-not (Test-TtsRuntime $TtsPython)) {
         throw "Chatterbox incompatível: from_pretrained não aceita nano=True mesmo após a atualização. Confira data/logs e .venv-tts."
     }
