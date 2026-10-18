@@ -318,6 +318,15 @@ export function ShadowingPage() {
     changeGroups(next, "Cue adicionado");
   }
 
+  function removeUsedCue(cueId: string) {
+    const next = groups().flatMap((group) => {
+      const index = group.indexOf(cueId);
+      if (index < 0) return [group];
+      return [group.slice(0, index), group.slice(index + 1)].filter((part) => part.length > 0);
+    });
+    changeGroups(next, "Cue removido da prática");
+  }
+
   function mergeBlockReason(index: number): string | null {
     if (!active || index >= active.blocks.length - 1) return "Não há próxima prática para juntar.";
     const left = active.blocks[index];
@@ -654,11 +663,43 @@ export function ShadowingPage() {
               {active.blocks.map((block, index) => {
                 const mergeReason = mergeBlockReason(index);
                 return (
-                  <article key={block.id} className="panel shadowing-block">
+                  <article
+                    key={block.id}
+                    id={`shadowing-block-${index}`}
+                    tabIndex={0}
+                    aria-label={`Prática ${index + 1}, ${block.speaker}`}
+                    aria-current={selectedBlockIndex === index ? "true" : undefined}
+                    onFocus={() => setSelectedBlockIndex(index)}
+                    onClick={() => setSelectedBlockIndex(index)}
+                    className={`panel shadowing-block ${selectedBlockIndex === index ? "is-selected" : ""}`}
+                  >
                     <div className="shadowing-block-heading">
                       <strong>
-                        Prática {index + 1} · {block.speaker}
+                        Prática {index + 1} ·{" "}
+                        {block.speaker === "Não identificado" || !block.speaker.trim()
+                          ? (
+                              <button
+                                type="button"
+                                disabled
+                                className="shadowing-assign-button"
+                                title="Atribuição indisponível aqui. A API atual não permite editar o locutor no Shadowing."
+                              >
+                                Atribuir personagem
+                              </button>
+                            )
+                          : block.speaker}
                       </strong>
+                      <span
+                        className={`shadowing-state ${
+                          active.status === "approved" ? "is-approved" :
+                            block.speaker === "Não identificado" || !block.speaker.trim() ? "is-missing" :
+                              phase === "finished" ? "is-ready" : "is-review"
+                        }`}
+                      >
+                        {active.status === "approved" ? "Aprovada" :
+                          block.speaker === "Não identificado" || !block.speaker.trim() ?
+                            "Falta personagem" : phase === "finished" ? "Pronta" : "Em revisão"}
+                      </span>
                       <small>
                         {((block.end_ms - block.start_ms) / 1000).toFixed(1)} s · {block.word_count}{" "}
                         palavras
@@ -676,7 +717,11 @@ export function ShadowingPage() {
                           const cue = active.source_cues.find((item) => item.id === cueId);
                           return (
                             <div key={cueId}>
-                              <span>
+                              <span
+                                tabIndex={0}
+                                onFocus={() => setFocusedCueId(cueId)}
+                                onClick={() => setFocusedCueId(cueId)}
+                              >
                                 Cue {cue?.order}: {cue?.en}
                               </span>
                               {position < block.cue_ids.length - 1 && (
@@ -695,15 +740,29 @@ export function ShadowingPage() {
                       </div>
                     )}
                     <div className="shadowing-block-actions">
+                      <span
+                        className="shadowing-disabled-hint"
+                        tabIndex={isBusy || Boolean(mergeReason) ? 0 : -1}
+                        title={isBusy ? "Aguarde a operação atual" :
+                          mergeReason ?? "Juntar com a próxima prática"}
+                      >
+                        <button
+                          type="button"
+                          disabled={isBusy || Boolean(mergeReason)}
+                          onClick={() => mergeWithNext(index)}
+                          aria-label="Juntar com próxima"
+                        >
+                          <Merge aria-hidden="true" /> Juntar com próxima
+                        </button>
+                      </span>
                       <button
                         type="button"
-                        disabled={isBusy || Boolean(mergeReason)}
-                        onClick={() => mergeWithNext(index)}
-                        title={mergeReason ?? "Juntar com a próxima prática"}
+                        className="shadowing-destructive"
+                        disabled={isBusy}
+                        title={isBusy ? "Aguarde a operação atual" :
+                          "Excluir desta prática. Você poderá desfazer."}
+                        onClick={() => omitBlock(index)}
                       >
-                        <Merge aria-hidden="true" /> Juntar com próxima
-                      </button>
-                      <button type="button" disabled={isBusy} onClick={() => omitBlock(index)}>
                         <Trash2 aria-hidden="true" /> Excluir grupo
                       </button>
                     </div>
