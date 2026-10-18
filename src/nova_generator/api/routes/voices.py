@@ -176,6 +176,11 @@ def _response(profile: VoiceProfile) -> VoiceResponse:
     snapshot = profile.snapshot()
     cache = FileSpeechCache(get_settings().media_cache_root)
     key = cache.cache_key(text=PREVIEW_TEXT, profile=snapshot, parameters={})
+    reference_message = None
+    try:
+        validate_profile_reference(_references(), profile.reference_audio_sha256)
+    except ValueError as exc:
+        reference_message = str(exc)
     return VoiceResponse(
         id=str(profile.id),
         name=profile.name,
@@ -188,4 +193,6 @@ def _response(profile: VoiceProfile) -> VoiceResponse:
         preview_url=f"{get_settings().api_prefix}/voices/{profile.id}/versions/"
         f"{profile.version}/preview",
         preview_ready=cache.find(key) is not None,
+        reference_ready=reference_message is None,
+        reference_message=reference_message,
     )
