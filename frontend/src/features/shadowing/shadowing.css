@@ -97,3 +97,120 @@
   gap: 0.8rem;
   padding: 1rem;
 }
+
+.shadowing-ai {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.shadowing-ai h2,
+.shadowing-section-heading h2 {
+  margin: 0 0 0.3rem;
+  font-size: 1.05rem;
+}
+
+.shadowing-ai p,
+.shadowing-section-heading p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.shadowing-ai-actions,
+.shadowing-block-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.shadowing-ai-actions a,
+.shadowing-ai-actions button,
+.shadowing-block-actions button,
+.shadowing-excluded-item button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.shadowing-ai-actions svg,
+.shadowing-block-actions svg,
+.shadowing-excluded-item svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.shadowing-import {
+  display: grid;
+  gap: 0.25rem;
+  min-width: min(100%, 235px);
+  font-size: 0.85rem;
+}
+
+.shadowing-section-heading {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.shadowing-block {
+  min-width: 0;
+}
+
+.shadowing-block-heading {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.shadowing-block-heading small {
+  color: var(--muted);
+}
+
+.shadowing-block-actions {
+  margin-top: 0.3rem;
+}
+
+.shadowing-cue-pieces {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.4rem 0;
+  padding: 0.6rem;
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.shadowing-cue-pieces > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+}
+
+.shadowing-excluded {
+  padding: 1rem;
+}
+
+.shadowing-excluded-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.shadowing-excluded-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.shadowing-excluded-item p {
+  margin: 0.3rem 0;
+}
+
+.shadowing-excluded-item small {
+  color: var(--muted);
+}
