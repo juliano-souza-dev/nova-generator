@@ -101,6 +101,11 @@ export function MaterialsPage() {
     mutationFn: () => studioApi.publishMaterialExport(projectId, activeExportId!, youtube.trim()),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["material-export", projectId] }),
   });
+  const selectedVoice = voices.data?.find((voice) => voice.id === voiceId);
+  const voiceReferenceError =
+    selectedVoice?.reference_ready === false
+      ? selectedVoice.reference_message ?? "A referência da voz não pode ser usada para síntese."
+      : null;
   const cards = materials.data?.cards ?? [];
   const selected = cards.filter((card) => card.included);
   const unprepared = cards.filter((card) => !card.editorial_ready);
@@ -143,6 +148,7 @@ export function MaterialsPage() {
   }
 
   function prepareSelected() {
+    if (!voiceId || voiceReferenceError) return;
     selectedVisible
       .filter((card) => materialStatus(card) === "ready")
       .forEach((card) => audio.mutate(card.cue_id));
@@ -208,6 +214,11 @@ export function MaterialsPage() {
             <RefreshCw aria-hidden="true" /> Atualizar
           </button>
         </div>
+      )}
+      {voiceReferenceError && (
+        <p className="field-error" role="alert">
+          {voiceReferenceError} <Link to="/voices">Atualizar voz na Biblioteca</Link>
+        </p>
       )}
       {project && (
         <section className="materials-ai-panel panel" aria-label="Materiais da IA externa">
@@ -380,7 +391,12 @@ export function MaterialsPage() {
             <button
               type="button"
               className="primary-button"
-              disabled={!selectedVisible.some((card) => materialStatus(card) === "ready") || audio.isPending}
+              disabled={
+                !voiceId ||
+                !!voiceReferenceError ||
+                !selectedVisible.some((card) => materialStatus(card) === "ready") ||
+                audio.isPending
+              }
               onClick={prepareSelected}
             >
               <Volume2 aria-hidden="true" /> Preparar selecionados
@@ -428,7 +444,7 @@ export function MaterialsPage() {
                   onAudio={(cueId) => audio.mutate(cueId)}
                   audioBusy={audio.isPending}
                   audioJobIds={audioJobIds}
-                  voiceSelected={!!voiceId}
+                  voiceSelected={!!voiceId && !voiceReferenceError}
                   onPreview={setPreviewCueId}
                 />
               ))}
