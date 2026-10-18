@@ -497,3 +497,23 @@ describe("MaterialsPage", () => {
     );
   });
 });
+
+it("temporary exact formatter output for changed material screens", async () => {
+  const prettier = await import("prettier");
+  const fs = await import("node:fs/promises");
+  const paths = [
+    ["MATERIAL", "src/features/materials/MaterialsPage.tsx"],
+    ["TEST", "src/features/materials/MaterialsPage.test.tsx"],
+    ["SHADOWING", "src/features/shadowing/ShadowingPage.tsx"],
+  ] as const;
+  for (const [id, path] of paths) {
+    const config = await prettier.resolveConfig(path);
+    const formatted = await prettier.format(await fs.readFile(path, "utf8"), {
+      ...config,
+      filepath: path,
+    });
+    console.log(`<<<FORMAT_BEGIN_${id}>>>`);
+    console.log(formatted);
+    console.log(`<<<FORMAT_END_${id}>>>`);
+  }
+});
