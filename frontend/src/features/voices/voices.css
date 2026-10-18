@@ -81,7 +81,9 @@
   border: 2px dashed var(--border);
   border-radius: 12px;
   background: var(--surface-raised);
-  transition: border-color 150ms ease, background 150ms ease;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
 }
 .voice-dropzone:hover,
 .voice-dropzone:focus-within {
