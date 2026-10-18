@@ -127,17 +127,13 @@ export function MaterialsPage() {
   const selectedVoice = voices.data?.find((voice) => voice.id === voiceId);
   const voiceReferenceError =
     selectedVoice?.reference_ready === false
-      ? selectedVoice.reference_message ?? "A referência da voz não pode ser usada para síntese."
+      ? (selectedVoice.reference_message ?? "A referência da voz não pode ser usada para síntese.")
       : null;
   const cards = materials.data?.cards ?? [];
   const selected = cards.filter((card) => card.included);
   const unprepared = cards.filter((card) => !card.editorial_ready);
   const materialStatus = (card: MaterialCard): MaterialStatus =>
-    !card.editorial_ready
-      ? "blocked"
-      : card.audio_ready
-        ? "generated"
-        : "ready";
+    !card.editorial_ready ? "blocked" : card.audio_ready ? "generated" : "ready";
   const visibleCards = cards.filter((card) => {
     const query = search.trim().toLocaleLowerCase();
     const matchesSearch =
@@ -160,8 +156,7 @@ export function MaterialsPage() {
     (card) => card.cue_id === previewCueId,
   );
   const ready =
-    selected.length > 0 &&
-    selected.every((card) => card.audio_ready && card.editorial_ready);
+    selected.length > 0 && selected.every((card) => card.audio_ready && card.editorial_ready);
   const selectedVisible = visibleCards.filter((card) => card.included);
   const activeAudioCount = Object.values(audioJobsByCue).filter((job) =>
     ACTIVE_AUDIO_JOB_STATES.has(job?.status ?? ""),
@@ -183,11 +178,19 @@ export function MaterialsPage() {
 
   async function prepareAudio(cueId: string): Promise<void> {
     const requestToken = `${contextKey}:${cueId}`;
-    if (!projectId || !voiceId || voiceReferenceError || audioRequestsInFlight.current.has(requestToken)) {
+    if (
+      !projectId ||
+      !voiceId ||
+      voiceReferenceError ||
+      audioRequestsInFlight.current.has(requestToken)
+    ) {
       return;
     }
     const job = audioJobsByCue[cueId];
-    if (audioJobIds[cueId] && (!job || ACTIVE_AUDIO_JOB_STATES.has(job.status) || job.status === "succeeded")) {
+    if (
+      audioJobIds[cueId] &&
+      (!job || ACTIVE_AUDIO_JOB_STATES.has(job.status) || job.status === "succeeded")
+    ) {
       return;
     }
     const requestContext = contextKey;
@@ -318,14 +321,15 @@ export function MaterialsPage() {
               <span className="eyebrow">Preparação pedagógica</span>
               <h2>Conteúdo pedagógico da IA externa</h2>
               <p>
-                O contrato inclui sete seções didáticas, exercícios com respostas e cards Anki.
-                Essa etapa complementar é independente da síntese de voz e da exportação Anki.
+                O contrato inclui sete seções didáticas, exercícios com respostas e cards Anki. Essa
+                etapa complementar é independente da síntese de voz e da exportação Anki.
               </p>
             </div>
           </div>
           {materialReview.isError && (
             <p role="alert">
-              Conteúdo pedagógico complementar indisponível. A síntese de voz e a exportação Anki continuam independentes.
+              Conteúdo pedagógico complementar indisponível. A síntese de voz e a exportação Anki
+              continuam independentes.
             </p>
           )}
           {!materialReview.isError && (
@@ -441,118 +445,124 @@ export function MaterialsPage() {
       )}
       {cards.length > 0 && unprepared.length === 0 && (
         <>
-        <section className="materials-workbench panel" aria-label="Filtrar cards">
-          <label className="materials-search">
-            <Search aria-hidden="true" />
-            <span className="sr-only">Buscar cards</span>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar inglês, português ou cena"
-            />
-          </label>
-          <div className="materials-status-filters" aria-label="Filtrar por status">
-            {(
-              [
-                ["all", "Todos"],
-                ["ready", "Prontos"],
-                ["generated", "Gerados"],
-                ["blocked", "Bloqueados"],
-              ] as const
-            ).map(([value, label]) => (
+          <section className="materials-workbench panel" aria-label="Filtrar cards">
+            <label className="materials-search">
+              <Search aria-hidden="true" />
+              <span className="sr-only">Buscar cards</span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar inglês, português ou cena"
+              />
+            </label>
+            <div className="materials-status-filters" aria-label="Filtrar por status">
+              {(
+                [
+                  ["all", "Todos"],
+                  ["ready", "Prontos"],
+                  ["generated", "Gerados"],
+                  ["blocked", "Bloqueados"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  aria-pressed={statusFilter === value}
+                  className={statusFilter === value ? "is-active" : undefined}
+                  onClick={() => setStatusFilter(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <span className="materials-counter">{selected.length} incluídos no reel</span>
+          </section>
+          {selectedVisible.length > 0 && (
+            <section className="materials-bulk-actions panel" aria-label="Ações em massa">
+              <strong>
+                {selectedVisible.length} selecionado{selectedVisible.length === 1 ? "" : "s"}
+              </strong>
               <button
                 type="button"
-                key={value}
-                aria-pressed={statusFilter === value}
-                className={statusFilter === value ? "is-active" : undefined}
-                onClick={() => setStatusFilter(value)}
+                className="secondary-button"
+                onClick={() => setVisibleIncluded(false)}
               >
-                {label}
+                Remover do reel
               </button>
-            ))}
-          </div>
-          <span className="materials-counter">{selected.length} incluídos no reel</span>
-        </section>
-        {selectedVisible.length > 0 && (
-          <section className="materials-bulk-actions panel" aria-label="Ações em massa">
-            <strong>{selectedVisible.length} selecionado{selectedVisible.length === 1 ? "" : "s"}</strong>
-            <button type="button" className="secondary-button" onClick={() => setVisibleIncluded(false)}>
-              Remover do reel
-            </button>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={
-                !voiceId ||
-                !!voiceReferenceError ||
-                !selectedVisible.some(canPrepareAudio)
-              }
-              onClick={prepareSelected}
-            >
-              <Volume2 aria-hidden="true" />
-              {submittingCueIds.length ? "Enviando WAVs…" : "Preparar selecionados"}
-            </button>
-          </section>
-        )}
-        {(audioNotice || activeAudioCount > 0) && (
-          <p className="material-audio-feedback panel" role="status">
-            {audioNotice ?? "Acompanhe a síntese dos WAVs abaixo."}
-            {activeAudioCount > 0 && ` ${activeAudioCount} tarefa(s) em processamento.`}
-            {" "}<Link to="/jobs">Ver monitor de jobs</Link>
-          </p>
-        )}
-        <div className="materials-table-wrap panel">
-          <table className="materials-table">
-            {sceneGroups.length === 1 ? (
-              <caption
-                style={{
-                  captionSide: "top",
-                  padding: "0 0 0.3rem",
-                  color: "var(--muted)",
-                  fontSize: "0.7rem",
-                  fontWeight: 700,
-                  letterSpacing: "0.04em",
-                  textAlign: "left",
-                  textTransform: "uppercase",
-                }}
+              <button
+                type="button"
+                className="primary-button"
+                disabled={
+                  !voiceId || !!voiceReferenceError || !selectedVisible.some(canPrepareAudio)
+                }
+                onClick={prepareSelected}
               >
-                Cena {sceneGroups[0][0]} · {sceneGroups[0][1].length} cards
-              </caption>
-            ) : null}
-            <thead>
-              <tr>
-                <th>Incluir</th>
-                <th>Card EN / PT</th>
-                <th>Destaques e voz</th>
-                <th>Áudio canônico</th>
-                <th>Intervalo do reel</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sceneGroups.map(([sceneOrder, sceneCards], index) => (
-                <SceneCardRows
-                  key={sceneOrder}
-                  sceneOrder={sceneOrder}
-                  cards={sceneCards}
-                  showHeading={sceneGroups.length > 1 || index > 0}
-                  statusOf={materialStatus}
-                  voiceName={voices.data?.find((voice) => voice.id === voiceId)?.name ?? "—"}
-                  voiceVersion={materials.data?.voice_version}
-                  onInclude={(cueId, included) => select.mutate({ cueId, included })}
-                  onAudio={(cueId) => void prepareAudio(cueId)}
-                  submittingCueIds={submittingCueIds}
-                  audioJobsByCue={audioJobsByCue}
-                  audioJobErrorsByCue={audioJobErrorsByCue}
-                  audioJobIds={audioJobIds}
-                  audioRequestErrors={audioRequestErrors}
-                  voiceSelected={!!voiceId && !voiceReferenceError}
-                  onPreview={setPreviewCueId}
-                />
-              ))}
-            </tbody>
-          </table>
-          {visibleCards.length === 0 && <p className="materials-no-results">Nenhum card encontrado.</p>}
-        </div>
+                <Volume2 aria-hidden="true" />
+                {submittingCueIds.length ? "Enviando WAVs…" : "Preparar selecionados"}
+              </button>
+            </section>
+          )}
+          {(audioNotice || activeAudioCount > 0) && (
+            <p className="material-audio-feedback panel" role="status">
+              {audioNotice ?? "Acompanhe a síntese dos WAVs abaixo."}
+              {activeAudioCount > 0 && ` ${activeAudioCount} tarefa(s) em processamento.`}{" "}
+              <Link to="/jobs">Ver monitor de jobs</Link>
+            </p>
+          )}
+          <div className="materials-table-wrap panel">
+            <table className="materials-table">
+              {sceneGroups.length === 1 ? (
+                <caption
+                  style={{
+                    captionSide: "top",
+                    padding: "0 0 0.3rem",
+                    color: "var(--muted)",
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    textAlign: "left",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Cena {sceneGroups[0][0]} · {sceneGroups[0][1].length} cards
+                </caption>
+              ) : null}
+              <thead>
+                <tr>
+                  <th>Incluir</th>
+                  <th>Card EN / PT</th>
+                  <th>Destaques e voz</th>
+                  <th>Áudio canônico</th>
+                  <th>Intervalo do reel</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sceneGroups.map(([sceneOrder, sceneCards], index) => (
+                  <SceneCardRows
+                    key={sceneOrder}
+                    sceneOrder={sceneOrder}
+                    cards={sceneCards}
+                    showHeading={sceneGroups.length > 1 || index > 0}
+                    statusOf={materialStatus}
+                    voiceName={voices.data?.find((voice) => voice.id === voiceId)?.name ?? "—"}
+                    voiceVersion={materials.data?.voice_version}
+                    onInclude={(cueId, included) => select.mutate({ cueId, included })}
+                    onAudio={(cueId) => void prepareAudio(cueId)}
+                    submittingCueIds={submittingCueIds}
+                    audioJobsByCue={audioJobsByCue}
+                    audioJobErrorsByCue={audioJobErrorsByCue}
+                    audioJobIds={audioJobIds}
+                    audioRequestErrors={audioRequestErrors}
+                    voiceSelected={!!voiceId && !voiceReferenceError}
+                    onPreview={setPreviewCueId}
+                  />
+                ))}
+              </tbody>
+            </table>
+            {visibleCards.length === 0 && (
+              <p className="materials-no-results">Nenhum card encontrado.</p>
+            )}
+          </div>
         </>
       )}
       {(select.error || exportCards.error || publication.error) && (
@@ -721,7 +731,9 @@ function SceneCardRows({
     <>
       {showHeading ? (
         <tr className="materials-scene-heading">
-          <th colSpan={5}>Cena {sceneOrder} · {cards.length} {cards.length === 1 ? "card" : "cards"}</th>
+          <th colSpan={5}>
+            Cena {sceneOrder} · {cards.length} {cards.length === 1 ? "card" : "cards"}
+          </th>
         </tr>
       ) : null}
       {cards.map((card) => (
@@ -793,7 +805,10 @@ function MaterialRow({
       <td>
         <HighlightedCueText text={card.approved_en} highlights={card.highlights} />
         <p>{card.approved_pt}</p>
-        <small>cue {card.cue_order} · fala {formatMs(card.speech_start_ms)}–{formatMs(card.speech_end_ms)}</small>
+        <small>
+          cue {card.cue_order} · fala {formatMs(card.speech_start_ms)}–
+          {formatMs(card.speech_end_ms)}
+        </small>
         <button
           className="material-card-preview-button"
           type="button"
