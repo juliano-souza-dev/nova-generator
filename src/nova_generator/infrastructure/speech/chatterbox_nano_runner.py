@@ -15,6 +15,8 @@ from pathlib import Path
 
 def main() -> None:
     request = json.load(sys.stdin)
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
     try:
         torch = import_module("torch")
         torchaudio = import_module("torchaudio")
@@ -27,8 +29,6 @@ def main() -> None:
     if profile["model_id"] != "chatterbox-nano":
         raise ValueError("Modelo de voz não suportado pelo runner local.")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    os.environ["HF_HUB_OFFLINE"] = "1"
-    os.environ["TRANSFORMERS_OFFLINE"] = "1"
     started = time.monotonic()
     print(f"voice_stage=model_loading device={device}", file=sys.stderr, flush=True)
     try:
