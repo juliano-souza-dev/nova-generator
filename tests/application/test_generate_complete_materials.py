@@ -124,7 +124,7 @@ def test_incomplete_ai_response_never_replaces_previous_approval(tmp_path):
             exchange, api_key=None, model="mock-model", client=client
         ).execute(repo.project.id, source_sha256=digest, selected_ids=[str(repo.cue.id)])
     assert exchange.status(repo.project.id)["status"] == "approved"
-    assert exchange.status(repo.project.id)["document"] == exchange.status(repo.project.id)["document"]
+    assert exchange.status(repo.project.id)["document"] == initial
 
 
 def test_complete_job_reuses_canonical_wav_and_creates_pdf_anki_manifest(tmp_path):
