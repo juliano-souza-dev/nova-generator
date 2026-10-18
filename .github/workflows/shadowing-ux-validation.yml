@@ -33,6 +33,13 @@ jobs:
           echo '<<<FORMAT_BEGIN_CSS>>>'
           cat src/features/shadowing/shadowing.css
           echo '<<<FORMAT_END_CSS>>>'
+          npx prettier --write e2e/shadowing-ai-review.spec.ts e2e/shadowing-ux-layout.spec.ts
+          echo '<<<FORMAT_BEGIN_E2E>>>'
+          cat e2e/shadowing-ux-layout.spec.ts
+          echo '<<<FORMAT_END_E2E>>>'
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test e2e/shadowing-ai-review.spec.ts e2e/shadowing-ux-layout.spec.ts
+
   backend:
     runs-on: ubuntu-latest
     steps:
