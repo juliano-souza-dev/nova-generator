@@ -28,20 +28,6 @@ vi.mock("../../lib/studio-api", () => ({
   },
 }));
 
-describe("Voice formatter diagnostics", () => {
-  it("prints the precise Prettier output for the voice page", async () => {
-    const prettier = await import("prettier");
-    const fs = await import("node:fs/promises");
-    const path = "src/features/voices/VoicesPage.tsx";
-    const config = await prettier.resolveConfig(path);
-    const formatted = await prettier.format(await fs.readFile(path, "utf8"), {
-      ...config,
-      filepath: path,
-    });
-    console.log("<<<VOICE_FORMAT_START>>>\n" + formatted + "\n<<<VOICE_FORMAT_END>>>");
-  });
-});
-
 describe("VoicesPage", () => {
   it("shows the selected version and its canonical preview", async () => {
     vi.mocked(studioApi.voices).mockResolvedValue([profile]);
