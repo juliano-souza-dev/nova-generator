@@ -21,6 +21,7 @@ from nova_generator.application.use_cases.editorial_publication_snapshot import 
     editorial_publication_sha256,
 )
 from nova_generator.application.use_cases.manage_jobs import EnqueueJob, GetJob
+from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
 from nova_generator.application.use_cases.manage_voice_profiles import ManageVoiceProfiles
 from nova_generator.application.use_cases.publish_anki_reel import (
     AnkiPublicationError,
@@ -103,6 +104,7 @@ class ExportResponse(BaseModel):
     apkg_url: str | None = None
     manifest_url: str | None = None
     reel_url: str | None = None
+    workbook_url: str | None = None
     hub_final_url: str | None = None
     youtube_video_id: str | None = None
 
@@ -398,6 +400,72 @@ def export_materials(
     return ExportResponse(job_id=job.id, status=job.status)
 
 
+@router.post("/generate", response_model=ExportResponse, status_code=status.HTTP_202_ACCEPTED)
+def generate_complete_material(
+    project_id: UUID,
+    payload: VoiceInput,
+    voices: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
+    enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
+) -> ExportResponse:
+    """Produce PDF, canonical WAVs, enriched study data, APKG and reel in one job."""
+    exchange = MaterialsAiExchange(_repository(), get_settings().project_root)
+    try:
+        review = exchange.status(project_id)
+    except ValueError as error:
+        raise HTTPException(409, detail=str(error)) from error
+    if review["status"] != "approved":
+        raise HTTPException(409, detail="Revise e aprove o conteúdo pedagógico antes de gerar o material.")
+    selected = [
+        cue for _, cue in _project_cues(project_id)
+        if cue.provenance.get("anki_included") is not False
+    ]
+    if not selected:
+        raise HTTPException(422, detail="Selecione ao menos um card.")
+    available = {card["cue_id"] for card in review["document"]["anki_cards"]}
+    if not all(str(cue.id) in available for cue in selected):
+        raise HTTPException(
+            409, detail="O material pedagógico não cobre todos os cards selecionados. "
+            "Gere e aprove uma nova proposta."
+        )
+    voice = _voice(voices, payload.voice_id)
+    try:
+        validate_profile_reference(
+            FileVoiceReferenceStore(get_settings().media_cache_root),
+            voice.reference_audio_sha256,
+        )
+    except ValueError as error:
+        raise HTTPException(422, detail=str(error)) from error
+    repository = _repository()
+    project = repository.get_project(project_id)
+    if project is None:
+        raise HTTPException(404, detail="project not found")
+    editorial_hash = editorial_publication_sha256(
+        project,
+        repository.get_project_scenes(project_id),
+        [(cue, repository.get_cue_words(cue.id)) for cue in selected],
+    )
+    document_bytes = json.dumps(
+        review["document"], ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    job = enqueue.execute(
+        kind="export_materials",
+        input={
+            "project_id": str(project_id),
+            "cue_ids": [str(cue.id) for cue in selected],
+            "text_hashes": {str(cue.id): cue.approved_en_sha256 for cue in selected},
+            "pt_hashes": {str(cue.id): utf8_sha256(cue.approved_pt) for cue in selected},
+            "editorial_sha256": editorial_hash,
+            "voice_snapshot": _voice_payload(voice),
+            "audio_hashes": {},
+            "generate_complete": True,
+            "materials_sha256": sha256(document_bytes).hexdigest(),
+            "materials_source_sha256": review["source_sha256"],
+        },
+        idempotency_key=None,
+    )
+    return ExportResponse(job_id=job.id, status=job.status)
+
+
 @router.get("/exports/{job_id}", response_model=ExportResponse)
 def get_material_export(
     project_id: UUID, job_id: UUID, jobs: Annotated[GetJob, Depends(get_job)]
@@ -412,6 +480,10 @@ def get_material_export(
         apkg_url=f"{base}/anki.apkg" if job.status == "succeeded" else None,
         manifest_url=f"{base}/anki-audio-manifest.json" if job.status == "succeeded" else None,
         reel_url=f"{base}/anki-reel.mp4" if job.status == "succeeded" else None,
+        workbook_url=(
+            f"{base}/material-didatico.pdf"
+            if job.status == "succeeded" and job.input.get("generate_complete") else None
+        ),
         hub_final_url=f"{base}/hub_final.json" if publication else None,
         youtube_video_id=publication["ankiAudio"]["youtube"]["video_id"] if publication else None,
     )
@@ -474,7 +546,9 @@ def download_material_export(
     artifact: str,
     jobs: Annotated[GetJob, Depends(get_job)],
 ) -> FileResponse:
-    if artifact not in {"anki.apkg", "anki-audio-manifest.json", "anki-reel.mp4"}:
+    if artifact not in {
+        "anki.apkg", "anki-audio-manifest.json", "anki-reel.mp4", "material-didatico.pdf"
+    }:
         raise HTTPException(404, detail="artifact not found")
     job = jobs.execute(str(job_id))
     if (
@@ -484,6 +558,8 @@ def download_material_export(
         or job.input.get("project_id") != str(project_id)
     ):
         raise HTTPException(404, detail="export not found")
+    if artifact == "material-didatico.pdf" and not job.input.get("generate_complete"):
+        raise HTTPException(404, detail="workbook not found")
     path = Path(get_settings().media_cache_root) / "exports" / str(job_id) / artifact
     if not path.is_file():
         raise HTTPException(404, detail="artifact not found")
