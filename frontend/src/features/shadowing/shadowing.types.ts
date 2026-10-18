@@ -1,1 +1,6 @@
-export type { ShadowingBlock, ShadowingPlan } from "../../lib/api.types";
+export type {
+  ShadowingBlock,
+  ShadowingCue,
+  ShadowingExcludedCue,
+  ShadowingPlan,
+} from "../../lib/api.types";
