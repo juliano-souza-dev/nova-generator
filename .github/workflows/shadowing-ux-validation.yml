@@ -21,9 +21,9 @@ jobs:
       - run: npm run lint
       - run: npx vitest run src/features/shadowing/ShadowingPage.test.tsx src/features/materials/MaterialsPage.test.tsx
       - run: npm run build
-      - run: npx prettier --check src/features/shadowing/ShadowingPage.tsx src/features/shadowing/ShadowingPage.test.tsx src/features/shadowing/shadowing.css src/features/materials/MaterialsPage.tsx src/features/materials/MaterialsPage.test.tsx e2e/shadowing-ai-review.spec.ts e2e/shadowing-ux-layout.spec.ts
+      - run: npx prettier --check src/features/shadowing/ShadowingPage.tsx src/features/shadowing/ShadowingPage.test.tsx src/features/shadowing/shadowing.css src/features/materials/MaterialsPage.tsx src/features/materials/MaterialsPage.test.tsx e2e/shadowing-ai-review.spec.ts e2e/shadowing-ux-layout.spec.ts e2e/material-wav-action.spec.ts
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test e2e/shadowing-ai-review.spec.ts e2e/shadowing-ux-layout.spec.ts
+      - run: npx playwright test e2e/shadowing-ai-review.spec.ts e2e/shadowing-ux-layout.spec.ts e2e/material-wav-action.spec.ts
 
   backend:
     runs-on: ubuntu-latest
