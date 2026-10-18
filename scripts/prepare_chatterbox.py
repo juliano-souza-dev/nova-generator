@@ -19,6 +19,12 @@ def main() -> int:
         return 1
 
     repository = "ResembleAI/chatterbox-turbo"
+    from huggingface_hub import try_to_load_from_cache
+
+    cached = try_to_load_from_cache(repository, "t3_turbo_v1.safetensors")
+    if isinstance(cached, str) and Path(cached).is_file():
+        print("Checkpoint Chatterbox Turbo encontrado no cache local.", flush=True)
+        return 0
     print(f"Preparando {repository}. Esta etapa pode transferir vários arquivos.", flush=True)
     try:
         location = snapshot_download(
