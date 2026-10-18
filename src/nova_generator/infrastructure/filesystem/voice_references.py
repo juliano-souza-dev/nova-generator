@@ -14,6 +14,11 @@ from pathlib import Path
 
 MAX_WAV_BYTES = 10 * 1024 * 1024
 MAX_REFERENCE_UPLOAD_BYTES = MAX_WAV_BYTES
+MIN_REFERENCE_DURATION_MS = 6000
+REFERENCE_TOO_SHORT_MESSAGE = (
+    "O áudio de referência deve ter pelo menos 6 segundos. "
+    "Envie uma gravação mais longa, preferencialmente de 10 a 15 segundos."
+)
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 
 
@@ -90,6 +95,7 @@ class FileVoiceReferenceStore:
 
     def save(self, content: bytes) -> VoiceReference:
         metadata = _inspect(content)
+        validate_reference_duration(metadata[0])
         digest = sha256(content).hexdigest()
         self.root.mkdir(parents=True, exist_ok=True)
         target = self.root / f"{digest}.wav"
@@ -129,6 +135,12 @@ class FileVoiceReferenceStore:
             for path in sorted(self.root.glob("*.wav"))
             if (item := self.get(path.stem)) is not None
         ]
+
+
+def validate_reference_duration(duration_ms: int) -> None:
+    """Prevent Chatterbox Turbo from receiving references of 5 seconds or less."""
+    if duration_ms < MIN_REFERENCE_DURATION_MS:
+        raise ValueError(REFERENCE_TOO_SHORT_MESSAGE)
 
 
 def _inspect(content: bytes) -> tuple[int, int, int]:
