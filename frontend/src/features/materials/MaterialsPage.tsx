@@ -64,9 +64,7 @@ export function MaterialsPage() {
     enabled: Boolean(projectId),
     retry: false,
     refetchInterval: (query) =>
-      ["queued", "running", "retryable"].includes(query.state.data?.status ?? "")
-        ? 3000
-        : false,
+      ["queued", "running", "retryable"].includes(query.state.data?.status ?? "") ? 3000 : false,
   });
   const generatePedagogical = useMutation({
     mutationFn: () => studioApi.generatePedagogicalMaterials(projectId),
@@ -367,7 +365,8 @@ export function MaterialsPage() {
                   : "A IA produzirá as sete seções pedagógicas, exercícios com respostas e cards Anki enriquecidos. Depois, revise e aprove o resultado."}
             </p>
             <small>
-              Os WAVs existentes serão reutilizados. A publicação no iHub continua exigindo a confirmação do vídeo no YouTube.
+              Os WAVs existentes serão reutilizados. A publicação no iHub continua exigindo a
+              confirmação do vídeo no YouTube.
             </small>
           </div>
           <button
@@ -400,7 +399,10 @@ export function MaterialsPage() {
         <section className="materials-result panel" aria-live="polite">
           <h3>Conteúdo pedagógico: {latestGeneration.data.status}</h3>
           {["queued", "running", "retryable"].includes(latestGeneration.data.status) && (
-            <p>A IA está preparando o material. Você pode acompanhar o progresso em <Link to="/jobs">Jobs</Link>.</p>
+            <p>
+              A IA está preparando o material. Você pode acompanhar o progresso em{" "}
+              <Link to="/jobs">Jobs</Link>.
+            </p>
           )}
           {latestGeneration.data.status === "succeeded" && !pedagogicalApproved && (
             <p>Proposta pronta. Revise as seções e aprove para liberar a produção final.</p>
