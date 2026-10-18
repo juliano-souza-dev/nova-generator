@@ -9,6 +9,7 @@ from uuid import UUID
 from nova_generator.application.use_cases.materials_ai_exchange import (
     MaterialsAiError,
     MaterialsAiExchange,
+    MaterialOutput,
 )
 
 
@@ -93,14 +94,16 @@ class GenerateMaterialsAi:
             raise MaterialsAiError(
                 "Falha ao gerar conteúdo na Groq. Utilize a IA externa ou tente novamente."
             ) from error
-        parsed = self.exchange.import_result(project_id, document)
-        actual = {card["cue_id"] for card in parsed["document"]["anki_cards"]}
-        if actual != set(selected_ids) or len(parsed["document"]["anki_cards"]) != len(selected_ids):
-            # Never leave an incomplete suggestion as the active draft.
-            self.exchange._path(project_id, "external-draft.json").unlink(missing_ok=True)
+        try:
+            parsed_document = MaterialOutput.model_validate(document)
+        except ValueError as error:
+            raise MaterialsAiError(f"Resposta pedagógica incompleta: {error}") from error
+        actual = {str(card.cue_id) for card in parsed_document.anki_cards}
+        if actual != set(selected_ids) or len(parsed_document.anki_cards) != len(selected_ids):
             raise MaterialsAiError(
                 "A IA não gerou todos os cards selecionados. Tente novamente ou use a IA externa."
             )
+        parsed = self.exchange.import_result(project_id, document)
         return {
             "project_id": str(project_id),
             "source_sha256": source_sha256,
