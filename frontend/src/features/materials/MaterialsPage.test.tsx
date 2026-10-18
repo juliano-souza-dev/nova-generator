@@ -56,6 +56,105 @@ function mount() {
 }
 
 describe("MaterialsPage", () => {
+
+  it("prepares WAV for approved cards without external pedagogical material", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      { id: "voice-1", name: "Ana", version: 2 } as never,
+    ]);
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "pending",
+      source_sha256: "",
+      document: null,
+    });
+    vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [{ ...card, audio_ready: false, audio_url: null, reel_start_ms: null, reel_end_ms: null }],
+      voice_id: "voice-1",
+      voice_version: 2,
+    });
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    vi.mocked(studioApi.prepareMaterialAudio).mockResolvedValue({
+      id: "audio-job-1",
+      status: "queued",
+    });
+    mount();
+
+    const prepare = await screen.findByRole("button", { name: "Preparar WAV" });
+    await waitFor(() => expect(prepare).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Preparar selecionados" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Exportar APKG" })).toBeDisabled();
+    fireEvent.click(prepare);
+    await waitFor(() =>
+      expect(studioApi.prepareMaterialAudio).toHaveBeenCalledWith(
+        "project-1",
+        "cue-1",
+        "voice-1",
+      ),
+    );
+  });
+
+  it("exports prepared Anki cards without an approved external pedagogical JSON", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      { id: "voice-1", name: "Ana", version: 2 } as never,
+    ]);
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "pending",
+      source_sha256: "",
+      document: null,
+    });
+    vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [card],
+      voice_id: "voice-1",
+      voice_version: 2,
+    });
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    vi.mocked(studioApi.exportMaterials).mockResolvedValue({
+      job_id: "job-1",
+      status: "queued",
+      apkg_url: null,
+      manifest_url: null,
+      reel_url: null,
+    });
+    mount();
+    await screen.findByText("Café?");
+    const exportButton = screen.getByRole("button", { name: "Exportar APKG" });
+    await waitFor(() => expect(exportButton).toBeEnabled());
+    fireEvent.click(exportButton);
+    await waitFor(() =>
+      expect(studioApi.exportMaterials).toHaveBeenCalledWith("project-1", "voice-1"),
+    );
+  });
+
+  it("still blocks audio when a card is not editorially prepared", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      { id: "voice-1", name: "Ana", version: 2 } as never,
+    ]);
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "approved",
+      source_sha256: "a".repeat(64),
+      document: null,
+    });
+    vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [{ ...card, editorial_ready: false, audio_ready: false, audio_url: null }],
+      voice_id: "voice-1",
+      voice_version: 2,
+    });
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    mount();
+    expect(await screen.findByText(/A preparação editorial ainda não está completa/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Preparar WAV" })).not.toBeInTheDocument();
+  });
   it("shows literal approved text, canonical preview, reel interval and submits selection", async () => {
     vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
       status: "approved",
