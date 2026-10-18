@@ -98,14 +98,21 @@ describe("VoicesPage", () => {
       available: true,
       model_sha256: "a".repeat(64),
     });
-    vi.mocked(studioApi.voiceReferences).mockResolvedValue([]);
-    vi.mocked(studioApi.uploadVoiceReference).mockResolvedValue({
+    const reference = {
       sha256: digest,
       duration_ms: 2500,
       sample_rate: 16000,
       channels: 1,
       size_bytes: 80044,
       audio_url: `/api/voices/references/${digest}`,
+    };
+    let uploaded = false;
+    vi.mocked(studioApi.voiceReferences).mockImplementation(async () =>
+      uploaded ? [reference] : [],
+    );
+    vi.mocked(studioApi.uploadVoiceReference).mockImplementation(async () => {
+      uploaded = true;
+      return reference;
     });
 
     render(
