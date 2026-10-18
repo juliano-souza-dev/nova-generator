@@ -7,7 +7,6 @@ import {
   Menu,
   Mic2,
   Sparkles,
-  Repeat2,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { NavLink } from "react-router-dom";
@@ -16,7 +15,6 @@ const links = [
   { to: "/projects", label: "Projetos", icon: FolderKanban },
   { to: "/editorial", label: "Editorial", icon: Languages },
   { to: "/media", label: "Mídia", icon: Mic2 },
-  { to: "/shadowing", label: "Shadowing", icon: Repeat2 },
   { to: "/materials", label: "Materiais", icon: LibraryBig },
   { to: "/voices", label: "Vozes", icon: Mic2 },
   { to: "/jobs", label: "Jobs", icon: ListChecks },

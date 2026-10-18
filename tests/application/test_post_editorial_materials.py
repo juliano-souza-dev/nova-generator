@@ -95,15 +95,9 @@ def test_prepared_shadowing_requires_approval_and_invalidates_when_cue_changes(t
         use_case.approve(PROJECT, SCENE, first["source_sha256"])
 
 
-def test_material_contract_requires_shadowing_and_exact_approved_text(tmp_path):
+def test_material_contract_uses_approved_editorial_text(tmp_path):
     repo = Repository()
     exchange = MaterialsAiExchange(repo, tmp_path)
-    with pytest.raises(MaterialsAiError, match="shadowing"):
-        exchange.package(PROJECT)
-    shadow = PrepareShadowing(repo, tmp_path)
-    draft = shadow.scene(PROJECT, SCENE)
-    shadow.approve(PROJECT, SCENE, draft["source_sha256"])
-
     package = exchange.package(PROJECT)
     assert package["source"]["scenes"][0]["cues"][0]["approved_en"] == "Hello."
     result = material_result(package["source_sha256"])
@@ -147,11 +141,8 @@ def test_material_contract_requires_shadowing_and_exact_approved_text(tmp_path):
 
 def test_material_contract_cannot_use_stale_or_unapproved_editorial(tmp_path):
     repo = Repository()
-    shadow = PrepareShadowing(repo, tmp_path)
-    plan = shadow.scene(PROJECT, SCENE)
-    shadow.approve(PROJECT, SCENE, plan["source_sha256"])
     exchange = MaterialsAiExchange(repo, tmp_path)
     original = exchange.package(PROJECT)
     repo.cue = replace(repo.cue, approved_pt="Bom dia.", revision=2)
-    with pytest.raises(MaterialsAiError, match="shadowing"):
+    with pytest.raises(MaterialsAiError, match="changed"):
         exchange.import_result(PROJECT, material_result(original["source_sha256"]))

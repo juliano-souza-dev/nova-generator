@@ -28,13 +28,16 @@
 }
 .materials-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   text-align: left;
 }
-.materials-table thead th {
+.materials-table thead {
   position: sticky;
-  z-index: 2;
+  z-index: 3;
   top: 0;
+}
+.materials-table thead th {
   background: var(--surface);
   box-shadow: 0 5px 10px rgb(2 6 23 / 34%);
 }

@@ -214,20 +214,17 @@ export function MaterialsPage() {
         <section className="materials-ai-panel panel" aria-label="Materiais da IA externa">
           <div className="materials-ai-heading">
             <div>
-              <span className="eyebrow">Depois do Shadowing</span>
+              <span className="eyebrow">Preparação pedagógica</span>
               <h2>Conteúdo pedagógico da IA externa</h2>
               <p>
                 O contrato inclui sete seções didáticas, exercícios com respostas e cards Anki.
-                Primeiro aprove o Shadowing, depois envie o JSON à sua IA e importe o resultado.
+                Envie o JSON à sua IA e importe o resultado para validar o material do projeto.
               </p>
             </div>
-            <Link className="secondary-button" to={`/shadowing?project=${projectId}`}>
-              Revisar Shadowing
-            </Link>
           </div>
           {materialReview.isError && (
             <p role="alert">
-              A preparação ainda não está liberada. Aprove todas as cenas no Shadowing.
+              A preparação pedagógica não pôde ser carregada. Revise os cues aprovados no Editorial.
             </p>
           )}
           {!materialReview.isError && (

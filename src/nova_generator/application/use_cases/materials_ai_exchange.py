@@ -12,7 +12,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
-from nova_generator.application.use_cases.prepare_shadowing import PrepareShadowing, ShadowingError
 
 INPUT_CONTRACT = "nova-generator-materials-input/1.0"
 OUTPUT_CONTRACT = "nova-generator-materials-output/1.0"
@@ -79,19 +78,11 @@ class MaterialsAiExchange:
     def __init__(self, repository: EditorialProjectRepository, project_root: Path):
         self.repository = repository
         self.project_root = project_root
-        self.shadowing = PrepareShadowing(repository, project_root)
 
     def package(self, project_id: UUID) -> dict[str, Any]:
         project = self.repository.get_project(project_id)
         if project is None:
             raise MaterialsAiError("project not found")
-        try:
-            plans = self.shadowing.scenes(project_id)
-        except ShadowingError as error:
-            raise MaterialsAiError(str(error)) from error
-        if not plans or any(plan["status"] != "approved" for plan in plans):
-            raise MaterialsAiError("approve the pre-produced shadowing before generating materials")
-
         scenes = []
         for scene in self.repository.get_project_scenes(project_id):
             cues = []
@@ -123,9 +114,6 @@ class MaterialsAiExchange:
                 "order": scene.order,
                 "duration_ms": scene.duration_ms,
                 "cues": cues,
-                "shadowing": next(
-                    plan for plan in plans if plan["scene_id"] == str(scene.id)
-                )["blocks"],
             })
         source = {
             "project_id": str(project.id),
@@ -152,7 +140,7 @@ class MaterialsAiExchange:
                     "meaning, marked_en, marked_pt, explanation_pt, example_en e example_pt "
                     "para reproduzir a mini lesson do iHub. O marked_en/marked_pt deve existir "
                     "literalmente na frase aprovada; os exemplos devem ter EN e PT. "
-                    "Não altere IDs, tempos ou shadowing. "
+                    "Não altere IDs ou tempos. "
                     "Retorne apenas JSON validado pelo contrato de saída."
                 ),
             },
@@ -167,7 +155,7 @@ class MaterialsAiExchange:
         if str(output.project_id) != str(project_id):
             raise MaterialsAiError("material belongs to another project")
         if output.source_sha256 != source["source_sha256"]:
-            raise MaterialsAiError("editorial or shadowing content changed; export a new package")
+            raise MaterialsAiError("editorial content changed; export a new package")
         if tuple(section.id for section in output.sections) != SECTION_IDS:
             raise MaterialsAiError(
                 "the seven pedagogical sections must be present in contract order"
