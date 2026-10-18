@@ -9,6 +9,9 @@ vi.mock("../../lib/studio-api", () => ({
   studioApi: {
     projects: vi.fn(),
     externalMaterialsReview: vi.fn(),
+    latestPedagogicalGeneration: vi.fn(),
+    generatePedagogicalMaterials: vi.fn(),
+    generateCompleteMaterials: vi.fn(),
     externalMaterialsPackageUrl: vi.fn(),
     importExternalMaterials: vi.fn(),
     approveExternalMaterials: vi.fn(),
@@ -57,7 +60,94 @@ function mount() {
 }
 
 describe("MaterialsPage", () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(studioApi.latestPedagogicalGeneration).mockRejectedValue({ status: 404 });
+  });
+
+  it("starts real pedagogical generation from the primary Gerar material button", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      { id: "voice-1", name: "Juliana", version: 3 } as never,
+    ]);
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [card], voice_id: "voice-1", voice_version: 3,
+    });
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "pending", source_sha256: "a".repeat(64), document: null,
+    });
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    vi.mocked(studioApi.generatePedagogicalMaterials).mockResolvedValue({
+      job_id: "ai-job", status: "queued",
+    });
+    mount();
+    const generate = await screen.findByRole("button", { name: "Gerar material" });
+    await waitFor(() => expect(generate).toBeEnabled());
+    fireEvent.click(generate);
+    await waitFor(() =>
+      expect(studioApi.generatePedagogicalMaterials).toHaveBeenCalledWith("project-1"),
+    );
+    expect(studioApi.generateCompleteMaterials).not.toHaveBeenCalled();
+  });
+
+  it("runs the complete production after pedagogical approval even when WAVs are missing", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      { id: "voice-1", name: "Juliana", version: 3 } as never,
+    ]);
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [{ ...card, audio_ready: false, audio_url: null }],
+      voice_id: "voice-1", voice_version: 3,
+    });
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "approved", source_sha256: "a".repeat(64), document: null,
+    });
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    vi.mocked(studioApi.generateCompleteMaterials).mockResolvedValue({
+      job_id: "complete-job", status: "queued",
+      apkg_url: null, manifest_url: null, reel_url: null,
+    });
+    vi.mocked(studioApi.materialExport).mockResolvedValue({
+      job_id: "complete-job", status: "succeeded",
+      apkg_url: "/anki.apkg", manifest_url: "/manifest.json",
+      reel_url: "/anki-reel.mp4", workbook_url: "/material-didatico.pdf",
+    });
+    mount();
+    const generate = await screen.findByRole("button", { name: "Gerar material" });
+    await waitFor(() => expect(generate).toBeEnabled());
+    fireEvent.click(generate);
+    await waitFor(() =>
+      expect(studioApi.generateCompleteMaterials).toHaveBeenCalledWith("project-1", "voice-1"),
+    );
+    expect(studioApi.generatePedagogicalMaterials).not.toHaveBeenCalled();
+    expect(await screen.findByRole("link", { name: "Baixar material didático (PDF)" }))
+      .toHaveAttribute("href", "/material-didatico.pdf");
+  });
+
+  it("requires human review before complete material generation", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      { id: "voice-1", name: "Juliana", version: 3 } as never,
+    ]);
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [card], voice_id: "voice-1", voice_version: 3,
+    });
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "draft", source_sha256: "a".repeat(64), document: null,
+    });
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    mount();
+    const generate = await screen.findByRole("button", { name: "Gerar material" });
+    expect(generate).toBeDisabled();
+    expect(screen.getByText(/Confira as sete seções e aprove o conteúdo/)).toBeInTheDocument();
+    expect(studioApi.generateCompleteMaterials).not.toHaveBeenCalled();
+  });
 
   it("shows sending, queue and worker status without silently ignoring Prepare WAV", async () => {
     vi.mocked(studioApi.projects).mockResolvedValue([
