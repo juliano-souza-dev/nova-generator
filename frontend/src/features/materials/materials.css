@@ -40,6 +40,9 @@
 .materials-table thead th {
   background: var(--surface);
   box-shadow: 0 5px 10px rgb(2 6 23 / 34%);
+  padding-top: 0.62rem;
+  padding-bottom: 0.62rem;
+  white-space: nowrap;
 }
 .materials-table th,
 .materials-table td {
@@ -202,6 +205,12 @@
 .material-status-badge.is-generated { color: #bbf7d0; background: rgb(74 222 128 / 14%); }
 .material-status-badge.is-blocked { color: #fecdd3; background: rgb(251 113 133 / 14%); }
 .material-audio-action { min-height: 36px; padding: 0.4rem 0.55rem; font-size: 0.78rem; }
+.material-audio-action:disabled {
+  background: var(--surface-raised);
+  border-color: var(--border);
+  color: var(--muted);
+  opacity: 1;
+}
 .materials-no-results { padding: 1.5rem; color: var(--muted); text-align: center; }
 .materials-export {
   display: flex;
