@@ -12,7 +12,7 @@ import "./voices.css";
 
 const schema = z.object({
   name: z.string().trim().min(1, "Informe o nome."),
-  reference_audio_sha256: z.string().regex(/^[a-f0-9]{64}$/, "Selecione um WAV de referência."),
+  reference_audio_sha256: z.string().regex(/^[a-f0-9]{64}$/, "Selecione um áudio de referência."),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -183,8 +183,8 @@ function VoiceForm({
 
   function submitReference(file: File | undefined) {
     if (!file || upload.isPending) return;
-    if (!/\.wav$/i.test(file.name)) {
-      setFileError("Selecione um arquivo WAV (.wav).");
+    if (!/\.(wav|mp3|ogg)$/i.test(file.name)) {
+      setFileError("Selecione um áudio WAV, MP3 ou OGG.");
       setFileName("");
       return;
     }
@@ -240,7 +240,7 @@ function VoiceForm({
             : (model.data?.message ?? model.error?.message)}
       </p>
       <div className="voice-upload-field">
-        <span className="voice-upload-title">Enviar WAV de referência (1 a 30 segundos)</span>
+        <span className="voice-upload-title">Enviar áudio de referência (1 a 30 segundos)</span>
         <div
           className={`voice-dropzone${isDragging ? " is-dragging" : ""}${upload.isPending ? " is-uploading" : ""}`}
           onDragEnter={onDragEnter}
@@ -251,10 +251,10 @@ function VoiceForm({
         >
           <input
             id="voice-reference-upload"
-            aria-label="Enviar WAV de referência (1 a 30 segundos)"
+            aria-label="Enviar áudio de referência (1 a 30 segundos)"
             className="voice-file-input"
             type="file"
-            accept=".wav,audio/wav,audio/x-wav,audio/wave"
+            accept=".wav,.mp3,.ogg,audio/wav,audio/x-wav,audio/wave,audio/mpeg,audio/ogg,application/ogg"
             disabled={upload.isPending}
             onChange={(event) => {
               submitReference(event.target.files?.[0]);
@@ -264,10 +264,10 @@ function VoiceForm({
           <label className="voice-dropzone-label" htmlFor="voice-reference-upload">
             <UploadCloud aria-hidden="true" />
             <strong>
-              {isDragging ? "Solte o WAV aqui" : "Arraste seu arquivo WAV para cá"}
+              {isDragging ? "Solte o áudio aqui" : "Arraste seu arquivo de áudio para cá"}
             </strong>
             <span>ou clique aqui para escolher um arquivo</span>
-            <small>Formato .wav · áudio de 1 a 30 segundos</small>
+            <small>WAV, MP3 ou OGG · áudio de 1 a 30 segundos</small>
           </label>
         </div>
         {fileName && (
@@ -285,7 +285,7 @@ function VoiceForm({
       )}
       <label htmlFor="voice-reference-select">Áudio de referência</label>
       <select id="voice-reference-select" {...form.register("reference_audio_sha256")}>
-        <option value="">Selecione um WAV da biblioteca</option>
+        <option value="">Selecione um áudio da biblioteca</option>
         {references.data?.map((reference) => (
           <option key={reference.sha256} value={reference.sha256}>
             {reference.sha256.slice(0, 12)} · {(reference.duration_ms / 1000).toFixed(1)} s
