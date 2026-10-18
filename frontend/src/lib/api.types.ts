@@ -223,6 +223,8 @@ export type VoiceProfile = {
   snapshot_sha256: string;
   preview_url: string | null;
   preview_ready: boolean;
+  reference_ready?: boolean;
+  reference_message?: string | null;
 };
 export type VoiceReference = {
   sha256: string;
@@ -236,4 +238,76 @@ export type VoiceModelStatus = {
   available: boolean;
   model_sha256?: string;
   message?: string;
+};
+
+export type ShadowingCue = {
+  id: string;
+  order: number;
+  speaker: string;
+  start_ms: number;
+  end_ms: number;
+  en: string;
+  pt: string;
+  eligible: boolean;
+};
+
+export type ShadowingExcludedCue = ShadowingCue & { reason: string };
+
+export type ShadowingBlock = {
+  id: string;
+  start_ms: number;
+  end_ms: number;
+  pause_duration_ms: number;
+  speaker: string;
+  word_count: number;
+  cue_ids: string[];
+  en: string;
+  pt: string;
+};
+
+export type ShadowingPlan = {
+  contract: string;
+  project_id: string;
+  scene_id: string;
+  source_sha256: string;
+  plan_sha256: string;
+  duration_ms: number;
+  status: "draft" | "approved";
+  origin: "automatic" | "groq" | "external" | "manual";
+  blocks: ShadowingBlock[];
+  source_cues: ShadowingCue[];
+  excluded_cues: ShadowingExcludedCue[];
+};
+
+export type MaterialAiSection = {
+  id: string;
+  title: string;
+  paragraphs: string[];
+  exercises: Array<{ prompt: string; answer: string }>;
+};
+export type MaterialAiDocument = {
+  contract: string;
+  project_id: string;
+  source_sha256: string;
+  title: string;
+  sections: MaterialAiSection[];
+  anki_cards: Array<{
+    cue_id: string;
+    front_en: string;
+    back_pt: string;
+    explanation_pt: string;
+    card_type?: string;
+    focus_text?: string;
+    meaning?: string;
+    marked_en?: string;
+    marked_pt?: string;
+    example_en?: string;
+    example_pt?: string;
+    tags: string[];
+  }>;
+};
+export type MaterialAiReview = {
+  status: "pending" | "draft" | "approved";
+  source_sha256: string;
+  document: MaterialAiDocument | null;
 };

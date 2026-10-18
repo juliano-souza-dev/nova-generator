@@ -10,10 +10,10 @@ test("uploads a WAV and creates a selectable voice without entering hashes", asy
   await page.route("**/api/voices/references", async (route) => {
     const reference = {
       sha256: digest,
-      duration_ms: 2000,
+      duration_ms: 7000,
       sample_rate: 16000,
       channels: 1,
-      size_bytes: 64044,
+      size_bytes: 224044,
       audio_url: `/api/voices/references/${digest}`,
     };
     if (route.request().method() === "POST") {
@@ -68,14 +68,60 @@ test("uploads a WAV and creates a selectable voice without entering hashes", asy
   await page.route("**/api/voices/references/*", (route) => route.fulfill({ body: "audio" }));
 
   await page.goto("/voices");
-  await expect(page.getByText("Modelo Chatterbox Nano disponível.")).toBeVisible();
-  await page.getByLabel("Enviar WAV de referência (1 a 30 segundos)").setInputFiles({
+  await expect(page.getByText("Modelo Chatterbox Turbo disponível.")).toBeVisible();
+  await page.getByLabel("Enviar áudio de referência (6 a 30 segundos)").setInputFiles({
     name: "speaker.wav",
     mimeType: "audio/wav",
     buffer: Buffer.from("wav"),
   });
-  await page.getByLabel("Áudio de referência").selectOption(digest);
+  await page.locator("#voice-reference-select").selectOption(digest);
   await page.getByPlaceholder("Narradora Ana").fill("Nova voz");
   await page.getByRole("button", { name: "Criar e sintetizar prévia" }).click();
   await expect(page.getByRole("button", { name: /Nova voz v1/ })).toBeVisible();
+});
+
+test("uploads a WAV dropped into the reference area without opening the file picker", async ({
+  page,
+}) => {
+  const digest = "e".repeat(64);
+  let uploaded = false;
+  await page.route("**/api/voices/model", (route) =>
+    route.fulfill({ json: { available: true, model_sha256: "a".repeat(64) } }),
+  );
+  await page.route("**/api/voices/references", async (route) => {
+    const reference = {
+      sha256: digest,
+      duration_ms: 7000,
+      sample_rate: 16000,
+      channels: 1,
+      size_bytes: 224044,
+      audio_url: `/api/voices/references/${digest}`,
+    };
+    if (route.request().method() === "POST") {
+      uploaded = true;
+      await route.fulfill({ status: 201, json: reference });
+    } else {
+      await route.fulfill({ json: uploaded ? [reference] : [] });
+    }
+  });
+  await page.route("**/api/voices", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/voices/references/*", (route) => route.fulfill({ body: "audio" }));
+
+  await page.goto("/voices");
+  const zone = page.getByTestId("voice-reference-dropzone");
+  await expect(zone).toBeVisible();
+  await zone.evaluate((element) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["wav"], "voice-drop.wav", { type: "audio/wav" }));
+    element.dispatchEvent(new DragEvent("dragenter", { bubbles: true, dataTransfer: transfer }));
+  });
+  await expect(zone).toHaveClass(/is-dragging/);
+  await zone.evaluate((element) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["wav"], "voice-drop.wav", { type: "audio/wav" }));
+    element.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer }));
+  });
+  await expect(zone).not.toHaveClass(/is-dragging/);
+  await expect(page.locator("#voice-reference-select")).toHaveValue(digest);
+  await expect(page.getByText("Arquivo selecionado: voice-drop.wav")).toBeVisible();
 });

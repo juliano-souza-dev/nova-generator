@@ -127,6 +127,20 @@ describe("EditorialPage", () => {
     ]);
   });
 
+  it("links approved editorial projects to Shadowing instead of Anki materials", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      { ...cue, provenance: { ...cue.provenance, approval: "approved" } },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const action = await screen.findByRole("link", { name: "Preparar shadowing" });
+    expect(action).toHaveAttribute("href", "/shadowing?project=p1");
+  });
+
   it("separates AI preparation from manual cue approval in the review context", async () => {
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1"]}>

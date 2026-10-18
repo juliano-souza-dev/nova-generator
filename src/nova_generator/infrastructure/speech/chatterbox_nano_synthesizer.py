@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from hashlib import sha256
 from pathlib import Path
@@ -8,8 +9,13 @@ from typing import Any
 
 from nova_generator.application.ports.wav_probe import WavProbe
 from nova_generator.domain.voices import SynthesizedSpeech, VoiceProfileSnapshot
-from nova_generator.infrastructure.filesystem.voice_references import FileVoiceReferenceStore
+from nova_generator.infrastructure.filesystem.voice_references import (
+    FileVoiceReferenceStore,
+    validate_profile_reference,
+)
 from nova_generator.infrastructure.speech.ffprobe_wav_probe import FfprobeWavProbe
+
+logger = logging.getLogger(__name__)
 
 
 class ChatterboxNanoSynthesizer:
@@ -45,9 +51,7 @@ class ChatterboxNanoSynthesizer:
             store = self._reference_store
             if store is None:
                 raise ValueError("Biblioteca de WAV de referência não configurada.")
-            stored = store.get(profile.reference_audio_sha256)
-            if stored is None:
-                raise ValueError("WAV de referência do perfil ausente ou alterado.")
+            validate_profile_reference(store, profile.reference_audio_sha256)
             reference_root = str(store.root.resolve())
         request = {
             "text": text,
@@ -67,7 +71,28 @@ class ChatterboxNanoSynthesizer:
                 check=False,
                 timeout=300,
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+        except subprocess.TimeoutExpired as exc:
+            def _decode(value: bytes | str | None) -> str:
+                if isinstance(value, bytes):
+                    return value.decode("utf-8", errors="replace")
+                return value or ""
+
+            stderr = _decode(exc.stderr).strip()
+            stdout = _decode(exc.stdout).strip()
+            logger.error(
+                "chatterbox_subprocess_timeout runner=%s timeout=%s stderr=%r stdout=%r",
+                self._runner,
+                exc.timeout,
+                stderr[-16000:],
+                stdout[-4000:],
+                exc_info=True,
+            )
+            raise RuntimeError(
+                "A síntese do Chatterbox excedeu 300 segundos e foi interrompida. "
+                "Verifique a carga da CPU/GPU, o primeiro carregamento do modelo "
+                "e os logs do worker antes de tentar novamente."
+            ) from exc
+        except OSError as exc:
             raise RuntimeError(
                 "Não foi possível iniciar o processo isolado do Chatterbox."
             ) from exc

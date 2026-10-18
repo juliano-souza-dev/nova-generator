@@ -164,7 +164,7 @@ function Test-TtsRuntime([string]$Executable) {
 }
 
 function Ensure-Tts([object]$PythonCommand) {
-    Write-Step "Preparando Chatterbox Nano isolado..."
+    Write-Step "Preparando Chatterbox Turbo isolado..."
     $expected = "chatterbox-tts=0.1.7;torch=2.6.0;python=3.12"
     $stamp = Join-Path $RuntimeRoot "tts.sha256"
     $current = if (Test-Path -LiteralPath $stamp) { (Get-Content -Raw $stamp).Trim() } else { "" }
@@ -180,7 +180,7 @@ function Ensure-Tts([object]$PythonCommand) {
         & $TtsPython -m pip install "torch==2.6.0" "torchaudio==2.6.0" --index-url "https://download.pytorch.org/whl/cpu"
         if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar PyTorch CPU do Chatterbox." }
         & $TtsPython -m pip install "chatterbox-tts==0.1.7"
-        if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Chatterbox Nano." }
+        if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Chatterbox Turbo." }
     }
     if (-not (Test-TtsRuntime $TtsPython)) {
         throw "O ambiente isolado do Chatterbox foi criado, mas não passou na verificação."
@@ -222,6 +222,43 @@ function Wait-Http([string]$Url, [System.Diagnostics.Process]$Process, [string]$
     throw "$Name não respondeu em $Url. Consulte data\logs."
 }
 
+# Vite launched by a previous Nova Generator session may survive a closed console.
+# Release only an exact Vite instance from this repository. Never stop an
+# unrelated process or blindly kill every program listening on port 5173.
+function Clear-PreviousFrontend {
+    $owners = @(
+        Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty OwningProcess -Unique |
+            Where-Object { $_ -gt 0 }
+    )
+    if ($owners.Count -eq 0) { return }
+
+    $viteScriptPath = (Join-Path $FrontendRoot "node_modules\vite\bin\vite.js").Replace("/", "\")
+    foreach ($owningProcessId in $owners) {
+        $instance = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $owningProcessId" -ErrorAction SilentlyContinue
+        $commandLine = if ($null -eq $instance) { "" } else { [string]$instance.CommandLine }
+        $normalizedCommand = $commandLine.Replace("/", "\")
+        if (
+            $null -eq $instance -or
+            $instance.Name -ne "node.exe" -or
+            $normalizedCommand.IndexOf($viteScriptPath, [StringComparison]::OrdinalIgnoreCase) -lt 0
+        ) {
+            throw "Porta 5173 ocupada pelo processo $owningProcessId, que não foi identificado como Vite deste projeto. Feche o aplicativo que usa a porta antes de executar INICIAR.bat."
+        }
+    }
+
+    foreach ($owningProcessId in $owners) {
+        Write-Step "Encerrando Vite antigo deste Nova Generator (PID $owningProcessId)..."
+        Stop-Process -Id $owningProcessId -Force -ErrorAction Stop
+    }
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        $remaining = @(Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue)
+        if ($remaining.Count -eq 0) { return }
+        Start-Sleep -Milliseconds 250
+    }
+    throw "O Vite anterior foi encerrado, mas a porta 5173 ainda está ocupada. Verifique o processo que a utiliza."
+}
+
 function Start-ServiceProcess(
     [string]$Name,
     [string]$Executable,
@@ -251,16 +288,24 @@ try {
     & $BackendPython -m alembic upgrade head
     if ($LASTEXITCODE -ne 0) { throw "Falha ao aplicar as migrations Alembic." }
 
+    Write-Step "Preparando modelo local de voz..."
+    $prepareScript = Join-Path $ProjectRoot "scripts/prepare_chatterbox.py"
+    & $ttsExecutable $prepareScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "Preparação automática do Chatterbox falhou. Consulte os detalhes acima."
+    }
+
     if ($CheckOnly) {
         Write-Host "`nAmbiente pronto. Verificação concluída sem iniciar os servidores." -ForegroundColor Green
         exit 0
     }
 
     $env:NOVA_GENERATOR_TTS_PYTHON = $ttsExecutable
+    Clear-PreviousFrontend
     Write-Step "Iniciando API, worker e interface..."
     $api = Start-ServiceProcess "api" $BackendPython @("-m", "uvicorn", "nova_generator.main:app", "--host", "127.0.0.1", "--port", "8000") $ProjectRoot
     $worker = Start-ServiceProcess "worker" $BackendPython @("-m", "nova_generator.worker") $ProjectRoot
-    $frontend = Start-ServiceProcess "frontend" (Get-Command "npm.cmd").Source @("run", "dev", "--", "--host", "127.0.0.1", "--port", "5173") $FrontendRoot
+    $frontend = Start-ServiceProcess "frontend" (Get-Command "npm.cmd").Source @("run", "dev", "--", "--host", "127.0.0.1", "--port", "5173", "--strictPort") $FrontendRoot
 
     Wait-Http "http://127.0.0.1:8000/api/health" $api "API"
     Wait-Http "http://127.0.0.1:5173" $frontend "Frontend"

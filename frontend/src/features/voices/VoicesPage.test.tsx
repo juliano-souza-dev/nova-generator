@@ -29,6 +29,65 @@ vi.mock("../../lib/studio-api", () => ({
 }));
 
 describe("VoicesPage", () => {
+  it("allows replacing an invalid voice reference with a new profile version", async () => {
+    const digest = "f".repeat(64);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      {
+        ...profile,
+        reference_ready: false,
+        reference_message: "A referência da voz precisa ter pelo menos 6 segundos.",
+      },
+    ]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: true,
+      model_sha256: "a".repeat(64),
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([
+      {
+        sha256: digest,
+        duration_ms: 7000,
+        sample_rate: 16000,
+        channels: 1,
+        size_bytes: 224044,
+        audio_url: `/api/voices/references/${digest}`,
+      },
+    ]);
+    vi.mocked(studioApi.createVoiceVersion).mockClear();
+    vi.mocked(studioApi.createVoiceVersion).mockResolvedValue({
+      ...profile,
+      version: 3,
+      reference_audio_sha256: digest,
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /Ana v2/ }));
+    expect(
+      screen.getByText(/A referência da voz precisa ter pelo menos 6 segundos/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sintetizar nova versão" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Áudio de referência"), {
+      target: { value: digest },
+    });
+    const replace = screen.getByRole("button", {
+      name: "Criar nova versão de Ana com este áudio",
+    });
+    await waitFor(() => expect(replace).toBeEnabled());
+    fireEvent.click(replace);
+    await waitFor(() =>
+      expect(studioApi.createVoiceVersion).toHaveBeenCalledWith(
+        "voice-1",
+        expect.objectContaining({
+          name: "Ana",
+          model_sha256: undefined,
+          reference_audio_sha256: digest,
+        }),
+      ),
+    );
+  });
+
   it("shows the selected version and its canonical preview", async () => {
     vi.mocked(studioApi.voices).mockResolvedValue([profile]);
     vi.mocked(studioApi.voiceModel).mockResolvedValue({
@@ -56,10 +115,10 @@ describe("VoicesPage", () => {
     vi.mocked(studioApi.voiceReferences).mockResolvedValue([]);
     vi.mocked(studioApi.uploadVoiceReference).mockResolvedValue({
       sha256: digest,
-      duration_ms: 2000,
+      duration_ms: 7000,
       sample_rate: 16000,
       channels: 1,
-      size_bytes: 64044,
+      size_bytes: 224044,
       audio_url: `/api/voices/references/${digest}`,
     });
     vi.mocked(studioApi.createVoice).mockResolvedValue({
@@ -71,8 +130,8 @@ describe("VoicesPage", () => {
         <VoicesPage />
       </QueryClientProvider>,
     );
-    await screen.findByText("Modelo Chatterbox Nano disponível.");
-    fireEvent.change(screen.getByLabelText("Enviar WAV de referência (1 a 30 segundos)"), {
+    await screen.findByText("Modelo Chatterbox Turbo disponível.");
+    fireEvent.change(screen.getByLabelText("Enviar áudio de referência (6 a 30 segundos)"), {
       target: { files: [new File(["wav"], "speaker.wav", { type: "audio/wav" })] },
     });
     await waitFor(() => expect(studioApi.uploadVoiceReference).toHaveBeenCalled());
@@ -89,5 +148,138 @@ describe("VoicesPage", () => {
         }),
       ),
     );
+  });
+
+  it("accepts a WAV dropped on the area and automatically selects the uploaded reference", async () => {
+    const digest = "d".repeat(64);
+    vi.mocked(studioApi.uploadVoiceReference).mockClear();
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: true,
+      model_sha256: "a".repeat(64),
+    });
+    const reference = {
+      sha256: digest,
+      duration_ms: 7000,
+      sample_rate: 16000,
+      channels: 1,
+      size_bytes: 224044,
+      audio_url: `/api/voices/references/${digest}`,
+    };
+    let uploaded = false;
+    vi.mocked(studioApi.voiceReferences).mockImplementation(async () =>
+      uploaded ? [reference] : [],
+    );
+    vi.mocked(studioApi.uploadVoiceReference).mockImplementation(async () => {
+      uploaded = true;
+      return reference;
+    });
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+
+    const zone = screen.getByTestId("voice-reference-dropzone");
+    const wav = new File(["wav"], "minha-voz.WAV", { type: "audio/wav" });
+    fireEvent.dragEnter(zone, { dataTransfer: { files: [wav] } });
+    expect(zone).toHaveClass("is-dragging");
+    expect(screen.getByText("Solte o áudio aqui")).toBeInTheDocument();
+    fireEvent.drop(zone, { dataTransfer: { files: [wav] } });
+
+    await waitFor(() => {
+      expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(wav, expect.anything());
+      expect(screen.getByLabelText("Áudio de referência")).toHaveValue(digest);
+    });
+    expect(zone).not.toHaveClass("is-dragging");
+    expect(screen.getByText(/Arquivo selecionado: minha-voz.WAV/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ["sample.mp3", "audio/mpeg"],
+    ["sample.ogg", "audio/ogg"],
+  ])("accepts %s dropped into the upload area", async (filename, type) => {
+    const digest = "f".repeat(64);
+    const reference = {
+      sha256: digest,
+      duration_ms: 7000,
+      sample_rate: 24000,
+      channels: 1,
+      size_bytes: 336044,
+      audio_url: `/api/voices/references/${digest}`,
+    };
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: true,
+      model_sha256: "a".repeat(64),
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([reference]);
+    vi.mocked(studioApi.uploadVoiceReference).mockClear();
+    vi.mocked(studioApi.uploadVoiceReference).mockResolvedValue(reference);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+    const file = new File(["encoded audio"], filename, { type });
+    fireEvent.drop(screen.getByTestId("voice-reference-dropzone"), {
+      dataTransfer: { files: [file] },
+    });
+    await waitFor(() =>
+      expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(file, expect.anything()),
+    );
+    await waitFor(() => expect(screen.getByLabelText("Áudio de referência")).toHaveValue(digest));
+  });
+
+  it("blocks previously stored references shorter than six seconds", async () => {
+    const digest = "e".repeat(64);
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: true,
+      model_sha256: "a".repeat(64),
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([
+      {
+        sha256: digest,
+        duration_ms: 5000,
+        sample_rate: 16000,
+        channels: 1,
+        size_bytes: 160044,
+        audio_url: `/api/voices/references/${digest}`,
+      },
+    ]);
+    vi.mocked(studioApi.createVoice).mockClear();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+    const legacyOption = await screen.findByRole("option", { name: /5\.0 s/ });
+    expect(legacyOption).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Criar e sintetizar prévia/ })).toBeDisabled();
+    expect(studioApi.createVoice).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported file types without uploading them", () => {
+    vi.mocked(studioApi.uploadVoiceReference).mockClear();
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: true,
+      model_sha256: "a".repeat(64),
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([]);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+
+    const zone = screen.getByTestId("voice-reference-dropzone");
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [new File(["flac"], "sample.flac", { type: "audio/flac" })] },
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Selecione um áudio WAV, MP3 ou OGG.");
+    expect(studioApi.uploadVoiceReference).not.toHaveBeenCalled();
   });
 });
