@@ -58,6 +58,27 @@ export function MaterialsPage() {
     onSuccess: () => void client.invalidateQueries({ queryKey: ["materials-ai-review"] }),
   });
 
+  const latestGeneration = useQuery({
+    queryKey: ["materials-ai-generation", projectId],
+    queryFn: () => studioApi.latestPedagogicalGeneration(projectId),
+    enabled: Boolean(projectId),
+    retry: false,
+    refetchInterval: (query) =>
+      ["queued", "running", "retryable"].includes(query.state.data?.status ?? "")
+        ? 3000
+        : false,
+  });
+  const generatePedagogical = useMutation({
+    mutationFn: () => studioApi.generatePedagogicalMaterials(projectId),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["materials-ai-generation", projectId] });
+    },
+  });
+  useEffect(() => {
+    if (latestGeneration.data?.status === "succeeded") {
+      void client.invalidateQueries({ queryKey: ["materials-ai-review", projectId] });
+    }
+  }, [client, projectId, latestGeneration.data?.status]);
   const project = useMemo(
     () => projects.data?.find((item) => item.id === projectId),
     [projects.data, projectId],
@@ -112,6 +133,15 @@ export function MaterialsPage() {
       void client.invalidateQueries({ queryKey: ["materials", projectId] });
     }
   }, [client, completedAudioJobs, projectId]);
+  const produceComplete = useMutation({
+    mutationFn: () => studioApi.generateCompleteMaterials(projectId, voiceId),
+    onSuccess: (result) => {
+      setExportJobId(result.job_id);
+      setYoutube("");
+      setConfirmed(false);
+      void client.invalidateQueries({ queryKey: ["material-latest-export", projectId] });
+    },
+  });
   const exportCards = useMutation({
     mutationFn: () => studioApi.exportMaterials(projectId, voiceId),
     onSuccess: (result) => {
@@ -158,6 +188,21 @@ export function MaterialsPage() {
   const ready =
     selected.length > 0 && selected.every((card) => card.audio_ready && card.editorial_ready);
   const selectedVisible = visibleCards.filter((card) => card.included);
+  const materialGenerationBusy =
+    generatePedagogical.isPending ||
+    produceComplete.isPending ||
+    ["queued", "running", "retryable"].includes(latestGeneration.data?.status ?? "") ||
+    (Boolean(exportStatus.data) &&
+      ["queued", "running", "retryable"].includes(exportStatus.data!.status));
+  const pedagogicalDraft = materialReview.data?.status === "draft";
+  const pedagogicalApproved = materialReview.data?.status === "approved";
+  const canGenerateMaterial =
+    Boolean(projectId) &&
+    selected.length > 0 &&
+    !materialGenerationBusy &&
+    !pedagogicalDraft &&
+    (!pedagogicalApproved || (Boolean(voiceId) && !voiceReferenceError));
+
   const activeAudioCount = Object.values(audioJobsByCue).filter((job) =>
     ACTIVE_AUDIO_JOB_STATES.has(job?.status ?? ""),
   ).length;
@@ -308,6 +353,68 @@ export function MaterialsPage() {
             <RefreshCw aria-hidden="true" /> Atualizar
           </button>
         </div>
+      )}
+      {project && (
+        <section className="materials-export panel" aria-label="Gerar material completo">
+          <div>
+            <h2>Gerar material</h2>
+            <p>
+              {pedagogicalApproved
+                ? "Conteúdo aprovado. Produzir PDF didático, WAVs ausentes, Anki com explicações, reel e manifesto."
+                : pedagogicalDraft
+                  ? "Proposta pedagógica pronta. Confira as sete seções e aprove o conteúdo abaixo antes de finalizar."
+                  : "A IA produzirá as sete seções pedagógicas, exercícios com respostas e cards Anki enriquecidos. Depois, revise e aprove o resultado."}
+            </p>
+            <small>
+              Os WAVs existentes serão reutilizados. A publicação no iHub continua exigindo a confirmação do vídeo no YouTube.
+            </small>
+          </div>
+          <button
+            className="primary-button"
+            type="button"
+            disabled={!canGenerateMaterial}
+            title={
+              pedagogicalDraft
+                ? "Revise e aprove a proposta pedagógica abaixo"
+                : !selected.length
+                  ? "Selecione ao menos um card"
+                  : materialGenerationBusy
+                    ? "Uma geração já está em andamento"
+                    : undefined
+            }
+            onClick={() =>
+              pedagogicalApproved ? produceComplete.mutate() : generatePedagogical.mutate()
+            }
+          >
+            <Download aria-hidden="true" />
+            {generatePedagogical.isPending
+              ? "Solicitando IA…"
+              : produceComplete.isPending
+                ? "Enfileirando produção…"
+                : "Gerar material"}
+          </button>
+        </section>
+      )}
+      {latestGeneration.data && (
+        <section className="materials-result panel" aria-live="polite">
+          <h3>Conteúdo pedagógico: {latestGeneration.data.status}</h3>
+          {["queued", "running", "retryable"].includes(latestGeneration.data.status) && (
+            <p>A IA está preparando o material. Você pode acompanhar o progresso em <Link to="/jobs">Jobs</Link>.</p>
+          )}
+          {latestGeneration.data.status === "succeeded" && !pedagogicalApproved && (
+            <p>Proposta pronta. Revise as seções e aprove para liberar a produção final.</p>
+          )}
+          {latestGeneration.data.status === "failed" && (
+            <p className="field-error" role="alert">
+              {latestGeneration.data.error_message ?? "Falha na geração pedagógica."}
+            </p>
+          )}
+        </section>
+      )}
+      {(generatePedagogical.error || produceComplete.error) && (
+        <p className="field-error" role="alert">
+          {(generatePedagogical.error ?? produceComplete.error)?.message}
+        </p>
       )}
       {voiceReferenceError && (
         <p className="field-error" role="alert">
@@ -621,6 +728,9 @@ export function MaterialsPage() {
               {exportStatus.data.error_message ?? "A exportação falhou."} Reprocesse o card afetado
               e tente novamente.
             </p>
+          )}
+          {exportStatus.data.workbook_url && (
+            <a href={exportStatus.data.workbook_url}>Baixar material didático (PDF)</a>
           )}
           {exportStatus.data.apkg_url && <a href={exportStatus.data.apkg_url}>Baixar APKG</a>}
           {exportStatus.data.manifest_url && (
