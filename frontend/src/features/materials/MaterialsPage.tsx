@@ -125,6 +125,7 @@ export function MaterialsPage() {
     groups.set(card.scene_order, group);
     return groups;
   }, new Map());
+  const sceneGroups = [...cardsByScene.entries()];
   const previewIndex = cards.findIndex((card) => card.cue_id === previewCueId);
   const previewCard = previewIndex >= 0 ? cards[previewIndex] : null;
   const previewPedagogical = materialReview.data?.document?.anki_cards.find(
@@ -390,6 +391,22 @@ export function MaterialsPage() {
         )}
         <div className="materials-table-wrap panel">
           <table className="materials-table">
+            {sceneGroups.length === 1 ? (
+              <caption
+                style={{
+                  captionSide: "top",
+                  padding: "0 0 0.3rem",
+                  color: "var(--muted)",
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.04em",
+                  textAlign: "left",
+                  textTransform: "uppercase",
+                }}
+              >
+                Cena {sceneGroups[0][0]} · {sceneGroups[0][1].length} cards
+              </caption>
+            ) : null}
             <thead>
               <tr>
                 <th>Incluir</th>
@@ -400,11 +417,12 @@ export function MaterialsPage() {
               </tr>
             </thead>
             <tbody>
-              {[...cardsByScene.entries()].map(([sceneOrder, sceneCards]) => (
+              {sceneGroups.map(([sceneOrder, sceneCards], index) => (
                 <SceneCardRows
                   key={sceneOrder}
                   sceneOrder={sceneOrder}
                   cards={sceneCards}
+                  showHeading={sceneGroups.length > 1 || index > 0}
                   statusOf={materialStatus}
                   voiceName={voices.data?.find((voice) => voice.id === voiceId)?.name ?? "—"}
                   voiceVersion={materials.data?.voice_version}
@@ -554,6 +572,7 @@ const statusDetails: Record<
 function SceneCardRows({
   sceneOrder,
   cards,
+  showHeading,
   statusOf,
   voiceName,
   voiceVersion,
@@ -566,6 +585,7 @@ function SceneCardRows({
 }: {
   sceneOrder: number;
   cards: MaterialCard[];
+  showHeading: boolean;
   statusOf: (card: MaterialCard) => MaterialStatus;
   voiceName: string;
   voiceVersion: number | null | undefined;
@@ -578,9 +598,11 @@ function SceneCardRows({
 }) {
   return (
     <>
-      <tr className="materials-scene-heading">
-        <th colSpan={5}>Cena {sceneOrder} · {cards.length} {cards.length === 1 ? "card" : "cards"}</th>
-      </tr>
+      {showHeading ? (
+        <tr className="materials-scene-heading">
+          <th colSpan={5}>Cena {sceneOrder} · {cards.length} {cards.length === 1 ? "card" : "cards"}</th>
+        </tr>
+      ) : null}
       {cards.map((card) => (
         <MaterialRow
           key={card.cue_id}
