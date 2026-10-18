@@ -196,7 +196,10 @@ describe("ShadowingPage", () => {
     fireEvent.keyDown(document, { key: "Delete" });
     await waitFor(() =>
       expect(studioApi.editShadowing).toHaveBeenCalledWith(
-        "project-1", "scene-1", plan.source_sha256, plan.plan_sha256,
+        "project-1",
+        "scene-1",
+        plan.source_sha256,
+        plan.plan_sha256,
         [["cue-1"]],
       ),
     );
@@ -376,23 +379,4 @@ describe("ShadowingPage", () => {
       expect(studioApi.importShadowing).toHaveBeenCalledWith("project-1", "scene-1", file),
     );
   });
-});
-
-it("temporary shadowing formatter output", async () => {
-  const prettier = await import("prettier");
-  const fs = await import("node:fs/promises");
-  const paths = [
-    ["PAGE", "src/features/shadowing/ShadowingPage.tsx"],
-    ["TEST", "src/features/shadowing/ShadowingPage.test.tsx"],
-  ] as const;
-  for (const [id, path] of paths) {
-    const config = await prettier.resolveConfig(path);
-    const formatted = await prettier.format(await fs.readFile(path, "utf8"), {
-      ...config,
-      filepath: path,
-    });
-    console.log(`<<<FORMAT_BEGIN_${id}>>>`);
-    console.log(formatted);
-    console.log(`<<<FORMAT_END_${id}>>>`);
-  }
 });
