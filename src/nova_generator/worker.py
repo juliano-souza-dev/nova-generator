@@ -5,17 +5,17 @@ from __future__ import annotations
 import os
 import signal
 import sys
-from uuid import UUID
 from pathlib import Path
 from threading import Event
+from uuid import UUID
 
 from nova_generator.api.dependencies import get_session_factory
 from nova_generator.application.use_cases.download_youtube_source import DownloadYoutubeSource
 from nova_generator.application.use_cases.editorial_assistance import RunEditorialAssistance
 from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
 from nova_generator.application.use_cases.generate_materials_ai import GenerateMaterialsAi
-from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
 from nova_generator.application.use_cases.ingest_scene_media import IngestSceneMedia
+from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
 from nova_generator.application.use_cases.render_story import RenderStory
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.core.settings import get_settings
