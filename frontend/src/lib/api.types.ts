@@ -204,6 +204,7 @@ export type MaterialExport = {
   apkg_url: string | null;
   manifest_url: string | null;
   reel_url: string | null;
+  workbook_url?: string | null;
   hub_final_url?: string | null;
   youtube_video_id?: string | null;
 };
