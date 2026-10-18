@@ -272,10 +272,19 @@ function VoiceForm({
         </div>
         {fileName && (
           <p className="voice-upload-filename" role="status">
-            {upload.isPending ? "Enviando" : upload.isError ? "Falha ao enviar" : "Arquivo selecionado"}: {fileName}
+            {upload.isPending
+              ? "Enviando"
+              : upload.isError
+                ? "Falha ao enviar"
+                : "Arquivo selecionado"}
+            : {fileName}
           </p>
         )}
-        {fileError && <p className="field-error" role="alert">{fileError}</p>}
+        {fileError && (
+          <p className="field-error" role="alert">
+            {fileError}
+          </p>
+        )}
       </div>
       {upload.isPending && <p role="status">Validando áudio…</p>}
       {upload.isError && (
