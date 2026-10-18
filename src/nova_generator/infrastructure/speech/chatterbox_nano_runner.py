@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import traceback
 from hashlib import file_digest
 from importlib import import_module
 from pathlib import Path
@@ -54,5 +55,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(str(exc), file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         raise SystemExit(1) from exc
