@@ -94,7 +94,11 @@ def approve_external_materials(
     return _execute(lambda: _exchange(repository).approve(project_id, payload.source_sha256))
 
 
-@router.post("/generate", response_model=MaterialGenerationResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/generate",
+    response_model=MaterialGenerationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def generate_pedagogical_materials(
     project_id: UUID,
     repository: Annotated[EditorialProjectRepository, Depends(get_editorial_repository)],
