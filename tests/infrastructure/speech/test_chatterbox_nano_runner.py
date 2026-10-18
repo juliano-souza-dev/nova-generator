@@ -1,48 +1,40 @@
-"""Nano loader compatibility tests without downloading a model or importing Torch."""
+"""Regression: the installed Chatterbox factory accepts device, not nano."""
 
-from pathlib import Path
+import io
+import json
+from types import SimpleNamespace
+from unittest.mock import Mock
 
-import pytest
-
-from nova_generator.infrastructure.speech.chatterbox_nano_runner import _load_nano_model
-
-
-class PipTurboOnly:
-    called = False
-
-    @classmethod
-    def from_pretrained(cls, device: str):
-        cls.called = True
-        return ("turbo", device)
+from nova_generator.infrastructure.speech import chatterbox_nano_runner
 
 
-class SourceNanoCapable:
-    calls: list[tuple[str, bool]] = []
+def test_chatterbox_factory_is_called_without_nano(monkeypatch, tmp_path) -> None:
+    factory = Mock(
+        return_value=SimpleNamespace(generate=Mock(return_value="audio"), sr=24000)
+    )
+    modules = {
+        "torch": SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False)),
+        "torchaudio": SimpleNamespace(save=Mock()),
+        "chatterbox.tts_turbo": SimpleNamespace(
+            ChatterboxTurboTTS=SimpleNamespace(from_pretrained=factory)
+        ),
+    }
+    monkeypatch.setattr(chatterbox_nano_runner, "import_module", modules.__getitem__)
+    monkeypatch.setattr(
+        chatterbox_nano_runner.sys,
+        "stdin",
+        io.StringIO(
+            json.dumps(
+                {
+                    "profile": {"model_id": "chatterbox-nano"},
+                    "text": "Hello.",
+                    "output": str(tmp_path / "output.wav"),
+                }
+            )
+        ),
+    )
 
-    @classmethod
-    def from_pretrained(cls, device: str, nano: bool = False):
-        cls.calls.append((device, nano))
-        return ("nano" if nano else "turbo", device)
+    chatterbox_nano_runner.main()
 
-
-def test_runner_does_not_fall_back_to_turbo_when_pypi_lacks_nano() -> None:
-    PipTurboOnly.called = False
-    with pytest.raises(RuntimeError, match=r"não suporta nano=True"):
-        _load_nano_model(PipTurboOnly, "cpu")
-    assert PipTurboOnly.called is False
-
-
-def test_runner_explicitly_loads_nano_on_compatible_chatterbox() -> None:
-    SourceNanoCapable.calls.clear()
-    assert _load_nano_model(SourceNanoCapable, "cpu") == ("nano", "cpu")
-    assert SourceNanoCapable.calls == [("cpu", True)]
-
-
-def test_windows_bootstrap_installs_nano_source_instead_of_incompatible_pypi() -> None:
-    startup = (
-        Path(__file__).resolve().parents[3] / "scripts" / "start-local.ps1"
-    ).read_text(encoding="utf-8")
-    assert "chatterbox-tts==0.1.7" not in startup
-    assert 'git+https://github.com/resemble-ai/chatterbox.git@$ChatterboxNanoCommit' in startup
-    assert "inspect.signature(ChatterboxTurboTTS.from_pretrained)" in startup
-    assert "Test-TtsRuntime $TtsPython" in startup
+    factory.assert_called_once_with(device="cpu")
+    modules["torchaudio"].save.assert_called_once()
