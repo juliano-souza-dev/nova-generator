@@ -1,5 +1,6 @@
 import io
 import json
+from hashlib import sha256
 import wave
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -15,13 +16,13 @@ from nova_generator.infrastructure.speech.chatterbox_nano_synthesizer import (
 )
 
 
-def _wav() -> bytes:
+def _wav(seconds: int = 7) -> bytes:
     output = io.BytesIO()
     with wave.open(output, "wb") as audio:
         audio.setnchannels(1)
         audio.setsampwidth(2)
         audio.setframerate(16000)
-        audio.writeframes(b"\x00\x00" * 32000)
+        audio.writeframes(b"\x00\x00" * 16000 * seconds)
     return output.getvalue()
 
 
@@ -35,7 +36,7 @@ def test_synthesizer_passes_only_managed_reference_identity(tmp_path):
 
     class Probe:
         def inspect_wav(self, source):
-            return 2000, 16000, 1
+            return 7000, 16000, 1
 
     def run(*args, **kwargs):
         request = json.loads(kwargs["input"])
@@ -64,3 +65,25 @@ def test_reference_name_cannot_escape_store(tmp_path):
     assert store.get("../secret") is None
     with pytest.raises(ValueError, match="inválido"):
         _resolve_reference("../secret", str(store.root))
+
+
+def test_old_short_reference_fails_before_loading_model(tmp_path):
+    store = FileVoiceReferenceStore(tmp_path)
+    content = _wav(5)
+    digest = sha256(content).hexdigest()
+    store.root.mkdir(parents=True)
+    (store.root / f"{digest}.wav").write_bytes(content)
+    snapshot = VoiceProfile(
+        uuid4(), "Ana", 1, "chatterbox-turbo", "a" * 64, digest
+    ).snapshot()
+    with patch("subprocess.run") as run:
+        with pytest.raises(ValueError, match="pelo menos 6 segundos"):
+            ChatterboxNanoSynthesizer(
+                Path("runner.py"), reference_store=store
+            ).synthesize(
+                text="Hello",
+                profile=snapshot,
+                parameters={},
+                output=tmp_path / "out.wav",
+            )
+    run.assert_not_called()
