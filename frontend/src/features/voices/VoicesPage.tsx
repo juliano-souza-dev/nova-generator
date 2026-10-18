@@ -155,7 +155,7 @@ function VoiceDetail({
         <p role="status">Prévia indisponível até atualizar a referência da voz.</p>
       ) : (
         <p role="status">Prévia em processamento. Acompanhe o estado no monitor de jobs.</p>
-      )
+      )}
       {error && (
         <p className="field-error" role="alert">
           {error}
