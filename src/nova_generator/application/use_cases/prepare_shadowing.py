@@ -110,7 +110,7 @@ class PrepareShadowing:
             },
             "cues": plan["source_cues"],
             "instructions": (
-                "Selecione falas curtas, naturais, úteis para praticar inglês e fáceis de memorizar. "
+                "Selecione falas curtas e naturais para praticar inglês. "
                 "Cada grupo deve usar apenas cues consecutivos do MESMO personagem, sem misturar "
                 "interlocutores ou ultrapassar 6,5 segundos e 14 palavras. "
                 "Pode omitir qualquer cue inadequado. Não altere, traduza, reescreva, fragmente "
@@ -455,7 +455,7 @@ def _validated_blocks(cues: list[Cue], groups: list[list[str]]) -> list[dict[str
         if any(
             right.speech_start_ms < left.speech_end_ms
             or right.speech_start_ms - left.speech_end_ms > MAX_CUE_GAP_MS
-            for left, right in zip(selected, selected[1:])
+            for left, right in zip(selected, selected[1:], strict=False)
         ):
             raise ShadowingError("A pausa entre cues é longa demais para uma única prática")
         start_ms = selected[0].speech_start_ms
