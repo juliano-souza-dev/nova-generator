@@ -36,6 +36,7 @@ class ExportAnkiReel:
         voice: VoiceProfileSnapshot,
         output_directory: Path,
         deck_name: str,
+        rich_cards: dict[str, dict] | None = None,
     ) -> AnkiAudioExport:
         if not cues or [cue.order for cue in cues] != sorted({cue.order for cue in cues}):
             raise ValueError("A exportação requer cues ordenados sem ordens repetidas.")
@@ -44,9 +45,15 @@ class ExportAnkiReel:
             if abs(duration - cue.duration_ms) > 100:
                 raise ValueError(f"Duração do WAV diverge do cue {cue.order}.")
         output_directory.mkdir(parents=True, exist_ok=True)
-        apkg = self._package_writer.write(
-            cues=cues, output=output_directory / "anki.apkg", deck_name=deck_name
-        )
+        writer_args = {
+            "cues": cues,
+            "output": output_directory / "anki.apkg",
+            "deck_name": deck_name,
+        }
+        if rich_cards is not None:
+            apkg = self._package_writer.write(**writer_args, rich_cards=rich_cards)
+        else:
+            apkg = self._package_writer.write(**writer_args)
         reel, intervals = self._reel_renderer.render(
             cues=cues, output=output_directory / "anki-reel.mp4"
         )
