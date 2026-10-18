@@ -30,7 +30,7 @@ export function VoicesPage() {
       const input = {
         name: values.name,
         model_id: "chatterbox-turbo",
-        model_sha256: existing?.model_sha256,
+        model_sha256: undefined,
         reference_audio_sha256: values.reference_audio_sha256 || undefined,
         parameters: {},
       };
@@ -72,6 +72,7 @@ export function VoicesPage() {
                 {voice.name}
                 <small>
                   v{voice.version} · {voice.model_id}
+                  {voice.reference_ready === false ? " · referência inválida" : ""}
                 </small>
               </span>
             </button>
@@ -96,6 +97,8 @@ export function VoicesPage() {
           )}
           <VoiceForm
             onSubmit={(values) => mutation.mutate({ values })}
+            selectedVoice={selected}
+            onNewVersion={(values, existing) => mutation.mutate({ values, existing })}
             busy={mutation.isPending}
             error={mutation.error?.message}
           />
@@ -140,17 +143,29 @@ function VoiceDetail({
           </dd>
         </div>
       </dl>
+      {voice.reference_ready === false && (
+        <p className="field-error" role="alert">
+          {voice.reference_message ?? "A referência desta voz precisa ser substituída."}
+          {" "}Envie uma nova gravação no formulário abaixo e crie uma nova versão deste perfil.
+        </p>
+      )}
       {voice.preview_ready && voice.preview_url ? (
         <audio controls src={voice.preview_url} aria-label={`Prévia da voz ${voice.name}`} />
+      ) : voice.reference_ready === false ? (
+        <p role="status">Prévia indisponível até atualizar a referência da voz.</p>
       ) : (
         <p role="status">Prévia em processamento. Acompanhe o estado no monitor de jobs.</p>
-      )}
+      )
       {error && (
         <p className="field-error" role="alert">
           {error}
         </p>
       )}
-      <button className="secondary-button" onClick={onVersion} disabled={busy}>
+      <button
+        className="secondary-button"
+        onClick={onVersion}
+        disabled={busy || voice.reference_ready === false}
+      >
         <Volume2 />
         {busy ? "Enfileirando…" : "Sintetizar nova versão"}
       </button>
@@ -160,10 +175,14 @@ function VoiceDetail({
 
 function VoiceForm({
   onSubmit,
+  onNewVersion,
+  selectedVoice,
   busy,
   error,
 }: {
   onSubmit: (values: FormValues) => void;
+  onNewVersion: (values: FormValues, existing: VoiceProfile) => void;
+  selectedVoice?: VoiceProfile | null;
   busy: boolean;
   error?: string;
 }) {
@@ -246,7 +265,7 @@ function VoiceForm({
     busy || !model.data?.available || upload.isPending || !selectedReference || referenceTooShort;
   return (
     <form className="panel voice-form" onSubmit={form.handleSubmit(onSubmit)}>
-      <h2>Nova voz</h2>
+      <h2>Nova voz ou nova versão</h2>
       <label>
         Nome
         <input {...form.register("name")} placeholder="Narradora Ana" />
@@ -350,6 +369,22 @@ function VoiceForm({
         <Plus />
         {busy ? "Criando…" : "Criar e sintetizar prévia"}
       </button>
+      {selectedVoice && (
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={cannotCreate}
+          onClick={() => {
+            if (!selectedReference) return;
+            onNewVersion(
+              { name: selectedVoice.name, reference_audio_sha256: selectedReference.sha256 },
+              selectedVoice,
+            );
+          }}
+        >
+          <Volume2 /> Criar nova versão de {selectedVoice.name} com este áudio
+        </button>
+      )}
     </form>
   );
 }
