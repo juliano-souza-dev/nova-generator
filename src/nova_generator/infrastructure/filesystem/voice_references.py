@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import os
 import re
+import subprocess
 import tempfile
 import wave
 from dataclasses import dataclass
@@ -12,7 +13,66 @@ from hashlib import sha256
 from pathlib import Path
 
 MAX_WAV_BYTES = 10 * 1024 * 1024
+MAX_REFERENCE_UPLOAD_BYTES = MAX_WAV_BYTES
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
+
+
+def normalize_reference_audio(content: bytes, extension: str) -> bytes:
+    """Convert compressed voice samples to stable PCM WAV without changing WAV uploads.
+
+    The final WAV, not the original compressed bytes, is content addressed and
+    used for Chatterbox inference. Neither user filenames nor shell commands are
+    used by the converter.
+    """
+    suffix = extension.lower().lstrip(".")
+    if suffix not in {"wav", "mp3", "ogg"}:
+        raise ValueError("Envie um arquivo WAV, MP3 ou OGG.")
+    if not content or len(content) > MAX_REFERENCE_UPLOAD_BYTES:
+        raise ValueError("O áudio de referência deve ter no máximo 10 MiB.")
+    if suffix == "wav":
+        return content
+    with tempfile.TemporaryDirectory(prefix="nova_voice_import_") as temporary:
+        root = Path(temporary)
+        source = root / f"reference.{suffix}"
+        output = root / "reference.wav"
+        source.write_bytes(content)
+        command = [
+            "ffmpeg",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(source),
+            "-map",
+            "0:a:0",
+            "-vn",
+            "-t",
+            "31",
+            "-ac",
+            "1",
+            "-ar",
+            "24000",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "wav",
+            str(output),
+        ]
+        try:
+            converted = subprocess.run(
+                command, check=False, capture_output=True, timeout=30
+            )
+        except FileNotFoundError as exc:
+            raise ValueError("FFmpeg não está instalado para converter MP3/OGG.") from exc
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ValueError("Não foi possível converter o áudio de referência.") from exc
+        if converted.returncode != 0 or not output.is_file():
+            raise ValueError("Arquivo MP3/OGG inválido ou sem áudio decodificável.")
+        result = output.read_bytes()
+        _inspect(result)
+        return result
 
 
 @dataclass(frozen=True)
