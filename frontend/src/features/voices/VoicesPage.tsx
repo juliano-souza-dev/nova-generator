@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
-import type { VoiceProfile } from "../../lib/api.types";
+import type { VoiceProfile, VoiceReference } from "../../lib/api.types";
 import { studioApi } from "../../lib/studio-api";
 import "./voices.css";
 
@@ -164,6 +164,7 @@ function VoiceForm({
     defaultValues: { name: "", reference_audio_sha256: "" },
   });
   const queryClient = useQueryClient();
+  const [lastUploaded, setLastUploaded] = useState<VoiceReference | null>(null);
   const references = useQuery({
     queryKey: ["voice-references"],
     queryFn: studioApi.voiceReferences,
@@ -172,6 +173,7 @@ function VoiceForm({
   const upload = useMutation({
     mutationFn: studioApi.uploadVoiceReference,
     onSuccess: (reference) => {
+      setLastUploaded(reference);
       form.setValue("reference_audio_sha256", reference.sha256, { shouldValidate: true });
       void queryClient.invalidateQueries({ queryKey: ["voice-references"] });
     },
@@ -222,8 +224,14 @@ function VoiceForm({
     if (!upload.isPending) submitReference(event.dataTransfer.files?.[0]);
   }
 
-  const selectedReference = references.data?.find(
-    (reference) => reference.sha256 === form.watch("reference_audio_sha256"),
+  // Keep the new option present immediately even while the library query refreshes.
+  const availableReferences = [...(references.data ?? [])];
+  if (lastUploaded && !availableReferences.some((item) => item.sha256 === lastUploaded.sha256)) {
+    availableReferences.push(lastUploaded);
+  }
+  const currentReference = form.watch("reference_audio_sha256");
+  const selectedReference = availableReferences.find(
+    (reference) => reference.sha256 === currentReference,
   );
   return (
     <form className="panel voice-form" onSubmit={form.handleSubmit(onSubmit)}>
@@ -293,9 +301,13 @@ function VoiceForm({
         </p>
       )}
       <label htmlFor="voice-reference-select">Áudio de referência</label>
-      <select id="voice-reference-select" {...form.register("reference_audio_sha256")}>
+      <select
+        id="voice-reference-select"
+        {...form.register("reference_audio_sha256")}
+        value={currentReference}
+      >
         <option value="">Selecione um áudio da biblioteca</option>
-        {references.data?.map((reference) => (
+        {availableReferences.map((reference) => (
           <option key={reference.sha256} value={reference.sha256}>
             {reference.sha256.slice(0, 12)} · {(reference.duration_ms / 1000).toFixed(1)} s
           </option>
