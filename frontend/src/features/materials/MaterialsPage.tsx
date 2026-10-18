@@ -105,7 +105,7 @@ export function MaterialsPage() {
   const selected = cards.filter((card) => card.included);
   const unprepared = cards.filter((card) => !card.editorial_ready);
   const materialStatus = (card: MaterialCard): MaterialStatus =>
-    !card.editorial_ready || !pedagogicalReady
+    !card.editorial_ready
       ? "blocked"
       : card.audio_ready
         ? "generated"
@@ -131,10 +131,8 @@ export function MaterialsPage() {
   const previewPedagogical = materialReview.data?.document?.anki_cards.find(
     (card) => card.cue_id === previewCueId,
   );
-  const pedagogicalReady = materialReview.data?.status === "approved";
   const ready =
     selected.length > 0 &&
-    pedagogicalReady &&
     selected.every((card) => card.audio_ready && card.editorial_ready);
   const selectedVisible = visibleCards.filter((card) => card.included);
 
@@ -158,7 +156,7 @@ export function MaterialsPage() {
     <section>
       <PageHeader
         title="Materiais e Anki"
-        description="Valide os cards já preparados pela IA, ouça o WAV canônico e exporte o pacote com o manifesto do reel."
+        description="Prepare os WAVs dos cards aprovados, confira os áudios e exporte o Anki sem depender de conteúdo pedagógico externo."
       />
       {projects.isPending && <LoadingState label="Carregando projetos" />}
       {projects.isError && (
@@ -219,7 +217,7 @@ export function MaterialsPage() {
               <h2>Conteúdo pedagógico da IA externa</h2>
               <p>
                 O contrato inclui sete seções didáticas, exercícios com respostas e cards Anki.
-                Envie o JSON à sua IA e importe o resultado para validar o material do projeto.
+                Essa etapa complementar é independente da síntese de voz e da exportação Anki.
               </p>
             </div>
           </div>
