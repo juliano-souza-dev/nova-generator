@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   CircleAlert,
@@ -9,21 +9,27 @@ import {
   Search,
   Volume2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
 import { ApiError } from "../../lib/api";
 import { IHubCardPreview } from "./IHubCardPreview";
-import type { MaterialCard } from "../../lib/api.types";
+import type { JobDetail, MaterialCard } from "../../lib/api.types";
 import { studioApi } from "../../lib/studio-api";
 import "./materials.css";
+
+const ACTIVE_AUDIO_JOB_STATES = new Set(["queued", "running", "retryable"]);
 
 export function MaterialsPage() {
   const [params, setParams] = useSearchParams();
   const [voiceId, setVoiceId] = useState("");
   const [exportJobId, setExportJobId] = useState<string | null>(null);
   const [audioJobIds, setAudioJobIds] = useState<Record<string, string>>({});
+  const [submittingCueIds, setSubmittingCueIds] = useState<string[]>([]);
+  const [audioRequestErrors, setAudioRequestErrors] = useState<Record<string, string>>({});
+  const [audioNotice, setAudioNotice] = useState<string | null>(null);
+  const audioRequestsInFlight = useRef(new Set<string>());
   const [youtube, setYoutube] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [previewCueId, setPreviewCueId] = useState<string | null>(null);
@@ -82,13 +88,28 @@ export function MaterialsPage() {
       studioApi.updateMaterial(projectId, cueId, included),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["materials", projectId] }),
   });
-  const audio = useMutation({
-    mutationFn: (cueId: string) => studioApi.prepareMaterialAudio(projectId, cueId, voiceId),
-    onSuccess: (job, cueId) => {
-      setAudioJobIds((current) => ({ ...current, [cueId]: job.id }));
-      void client.invalidateQueries({ queryKey: ["materials", projectId] });
-    },
+  const audioJobEntries = Object.entries(audioJobIds);
+  const audioJobQueries = useQueries({
+    queries: audioJobEntries.map(([, jobId]) => ({
+      queryKey: ["material-audio-job", jobId],
+      queryFn: () => studioApi.job(jobId),
+      refetchInterval: (query: { state: { data?: JobDetail } }) =>
+        ACTIVE_AUDIO_JOB_STATES.has(query.state.data?.status ?? "") ? 3000 : false,
+    })),
   });
+  const audioJobsByCue: Record<string, JobDetail | undefined> = {};
+  audioJobEntries.forEach(([cueId], index) => {
+    audioJobsByCue[cueId] = audioJobQueries[index]?.data;
+  });
+  const completedAudioJobs = Object.values(audioJobsByCue)
+    .filter((job) => job?.status === "succeeded")
+    .map((job) => job!.id)
+    .join("|");
+  useEffect(() => {
+    if (completedAudioJobs) {
+      void client.invalidateQueries({ queryKey: ["materials", projectId] });
+    }
+  }, [client, completedAudioJobs, projectId]);
   const exportCards = useMutation({
     mutationFn: () => studioApi.exportMaterials(projectId, voiceId),
     onSuccess: (result) => {
@@ -140,6 +161,72 @@ export function MaterialsPage() {
     selected.length > 0 &&
     selected.every((card) => card.audio_ready && card.editorial_ready);
   const selectedVisible = visibleCards.filter((card) => card.included);
+  const activeAudioCount = Object.values(audioJobsByCue).filter((job) =>
+    ACTIVE_AUDIO_JOB_STATES.has(job?.status ?? ""),
+  ).length;
+  const contextKey = `${projectId}:${voiceId}`;
+  const audioContext = useRef(contextKey);
+  audioContext.current = contextKey;
+
+  function canPrepareAudio(card: MaterialCard): boolean {
+    const jobId = audioJobIds[card.cue_id];
+    const job = audioJobsByCue[card.cue_id];
+    return (
+      materialStatus(card) === "ready" &&
+      !submittingCueIds.includes(card.cue_id) &&
+      !audioRequestsInFlight.current.has(card.cue_id) &&
+      (!jobId || job?.status === "failed" || job?.status === "cancelled")
+    );
+  }
+
+  async function prepareAudio(cueId: string): Promise<void> {
+    if (!projectId || !voiceId || voiceReferenceError || audioRequestsInFlight.current.has(cueId)) {
+      return;
+    }
+    const job = audioJobsByCue[cueId];
+    if (audioJobIds[cueId] && (!job || ACTIVE_AUDIO_JOB_STATES.has(job.status) || job.status === "succeeded")) {
+      return;
+    }
+    const requestContext = contextKey;
+    audioRequestsInFlight.current.add(cueId);
+    setSubmittingCueIds((current) => [...current, cueId]);
+    setAudioRequestErrors((current) => {
+      const next = { ...current };
+      delete next[cueId];
+      return next;
+    });
+    setAudioJobIds((current) => {
+      const next = { ...current };
+      delete next[cueId];
+      return next;
+    });
+    setAudioNotice("Enviando solicitação de áudio ao worker…");
+    try {
+      const result = await studioApi.prepareMaterialAudio(projectId, cueId, voiceId);
+      if (audioContext.current !== requestContext) return;
+      setAudioJobIds((current) => ({ ...current, [cueId]: result.id }));
+      setAudioNotice("Solicitação recebida. Acompanhe o estado da síntese em cada card.");
+      void client.invalidateQueries({ queryKey: ["materials", projectId] });
+    } catch (error) {
+      if (audioContext.current !== requestContext) return;
+      const message = error instanceof Error ? error.message : "Não foi possível solicitar o WAV.";
+      setAudioRequestErrors((current) => ({ ...current, [cueId]: message }));
+      setAudioNotice("Falha ao solicitar um WAV. Consulte o erro no card correspondente.");
+    } finally {
+      audioRequestsInFlight.current.delete(cueId);
+      if (audioContext.current === requestContext) {
+        setSubmittingCueIds((current) => current.filter((id) => id !== cueId));
+      }
+    }
+  }
+
+  function resetAudioTracking() {
+    audioRequestsInFlight.current.clear();
+    setAudioJobIds({});
+    setSubmittingCueIds([]);
+    setAudioRequestErrors({});
+    setAudioNotice(null);
+  }
 
   function setVisibleIncluded(included: boolean) {
     visibleCards
@@ -149,9 +236,10 @@ export function MaterialsPage() {
 
   function prepareSelected() {
     if (!voiceId || voiceReferenceError) return;
-    selectedVisible
-      .filter((card) => materialStatus(card) === "ready")
-      .forEach((card) => audio.mutate(card.cue_id));
+    const available = selectedVisible.filter(canPrepareAudio);
+    if (!available.length) return;
+    setAudioNotice(`Solicitando WAV para ${available.length} cards selecionados…`);
+    void Promise.all(available.map((card) => prepareAudio(card.cue_id)));
   }
 
   useEffect(() => {
@@ -182,7 +270,7 @@ export function MaterialsPage() {
               onChange={(event) => {
                 setParams({ project: event.target.value });
                 setExportJobId(null);
-                setAudioJobIds({});
+                resetAudioTracking();
                 setPreviewCueId(null);
               }}
             >
@@ -200,7 +288,7 @@ export function MaterialsPage() {
               onChange={(event) => {
                 setVoiceId(event.target.value);
                 setExportJobId(null);
-                setAudioJobIds({});
+                resetAudioTracking();
               }}
             >
               {voices.data?.map((voice) => (
