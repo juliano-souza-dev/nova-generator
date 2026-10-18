@@ -50,7 +50,7 @@ for (const width of [1440, 1024, 390]) {
     );
     expect(overflow).toBeLessThanOrEqual(1);
     const columns = await page.locator(".shadowing-layout").evaluate((node) =>
-      getComputedStyle(node).gridTemplateColumns.trim().split(/\\s+/).length,
+      getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length,
     );
     expect(columns).toBe(width >= 1024 ? 2 : 1);
   });
