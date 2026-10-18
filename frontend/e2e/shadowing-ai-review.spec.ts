@@ -89,7 +89,7 @@ test("Shadowing sends the current scene to Groq and displays revised origin", as
     return route.fulfill({ json: { ...plan, origin: "groq" } });
   });
   await page.goto("/shadowing?project=project-1");
-  await page.getByRole("button", { name: "Gerar proposta com Groq" }).click();
-  await expect(page.getByText(/A Groq gerou uma nova proposta/)).toBeVisible();
+  await page.getByRole("button", { name: "Gerar proposta com IA" }).click();
+  await expect(page.getByText(/Proposta gerada: 2 grupos/)).toBeVisible();
   expect(generated).toBe(true);
 });
