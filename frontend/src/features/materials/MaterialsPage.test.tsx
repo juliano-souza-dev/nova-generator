@@ -80,7 +80,10 @@ describe("MaterialsPage", () => {
     vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
     let acceptRequest!: (job: Awaited<ReturnType<typeof studioApi.prepareMaterialAudio>>) => void;
     vi.mocked(studioApi.prepareMaterialAudio).mockImplementation(
-      () => new Promise((resolve) => { acceptRequest = resolve; }),
+      () =>
+        new Promise((resolve) => {
+          acceptRequest = resolve;
+        }),
     );
     vi.mocked(studioApi.job).mockResolvedValue({
       id: "audio-job-1",
@@ -94,12 +97,11 @@ describe("MaterialsPage", () => {
     expect(screen.getByRole("button", { name: "Enviando…" })).toBeDisabled();
     expect(screen.getByText(/Enviando solicitação de áudio ao worker/)).toBeInTheDocument();
     acceptRequest({ id: "audio-job-1", status: "queued" } as never);
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Na fila" })).toBeDisabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Na fila" })).toBeDisabled());
     expect(await screen.findByText("Tarefa recebida. Aguardando o worker.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ver monitor de jobs" })).toHaveAttribute(
-      "href", "/jobs",
+      "href",
+      "/jobs",
     );
   });
 
@@ -116,7 +118,9 @@ describe("MaterialsPage", () => {
       voice_version: 2,
     });
     vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
-      status: "pending", source_sha256: "", document: null,
+      status: "pending",
+      source_sha256: "",
+      document: null,
     });
     vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
     vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
@@ -144,22 +148,39 @@ describe("MaterialsPage", () => {
     vi.mocked(studioApi.materials).mockResolvedValue({
       cards: [
         { ...card, audio_ready: false, audio_url: null },
-        { ...card, cue_id: "cue-2", cue_order: 2, approved_en: "Hello.", audio_ready: false, audio_url: null },
+        {
+          ...card,
+          cue_id: "cue-2",
+          cue_order: 2,
+          approved_en: "Hello.",
+          audio_ready: false,
+          audio_url: null,
+        },
       ],
       voice_id: "voice-1",
       voice_version: 2,
     });
     vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
-      status: "pending", source_sha256: "", document: null,
+      status: "pending",
+      source_sha256: "",
+      document: null,
     });
     vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
     vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
-    vi.mocked(studioApi.prepareMaterialAudio).mockImplementation(async (_project, cueId) => ({
-      id: `job-${cueId}`, status: "queued",
-    }) as never);
-    vi.mocked(studioApi.job).mockImplementation(async (jobId) => ({
-      id: jobId, status: "queued",
-    }) as never);
+    vi.mocked(studioApi.prepareMaterialAudio).mockImplementation(
+      async (_project, cueId) =>
+        ({
+          id: `job-${cueId}`,
+          status: "queued",
+        }) as never,
+    );
+    vi.mocked(studioApi.job).mockImplementation(
+      async (jobId) =>
+        ({
+          id: jobId,
+          status: "queued",
+        }) as never,
+    );
     mount();
     const prepare = await screen.findByRole("button", { name: "Preparar selecionados" });
     await waitFor(() => expect(prepare).toBeEnabled());
