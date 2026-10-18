@@ -73,14 +73,19 @@ describe("MaterialsPage", () => {
       { id: "voice-1", name: "Juliana", version: 3 } as never,
     ]);
     vi.mocked(studioApi.materials).mockResolvedValue({
-      cards: [card], voice_id: "voice-1", voice_version: 3,
+      cards: [card],
+      voice_id: "voice-1",
+      voice_version: 3,
     });
     vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
-      status: "pending", source_sha256: "a".repeat(64), document: null,
+      status: "pending",
+      source_sha256: "a".repeat(64),
+      document: null,
     });
     vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
     vi.mocked(studioApi.generatePedagogicalMaterials).mockResolvedValue({
-      job_id: "ai-job", status: "queued",
+      job_id: "ai-job",
+      status: "queued",
     });
     mount();
     const generate = await screen.findByRole("button", { name: "Gerar material" });
@@ -101,20 +106,29 @@ describe("MaterialsPage", () => {
     ]);
     vi.mocked(studioApi.materials).mockResolvedValue({
       cards: [{ ...card, audio_ready: false, audio_url: null }],
-      voice_id: "voice-1", voice_version: 3,
+      voice_id: "voice-1",
+      voice_version: 3,
     });
     vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
-      status: "approved", source_sha256: "a".repeat(64), document: null,
+      status: "approved",
+      source_sha256: "a".repeat(64),
+      document: null,
     });
     vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
     vi.mocked(studioApi.generateCompleteMaterials).mockResolvedValue({
-      job_id: "complete-job", status: "queued",
-      apkg_url: null, manifest_url: null, reel_url: null,
+      job_id: "complete-job",
+      status: "queued",
+      apkg_url: null,
+      manifest_url: null,
+      reel_url: null,
     });
     vi.mocked(studioApi.materialExport).mockResolvedValue({
-      job_id: "complete-job", status: "succeeded",
-      apkg_url: "/anki.apkg", manifest_url: "/manifest.json",
-      reel_url: "/anki-reel.mp4", workbook_url: "/material-didatico.pdf",
+      job_id: "complete-job",
+      status: "succeeded",
+      apkg_url: "/anki.apkg",
+      manifest_url: "/manifest.json",
+      reel_url: "/anki-reel.mp4",
+      workbook_url: "/material-didatico.pdf",
     });
     mount();
     const generate = await screen.findByRole("button", { name: "Gerar material" });
@@ -124,8 +138,9 @@ describe("MaterialsPage", () => {
       expect(studioApi.generateCompleteMaterials).toHaveBeenCalledWith("project-1", "voice-1"),
     );
     expect(studioApi.generatePedagogicalMaterials).not.toHaveBeenCalled();
-    expect(await screen.findByRole("link", { name: "Baixar material didático (PDF)" }))
-      .toHaveAttribute("href", "/material-didatico.pdf");
+    expect(
+      await screen.findByRole("link", { name: "Baixar material didático (PDF)" }),
+    ).toHaveAttribute("href", "/material-didatico.pdf");
   });
 
   it("requires human review before complete material generation", async () => {
@@ -136,10 +151,14 @@ describe("MaterialsPage", () => {
       { id: "voice-1", name: "Juliana", version: 3 } as never,
     ]);
     vi.mocked(studioApi.materials).mockResolvedValue({
-      cards: [card], voice_id: "voice-1", voice_version: 3,
+      cards: [card],
+      voice_id: "voice-1",
+      voice_version: 3,
     });
     vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
-      status: "draft", source_sha256: "a".repeat(64), document: null,
+      status: "draft",
+      source_sha256: "a".repeat(64),
+      document: null,
     });
     vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
     mount();
@@ -496,24 +515,4 @@ describe("MaterialsPage", () => {
       ),
     );
   });
-});
-
-it("temporary exact formatter output for changed material screens", async () => {
-  const prettier = await import("prettier");
-  const fs = await import("node:fs/promises");
-  const paths = [
-    ["MATERIAL", "src/features/materials/MaterialsPage.tsx"],
-    ["TEST", "src/features/materials/MaterialsPage.test.tsx"],
-    ["SHADOWING", "src/features/shadowing/ShadowingPage.tsx"],
-  ] as const;
-  for (const [id, path] of paths) {
-    const config = await prettier.resolveConfig(path);
-    const formatted = await prettier.format(await fs.readFile(path, "utf8"), {
-      ...config,
-      filepath: path,
-    });
-    console.log(`<<<FORMAT_BEGIN_${id}>>>`);
-    console.log(formatted);
-    console.log(`<<<FORMAT_END_${id}>>>`);
-  }
 });
