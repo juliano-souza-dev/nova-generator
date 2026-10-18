@@ -245,6 +245,20 @@ export function ShadowingPage() {
     setPhase("ready");
   }
 
+  function togglePreview() {
+    if (phase === "playing") {
+      playerRef.current?.pause();
+      setPhase("paused");
+    } else if (phase === "paused" && playerRef.current) {
+      void playerRef.current.play().then(
+        () => setPhase("playing"),
+        () => setPreviewError("Não foi possível retomar a reprodução."),
+      );
+    } else if (phase !== "pause") {
+      startPreview();
+    }
+  }
+
   function handleProgress() {
     const block = active?.blocks[previewIndex];
     if (phase !== "playing" || !block || !playerRef.current) return;
@@ -258,18 +272,27 @@ export function ShadowingPage() {
     return active?.blocks.map((block) => [...block.cue_ids]) ?? [];
   }
 
-  function changeGroups(next: string[][]) {
+  function changeGroups(next: string[][], description: string) {
     if (!active || busy.current) return;
     setActionNotice("");
     stopPreview();
-    editing.mutate({ plan: active, groups: next });
+    editing.mutate({ plan: active, groups: next, description });
+  }
+
+  function undoLast() {
+    if (!active || busy.current) return;
+    const prior = undoHistory.current.at(-1);
+    if (!prior || prior.projectId !== projectId || prior.sceneId !== active.scene_id ||
+        prior.source !== active.source_sha256) return;
+    stopPreview();
+    editing.mutate({ plan: active, groups: prior.groups, undo: true });
   }
 
   function mergeWithNext(index: number) {
     if (!active || index >= active.blocks.length - 1) return;
     const next = groups();
     next.splice(index, 2, [...next[index], ...next[index + 1]]);
-    changeGroups(next);
+    changeGroups(next, "Grupos unidos");
   }
 
   function splitAfter(index: number, cuePosition: number) {
@@ -277,13 +300,13 @@ export function ShadowingPage() {
     const existing = next[index];
     if (!existing || cuePosition >= existing.length - 1) return;
     next.splice(index, 1, existing.slice(0, cuePosition + 1), existing.slice(cuePosition + 1));
-    changeGroups(next);
+    changeGroups(next, "Grupo separado");
   }
 
   function omitBlock(index: number) {
     const next = groups();
     next.splice(index, 1);
-    changeGroups(next);
+    changeGroups(next, "Grupo excluído");
   }
 
   function includeCue(cue: ShadowingCue) {
@@ -292,7 +315,7 @@ export function ShadowingPage() {
     const order = new Map(active.source_cues.map((item) => [item.id, item.order]));
     const insertAt = next.findIndex((group) => (order.get(group[0]) ?? 0) > cue.order);
     next.splice(insertAt < 0 ? next.length : insertAt, 0, [cue.id]);
-    changeGroups(next);
+    changeGroups(next, "Cue adicionado");
   }
 
   function mergeBlockReason(index: number): string | null {
@@ -314,6 +337,86 @@ export function ShadowingPage() {
     if (words > 24) return `A prática combinada teria ${words} palavras; o limite manual é 24.`;
     return null;
   }
+
+  const filteredCues = active?.excluded_cues.filter((cue) => {
+    const normalized = (value: string) =>
+      value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR");
+    const matchesText = normalized(`${cue.en} ${cue.pt} ${cue.speaker}`).includes(normalized(cueQuery));
+    const duration = cue.end_ms - cue.start_ms;
+    const matchesDuration = durationFilter === "all" ||
+      (durationFilter === "short" && duration <= 2000) ||
+      (durationFilter === "medium" && duration > 2000 && duration <= 4000) ||
+      (durationFilter === "long" && duration > 4000);
+    const words = cue.en.trim().split(/\\s+/).filter(Boolean).length;
+    return matchesText && matchesDuration &&
+      (wordFilter === "all" || (wordFilter === "short" && words <= 5) ||
+        (wordFilter === "long" && words > 5));
+  }) ?? [];
+  const usedCues = active?.source_cues.filter((cue) =>
+    active.blocks.some((block) => block.cue_ids.includes(cue.id)),
+  ) ?? [];
+  const displayedSteps = [
+    { id: "project", label: "Projeto", target: "shadowing-project" },
+    { id: "scene", label: "Cena", target: "shadowing-scene" },
+    { id: "mount", label: "Montar", target: "shadowing-ai" },
+    { id: "review", label: "Revisar", target: "shadowing-review" },
+    { id: "approve", label: "Aprovar", target: "shadowing-actions" },
+  ];
+  const currentStep = !projectId ? 0 : !active ? 1 :
+    active.status === "approved" ? 4 : active.origin === "automatic" ? 2 : 3;
+
+  useEffect(() => {
+    function onShortcut(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (event.key === "Escape" && shortcutsOpen) {
+        setShortcutsOpen(false);
+        return;
+      }
+      if (event.key === "?") {
+        event.preventDefault();
+        setShortcutsOpen((value) => !value);
+        return;
+      }
+      if (shortcutsOpen || isBusy || !active) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        if (historyCount) { event.preventDefault(); undoLast(); }
+        return;
+      }
+      if (event.ctrlKey || event.altKey || event.metaKey ||
+          target?.closest("button, a, [role='button']")) return;
+      const key = event.key.toLowerCase();
+      if (event.code === "Space") {
+        if (media.data?.cut_url) { event.preventDefault(); togglePreview(); }
+      } else if (key === "j" || key === "k") {
+        if (!active.blocks.length) return;
+        event.preventDefault();
+        setSelectedBlockIndex((current) => {
+          const next = Math.max(0, Math.min(active.blocks.length - 1, current + (key === "j" ? 1 : -1)));
+          document.getElementById(`shadowing-block-${next}`)?.scrollIntoView?.({ block: "nearest" });
+          return next;
+        });
+      } else if (key === "delete" && active.blocks[selectedBlockIndex]) {
+        event.preventDefault();
+        omitBlock(selectedBlockIndex);
+      } else if (key === "m" && !mergeBlockReason(selectedBlockIndex)) {
+        event.preventDefault();
+        mergeWithNext(selectedBlockIndex);
+      } else if (key === "a") {
+        const cue = active.excluded_cues.find((item) => item.id === focusedCueId && item.eligible);
+        if (cue) { event.preventDefault(); includeCue(cue); }
+      } else if (key === "s") {
+        const cueIds = active.blocks[selectedBlockIndex]?.cue_ids ?? [];
+        const position = cueIds.indexOf(focusedCueId);
+        if (position >= 0 && position < cueIds.length - 1) {
+          event.preventDefault();
+          splitAfter(selectedBlockIndex, position);
+        }
+      }
+    }
+    document.addEventListener("keydown", onShortcut);
+    return () => document.removeEventListener("keydown", onShortcut);
+  });
 
   return (
     <section className="shadowing-workspace">
