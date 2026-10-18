@@ -82,14 +82,22 @@ export function ShadowingPage() {
     Boolean(plans.data?.length) && plans.data!.every((item) => item.status === "approved");
   const busy = useRef(false);
   const approvedCount = plans.data?.filter((item) => item.status === "approved").length ?? 0;
-  const sceneIndex = Math.max(0, plans.data?.findIndex((item) => item.scene_id === active?.scene_id) ?? 0);
-  const missingSpeakers = active?.blocks.some(
-    (block) => !block.speaker.trim() || block.speaker === "Não identificado",
-  ) ?? false;
+  const sceneIndex = Math.max(
+    0,
+    plans.data?.findIndex((item) => item.scene_id === active?.scene_id) ?? 0,
+  );
+  const missingSpeakers =
+    active?.blocks.some((block) => !block.speaker.trim() || block.speaker === "Não identificado") ??
+    false;
   const activeReady = Boolean(active?.blocks.length) && !missingSpeakers && phase === "finished";
-  const previewLabel = phase === "finished" ? "Revisada" :
-    phase === "playing" || phase === "pause" ? "Reproduzindo" :
-    phase === "paused" ? "Pausada" : "Não iniciada";
+  const previewLabel =
+    phase === "finished"
+      ? "Revisada"
+      : phase === "playing" || phase === "pause"
+        ? "Reproduzindo"
+        : phase === "paused"
+          ? "Pausada"
+          : "Não iniciada";
 
   const refreshPlans = () => void client.invalidateQueries({ queryKey: ["shadowing", projectId] });
 
@@ -99,9 +107,12 @@ export function ShadowingPage() {
     toastTimer.current = setTimeout(() => setToast(null), 5000);
   }, []);
 
-  useEffect(() => () => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     undoHistory.current = [];
@@ -140,7 +151,7 @@ export function ShadowingPage() {
       ),
     onSuccess: (updated, variables) => {
       client.setQueryData<ShadowingPlan[]>(["shadowing", projectId], (previous) =>
-        previous?.map((item) => item.scene_id === updated.scene_id ? updated : item),
+        previous?.map((item) => (item.scene_id === updated.scene_id ? updated : item)),
       );
       if (variables.undo) {
         undoHistory.current.pop();
@@ -157,8 +168,9 @@ export function ShadowingPage() {
       }
       setHistoryVersion((value) => value + 1);
       showToast({
-        text: variables.undo ? "Última edição desfeita." :
-          `${variables.description ?? "Grupos atualizados"}. Reproduza a prévia antes de aprovar.`,
+        text: variables.undo
+          ? "Última edição desfeita."
+          : `${variables.description ?? "Grupos atualizados"}. Reproduza a prévia antes de aprovar.`,
         tone: "success",
         undo: undoHistory.current.length > 0,
       });
@@ -177,8 +189,11 @@ export function ShadowingPage() {
       });
       refreshPlans();
     },
-    onError: (error) => showToast({ text: `Falha ao gerar proposta: ${error.message}`, tone: "error" }),
-    onSettled: () => { generatingGuard.current = false; },
+    onError: (error) =>
+      showToast({ text: `Falha ao gerar proposta: ${error.message}`, tone: "error" }),
+    onSettled: () => {
+      generatingGuard.current = false;
+    },
   });
   const importAi = useMutation({
     mutationFn: ({ plan, file }: { plan: ShadowingPlan; file: File }) =>
@@ -189,8 +204,11 @@ export function ShadowingPage() {
       showToast({ text: `Proposta importada: ${updated.blocks.length} grupos.`, tone: "success" });
       refreshPlans();
     },
-    onError: (error) => showToast({ text: `Erro no JSON importado: ${error.message}`, tone: "error" }),
-    onSettled: () => { importGuard.current = false; },
+    onError: (error) =>
+      showToast({ text: `Erro no JSON importado: ${error.message}`, tone: "error" }),
+    onSettled: () => {
+      importGuard.current = false;
+    },
   });
   const isBusy = editing.isPending || groq.isPending || importAi.isPending || approval.isPending;
   busy.current = isBusy;
@@ -296,8 +314,13 @@ export function ShadowingPage() {
   function undoLast() {
     if (!active || busy.current) return;
     const prior = undoHistory.current.at(-1);
-    if (!prior || prior.projectId !== projectId || prior.sceneId !== active.scene_id ||
-        prior.source !== active.source_sha256) return;
+    if (
+      !prior ||
+      prior.projectId !== projectId ||
+      prior.sceneId !== active.scene_id ||
+      prior.source !== active.source_sha256
+    )
+      return;
     stopPreview();
     editing.mutate({ plan: active, groups: prior.groups, undo: true });
   }
@@ -361,23 +384,35 @@ export function ShadowingPage() {
     return null;
   }
 
-  const filteredCues = active?.excluded_cues.filter((cue) => {
-    const normalized = (value: string) =>
-      value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR");
-    const matchesText = normalized(`${cue.en} ${cue.pt} ${cue.speaker}`).includes(normalized(cueQuery));
-    const duration = cue.end_ms - cue.start_ms;
-    const matchesDuration = durationFilter === "all" ||
-      (durationFilter === "short" && duration <= 2000) ||
-      (durationFilter === "medium" && duration > 2000 && duration <= 4000) ||
-      (durationFilter === "long" && duration > 4000);
-    const words = cue.en.trim().split(/\\s+/).filter(Boolean).length;
-    return matchesText && matchesDuration &&
-      (wordFilter === "all" || (wordFilter === "short" && words <= 5) ||
-        (wordFilter === "long" && words > 5));
-  }) ?? [];
-  const usedCues = active?.source_cues.filter((cue) =>
-    active.blocks.some((block) => block.cue_ids.includes(cue.id)),
-  ) ?? [];
+  const filteredCues =
+    active?.excluded_cues.filter((cue) => {
+      const normalized = (value: string) =>
+        value
+          .normalize("NFD")
+          .replace(/[\\u0300-\\u036f]/g, "")
+          .toLocaleLowerCase("pt-BR");
+      const matchesText = normalized(`${cue.en} ${cue.pt} ${cue.speaker}`).includes(
+        normalized(cueQuery),
+      );
+      const duration = cue.end_ms - cue.start_ms;
+      const matchesDuration =
+        durationFilter === "all" ||
+        (durationFilter === "short" && duration <= 2000) ||
+        (durationFilter === "medium" && duration > 2000 && duration <= 4000) ||
+        (durationFilter === "long" && duration > 4000);
+      const words = cue.en.trim().split(/\\s+/).filter(Boolean).length;
+      return (
+        matchesText &&
+        matchesDuration &&
+        (wordFilter === "all" ||
+          (wordFilter === "short" && words <= 5) ||
+          (wordFilter === "long" && words > 5))
+      );
+    }) ?? [];
+  const usedCues =
+    active?.source_cues.filter((cue) =>
+      active.blocks.some((block) => block.cue_ids.includes(cue.id)),
+    ) ?? [];
   const displayedSteps = [
     { id: "project", label: "Projeto", target: "shadowing-project" },
     { id: "scene", label: "Cena", target: "shadowing-scene" },
@@ -385,8 +420,15 @@ export function ShadowingPage() {
     { id: "review", label: "Revisar", target: "shadowing-review" },
     { id: "approve", label: "Aprovar", target: "shadowing-actions" },
   ];
-  const currentStep = !projectId ? 0 : !active ? 1 :
-    active.status === "approved" ? 4 : active.origin === "automatic" ? 2 : 3;
+  const currentStep = !projectId
+    ? 0
+    : !active
+      ? 1
+      : active.status === "approved"
+        ? 4
+        : active.origin === "automatic"
+          ? 2
+          : 3;
 
   useEffect(() => {
     function onShortcut(event: KeyboardEvent) {
@@ -403,20 +445,36 @@ export function ShadowingPage() {
       }
       if (shortcutsOpen || isBusy || !active) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
-        if (historyCount) { event.preventDefault(); undoLast(); }
+        if (historyCount) {
+          event.preventDefault();
+          undoLast();
+        }
         return;
       }
-      if (event.ctrlKey || event.altKey || event.metaKey ||
-          target?.closest("button, a, [role='button']")) return;
+      if (
+        event.ctrlKey ||
+        event.altKey ||
+        event.metaKey ||
+        target?.closest("button, a, [role='button']")
+      )
+        return;
       const key = event.key.toLowerCase();
       if (event.code === "Space") {
-        if (media.data?.cut_url) { event.preventDefault(); togglePreview(); }
+        if (media.data?.cut_url) {
+          event.preventDefault();
+          togglePreview();
+        }
       } else if (key === "j" || key === "k") {
         if (!active.blocks.length) return;
         event.preventDefault();
         setSelectedBlockIndex((current) => {
-          const next = Math.max(0, Math.min(active.blocks.length - 1, current + (key === "j" ? 1 : -1)));
-          document.getElementById(`shadowing-block-${next}`)?.scrollIntoView?.({ block: "nearest" });
+          const next = Math.max(
+            0,
+            Math.min(active.blocks.length - 1, current + (key === "j" ? 1 : -1)),
+          );
+          document
+            .getElementById(`shadowing-block-${next}`)
+            ?.scrollIntoView?.({ block: "nearest" });
           return next;
         });
       } else if (key === "delete" && active.blocks[selectedBlockIndex]) {
@@ -427,7 +485,10 @@ export function ShadowingPage() {
         mergeWithNext(selectedBlockIndex);
       } else if (key === "a") {
         const cue = active.excluded_cues.find((item) => item.id === focusedCueId && item.eligible);
-        if (cue) { event.preventDefault(); includeCue(cue); }
+        if (cue) {
+          event.preventDefault();
+          includeCue(cue);
+        }
       } else if (key === "s") {
         const cueIds = active.blocks[selectedBlockIndex]?.cue_ids ?? [];
         const position = cueIds.indexOf(focusedCueId);
@@ -454,23 +515,38 @@ export function ShadowingPage() {
               <button
                 type="button"
                 disabled={index > currentStep}
-                title={index > currentStep ? "Conclua as etapas anteriores para navegar" :
-                  "Ir para " + step.label}
+                title={
+                  index > currentStep
+                    ? "Conclua as etapas anteriores para navegar"
+                    : "Ir para " + step.label
+                }
                 aria-current={index === currentStep ? "step" : undefined}
-                className={index < currentStep ? "is-complete" :
-                  index === currentStep ? "is-current" : "is-pending"}
-                onClick={() => document.getElementById(step.target)?.scrollIntoView?.({
-                  behavior: "smooth", block: "start",
-                })}
+                className={
+                  index < currentStep
+                    ? "is-complete"
+                    : index === currentStep
+                      ? "is-current"
+                      : "is-pending"
+                }
+                onClick={() =>
+                  document.getElementById(step.target)?.scrollIntoView?.({
+                    behavior: "smooth",
+                    block: "start",
+                  })
+                }
               >
-                <span aria-hidden="true">{index < currentStep ? "✓" : index === currentStep ? "●" : "○"}</span>
+                <span aria-hidden="true">
+                  {index < currentStep ? "✓" : index === currentStep ? "●" : "○"}
+                </span>
                 {step.label}
               </button>
             </li>
           ))}
         </ol>
         <div className="shadowing-steps-right">
-          <strong>{approvedCount} de {plans.data?.length ?? 0} cenas aprovadas</strong>
+          <strong>
+            {approvedCount} de {plans.data?.length ?? 0} cenas aprovadas
+          </strong>
           <button
             type="button"
             aria-label="Ver atalhos de teclado"
@@ -500,7 +576,7 @@ export function ShadowingPage() {
                 stopPreview();
                 setParams({ project: event.target.value });
                 setActiveSceneId("");
-                          }}
+              }}
             >
               {projects.data?.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -534,7 +610,7 @@ export function ShadowingPage() {
                 onChange={(event) => {
                   stopPreview();
                   setActiveSceneId(event.target.value);
-                              }}
+                }}
               >
                 {plans.data?.map((item, index) => (
                   <option key={item.scene_id} value={item.scene_id}>
@@ -548,217 +624,258 @@ export function ShadowingPage() {
               {active.excluded_cues.length} cues disponíveis ·{" "}
               {SOURCE_LABELS[active.origin] ?? "Proposta salva"}
             </span>
-            <span className={`shadowing-state ${active.status === "approved" ? "is-approved" : "is-review"}`}>
+            <span
+              className={`shadowing-state ${active.status === "approved" ? "is-approved" : "is-review"}`}
+            >
               {active.status === "approved" ? "Aprovada" : "Em revisão"}
             </span>
           </div>
 
           <div className="shadowing-layout">
             <div className="shadowing-video-column">
-          <div className="shadowing-stage panel" ref={stageRef} aria-label="Prévia da cena">
-            <video
-              ref={playerRef}
-              src={media.data?.cut_url ?? undefined}
-              preload="metadata"
-              playsInline
-              controls={false}
-              onTimeUpdate={handleProgress}
-              aria-label="Prévia de shadowing"
-            />
-            <div className="shadowing-preview-status" aria-live="polite">
-              {phase === "pause" && active.blocks[previewIndex] && (
-                <>
-                  <strong>PAUSA · REPITA EM VOZ ALTA</strong>
-                  <p>{active.blocks[previewIndex].en}</p>
-                  <small>{active.blocks[previewIndex].pt}</small>
-                </>
-              )}
-              {phase === "finished" && (
-                <strong>Prévia concluída. Você pode aprovar o plano.</strong>
-              )}
-            </div>
-            {previewError && <p role="alert">{previewError}</p>}
-          </div>
+              <div className="shadowing-stage panel" ref={stageRef} aria-label="Prévia da cena">
+                <video
+                  ref={playerRef}
+                  src={media.data?.cut_url ?? undefined}
+                  preload="metadata"
+                  playsInline
+                  controls={false}
+                  onTimeUpdate={handleProgress}
+                  aria-label="Prévia de shadowing"
+                />
+                <div className="shadowing-preview-status" aria-live="polite">
+                  {phase === "pause" && active.blocks[previewIndex] && (
+                    <>
+                      <strong>PAUSA · REPITA EM VOZ ALTA</strong>
+                      <p>{active.blocks[previewIndex].en}</p>
+                      <small>{active.blocks[previewIndex].pt}</small>
+                    </>
+                  )}
+                  {phase === "finished" && (
+                    <strong>Prévia concluída. Você pode aprovar o plano.</strong>
+                  )}
+                </div>
+                {previewError && <p role="alert">{previewError}</p>}
+              </div>
 
-          <div id="shadowing-actions" className="shadowing-sticky-actions panel">
-            <div className="shadowing-action-group">
-              <button
-                type="button"
-                onClick={togglePreview}
-                disabled={!media.data?.cut_url || !active.blocks.length || phase === "pause" || isBusy}
-                title={!media.data?.cut_url ? "Vídeo da cena indisponível" :
-                  !active.blocks.length ? "Adicione uma prática antes da prévia" :
-                  isBusy ? "Aguarde a edição em andamento" : "Reproduzir ou pausar a prévia"}
-              >
-                {phase === "playing" ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-                {phase === "playing" ? "Pausar" : "Reproduzir prévia"}
-              </button>
-              {(phase === "playing" || phase === "paused" || phase === "pause") && (
-                <button type="button" className="shadowing-stop" onClick={stopPreview}>
-                  <X aria-hidden="true" /> Parar
-                </button>
-              )}
-              <span className="shadowing-preview-indicator" role="status">
-                {previewLabel}
-                {previewIndex >= 0 ? ` · Bloco ${previewIndex + 1}/${active.blocks.length}` : ""}
-              </span>
-            </div>
-            <div className="shadowing-action-group">
-              <button
-                type="button"
-                onClick={undoLast}
-                disabled={isBusy || !historyCount}
-                title={historyCount ? `Desfazer última edição (${historyCount} disponível)` : "Nenhuma edição para desfazer"}
-              >
-                <Undo2 aria-hidden="true" /> Desfazer
-              </button>
-              <span
-                className="shadowing-disabled-hint"
-                tabIndex={active.status === "approved" || !active.blocks.length ||
-                  isBusy || missingSpeakers || phase !== "finished" ? 0 : -1}
-                title={
-                  active.status === "approved" ? "Esta cena já foi aprovada" :
-                  !active.blocks.length ? "Adicione ao menos uma prática" :
-                  isBusy ? "Aguarde a operação em andamento" :
-                  missingSpeakers ? "Há práticas sem personagem identificado" :
-                  phase !== "finished" ? "Reproduza a prévia completa antes de aprovar" :
-                  "Aprovar plano revisado"
-                }
-              >
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => approval.mutate(active)}
-                  disabled={active.status === "approved" || isBusy || !activeReady}
-                >
-                  <Check aria-hidden="true" />
-                  {active.status === "approved" ? "Shadowing aprovado" : "Aprovar Shadowing"}
-                </button>
-              </span>
-            </div>
-          </div>
-            </div>
-            <div className="shadowing-content-column">
-          <section id="shadowing-ai" className="shadowing-ai panel" aria-label="Preparação com IA">
-            <div>
-              <h2>Montar prática com IA</h2>
-              <p>Trechos curtos por personagem, preservando os textos aprovados.</p>
-            </div>
-            {active.origin === "automatic" && active.blocks.length === 0 && (
-              <p className="shadowing-empty">
-                Sem proposta gerada. Gere uma proposta com IA ou importe um arquivo .json.
-              </p>
-            )}
-            <div className="shadowing-ai-actions">
-              <button
-                type="button"
-                className="primary-button"
-                disabled={isBusy}
-                onClick={() => {
-                  if (generatingGuard.current) return;
-                  generatingGuard.current = true;
-                                stopPreview();
-                  groq.mutate(active);
-                }}
-              >
-                <Sparkles aria-hidden="true" />
-                {groq.isPending ? "Gerando proposta…" : "Gerar proposta com IA"}
-              </button>
-              <div className="shadowing-extra-tools">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  aria-expanded={toolsOpen}
-                  aria-controls="shadowing-external-tools"
-                  onClick={() => setToolsOpen((value) => !value)}
-                >
-                  <MoreHorizontal aria-hidden="true" /> Outras opções
-                </button>
-                {toolsOpen && (
-                  <div id="shadowing-external-tools" className="shadowing-extra-menu">
-                    <a
-                      href={studioApi.shadowingPackageUrl(projectId, active.scene_id)}
-                      download
-                    >
-                      <Download aria-hidden="true" /> Baixar pacote para IA externa
-                    </a>
+              <div id="shadowing-actions" className="shadowing-sticky-actions panel">
+                <div className="shadowing-action-group">
+                  <button
+                    type="button"
+                    onClick={togglePreview}
+                    disabled={
+                      !media.data?.cut_url || !active.blocks.length || phase === "pause" || isBusy
+                    }
+                    title={
+                      !media.data?.cut_url
+                        ? "Vídeo da cena indisponível"
+                        : !active.blocks.length
+                          ? "Adicione uma prática antes da prévia"
+                          : isBusy
+                            ? "Aguarde a edição em andamento"
+                            : "Reproduzir ou pausar a prévia"
+                    }
+                  >
+                    {phase === "playing" ? (
+                      <Pause aria-hidden="true" />
+                    ) : (
+                      <Play aria-hidden="true" />
+                    )}
+                    {phase === "playing" ? "Pausar" : "Reproduzir prévia"}
+                  </button>
+                  {(phase === "playing" || phase === "paused" || phase === "pause") && (
+                    <button type="button" className="shadowing-stop" onClick={stopPreview}>
+                      <X aria-hidden="true" /> Parar
+                    </button>
+                  )}
+                  <span className="shadowing-preview-indicator" role="status">
+                    {previewLabel}
+                    {previewIndex >= 0
+                      ? ` · Bloco ${previewIndex + 1}/${active.blocks.length}`
+                      : ""}
+                  </span>
+                </div>
+                <div className="shadowing-action-group">
+                  <button
+                    type="button"
+                    onClick={undoLast}
+                    disabled={isBusy || !historyCount}
+                    title={
+                      historyCount
+                        ? `Desfazer última edição (${historyCount} disponível)`
+                        : "Nenhuma edição para desfazer"
+                    }
+                  >
+                    <Undo2 aria-hidden="true" /> Desfazer
+                  </button>
+                  <span
+                    className="shadowing-disabled-hint"
+                    tabIndex={
+                      active.status === "approved" ||
+                      !active.blocks.length ||
+                      isBusy ||
+                      missingSpeakers ||
+                      phase !== "finished"
+                        ? 0
+                        : -1
+                    }
+                    title={
+                      active.status === "approved"
+                        ? "Esta cena já foi aprovada"
+                        : !active.blocks.length
+                          ? "Adicione ao menos uma prática"
+                          : isBusy
+                            ? "Aguarde a operação em andamento"
+                            : missingSpeakers
+                              ? "Há práticas sem personagem identificado"
+                              : phase !== "finished"
+                                ? "Reproduza a prévia completa antes de aprovar"
+                                : "Aprovar plano revisado"
+                    }
+                  >
                     <button
                       type="button"
-                      disabled={isBusy}
-                      onClick={() => fileRef.current?.click()}
+                      className="primary-button"
+                      onClick={() => approval.mutate(active)}
+                      disabled={active.status === "approved" || isBusy || !activeReady}
                     >
-                      <Plus aria-hidden="true" /> Importar proposta (.json)
+                      <Check aria-hidden="true" />
+                      {active.status === "approved" ? "Shadowing aprovado" : "Aprovar Shadowing"}
                     </button>
-                  </div>
-                )}
-                <input
-                  ref={fileRef}
-                  className="shadowing-file-input"
-                  aria-label="Importar proposta (.json)"
-                  type="file"
-                  accept=".json,application/json"
-                  disabled={isBusy}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = "";
-                    if (!file || importGuard.current) return;
-                    if (!file.name.toLowerCase().endsWith(".json")) {
-                      showToast({ text: "Selecione um arquivo JSON (.json).", tone: "error" });
-                      return;
-                    }
-                    importGuard.current = true;
-                    setSelectedFileName(file.name);
-                                    setToolsOpen(false);
-                    stopPreview();
-                    importAi.mutate({ plan: active, file });
-                  }}
-                />
+                  </span>
+                </div>
               </div>
             </div>
-            {selectedFileName && <small className="shadowing-file-label">Arquivo: {selectedFileName}</small>}
-            {(importAi.isPending || groq.isPending) && (
-              <p className="shadowing-loading" role="status">
-                <span className="shadowing-spinner" aria-hidden="true" />
-                {groq.isPending
-                  ? "Gerando proposta… isso pode levar alguns instantes"
-                  : "Validando proposta importada…"}
-              </p>
-            )}
-          </section>
-
-          <section id="shadowing-review" className="shadowing-review" aria-label="Revisar práticas">
-            <div className="shadowing-section-heading">
-              <h2>Práticas selecionadas</h2>
-              <p>
-                A IA propõe até 14 palavras. Na revisão manual, você pode juntar cues consecutivos
-                em até 24 palavras e 6,5 s. Quando ambos estiverem sem locutor, a junção é uma
-                decisão manual.
-              </p>
-            </div>
-            {active.blocks.length === 0 && (
-              <p className="panel">
-                Nenhuma prática selecionada. Use a IA ou adicione falas curtas da lista abaixo.
-              </p>
-            )}
-            <div className="shadowing-blocks">
-              {active.blocks.map((block, index) => {
-                const mergeReason = mergeBlockReason(index);
-                return (
-                  <article
-                    key={block.id}
-                    id={`shadowing-block-${index}`}
-                    tabIndex={0}
-                    aria-label={`Prática ${index + 1}, ${block.speaker}`}
-                    aria-current={selectedBlockIndex === index ? "true" : undefined}
-                    onFocus={() => setSelectedBlockIndex(index)}
-                    onClick={() => setSelectedBlockIndex(index)}
-                    className={`panel shadowing-block ${selectedBlockIndex === index ? "is-selected" : ""}`}
+            <div className="shadowing-content-column">
+              <section
+                id="shadowing-ai"
+                className="shadowing-ai panel"
+                aria-label="Preparação com IA"
+              >
+                <div>
+                  <h2>Montar prática com IA</h2>
+                  <p>Trechos curtos por personagem, preservando os textos aprovados.</p>
+                </div>
+                {active.origin === "automatic" && active.blocks.length === 0 && (
+                  <p className="shadowing-empty">
+                    Sem proposta gerada. Gere uma proposta com IA ou importe um arquivo .json.
+                  </p>
+                )}
+                <div className="shadowing-ai-actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={isBusy}
+                    onClick={() => {
+                      if (generatingGuard.current) return;
+                      generatingGuard.current = true;
+                      stopPreview();
+                      groq.mutate(active);
+                    }}
                   >
-                    <div className="shadowing-block-heading">
-                      <strong>
-                        Prática {index + 1} ·{" "}
-                        {block.speaker === "Não identificado" || !block.speaker.trim()
-                          ? (
+                    <Sparkles aria-hidden="true" />
+                    {groq.isPending ? "Gerando proposta…" : "Gerar proposta com IA"}
+                  </button>
+                  <div className="shadowing-extra-tools">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      aria-expanded={toolsOpen}
+                      aria-controls="shadowing-external-tools"
+                      onClick={() => setToolsOpen((value) => !value)}
+                    >
+                      <MoreHorizontal aria-hidden="true" /> Outras opções
+                    </button>
+                    {toolsOpen && (
+                      <div id="shadowing-external-tools" className="shadowing-extra-menu">
+                        <a
+                          href={studioApi.shadowingPackageUrl(projectId, active.scene_id)}
+                          download
+                        >
+                          <Download aria-hidden="true" /> Baixar pacote para IA externa
+                        </a>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => fileRef.current?.click()}
+                        >
+                          <Plus aria-hidden="true" /> Importar proposta (.json)
+                        </button>
+                      </div>
+                    )}
+                    <input
+                      ref={fileRef}
+                      className="shadowing-file-input"
+                      aria-label="Importar proposta (.json)"
+                      type="file"
+                      accept=".json,application/json"
+                      disabled={isBusy}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (!file || importGuard.current) return;
+                        if (!file.name.toLowerCase().endsWith(".json")) {
+                          showToast({ text: "Selecione um arquivo JSON (.json).", tone: "error" });
+                          return;
+                        }
+                        importGuard.current = true;
+                        setSelectedFileName(file.name);
+                        setToolsOpen(false);
+                        stopPreview();
+                        importAi.mutate({ plan: active, file });
+                      }}
+                    />
+                  </div>
+                </div>
+                {selectedFileName && (
+                  <small className="shadowing-file-label">Arquivo: {selectedFileName}</small>
+                )}
+                {(importAi.isPending || groq.isPending) && (
+                  <p className="shadowing-loading" role="status">
+                    <span className="shadowing-spinner" aria-hidden="true" />
+                    {groq.isPending
+                      ? "Gerando proposta… isso pode levar alguns instantes"
+                      : "Validando proposta importada…"}
+                  </p>
+                )}
+              </section>
+
+              <section
+                id="shadowing-review"
+                className="shadowing-review"
+                aria-label="Revisar práticas"
+              >
+                <div className="shadowing-section-heading">
+                  <h2>Práticas selecionadas</h2>
+                  <p>
+                    A IA propõe até 14 palavras. Na revisão manual, você pode juntar cues
+                    consecutivos em até 24 palavras e 6,5 s. Quando ambos estiverem sem locutor, a
+                    junção é uma decisão manual.
+                  </p>
+                </div>
+                {active.blocks.length === 0 && (
+                  <p className="panel">
+                    Nenhuma prática selecionada. Use a IA ou adicione falas curtas da lista abaixo.
+                  </p>
+                )}
+                <div className="shadowing-blocks">
+                  {active.blocks.map((block, index) => {
+                    const mergeReason = mergeBlockReason(index);
+                    return (
+                      <article
+                        key={block.id}
+                        id={`shadowing-block-${index}`}
+                        tabIndex={0}
+                        aria-label={`Prática ${index + 1}, ${block.speaker}`}
+                        aria-current={selectedBlockIndex === index ? "true" : undefined}
+                        onFocus={() => setSelectedBlockIndex(index)}
+                        onClick={() => setSelectedBlockIndex(index)}
+                        className={`panel shadowing-block ${selectedBlockIndex === index ? "is-selected" : ""}`}
+                      >
+                        <div className="shadowing-block-heading">
+                          <strong>
+                            Prática {index + 1} ·{" "}
+                            {block.speaker === "Não identificado" || !block.speaker.trim() ? (
                               <button
                                 type="button"
                                 disabled
@@ -767,208 +884,249 @@ export function ShadowingPage() {
                               >
                                 Atribuir personagem
                               </button>
-                            )
-                          : block.speaker}
-                      </strong>
-                      <span
-                        className={`shadowing-state ${
-                          active.status === "approved" ? "is-approved" :
-                            block.speaker === "Não identificado" || !block.speaker.trim() ? "is-missing" :
-                              phase === "finished" ? "is-ready" : "is-review"
-                        }`}
-                      >
-                        {active.status === "approved" ? "Aprovada" :
-                          block.speaker === "Não identificado" || !block.speaker.trim() ?
-                            "Falta personagem" : phase === "finished" ? "Pronta" : "Em revisão"}
-                      </span>
-                      <small>
-                        {((block.end_ms - block.start_ms) / 1000).toFixed(1)} s · {block.word_count}{" "}
-                        palavras
-                      </small>
-                    </div>
-                    <p>{block.en}</p>
-                    <small>{block.pt}</small>
-                    <span>
-                      {formatTime(block.start_ms)}–{formatTime(block.end_ms)} · Pausa{" "}
-                      {(block.pause_duration_ms / 1000).toFixed(1)} s
-                    </span>
-                    {block.cue_ids.length > 1 && (
-                      <div className="shadowing-cue-pieces">
-                        {block.cue_ids.map((cueId, position) => {
-                          const cue = active.source_cues.find((item) => item.id === cueId);
-                          return (
-                            <div key={cueId}>
-                              <span
-                                tabIndex={0}
-                                onFocus={() => setFocusedCueId(cueId)}
-                                onClick={() => setFocusedCueId(cueId)}
-                              >
-                                Cue {cue?.order}: {cue?.en}
-                              </span>
-                              {position < block.cue_ids.length - 1 && (
-                                <button
-                                  type="button"
-                                  disabled={isBusy}
-                                  onClick={() => splitAfter(index, position)}
-                                  aria-label={`Separar após cue ${cue?.order}`}
-                                >
-                                  <Scissors aria-hidden="true" /> Separar aqui
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <div className="shadowing-block-actions">
-                      <span
-                        className="shadowing-disabled-hint"
-                        tabIndex={isBusy || Boolean(mergeReason) ? 0 : -1}
-                        title={isBusy ? "Aguarde a operação atual" :
-                          mergeReason ?? "Juntar com a próxima prática"}
-                      >
-                        <button
-                          type="button"
-                          disabled={isBusy || Boolean(mergeReason)}
-                          onClick={() => mergeWithNext(index)}
-                          aria-label="Juntar com próxima"
-                        >
-                          <Merge aria-hidden="true" /> Juntar com próxima
-                        </button>
-                      </span>
-                      <button
-                        type="button"
-                        className="shadowing-destructive"
-                        disabled={isBusy}
-                        title={isBusy ? "Aguarde a operação atual" :
-                          "Excluir desta prática. Você poderá desfazer."}
-                        onClick={() => omitBlock(index)}
-                      >
-                        <Trash2 aria-hidden="true" /> Excluir grupo
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="shadowing-excluded panel" id="shadowing-cues" aria-label="Cues não selecionados">
-            <div className="shadowing-section-heading">
-              <h2>Cues disponíveis</h2>
-              <p>Adicione somente as falas que deseja praticar. O Editorial não é alterado.</p>
-            </div>
-            <div className="shadowing-cue-filters">
-              <label className="shadowing-search">
-                <Search aria-hidden="true" />
-                <input
-                  type="search"
-                  placeholder="Buscar frase, tradução ou personagem"
-                  aria-label="Buscar cues"
-                  value={cueQuery}
-                  onChange={(event) => setCueQuery(event.target.value)}
-                />
-              </label>
-              <label>
-                Duração
-                <select aria-label="Filtrar duração" value={durationFilter}
-                  onChange={(event) => setDurationFilter(event.target.value)}>
-                  <option value="all">Todas</option>
-                  <option value="short">Até 2 s</option>
-                  <option value="medium">2–4 s</option>
-                  <option value="long">Acima de 4 s</option>
-                </select>
-              </label>
-              <label>
-                Palavras
-                <select aria-label="Filtrar palavras" value={wordFilter}
-                  onChange={(event) => setWordFilter(event.target.value)}>
-                  <option value="all">Todas</option>
-                  <option value="short">Até 5</option>
-                  <option value="long">Mais de 5</option>
-                </select>
-              </label>
-            </div>
-            <p className="shadowing-cue-count" role="status">
-              {filteredCues.length} de {active.excluded_cues.length} cues disponíveis
-            </p>
-            {active.excluded_cues.length === 0 && (
-              <p className="shadowing-empty">Todos os cues desta cena já estão em práticas.</p>
-            )}
-            {active.excluded_cues.length > 0 && filteredCues.length === 0 && (
-              <p className="shadowing-empty">Nenhum cue encontrado com esses filtros.</p>
-            )}
-            <div className="shadowing-excluded-list">
-              {filteredCues.map((cue) => {
-                const duration = (cue.end_ms - cue.start_ms) / 1000;
-                const words = cue.en.trim().split(/\\s+/).filter(Boolean).length;
-                return (
-                  <div
-                    className="shadowing-excluded-item"
-                    key={cue.id}
-                    tabIndex={0}
-                    onFocus={() => setFocusedCueId(cue.id)}
-                    onClick={() => setFocusedCueId(cue.id)}
-                  >
-                    <div>
-                      <strong>
-                        Cue {cue.order} ·{" "}
-                        {cue.speaker === "Não identificado" || !cue.speaker.trim()
-                          ? (
+                            ) : (
+                              block.speaker
+                            )}
+                          </strong>
+                          <span
+                            className={`shadowing-state ${
+                              active.status === "approved"
+                                ? "is-approved"
+                                : block.speaker === "Não identificado" || !block.speaker.trim()
+                                  ? "is-missing"
+                                  : phase === "finished"
+                                    ? "is-ready"
+                                    : "is-review"
+                            }`}
+                          >
+                            {active.status === "approved"
+                              ? "Aprovada"
+                              : block.speaker === "Não identificado" || !block.speaker.trim()
+                                ? "Falta personagem"
+                                : phase === "finished"
+                                  ? "Pronta"
+                                  : "Em revisão"}
+                          </span>
+                          <small>
+                            {((block.end_ms - block.start_ms) / 1000).toFixed(1)} s ·{" "}
+                            {block.word_count} palavras
+                          </small>
+                        </div>
+                        <p>{block.en}</p>
+                        <small>{block.pt}</small>
+                        <span>
+                          {formatTime(block.start_ms)}–{formatTime(block.end_ms)} · Pausa{" "}
+                          {(block.pause_duration_ms / 1000).toFixed(1)} s
+                        </span>
+                        {block.cue_ids.length > 1 && (
+                          <div className="shadowing-cue-pieces">
+                            {block.cue_ids.map((cueId, position) => {
+                              const cue = active.source_cues.find((item) => item.id === cueId);
+                              return (
+                                <div key={cueId}>
+                                  <span
+                                    tabIndex={0}
+                                    onFocus={() => setFocusedCueId(cueId)}
+                                    onClick={() => setFocusedCueId(cueId)}
+                                  >
+                                    Cue {cue?.order}: {cue?.en}
+                                  </span>
+                                  {position < block.cue_ids.length - 1 && (
+                                    <button
+                                      type="button"
+                                      disabled={isBusy}
+                                      onClick={() => splitAfter(index, position)}
+                                      aria-label={`Separar após cue ${cue?.order}`}
+                                    >
+                                      <Scissors aria-hidden="true" /> Separar aqui
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="shadowing-block-actions">
+                          <span
+                            className="shadowing-disabled-hint"
+                            tabIndex={isBusy || Boolean(mergeReason) ? 0 : -1}
+                            title={
+                              isBusy
+                                ? "Aguarde a operação atual"
+                                : (mergeReason ?? "Juntar com a próxima prática")
+                            }
+                          >
                             <button
-                              disabled
                               type="button"
-                              className="shadowing-assign-button"
-                              title="Atribuição indisponível neste item. A API atual não permite editar o locutor."
+                              disabled={isBusy || Boolean(mergeReason)}
+                              onClick={() => mergeWithNext(index)}
+                              aria-label="Juntar com próxima"
                             >
-                              Atribuir personagem
+                              <Merge aria-hidden="true" /> Juntar com próxima
                             </button>
-                          ) : cue.speaker}
-                      </strong>
-                      <span className="shadowing-cue-chips">
-                        <span>{duration.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s</span>
-                        <span>{words} {words === 1 ? "palavra" : "palavras"}</span>
-                      </span>
-                      <p>{cue.en}</p>
-                      <small>{cue.pt}</small>
-                      {!cue.eligible && <small className="shadowing-ineligible">{cue.reason}</small>}
-                    </div>
-                    {cue.eligible ? (
-                      <button type="button" disabled={isBusy} onClick={() => includeCue(cue)}>
-                        <Plus aria-hidden="true" /> Adicionar
-                      </button>
-                    ) : (
-                      <Link to={`/editorial?project=${projectId}`}>Ver no Editorial</Link>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <details className="shadowing-used" open={usedExpanded}
-              onToggle={(event) => setUsedExpanded(event.currentTarget.open)}>
-              <summary>Usados em outras práticas ({usedCues.length})</summary>
-              <div className="shadowing-excluded-list">
-                {usedCues.map((cue) => {
-                  const owner = active.blocks.findIndex((block) => block.cue_ids.includes(cue.id));
-                  return (
-                    <div className="shadowing-excluded-item" key={cue.id}>
-                      <div>
-                        <strong>Cue {cue.order} · {cue.speaker}</strong>
-                        <p>{cue.en}</p>
-                        <small>Em prática {owner + 1}</small>
-                      </div>
-                      <button type="button" disabled={isBusy}
-                        title="Retirar este cue da prática e devolvê-lo aos disponíveis"
-                        onClick={() => removeUsedCue(cue.id)}>
-                        <Trash2 aria-hidden="true" /> Remover da prática
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
-          </section>
+                          </span>
+                          <button
+                            type="button"
+                            className="shadowing-destructive"
+                            disabled={isBusy}
+                            title={
+                              isBusy
+                                ? "Aguarde a operação atual"
+                                : "Excluir desta prática. Você poderá desfazer."
+                            }
+                            onClick={() => omitBlock(index)}
+                          >
+                            <Trash2 aria-hidden="true" /> Excluir grupo
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
 
+              <section
+                className="shadowing-excluded panel"
+                id="shadowing-cues"
+                aria-label="Cues não selecionados"
+              >
+                <div className="shadowing-section-heading">
+                  <h2>Cues disponíveis</h2>
+                  <p>Adicione somente as falas que deseja praticar. O Editorial não é alterado.</p>
+                </div>
+                <div className="shadowing-cue-filters">
+                  <label className="shadowing-search">
+                    <Search aria-hidden="true" />
+                    <input
+                      type="search"
+                      placeholder="Buscar frase, tradução ou personagem"
+                      aria-label="Buscar cues"
+                      value={cueQuery}
+                      onChange={(event) => setCueQuery(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Duração
+                    <select
+                      aria-label="Filtrar duração"
+                      value={durationFilter}
+                      onChange={(event) => setDurationFilter(event.target.value)}
+                    >
+                      <option value="all">Todas</option>
+                      <option value="short">Até 2 s</option>
+                      <option value="medium">2–4 s</option>
+                      <option value="long">Acima de 4 s</option>
+                    </select>
+                  </label>
+                  <label>
+                    Palavras
+                    <select
+                      aria-label="Filtrar palavras"
+                      value={wordFilter}
+                      onChange={(event) => setWordFilter(event.target.value)}
+                    >
+                      <option value="all">Todas</option>
+                      <option value="short">Até 5</option>
+                      <option value="long">Mais de 5</option>
+                    </select>
+                  </label>
+                </div>
+                <p className="shadowing-cue-count" role="status">
+                  {filteredCues.length} de {active.excluded_cues.length} cues disponíveis
+                </p>
+                {active.excluded_cues.length === 0 && (
+                  <p className="shadowing-empty">Todos os cues desta cena já estão em práticas.</p>
+                )}
+                {active.excluded_cues.length > 0 && filteredCues.length === 0 && (
+                  <p className="shadowing-empty">Nenhum cue encontrado com esses filtros.</p>
+                )}
+                <div className="shadowing-excluded-list">
+                  {filteredCues.map((cue) => {
+                    const duration = (cue.end_ms - cue.start_ms) / 1000;
+                    const words = cue.en.trim().split(/\\s+/).filter(Boolean).length;
+                    return (
+                      <div
+                        className="shadowing-excluded-item"
+                        key={cue.id}
+                        tabIndex={0}
+                        onFocus={() => setFocusedCueId(cue.id)}
+                        onClick={() => setFocusedCueId(cue.id)}
+                      >
+                        <div>
+                          <strong>
+                            Cue {cue.order} ·{" "}
+                            {cue.speaker === "Não identificado" || !cue.speaker.trim() ? (
+                              <button
+                                disabled
+                                type="button"
+                                className="shadowing-assign-button"
+                                title="Atribuição indisponível neste item. A API atual não permite editar o locutor."
+                              >
+                                Atribuir personagem
+                              </button>
+                            ) : (
+                              cue.speaker
+                            )}
+                          </strong>
+                          <span className="shadowing-cue-chips">
+                            <span>
+                              {duration.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s
+                            </span>
+                            <span>
+                              {words} {words === 1 ? "palavra" : "palavras"}
+                            </span>
+                          </span>
+                          <p>{cue.en}</p>
+                          <small>{cue.pt}</small>
+                          {!cue.eligible && (
+                            <small className="shadowing-ineligible">{cue.reason}</small>
+                          )}
+                        </div>
+                        {cue.eligible ? (
+                          <button type="button" disabled={isBusy} onClick={() => includeCue(cue)}>
+                            <Plus aria-hidden="true" /> Adicionar
+                          </button>
+                        ) : (
+                          <Link to={`/editorial?project=${projectId}`}>Ver no Editorial</Link>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <details
+                  className="shadowing-used"
+                  open={usedExpanded}
+                  onToggle={(event) => setUsedExpanded(event.currentTarget.open)}
+                >
+                  <summary>Usados em outras práticas ({usedCues.length})</summary>
+                  <div className="shadowing-excluded-list">
+                    {usedCues.map((cue) => {
+                      const owner = active.blocks.findIndex((block) =>
+                        block.cue_ids.includes(cue.id),
+                      );
+                      return (
+                        <div className="shadowing-excluded-item" key={cue.id}>
+                          <div>
+                            <strong>
+                              Cue {cue.order} · {cue.speaker}
+                            </strong>
+                            <p>{cue.en}</p>
+                            <small>Em prática {owner + 1}</small>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            title="Retirar este cue da prática e devolvê-lo aos disponíveis"
+                            onClick={() => removeUsedCue(cue.id)}
+                          >
+                            <Trash2 aria-hidden="true" /> Remover da prática
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              </section>
             </div>
           </div>
           {allApproved && (
@@ -982,8 +1140,10 @@ export function ShadowingPage() {
         </>
       )}
       {toast && (
-        <div className={`shadowing-toast is-${toast.tone}`}
-          role={toast.tone === "error" ? "alert" : "status"}>
+        <div
+          className={`shadowing-toast is-${toast.tone}`}
+          role={toast.tone === "error" ? "alert" : "status"}
+        >
           <span>{toast.text}</span>
           {toast.undo && historyCount > 0 && (
             <button type="button" onClick={undoLast} disabled={isBusy}>
@@ -995,28 +1155,48 @@ export function ShadowingPage() {
               <RefreshCw aria-hidden="true" /> Tentar novamente
             </button>
           )}
-          <button type="button" onClick={() => setToast(null)}
-            aria-label="Fechar mensagem"><X aria-hidden="true" /></button>
+          <button type="button" onClick={() => setToast(null)} aria-label="Fechar mensagem">
+            <X aria-hidden="true" />
+          </button>
         </div>
       )}
       {shortcutsOpen && (
         <div className="shadowing-dialog-backdrop" onClick={() => setShortcutsOpen(false)}>
-          <section role="dialog" aria-modal="true" aria-label="Atalhos de teclado"
-            className="shadowing-shortcuts panel" onClick={(event) => event.stopPropagation()}>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="Atalhos de teclado"
+            className="shadowing-shortcuts panel"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="shadowing-dialog-title">
               <h2>Atalhos de teclado</h2>
-              <button type="button" autoFocus aria-label="Fechar atalhos"
-                onClick={() => setShortcutsOpen(false)}><X aria-hidden="true" /></button>
+              <button
+                type="button"
+                autoFocus
+                aria-label="Fechar atalhos"
+                onClick={() => setShortcutsOpen(false)}
+              >
+                <X aria-hidden="true" />
+              </button>
             </div>
             <dl>
-              <dt>Espaço</dt><dd>Reproduzir ou pausar</dd>
-              <dt>J / K</dt><dd>Selecionar próxima / anterior prática</dd>
-              <dt>A</dt><dd>Adicionar o cue focado</dd>
-              <dt>Delete</dt><dd>Excluir prática selecionada</dd>
-              <dt>M</dt><dd>Juntar com próxima prática, se permitido</dd>
-              <dt>S</dt><dd>Separar após o cue focado, se permitido</dd>
-              <dt>Ctrl+Z / Cmd+Z</dt><dd>Desfazer última edição</dd>
-              <dt>?</dt><dd>Abrir ou fechar esta ajuda</dd>
+              <dt>Espaço</dt>
+              <dd>Reproduzir ou pausar</dd>
+              <dt>J / K</dt>
+              <dd>Selecionar próxima / anterior prática</dd>
+              <dt>A</dt>
+              <dd>Adicionar o cue focado</dd>
+              <dt>Delete</dt>
+              <dd>Excluir prática selecionada</dd>
+              <dt>M</dt>
+              <dd>Juntar com próxima prática, se permitido</dd>
+              <dt>S</dt>
+              <dd>Separar após o cue focado, se permitido</dd>
+              <dt>Ctrl+Z / Cmd+Z</dt>
+              <dd>Desfazer última edição</dd>
+              <dt>?</dt>
+              <dd>Abrir ou fechar esta ajuda</dd>
             </dl>
           </section>
         </div>
