@@ -14,6 +14,7 @@ def test_launcher_recycles_only_vite_from_current_project() -> None:
     assert '$instance.Name -ne "node.exe"' in launcher
     assert "$normalizedCommand.IndexOf($viteScriptPath" in launcher
     assert "Stop-Process -Id $owningProcessId" in launcher
-    assert "Clear-PreviousFrontend" in launcher.split('Write-Step "Iniciando API, worker e interface..."')[0]
+    before_start = launcher.split('Write-Step "Iniciando API, worker e interface..."')[0]
+    assert "Clear-PreviousFrontend" in before_start
     assert '"--strictPort"' in launcher
     assert "não foi identificado como Vite deste projeto" in launcher
