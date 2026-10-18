@@ -260,7 +260,7 @@ try {
     Write-Step "Iniciando API, worker e interface..."
     $api = Start-ServiceProcess "api" $BackendPython @("-m", "uvicorn", "nova_generator.main:app", "--host", "127.0.0.1", "--port", "8000") $ProjectRoot
     $worker = Start-ServiceProcess "worker" $BackendPython @("-m", "nova_generator.worker") $ProjectRoot
-    $frontend = Start-ServiceProcess "frontend" (Get-Command "npm.cmd").Source @("run", "dev", "--", "--host", "127.0.0.1", "--port", "5173") $FrontendRoot
+    $frontend = Start-ServiceProcess "frontend" (Get-Command "npm.cmd").Source @("run", "dev", "--", "--host", "127.0.0.1", "--port", "5173", "--strictPort") $FrontendRoot
 
     Wait-Http "http://127.0.0.1:8000/api/health" $api "API"
     Wait-Http "http://127.0.0.1:5173" $frontend "Frontend"
