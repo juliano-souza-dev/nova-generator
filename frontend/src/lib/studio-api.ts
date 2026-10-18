@@ -208,6 +208,11 @@ export const studioApi = {
     }),
   externalMaterialsPackageUrl: (projectId: string) =>
     apiUrl(`/projects/${projectId}/materials-ai/package`),
+  generatePedagogicalMaterials: (projectId: string) =>
+    apiRequest<{ job_id: string; status: string }>(
+      `/projects/${projectId}/materials-ai/generate`,
+      { method: "POST" },
+    ),
   externalMaterialsReview: (projectId: string) =>
     apiRequest<MaterialAiReview>(`/projects/${projectId}/materials-ai/review`),
   importExternalMaterials: (projectId: string, file: File) => {
@@ -234,6 +239,11 @@ export const studioApi = {
     }),
   prepareMaterialAudio: (projectId: string, cueId: string, voiceId: string) =>
     apiRequest<Job>(`/projects/${projectId}/materials/${cueId}/audio`, {
+      method: "POST",
+      body: JSON.stringify({ voice_id: voiceId }),
+    }),
+  generateCompleteMaterials: (projectId: string, voiceId: string) =>
+    apiRequest<MaterialExport>(`/projects/${projectId}/materials/generate`, {
       method: "POST",
       body: JSON.stringify({ voice_id: voiceId }),
     }),
