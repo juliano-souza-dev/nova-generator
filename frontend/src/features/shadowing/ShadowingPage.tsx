@@ -30,7 +30,7 @@ type Toast = { text: string; tone: "success" | "error" | "info"; undo?: boolean 
 
 const SOURCE_LABELS: Record<ShadowingPlan["origin"], string> = {
   automatic: "Rascunho automático",
-  groq: "Proposta da Groq",
+  groq: "Proposta por IA",
   external: "Proposta da IA externa",
   manual: "Revisão manual",
 };
@@ -515,8 +515,11 @@ export function ShadowingPage() {
               </select>
             </label>
             <span className="shadowing-info">
-              {active.blocks.length} práticas curtas · {active.excluded_cues.length} cues fora ·{" "}
+              {active.blocks.length} práticas · {active.excluded_cues.length} cues disponíveis ·{" "}
               {SOURCE_LABELS[active.origin] ?? "Proposta salva"}
+            </span>
+            <span className={`shadowing-state ${active.status === "approved" ? "is-approved" : "is-review"}`}>
+              {active.status === "approved" ? "Aprovada" : "Em revisão"}
             </span>
           </div>
 
@@ -552,10 +555,7 @@ export function ShadowingPage() {
           <section id="shadowing-ai" className="shadowing-ai panel" aria-label="Preparação com IA">
             <div>
               <h2>Montar prática com IA</h2>
-              <p>
-                A IA seleciona grupos com até 6,5 segundos e 14 palavras, sempre com um só
-                personagem. As traduções e os textos aprovados não são modificados.
-              </p>
+              <p>Trechos curtos por personagem, preservando os textos aprovados.</p>
             </div>
             <div className="shadowing-ai-actions">
               <button
@@ -563,50 +563,77 @@ export function ShadowingPage() {
                 className="primary-button"
                 disabled={isBusy}
                 onClick={() => {
+                  if (generatingGuard.current) return;
+                  generatingGuard.current = true;
                   setActionNotice("");
                   stopPreview();
                   groq.mutate(active);
                 }}
               >
                 <Sparkles aria-hidden="true" />
-                {groq.isPending ? "Gerando…" : "Gerar proposta com Groq"}
+                {groq.isPending ? "Gerando proposta…" : "Gerar proposta com IA"}
               </button>
-              <a
-                className="secondary-button"
-                href={studioApi.shadowingPackageUrl(projectId, active.scene_id)}
-                download
-              >
-                <Download aria-hidden="true" /> Baixar pacote para IA externa
-              </a>
-              <label className="shadowing-import">
-                Importar proposta (.json)
+              <div className="shadowing-extra-tools">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  aria-expanded={toolsOpen}
+                  aria-controls="shadowing-external-tools"
+                  onClick={() => setToolsOpen((value) => !value)}
+                >
+                  <MoreHorizontal aria-hidden="true" /> Outras opções
+                </button>
+                {toolsOpen && (
+                  <div id="shadowing-external-tools" className="shadowing-extra-menu">
+                    <a
+                      href={studioApi.shadowingPackageUrl(projectId, active.scene_id)}
+                      download
+                    >
+                      <Download aria-hidden="true" /> Baixar pacote para IA externa
+                    </a>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      <Plus aria-hidden="true" /> Importar proposta (.json)
+                    </button>
+                  </div>
+                )}
                 <input
                   ref={fileRef}
+                  className="shadowing-file-input"
+                  aria-label="Importar proposta (.json)"
                   type="file"
                   accept=".json,application/json"
                   disabled={isBusy}
                   onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) {
-                      setSelectedFileName(file.name);
-                      setActionNotice("");
-                      stopPreview();
-                      importAi.mutate({ plan: active, file });
-                    }
                     event.target.value = "";
+                    if (!file || importGuard.current) return;
+                    if (!file.name.toLowerCase().endsWith(".json")) {
+                      showToast({ text: "Selecione um arquivo JSON (.json).", tone: "error" });
+                      return;
+                    }
+                    importGuard.current = true;
+                    setSelectedFileName(file.name);
+                    setActionNotice("");
+                    setToolsOpen(false);
+                    stopPreview();
+                    importAi.mutate({ plan: active, file });
                   }}
                 />
-              </label>
+              </div>
             </div>
-            {selectedFileName && <small role="status">Arquivo: {selectedFileName}</small>}
-            {importAi.isPending && <p role="status">Validando a proposta da IA externa…</p>}
-            {groq.isPending && <p role="status">A Groq está selecionando as melhores falas…</p>}
-            {actionError && (
-              <p className="field-error" role="alert">
-                {actionError.message}
+            {selectedFileName && <small className="shadowing-file-label">Arquivo: {selectedFileName}</small>}
+            {(importAi.isPending || groq.isPending) && (
+              <p className="shadowing-loading" role="status">
+                <span className="shadowing-spinner" aria-hidden="true" />
+                {groq.isPending
+                  ? "Gerando proposta… isso pode levar alguns instantes"
+                  : "Validando proposta importada…"}
               </p>
             )}
-            {actionNotice && <p role="status">{actionNotice}</p>}
           </section>
 
           <section id="shadowing-review" className="shadowing-review" aria-label="Revisar práticas">
