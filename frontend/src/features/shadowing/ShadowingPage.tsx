@@ -633,31 +633,6 @@ export function ShadowingPage() {
 
           <div className="shadowing-layout">
             <div className="shadowing-video-column">
-              <div className="shadowing-stage panel" ref={stageRef} aria-label="Prévia da cena">
-                <video
-                  ref={playerRef}
-                  src={media.data?.cut_url ?? undefined}
-                  preload="metadata"
-                  playsInline
-                  controls={false}
-                  onTimeUpdate={handleProgress}
-                  aria-label="Prévia de shadowing"
-                />
-                <div className="shadowing-preview-status" aria-live="polite">
-                  {phase === "pause" && active.blocks[previewIndex] && (
-                    <>
-                      <strong>PAUSA · REPITA EM VOZ ALTA</strong>
-                      <p>{active.blocks[previewIndex].en}</p>
-                      <small>{active.blocks[previewIndex].pt}</small>
-                    </>
-                  )}
-                  {phase === "finished" && (
-                    <strong>Prévia concluída. Você pode aprovar o plano.</strong>
-                  )}
-                </div>
-                {previewError && <p role="alert">{previewError}</p>}
-              </div>
-
               <div id="shadowing-actions" className="shadowing-sticky-actions panel">
                 <div className="shadowing-action-group">
                   <button
@@ -745,7 +720,33 @@ export function ShadowingPage() {
                   </span>
                 </div>
               </div>
-            </div>
+
+          <div className="shadowing-stage panel" ref={stageRef} aria-label="Prévia da cena">
+                <video
+                  ref={playerRef}
+                  src={media.data?.cut_url ?? undefined}
+                  preload="metadata"
+                  playsInline
+                  controls={false}
+                  onTimeUpdate={handleProgress}
+                  aria-label="Prévia de shadowing"
+                />
+                <div className="shadowing-preview-status" aria-live="polite">
+                  {phase === "pause" && active.blocks[previewIndex] && (
+                    <>
+                      <strong>PAUSA · REPITA EM VOZ ALTA</strong>
+                      <p>{active.blocks[previewIndex].en}</p>
+                      <small>{active.blocks[previewIndex].pt}</small>
+                    </>
+                  )}
+                  {phase === "finished" && (
+                    <strong>Prévia concluída. Você pode aprovar o plano.</strong>
+                  )}
+                </div>
+                {previewError && <p role="alert">{previewError}</p>}
+              </div>
+
+                          </div>
             <div className="shadowing-content-column">
               <section
                 id="shadowing-ai"
