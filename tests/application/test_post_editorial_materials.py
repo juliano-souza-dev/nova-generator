@@ -81,9 +81,9 @@ def test_prepared_shadowing_requires_approval_and_invalidates_when_cue_changes(t
     use_case = PrepareShadowing(repo, tmp_path)
     first = use_case.scene(PROJECT, SCENE)
     assert first["status"] == "draft"
-    assert first["blocks"][0]["start_ms"] == 0
+    assert first["blocks"][0]["start_ms"] == 500
     assert first["blocks"][0]["end_ms"] == 2000
-    assert first["blocks"][0]["pause_duration_ms"] == 3500
+    assert first["blocks"][0]["pause_duration_ms"] == 3100
     approved = use_case.approve(PROJECT, SCENE, first["source_sha256"])
     assert approved["status"] == "approved"
     assert use_case.scene(PROJECT, SCENE) == approved

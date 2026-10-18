@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { studioApi } from "../../lib/studio-api";
 import { MaterialsPage } from "./MaterialsPage";
 
@@ -16,6 +16,7 @@ vi.mock("../../lib/studio-api", () => ({
     materials: vi.fn(),
     updateMaterial: vi.fn(),
     prepareMaterialAudio: vi.fn(),
+    job: vi.fn(),
     exportMaterials: vi.fn(),
     materialExport: vi.fn(),
     latestMaterialExport: vi.fn(),
@@ -56,6 +57,141 @@ function mount() {
 }
 
 describe("MaterialsPage", () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it("shows sending, queue and worker status without silently ignoring Prepare WAV", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      { id: "voice-1", name: "Ana", version: 2 } as never,
+    ]);
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [{ ...card, audio_ready: false, audio_url: null }],
+      voice_id: "voice-1",
+      voice_version: 2,
+    });
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "pending",
+      source_sha256: "",
+      document: null,
+    });
+    vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    let acceptRequest!: (job: Awaited<ReturnType<typeof studioApi.prepareMaterialAudio>>) => void;
+    vi.mocked(studioApi.prepareMaterialAudio).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          acceptRequest = resolve;
+        }),
+    );
+    vi.mocked(studioApi.job).mockResolvedValue({
+      id: "audio-job-1",
+      status: "queued",
+    } as never);
+    mount();
+
+    const prepare = await screen.findByRole("button", { name: "Preparar WAV" });
+    await waitFor(() => expect(prepare).toBeEnabled());
+    fireEvent.click(prepare);
+    expect(screen.getByRole("button", { name: "Enviando…" })).toBeDisabled();
+    expect(screen.getByText(/Enviando solicitação de áudio ao worker/)).toBeInTheDocument();
+    acceptRequest({ id: "audio-job-1", status: "queued" } as never);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Na fila" })).toBeDisabled());
+    expect(await screen.findByText("Tarefa recebida. Aguardando o worker.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ver monitor de jobs" })).toHaveAttribute(
+      "href",
+      "/jobs",
+    );
+  });
+
+  it("shows API rejection next to the affected WAV button and allows retry", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      { id: "voice-1", name: "Ana", version: 2 } as never,
+    ]);
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [{ ...card, audio_ready: false, audio_url: null }],
+      voice_id: "voice-1",
+      voice_version: 2,
+    });
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "pending",
+      source_sha256: "",
+      document: null,
+    });
+    vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    vi.mocked(studioApi.prepareMaterialAudio).mockRejectedValue(
+      new Error("Worker de voz indisponível"),
+    );
+    mount();
+
+    const prepare = await screen.findByRole("button", { name: "Preparar WAV" });
+    await waitFor(() => expect(prepare).toBeEnabled());
+    fireEvent.click(prepare);
+    expect(
+      await screen.findByText(/Não foi possível iniciar a síntese: Worker de voz indisponível/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preparar WAV" })).toBeEnabled();
+  });
+
+  it("enqueues each selected WAV individually and prevents duplicate submissions", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      { id: "voice-1", name: "Ana", version: 2 } as never,
+    ]);
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [
+        { ...card, audio_ready: false, audio_url: null },
+        {
+          ...card,
+          cue_id: "cue-2",
+          cue_order: 2,
+          approved_en: "Hello.",
+          audio_ready: false,
+          audio_url: null,
+        },
+      ],
+      voice_id: "voice-1",
+      voice_version: 2,
+    });
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "pending",
+      source_sha256: "",
+      document: null,
+    });
+    vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    vi.mocked(studioApi.prepareMaterialAudio).mockImplementation(
+      async (_project, cueId) =>
+        ({
+          id: `job-${cueId}`,
+          status: "queued",
+        }) as never,
+    );
+    vi.mocked(studioApi.job).mockImplementation(
+      async (jobId) =>
+        ({
+          id: jobId,
+          status: "queued",
+        }) as never,
+    );
+    mount();
+    const prepare = await screen.findByRole("button", { name: "Preparar selecionados" });
+    await waitFor(() => expect(prepare).toBeEnabled());
+    fireEvent.click(prepare);
+    await waitFor(() => expect(studioApi.prepareMaterialAudio).toHaveBeenCalledTimes(2));
+    expect(studioApi.prepareMaterialAudio).toHaveBeenCalledWith("project-1", "cue-1", "voice-1");
+    expect(studioApi.prepareMaterialAudio).toHaveBeenCalledWith("project-1", "cue-2", "voice-1");
+    await waitFor(() => expect(prepare).toBeDisabled());
+    expect(await screen.findAllByRole("button", { name: "Na fila" })).toHaveLength(2);
+  });
+
   it("blocks Anki synthesis for a legacy voice with a short reference", async () => {
     vi.mocked(studioApi.projects).mockResolvedValue([
       { id: "project-1", title: "Lesson" } as never,

@@ -171,10 +171,40 @@ export const studioApi = {
       body: JSON.stringify({ youtube }),
     }),
   shadowing: (projectId: string) => apiRequest<ShadowingPlan[]>(`/projects/${projectId}/shadowing`),
-  approveShadowing: (projectId: string, sceneId: string, source_sha256: string) =>
+  shadowingPackageUrl: (projectId: string, sceneId: string) =>
+    apiUrl(`/projects/${projectId}/shadowing/${sceneId}/package`),
+  generateShadowing: (projectId: string, sceneId: string) =>
+    apiRequest<ShadowingPlan>(`/projects/${projectId}/shadowing/${sceneId}/generate`, {
+      method: "POST",
+    }),
+  importShadowing: (projectId: string, sceneId: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return apiRequest<ShadowingPlan>(`/projects/${projectId}/shadowing/${sceneId}/import`, {
+      method: "POST",
+      body,
+    });
+  },
+  editShadowing: (
+    projectId: string,
+    sceneId: string,
+    source_sha256: string,
+    plan_sha256: string,
+    groups: string[][],
+  ) =>
+    apiRequest<ShadowingPlan>(`/projects/${projectId}/shadowing/${sceneId}/blocks`, {
+      method: "PUT",
+      body: JSON.stringify({ source_sha256, plan_sha256, groups }),
+    }),
+  approveShadowing: (
+    projectId: string,
+    sceneId: string,
+    source_sha256: string,
+    plan_sha256: string,
+  ) =>
     apiRequest<ShadowingPlan>(`/projects/${projectId}/shadowing/${sceneId}/approval`, {
       method: "POST",
-      body: JSON.stringify({ source_sha256 }),
+      body: JSON.stringify({ source_sha256, plan_sha256 }),
     }),
   externalMaterialsPackageUrl: (projectId: string) =>
     apiUrl(`/projects/${projectId}/materials-ai/package`),
