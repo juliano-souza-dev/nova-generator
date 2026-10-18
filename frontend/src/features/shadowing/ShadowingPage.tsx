@@ -3,15 +3,20 @@ import {
   Check,
   Download,
   Merge,
+  MoreHorizontal,
+  Pause,
+  Plus,
   Play,
   RefreshCw,
   Scissors,
+  Search,
+  Keyboard,
   Sparkles,
   Trash2,
   Undo2,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
@@ -19,7 +24,9 @@ import type { ShadowingCue, ShadowingPlan } from "./shadowing.types";
 import { studioApi } from "../../lib/studio-api";
 import "./shadowing.css";
 
-type PreviewPhase = "ready" | "playing" | "pause" | "finished";
+type PreviewPhase = "ready" | "playing" | "paused" | "pause" | "finished";
+type UndoEntry = { projectId: string; sceneId: string; source: string; groups: string[][] };
+type Toast = { text: string; tone: "success" | "error" | "info"; undo?: boolean };
 
 const SOURCE_LABELS: Record<ShadowingPlan["origin"], string> = {
   automatic: "Rascunho automático",
@@ -36,8 +43,23 @@ export function ShadowingPage() {
   const [previewError, setPreviewError] = useState("");
   const [selectedFileName, setSelectedFileName] = useState("");
   const [actionNotice, setActionNotice] = useState("");
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [selectedBlockIndex, setSelectedBlockIndex] = useState(0);
+  const [focusedCueId, setFocusedCueId] = useState("");
+  const [cueQuery, setCueQuery] = useState("");
+  const [durationFilter, setDurationFilter] = useState("all");
+  const [wordFilter, setWordFilter] = useState("all");
+  const [usedExpanded, setUsedExpanded] = useState(false);
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const undoHistory = useRef<UndoEntry[]>([]);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const generatingGuard = useRef(false);
+  const importGuard = useRef(false);
   const playerRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const client = useQueryClient();
   const projects = useQuery({
     queryKey: ["projects", "shadowing"],
@@ -60,6 +82,15 @@ export function ShadowingPage() {
   const allApproved =
     Boolean(plans.data?.length) && plans.data!.every((item) => item.status === "approved");
   const busy = useRef(false);
+  const approvedCount = plans.data?.filter((item) => item.status === "approved").length ?? 0;
+  const sceneIndex = Math.max(0, plans.data?.findIndex((item) => item.scene_id === active?.scene_id) ?? 0);
+  const missingSpeakers = active?.blocks.some(
+    (block) => !block.speaker.trim() || block.speaker === "Não identificado",
+  ) ?? false;
+  const activeReady = Boolean(active?.blocks.length) && !missingSpeakers && phase === "finished";
+  const previewLabel = phase === "finished" ? "Revisada" :
+    phase === "playing" || phase === "pause" ? "Reproduzindo" :
+    phase === "paused" ? "Pausada" : "Não iniciada";
 
   const refreshPlans = () => void client.invalidateQueries({ queryKey: ["shadowing", projectId] });
 
