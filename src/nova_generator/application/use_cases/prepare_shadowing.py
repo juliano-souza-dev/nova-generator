@@ -73,7 +73,11 @@ class PrepareShadowing:
                 blocks = _validated_blocks(
                     cues,
                     groups,
-                    max_words=MAX_MANUAL_BLOCK_WORDS if stored.get("origin") == "manual" else MAX_BLOCK_WORDS,
+                    max_words=(
+                        MAX_MANUAL_BLOCK_WORDS
+                        if stored.get("origin") == "manual"
+                        else MAX_BLOCK_WORDS
+                    ),
                 )
                 plan_hash = _plan_hash(fingerprint, blocks)
                 if stored["plan_sha256"] == plan_hash:
@@ -256,7 +260,9 @@ class PrepareShadowing:
         if source_sha256 != fingerprint:
             raise ShadowingError("O Editorial mudou. Recarregue a cena e gere outra proposta.")
         blocks = _validated_blocks(
-            cues, groups, max_words=MAX_MANUAL_BLOCK_WORDS if origin == "manual" else MAX_BLOCK_WORDS
+            cues,
+            groups,
+            max_words=(MAX_MANUAL_BLOCK_WORDS if origin == "manual" else MAX_BLOCK_WORDS),
         )
         result = self._public(
             project_id, scene, cues, fingerprint, blocks, status="draft", origin=origin
