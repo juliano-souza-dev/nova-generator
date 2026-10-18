@@ -174,6 +174,28 @@ describe("ShadowingPage", () => {
     expect(studioApi.editShadowing).not.toHaveBeenCalled();
   });
 
+  it("uses J and Delete shortcuts to edit the currently selected practice", async () => {
+    mount();
+    await screen.findByText("Prática 2 · Mike");
+    fireEvent.keyDown(document, { key: "j" });
+    expect(document.getElementById("shadowing-block-1")).toHaveAttribute("aria-current", "true");
+    fireEvent.keyDown(document, { key: "Delete" });
+    await waitFor(() =>
+      expect(studioApi.editShadowing).toHaveBeenCalledWith(
+        "project-1", "scene-1", plan.source_sha256, plan.plan_sha256,
+        [["cue-1"]],
+      ),
+    );
+  });
+
+  it("ignores destructive shortcuts while typing in a search field", async () => {
+    mount();
+    await screen.findByText("Prática 1 · Mike");
+    const search = screen.getByRole("searchbox", { name: "Buscar cues" });
+    fireEvent.keyDown(search, { key: "Delete" });
+    expect(studioApi.editShadowing).not.toHaveBeenCalled();
+  });
+
   it("synchronizes deletion and undo with the existing edit endpoint", async () => {
     let latest = plan;
     vi.mocked(studioApi.shadowing).mockImplementation(async () => [latest]);
