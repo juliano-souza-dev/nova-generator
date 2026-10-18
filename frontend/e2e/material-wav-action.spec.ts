@@ -105,3 +105,67 @@ test("Preparar WAV reports rejected requests visibly without leaving the table",
   ).toBeVisible();
   await expect(prepare).toBeEnabled();
 });
+
+
+test("Gerar material starts generation of the seven sections and Anki explanations", async ({
+  page,
+}) => {
+  await arrangeMaterialPage(page);
+  await page.route("**/api/projects/project-1/materials-ai/latest-generation", (route) =>
+    route.fulfill({ status: 404, json: { detail: "generation not found" } }),
+  );
+  let started = false;
+  await page.route("**/api/projects/project-1/materials-ai/generate", (route) => {
+    expect(route.request().method()).toBe("POST");
+    started = true;
+    return route.fulfill({ status: 202, json: { job_id: "ai-1", status: "queued" } });
+  });
+  await page.goto("/materials?project=project-1");
+  const generate = page.getByRole("button", { name: "Gerar material" });
+  await expect(generate).toBeEnabled();
+  await generate.click();
+  await expect.poll(() => started).toBe(true);
+});
+
+test("Gerar material produces the PDF, APKG and reel after human approval", async ({
+  page,
+}) => {
+  await arrangeMaterialPage(page);
+  await page.route("**/api/projects/project-1/materials-ai/review", (route) =>
+    route.fulfill({
+      json: { status: "approved", source_sha256: "a".repeat(64), document: null },
+    }),
+  );
+  await page.route("**/api/projects/project-1/materials-ai/latest-generation", (route) =>
+    route.fulfill({ status: 404, json: { detail: "generation not found" } }),
+  );
+  let produced = false;
+  await page.route("**/api/projects/project-1/materials/generate", (route) => {
+    expect(route.request().postDataJSON()).toEqual({ voice_id: "voice-1" });
+    produced = true;
+    return route.fulfill({
+      status: 202, json: { job_id: "complete-1", status: "queued" },
+    });
+  });
+  await page.route("**/api/projects/project-1/materials/exports/complete-1", (route) =>
+    route.fulfill({
+      json: {
+        job_id: "complete-1",
+        status: "succeeded",
+        workbook_url: "/material-didatico.pdf",
+        apkg_url: "/anki.apkg",
+        reel_url: "/anki-reel.mp4",
+        manifest_url: "/anki-audio-manifest.json",
+      },
+    }),
+  );
+  await page.goto("/materials?project=project-1");
+  const generate = page.getByRole("button", { name: "Gerar material" });
+  await expect(generate).toBeEnabled();
+  await generate.click();
+  await expect.poll(() => produced).toBe(true);
+  await expect(page.getByRole("link", { name: "Baixar material didático (PDF)" }))
+    .toHaveAttribute("href", "/material-didatico.pdf");
+  await expect(page.getByRole("link", { name: "Baixar APKG" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Baixar reel" })).toBeVisible();
+});
