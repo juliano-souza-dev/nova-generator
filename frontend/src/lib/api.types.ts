@@ -223,6 +223,8 @@ export type VoiceProfile = {
   snapshot_sha256: string;
   preview_url: string | null;
   preview_ready: boolean;
+  reference_ready?: boolean;
+  reference_message?: string | null;
 };
 export type VoiceReference = {
   sha256: string;
