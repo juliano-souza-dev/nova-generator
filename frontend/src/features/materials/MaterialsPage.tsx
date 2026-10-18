@@ -98,8 +98,10 @@ export function MaterialsPage() {
     })),
   });
   const audioJobsByCue: Record<string, JobDetail | undefined> = {};
+  const audioJobErrorsByCue: Record<string, string | undefined> = {};
   audioJobEntries.forEach(([cueId], index) => {
     audioJobsByCue[cueId] = audioJobQueries[index]?.data;
+    audioJobErrorsByCue[cueId] = audioJobQueries[index]?.error?.message;
   });
   const completedAudioJobs = Object.values(audioJobsByCue)
     .filter((job) => job?.status === "succeeded")
@@ -540,6 +542,7 @@ export function MaterialsPage() {
                   onAudio={(cueId) => void prepareAudio(cueId)}
                   submittingCueIds={submittingCueIds}
                   audioJobsByCue={audioJobsByCue}
+                  audioJobErrorsByCue={audioJobErrorsByCue}
                   audioJobIds={audioJobIds}
                   audioRequestErrors={audioRequestErrors}
                   voiceSelected={!!voiceId && !voiceReferenceError}
@@ -692,6 +695,7 @@ function SceneCardRows({
   onAudio,
   submittingCueIds,
   audioJobsByCue,
+  audioJobErrorsByCue,
   audioJobIds,
   audioRequestErrors,
   voiceSelected,
@@ -707,6 +711,7 @@ function SceneCardRows({
   onAudio: (cueId: string) => void;
   submittingCueIds: string[];
   audioJobsByCue: Record<string, JobDetail | undefined>;
+  audioJobErrorsByCue: Record<string, string | undefined>;
   audioJobIds: Record<string, string>;
   audioRequestErrors: Record<string, string>;
   voiceSelected: boolean;
@@ -731,6 +736,7 @@ function SceneCardRows({
           audioSubmitting={submittingCueIds.includes(card.cue_id)}
           audioJobId={audioJobIds[card.cue_id]}
           audioJob={audioJobsByCue[card.cue_id]}
+          audioJobQueryError={audioJobErrorsByCue[card.cue_id]}
           audioRequestError={audioRequestErrors[card.cue_id]}
           voiceSelected={voiceSelected}
           onPreview={() => onPreview(card.cue_id)}
@@ -750,6 +756,7 @@ function MaterialRow({
   audioSubmitting,
   audioJobId,
   audioJob,
+  audioJobQueryError,
   audioRequestError,
   voiceSelected,
   onPreview,
@@ -763,6 +770,7 @@ function MaterialRow({
   audioSubmitting: boolean;
   audioJobId?: string;
   audioJob?: JobDetail;
+  audioJobQueryError?: string;
   audioRequestError?: string;
   voiceSelected: boolean;
   onPreview: () => void;
@@ -870,6 +878,12 @@ function MaterialRow({
         {!card.audio_ready && audioJob?.status === "succeeded" && (
           <small className="material-audio-progress" role="status">
             WAV concluído. Atualizando card…
+          </small>
+        )}
+        {audioJobId && audioJobQueryError && (
+          <small className="field-error" role="alert">
+            Não foi possível consultar o andamento: {audioJobQueryError}.{" "}
+            <Link to="/jobs">Abrir monitor</Link>
           </small>
         )}
         {audioRequestError && (
