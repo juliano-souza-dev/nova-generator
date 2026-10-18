@@ -56,6 +56,46 @@ function mount() {
 }
 
 describe("MaterialsPage", () => {
+  it("blocks Anki synthesis for a legacy voice with a short reference", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      {
+        id: "voice-1",
+        name: "Juliana",
+        version: 3,
+        reference_ready: false,
+        reference_message: "A referência desta voz precisa ter pelo menos 6 segundos.",
+      } as never,
+    ]);
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "pending",
+      source_sha256: "",
+      document: null,
+    });
+    vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [{ ...card, audio_ready: false, audio_url: null }],
+      voice_id: "voice-1",
+      voice_version: 3,
+    });
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    vi.mocked(studioApi.prepareMaterialAudio).mockClear();
+    mount();
+
+    expect(
+      await screen.findByText(/A referência desta voz precisa ter pelo menos 6 segundos/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Atualizar voz na Biblioteca" })).toHaveAttribute(
+      "href",
+      "/voices",
+    );
+    expect(screen.getByRole("button", { name: "Preparar WAV" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Preparar selecionados" })).toBeDisabled();
+    expect(studioApi.prepareMaterialAudio).not.toHaveBeenCalled();
+  });
+
   it("prepares WAV for approved cards without external pedagogical material", async () => {
     vi.mocked(studioApi.projects).mockResolvedValue([
       { id: "project-1", title: "Lesson" } as never,
