@@ -73,7 +73,7 @@ def render_material_workbook(document: dict[str, Any], output: Path) -> Path:
             )
     story.append(Paragraph("Cards Anki · Explicações", heading))
     for index, card in enumerate(document["anki_cards"], start=1):
-        items = [
+        items: list[Any] = [
             Paragraph(f"<b>{index}. {escape(card['front_en'])}</b>", small_heading),
             Paragraph(escape(card["back_pt"]), body),
             Paragraph(escape(card["explanation_pt"]), body),
