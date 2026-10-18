@@ -150,17 +150,12 @@ function Ensure-Backend([object]$PythonCommand) {
     }
 }
 
-# The 0.1.7 PyPI wheel does not support nano=True. Keep the upstream
-# revision pinned: version numbers alone are insufficient (both report 0.1.7).
-$ChatterboxNanoCommit = "5de7a54aa4e5e2baadb0182dde554908b48b85c2"
-
 function Test-TtsRuntime([string]$Executable) {
     if (-not (Test-Path -LiteralPath $Executable)) { return $false }
     $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        # Checking imports alone reuses the incompatible 0.1.7 PyPI wheel.
-        & $Executable -c "import inspect, torch, torchaudio; from chatterbox.tts_turbo import ChatterboxTurboTTS; assert 'nano' in inspect.signature(ChatterboxTurboTTS.from_pretrained).parameters" 2>$null
+        & $Executable -c "import chatterbox, torch, torchaudio" 2>$null
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousPreference
@@ -170,32 +165,25 @@ function Test-TtsRuntime([string]$Executable) {
 
 function Ensure-Tts([object]$PythonCommand) {
     Write-Step "Preparando Chatterbox Nano isolado..."
-    $expected = "chatterbox-nano-source=$ChatterboxNanoCommit;torch=2.6.0;python=3.12"
+    $expected = "chatterbox-tts=0.1.7;torch=2.6.0;python=3.12"
     $stamp = Join-Path $RuntimeRoot "tts.sha256"
     $current = if (Test-Path -LiteralPath $stamp) { (Get-Content -Raw $stamp).Trim() } else { "" }
-    if ((Test-Path -LiteralPath $TtsPython) -and $current -eq $expected -and (Test-TtsRuntime $TtsPython)) {
+    if ((Test-Path -LiteralPath $TtsPython) -and $current -eq $expected) {
         return $TtsPython
     }
     if (-not (Test-Path -LiteralPath $TtsPython)) {
         Invoke-Python $PythonCommand @("-m", "venv", $TtsVenv)
     }
-    # Git is required by the source package's resemble-perth dependency.
-    if (-not (Get-Command "git.exe" -ErrorAction SilentlyContinue)) {
-        Install-WingetPackage "Git.Git" "Git"
-    }
-    if (-not (Get-Command "git.exe" -ErrorAction SilentlyContinue)) {
-        throw "Git não está disponível para instalar o Chatterbox Nano do código-fonte."
-    }
-    & $TtsPython -m pip install --upgrade pip
-    if ($LASTEXITCODE -ne 0) { throw "Falha ao atualizar pip do Chatterbox." }
-    & $TtsPython -m pip install "torch==2.6.0" "torchaudio==2.6.0" --index-url "https://download.pytorch.org/whl/cpu"
-    if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar PyTorch CPU do Chatterbox." }
-    # Direct VCS installation replaces the incompatible PyPI wheel and also
-    # resolves the upstream dependencies on a clean environment.
-    & $TtsPython -m pip install --upgrade "git+https://github.com/resemble-ai/chatterbox.git@$ChatterboxNanoCommit"
-    if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Chatterbox Nano do código-fonte." }
     if (-not (Test-TtsRuntime $TtsPython)) {
-        throw "Chatterbox incompatível: from_pretrained não aceita nano=True mesmo após a atualização. Confira data/logs e .venv-tts."
+        & $TtsPython -m pip install --upgrade pip
+        if ($LASTEXITCODE -ne 0) { throw "Falha ao atualizar pip do Chatterbox." }
+        & $TtsPython -m pip install "torch==2.6.0" "torchaudio==2.6.0" --index-url "https://download.pytorch.org/whl/cpu"
+        if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar PyTorch CPU do Chatterbox." }
+        & $TtsPython -m pip install "chatterbox-tts==0.1.7"
+        if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Chatterbox Nano." }
+    }
+    if (-not (Test-TtsRuntime $TtsPython)) {
+        throw "O ambiente isolado do Chatterbox foi criado, mas não passou na verificação."
     }
     Set-Content -LiteralPath $stamp -Value $expected -Encoding ASCII
     return $TtsPython
