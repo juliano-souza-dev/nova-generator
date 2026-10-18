@@ -571,6 +571,61 @@ export function ShadowingPage() {
             {previewError && <p role="alert">{previewError}</p>}
           </div>
 
+          <div id="shadowing-actions" className="shadowing-sticky-actions panel">
+            <div className="shadowing-action-group">
+              <button
+                type="button"
+                onClick={togglePreview}
+                disabled={!media.data?.cut_url || !active.blocks.length || phase === "pause" || isBusy}
+                title={!media.data?.cut_url ? "Vídeo da cena indisponível" :
+                  !active.blocks.length ? "Adicione uma prática antes da prévia" :
+                  isBusy ? "Aguarde a edição em andamento" : "Reproduzir ou pausar a prévia"}
+              >
+                {phase === "playing" ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+                {phase === "playing" ? "Pausar" : "Reproduzir prévia"}
+              </button>
+              {(phase === "playing" || phase === "paused" || phase === "pause") && (
+                <button type="button" className="shadowing-stop" onClick={stopPreview}>
+                  <X aria-hidden="true" /> Parar
+                </button>
+              )}
+              <span className="shadowing-preview-indicator" role="status">
+                {previewLabel}
+                {previewIndex >= 0 ? ` · Bloco ${previewIndex + 1}/${active.blocks.length}` : ""}
+              </span>
+            </div>
+            <div className="shadowing-action-group">
+              <button
+                type="button"
+                onClick={undoLast}
+                disabled={isBusy || !historyCount}
+                title={historyCount ? `Desfazer última edição (${historyCount} disponível)` : "Nenhuma edição para desfazer"}
+              >
+                <Undo2 aria-hidden="true" /> Desfazer
+              </button>
+              <span
+                className="shadowing-disabled-hint"
+                tabIndex={active.status === "approved" || !active.blocks.length || isBusy || phase !== "finished" ? 0 : -1}
+                title={
+                  active.status === "approved" ? "Esta cena já foi aprovada" :
+                  !active.blocks.length ? "Adicione ao menos uma prática" :
+                  isBusy ? "Aguarde a operação em andamento" :
+                  phase !== "finished" ? "Reproduza a prévia completa antes de aprovar" :
+                  "Aprovar plano revisado"
+                }
+              >
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => approval.mutate(active)}
+                  disabled={active.status === "approved" || !active.blocks.length || isBusy || phase !== "finished"}
+                >
+                  <Check aria-hidden="true" />
+                  {active.status === "approved" ? "Shadowing aprovado" : "Aprovar Shadowing"}
+                </button>
+              </span>
+            </div>
+          </div>
             </div>
             <div className="shadowing-content-column">
           <section id="shadowing-ai" className="shadowing-ai panel" aria-label="Preparação com IA">
@@ -898,61 +953,6 @@ export function ShadowingPage() {
             </details>
           </section>
 
-            </div>
-          </div>
-          <div id="shadowing-actions" className="shadowing-sticky-actions panel">
-            <div className="shadowing-action-group">
-              <button
-                type="button"
-                onClick={togglePreview}
-                disabled={!media.data?.cut_url || !active.blocks.length || phase === "pause" || isBusy}
-                title={!media.data?.cut_url ? "Vídeo da cena indisponível" :
-                  !active.blocks.length ? "Adicione uma prática antes da prévia" :
-                  isBusy ? "Aguarde a edição em andamento" : "Reproduzir ou pausar a prévia"}
-              >
-                {phase === "playing" ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-                {phase === "playing" ? "Pausar" : "Reproduzir prévia"}
-              </button>
-              {(phase === "playing" || phase === "paused" || phase === "pause") && (
-                <button type="button" className="shadowing-stop" onClick={stopPreview}>
-                  <X aria-hidden="true" /> Parar
-                </button>
-              )}
-              <span className="shadowing-preview-indicator" role="status">
-                {previewLabel}
-                {previewIndex >= 0 ? ` · Bloco ${previewIndex + 1}/${active.blocks.length}` : ""}
-              </span>
-            </div>
-            <div className="shadowing-action-group">
-              <button
-                type="button"
-                onClick={undoLast}
-                disabled={isBusy || !historyCount}
-                title={historyCount ? `Desfazer última edição (${historyCount} disponível)` : "Nenhuma edição para desfazer"}
-              >
-                <Undo2 aria-hidden="true" /> Desfazer
-              </button>
-              <span
-                className="shadowing-disabled-hint"
-                tabIndex={active.status === "approved" || !active.blocks.length || isBusy || phase !== "finished" ? 0 : -1}
-                title={
-                  active.status === "approved" ? "Esta cena já foi aprovada" :
-                  !active.blocks.length ? "Adicione ao menos uma prática" :
-                  isBusy ? "Aguarde a operação em andamento" :
-                  phase !== "finished" ? "Reproduza a prévia completa antes de aprovar" :
-                  "Aprovar plano revisado"
-                }
-              >
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => approval.mutate(active)}
-                  disabled={active.status === "approved" || !active.blocks.length || isBusy || phase !== "finished"}
-                >
-                  <Check aria-hidden="true" />
-                  {active.status === "approved" ? "Shadowing aprovado" : "Aprovar Shadowing"}
-                </button>
-              </span>
             </div>
           </div>
           {allApproved && (
