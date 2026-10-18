@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import signal
 import sys
+from uuid import UUID
 from pathlib import Path
 from threading import Event
 
@@ -12,6 +13,8 @@ from nova_generator.api.dependencies import get_session_factory
 from nova_generator.application.use_cases.download_youtube_source import DownloadYoutubeSource
 from nova_generator.application.use_cases.editorial_assistance import RunEditorialAssistance
 from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
+from nova_generator.application.use_cases.generate_materials_ai import GenerateMaterialsAi
+from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
 from nova_generator.application.use_cases.ingest_scene_media import IngestSceneMedia
 from nova_generator.application.use_cases.render_story import RenderStory
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
@@ -96,6 +99,22 @@ def main() -> None:
         settings.project_root,
     )
     editorial_repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    material_ai = GenerateMaterialsAi(
+        MaterialsAiExchange(editorial_repository, settings.project_root),
+        api_key=settings.groq_api_key,
+        model=settings.groq_editorial_model,
+    )
+
+    def generate_pedagogical(job, execution):
+        execution.raise_if_cancelled()
+        result = material_ai.execute(
+            UUID(str(job.input["project_id"])),
+            source_sha256=str(job.input["source_sha256"]),
+            selected_ids=[str(cue) for cue in job.input["selected_cue_ids"]],
+        )
+        execution.heartbeat()
+        return result
+
     worker = PersistentWorker(
         SqlAlchemyJobRepository(get_session_factory()),
         worker_id=f"local-{os.getpid()}",
@@ -106,6 +125,7 @@ def main() -> None:
             ),
             "synthesize_material_audio": materials.synthesize,
             "export_materials": materials.export,
+            "generate_pedagogical_materials": generate_pedagogical,
             "download_youtube": project_media.download,
             "ingest_scene_media": project_media.ingest,
             "editorial_assistance": EditorialAssistanceJobHandler(
