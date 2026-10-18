@@ -23,7 +23,10 @@
   gap: 0.4rem;
 }
 .materials-table-wrap {
-  overflow: visible;
+  position: relative;
+  max-height: min(62vh, 720px);
+  overflow: auto;
+  isolation: isolate;
 }
 .materials-table {
   width: 100%;
@@ -35,8 +38,11 @@
   position: static;
 }
 .materials-table thead th {
+  position: sticky;
+  z-index: 5;
+  top: 0;
   background: var(--surface);
-  box-shadow: inset 0 -1px 0 var(--border);
+  box-shadow: 0 1px 0 var(--border), 0 5px 10px rgb(2 6 23 / 34%);
   padding-top: 0.62rem;
   padding-bottom: 0.62rem;
   white-space: nowrap;
