@@ -1,0 +1,36 @@
+name: Temporary Shadowing UX Validation
+on:
+  push:
+    branches: [fix/quality-gates-and-finish-plan]
+permissions:
+  contents: read
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx vitest run src/features/shadowing/ShadowingPage.test.tsx
+      - run: npm run build
+      - run: npx prettier --check src/features/shadowing/ShadowingPage.tsx src/features/shadowing/ShadowingPage.test.tsx src/features/shadowing/shadowing.css
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install ".[dev]"
+      - run: python -m ruff check src tests
+      - run: python -m pyright
+      - run: python -m pytest tests/application/test_shadowing_groups.py tests/api/test_shadowing_workflow.py
