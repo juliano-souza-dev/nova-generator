@@ -134,11 +134,14 @@ describe("ShadowingPage", () => {
 
   it("shows short speaker-specific practices and the separate AI preparation step", async () => {
     mount();
-    expect(await screen.findByRole("heading", { name: "Montar prática com IA" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Gerar proposta com Groq" })).toBeEnabled();
     expect(
-      screen.getByRole("link", { name: "Baixar pacote para IA externa" }),
-    ).toHaveAttribute("href", "/shadowing-package.json");
+      await screen.findByRole("heading", { name: "Montar prática com IA" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Gerar proposta com Groq" })).toBeEnabled();
+    expect(screen.getByRole("link", { name: "Baixar pacote para IA externa" })).toHaveAttribute(
+      "href",
+      "/shadowing-package.json",
+    );
     expect(screen.getByText("Prática 1 · Mike")).toBeInTheDocument();
     expect(screen.getByText("Prática 2 · Mike")).toBeInTheDocument();
     expect(screen.getByText("Cue 2 · Donna")).toBeInTheDocument();
@@ -166,7 +169,10 @@ describe("ShadowingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Separar após cue 3" }));
     await waitFor(() =>
       expect(studioApi.editShadowing).toHaveBeenCalledWith(
-        "project-1", "scene-1", plan.source_sha256, plan.plan_sha256,
+        "project-1",
+        "scene-1",
+        plan.source_sha256,
+        plan.plan_sha256,
         [["cue-1"], ["cue-3"], ["cue-4"]],
       ),
     );
@@ -178,7 +184,10 @@ describe("ShadowingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Adicionar" }));
     await waitFor(() =>
       expect(studioApi.editShadowing).toHaveBeenCalledWith(
-        "project-1", "scene-1", plan.source_sha256, plan.plan_sha256,
+        "project-1",
+        "scene-1",
+        plan.source_sha256,
+        plan.plan_sha256,
         [["cue-1"], ["cue-2"], ["cue-3", "cue-4"]],
       ),
     );
@@ -189,8 +198,24 @@ describe("ShadowingPage", () => {
       {
         ...plan,
         blocks: [
-          { ...plan.blocks[1], id: "block-1", cue_ids: ["cue-3"], end_ms: 4100, en: "Come here.", pt: "Venha aqui.", word_count: 2 },
-          { ...plan.blocks[1], id: "block-2", cue_ids: ["cue-4"], start_ms: 4300, en: "Right now!", pt: "Agora mesmo!", word_count: 2 },
+          {
+            ...plan.blocks[1],
+            id: "block-1",
+            cue_ids: ["cue-3"],
+            end_ms: 4100,
+            en: "Come here.",
+            pt: "Venha aqui.",
+            word_count: 2,
+          },
+          {
+            ...plan.blocks[1],
+            id: "block-2",
+            cue_ids: ["cue-4"],
+            start_ms: 4300,
+            en: "Right now!",
+            pt: "Agora mesmo!",
+            word_count: 2,
+          },
         ],
         excluded_cues: [cues[0], cues[1]].map((cue) => ({
           ...cue,
@@ -204,7 +229,10 @@ describe("ShadowingPage", () => {
     fireEvent.click(merge[0]);
     await waitFor(() =>
       expect(studioApi.editShadowing).toHaveBeenCalledWith(
-        "project-1", "scene-1", plan.source_sha256, plan.plan_sha256,
+        "project-1",
+        "scene-1",
+        plan.source_sha256,
+        plan.plan_sha256,
         [["cue-3", "cue-4"]],
       ),
     );
