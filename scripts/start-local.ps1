@@ -222,6 +222,43 @@ function Wait-Http([string]$Url, [System.Diagnostics.Process]$Process, [string]$
     throw "$Name não respondeu em $Url. Consulte data\logs."
 }
 
+# Vite launched by a previous Nova Generator session may survive a closed console.
+# Release only an exact Vite instance from this repository. Never stop an
+# unrelated process or blindly kill every program listening on port 5173.
+function Clear-PreviousFrontend {
+    $owners = @(
+        Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty OwningProcess -Unique |
+            Where-Object { $_ -gt 0 }
+    )
+    if ($owners.Count -eq 0) { return }
+
+    $viteScriptPath = (Join-Path $FrontendRoot "node_modules\vite\bin\vite.js").Replace("/", "\")
+    foreach ($owningProcessId in $owners) {
+        $instance = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $owningProcessId" -ErrorAction SilentlyContinue
+        $commandLine = if ($null -eq $instance) { "" } else { [string]$instance.CommandLine }
+        $normalizedCommand = $commandLine.Replace("/", "\")
+        if (
+            $null -eq $instance -or
+            $instance.Name -ne "node.exe" -or
+            $normalizedCommand.IndexOf($viteScriptPath, [StringComparison]::OrdinalIgnoreCase) -lt 0
+        ) {
+            throw "Porta 5173 ocupada pelo processo $owningProcessId, que não foi identificado como Vite deste projeto. Feche o aplicativo que usa a porta antes de executar INICIAR.bat."
+        }
+    }
+
+    foreach ($owningProcessId in $owners) {
+        Write-Step "Encerrando Vite antigo deste Nova Generator (PID $owningProcessId)..."
+        Stop-Process -Id $owningProcessId -Force -ErrorAction Stop
+    }
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        $remaining = @(Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue)
+        if ($remaining.Count -eq 0) { return }
+        Start-Sleep -Milliseconds 250
+    }
+    throw "O Vite anterior foi encerrado, mas a porta 5173 ainda está ocupada. Verifique o processo que a utiliza."
+}
+
 function Start-ServiceProcess(
     [string]$Name,
     [string]$Executable,
@@ -257,6 +294,7 @@ try {
     }
 
     $env:NOVA_GENERATOR_TTS_PYTHON = $ttsExecutable
+    Clear-PreviousFrontend
     Write-Step "Iniciando API, worker e interface..."
     $api = Start-ServiceProcess "api" $BackendPython @("-m", "uvicorn", "nova_generator.main:app", "--host", "127.0.0.1", "--port", "8000") $ProjectRoot
     $worker = Start-ServiceProcess "worker" $BackendPython @("-m", "nova_generator.worker") $ProjectRoot
