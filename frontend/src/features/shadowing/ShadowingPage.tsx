@@ -454,6 +454,8 @@ export function ShadowingPage() {
               <button
                 type="button"
                 disabled={index > currentStep}
+                title={index > currentStep ? "Conclua as etapas anteriores para navegar" :
+                  "Ir para " + step.label}
                 aria-current={index === currentStep ? "step" : undefined}
                 className={index < currentStep ? "is-complete" :
                   index === currentStep ? "is-current" : "is-pending"}
@@ -515,6 +517,12 @@ export function ShadowingPage() {
       {plans.isPending && Boolean(projectId) && <LoadingState label="Carregando Shadowing" />}
       {plans.isError && (
         <ErrorState message={plans.error.message} retry={() => void plans.refetch()} />
+      )}
+      {Boolean(projectId) && plans.data?.length === 0 && (
+        <EmptyState title="Este projeto ainda não tem cenas">
+          Importe o material e prepare o Editorial para começar o Shadowing.
+          <Link to={`/projects`}>Ir para Projetos</Link>
+        </EmptyState>
       )}
       {active && (
         <>
@@ -606,7 +614,8 @@ export function ShadowingPage() {
               </button>
               <span
                 className="shadowing-disabled-hint"
-                tabIndex={active.status === "approved" || !active.blocks.length || isBusy || phase !== "finished" ? 0 : -1}
+                tabIndex={active.status === "approved" || !active.blocks.length ||
+                  isBusy || missingSpeakers || phase !== "finished" ? 0 : -1}
                 title={
                   active.status === "approved" ? "Esta cena já foi aprovada" :
                   !active.blocks.length ? "Adicione ao menos uma prática" :
@@ -635,6 +644,11 @@ export function ShadowingPage() {
               <h2>Montar prática com IA</h2>
               <p>Trechos curtos por personagem, preservando os textos aprovados.</p>
             </div>
+            {active.origin === "automatic" && active.blocks.length === 0 && (
+              <p className="shadowing-empty">
+                Sem proposta gerada. Gere uma proposta com IA ou importe um arquivo .json.
+              </p>
+            )}
             <div className="shadowing-ai-actions">
               <button
                 type="button"
