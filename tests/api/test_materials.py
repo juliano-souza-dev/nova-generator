@@ -304,7 +304,9 @@ def test_gerar_material_requires_review_and_queues_complete_production(
     }
     imported = client.post(
         f"{base}/materials-ai/import",
-        files={"file": ("output.json", io.BytesIO(json.dumps(document).encode()), "application/json")},
+        files={
+            "file": ("output.json", io.BytesIO(json.dumps(document).encode()), "application/json")
+        },
     )
     assert imported.status_code == 200, imported.text
     still_draft = client.post(
