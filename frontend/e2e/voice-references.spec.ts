@@ -79,3 +79,49 @@ test("uploads a WAV and creates a selectable voice without entering hashes", asy
   await page.getByRole("button", { name: "Criar e sintetizar prévia" }).click();
   await expect(page.getByRole("button", { name: /Nova voz v1/ })).toBeVisible();
 });
+
+test("uploads a WAV dropped into the reference area without opening the file picker", async ({
+  page,
+}) => {
+  const digest = "e".repeat(64);
+  let uploaded = false;
+  await page.route("**/api/voices/model", (route) =>
+    route.fulfill({ json: { available: true, model_sha256: "a".repeat(64) } }),
+  );
+  await page.route("**/api/voices/references", async (route) => {
+    const reference = {
+      sha256: digest,
+      duration_ms: 2000,
+      sample_rate: 16000,
+      channels: 1,
+      size_bytes: 64044,
+      audio_url: `/api/voices/references/${digest}`,
+    };
+    if (route.request().method() === "POST") {
+      uploaded = true;
+      await route.fulfill({ status: 201, json: reference });
+    } else {
+      await route.fulfill({ json: uploaded ? [reference] : [] });
+    }
+  });
+  await page.route("**/api/voices", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/voices/references/*", (route) => route.fulfill({ body: "audio" }));
+
+  await page.goto("/voices");
+  const zone = page.getByTestId("voice-reference-dropzone");
+  await expect(zone).toBeVisible();
+  await zone.evaluate((element) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["wav"], "voice-drop.wav", { type: "audio/wav" }));
+    element.dispatchEvent(new DragEvent("dragenter", { bubbles: true, dataTransfer: transfer }));
+  });
+  await expect(zone).toHaveClass(/is-dragging/);
+  await zone.evaluate((element) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["wav"], "voice-drop.wav", { type: "audio/wav" }));
+    element.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer }));
+  });
+  await expect(zone).not.toHaveClass(/is-dragging/);
+  await expect(page.getByLabel("Áudio de referência")).toHaveValue(digest);
+  await expect(page.getByText("Arquivo selecionado: voice-drop.wav")).toBeVisible();
+});
