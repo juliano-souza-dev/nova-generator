@@ -390,7 +390,7 @@ export function ShadowingPage() {
 
   useEffect(() => {
     function onShortcut(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
+      const target = event.target instanceof Element ? event.target : null;
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
       if (event.key === "Escape" && shortcutsOpen) {
         setShortcutsOpen(false);
