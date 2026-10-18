@@ -143,6 +143,29 @@ def validate_reference_duration(duration_ms: int) -> None:
         raise ValueError(REFERENCE_TOO_SHORT_MESSAGE)
 
 
+def validate_profile_reference(
+    store: FileVoiceReferenceStore, digest: str | None
+) -> None:
+    """Check the voice's original sample, never the length of synthesized cards."""
+    if digest is None:
+        return
+    stored = store.get(digest)
+    if stored is None:
+        raise ValueError(
+            "O áudio original da voz não foi encontrado. "
+            "Selecione outro perfil ou cadastre uma nova referência."
+        )
+    try:
+        validate_reference_duration(stored[0].duration_ms)
+    except ValueError as exc:
+        raise ValueError(
+            "A referência desta voz é curta demais para o Chatterbox Turbo. "
+            "O áudio original precisa ter pelo menos 6 segundos. "
+            "Grave uma nova referência de 10 a 15 segundos na Biblioteca de vozes. "
+            "Os WAVs dos cards Anki podem ser mais curtos."
+        ) from exc
+
+
 def _inspect(content: bytes) -> tuple[int, int, int]:
     if len(content) > MAX_WAV_BYTES:
         raise ValueError("O WAV de referência deve ter no máximo 10 MiB.")
