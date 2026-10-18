@@ -52,7 +52,7 @@ def test_synthesizer_passes_only_managed_reference_identity(tmp_path):
         ).synthesize(text="Hello", profile=snapshot, parameters={}, output=output)
     assert _resolve_reference(reference.sha256, str(store.root)).read_bytes() == _wav()
     (store.root / f"{reference.sha256}.wav").write_bytes(b"tampered")
-    with pytest.raises(ValueError, match="ausente ou alterado"):
+    with pytest.raises(ValueError, match="não foi encontrado"):
         ChatterboxNanoSynthesizer(
             Path("runner.py"), wav_probe=Probe(), reference_store=store
         ).synthesize(text="Hello", profile=snapshot, parameters={}, output=output)
