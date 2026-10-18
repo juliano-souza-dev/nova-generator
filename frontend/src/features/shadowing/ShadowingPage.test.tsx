@@ -149,6 +149,19 @@ describe("ShadowingPage", () => {
     expect(screen.getByRole("button", { name: "Aprovar Shadowing" })).toBeDisabled();
   });
 
+  it("exposes bulk approval but keeps it disabled until every scene is reviewed", async () => {
+    mount();
+    const approveAll = await screen.findByRole("button", {
+      name: "Aprovar todas as cenas",
+    });
+    expect(approveAll).toBeDisabled();
+    expect(approveAll.parentElement).toHaveAttribute(
+      "title",
+      "Revise a prévia e os personagens de todas as cenas antes de aprovar",
+    );
+    expect(studioApi.approveShadowing).not.toHaveBeenCalled();
+  });
+
   it("shows project approval progress and keyboard shortcuts", async () => {
     mount();
     expect(await screen.findByText("0 de 1 cenas aprovadas")).toBeInTheDocument();
