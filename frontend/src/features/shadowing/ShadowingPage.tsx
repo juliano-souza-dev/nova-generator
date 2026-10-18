@@ -772,35 +772,120 @@ export function ShadowingPage() {
             </div>
           </section>
 
-          <section className="shadowing-excluded panel" aria-label="Cues não selecionados">
+          <section className="shadowing-excluded panel" id="shadowing-cues" aria-label="Cues não selecionados">
             <div className="shadowing-section-heading">
-              <h2>Cues fora desta prática ({active.excluded_cues.length})</h2>
-              <p>
-                Excluir um grupo não apaga nada do Editorial. Falas longas precisam ser divididas na
-                origem para virar práticas fáceis de repetir.
-              </p>
+              <h2>Cues disponíveis</h2>
+              <p>Adicione somente as falas que deseja praticar. O Editorial não é alterado.</p>
             </div>
-            {active.excluded_cues.length === 0 && <p>Todos os cues estão selecionados.</p>}
+            <div className="shadowing-cue-filters">
+              <label className="shadowing-search">
+                <Search aria-hidden="true" />
+                <input
+                  type="search"
+                  placeholder="Buscar frase, tradução ou personagem"
+                  aria-label="Buscar cues"
+                  value={cueQuery}
+                  onChange={(event) => setCueQuery(event.target.value)}
+                />
+              </label>
+              <label>
+                Duração
+                <select aria-label="Filtrar duração" value={durationFilter}
+                  onChange={(event) => setDurationFilter(event.target.value)}>
+                  <option value="all">Todas</option>
+                  <option value="short">Até 2 s</option>
+                  <option value="medium">2–4 s</option>
+                  <option value="long">Acima de 4 s</option>
+                </select>
+              </label>
+              <label>
+                Palavras
+                <select aria-label="Filtrar palavras" value={wordFilter}
+                  onChange={(event) => setWordFilter(event.target.value)}>
+                  <option value="all">Todas</option>
+                  <option value="short">Até 5</option>
+                  <option value="long">Mais de 5</option>
+                </select>
+              </label>
+            </div>
+            <p className="shadowing-cue-count" role="status">
+              {filteredCues.length} de {active.excluded_cues.length} cues disponíveis
+            </p>
+            {active.excluded_cues.length === 0 && (
+              <p className="shadowing-empty">Todos os cues desta cena já estão em práticas.</p>
+            )}
+            {active.excluded_cues.length > 0 && filteredCues.length === 0 && (
+              <p className="shadowing-empty">Nenhum cue encontrado com esses filtros.</p>
+            )}
             <div className="shadowing-excluded-list">
-              {active.excluded_cues.map((cue) => (
-                <div className="shadowing-excluded-item" key={cue.id}>
-                  <div>
-                    <strong>
-                      Cue {cue.order} · {cue.speaker}
-                    </strong>
-                    <p>{cue.en}</p>
-                    <small>{cue.reason}</small>
+              {filteredCues.map((cue) => {
+                const duration = (cue.end_ms - cue.start_ms) / 1000;
+                const words = cue.en.trim().split(/\\s+/).filter(Boolean).length;
+                return (
+                  <div
+                    className="shadowing-excluded-item"
+                    key={cue.id}
+                    tabIndex={0}
+                    onFocus={() => setFocusedCueId(cue.id)}
+                    onClick={() => setFocusedCueId(cue.id)}
+                  >
+                    <div>
+                      <strong>
+                        Cue {cue.order} ·{" "}
+                        {cue.speaker === "Não identificado" || !cue.speaker.trim()
+                          ? (
+                            <button
+                              disabled
+                              type="button"
+                              className="shadowing-assign-button"
+                              title="Atribuição indisponível neste item. A API atual não permite editar o locutor."
+                            >
+                              Atribuir personagem
+                            </button>
+                          ) : cue.speaker}
+                      </strong>
+                      <span className="shadowing-cue-chips">
+                        <span>{duration.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s</span>
+                        <span>{words} {words === 1 ? "palavra" : "palavras"}</span>
+                      </span>
+                      <p>{cue.en}</p>
+                      <small>{cue.pt}</small>
+                      {!cue.eligible && <small className="shadowing-ineligible">{cue.reason}</small>}
+                    </div>
+                    {cue.eligible ? (
+                      <button type="button" disabled={isBusy} onClick={() => includeCue(cue)}>
+                        <Plus aria-hidden="true" /> Adicionar
+                      </button>
+                    ) : (
+                      <Link to={`/editorial?project=${projectId}`}>Ver no Editorial</Link>
+                    )}
                   </div>
-                  {cue.eligible ? (
-                    <button type="button" disabled={isBusy} onClick={() => includeCue(cue)}>
-                      <Undo2 aria-hidden="true" /> Adicionar
-                    </button>
-                  ) : (
-                    <Link to={`/editorial?project=${projectId}`}>Ver no Editorial</Link>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
+            <details className="shadowing-used" open={usedExpanded}
+              onToggle={(event) => setUsedExpanded(event.currentTarget.open)}>
+              <summary>Usados em outras práticas ({usedCues.length})</summary>
+              <div className="shadowing-excluded-list">
+                {usedCues.map((cue) => {
+                  const owner = active.blocks.findIndex((block) => block.cue_ids.includes(cue.id));
+                  return (
+                    <div className="shadowing-excluded-item" key={cue.id}>
+                      <div>
+                        <strong>Cue {cue.order} · {cue.speaker}</strong>
+                        <p>{cue.en}</p>
+                        <small>Em prática {owner + 1}</small>
+                      </div>
+                      <button type="button" disabled={isBusy}
+                        title="Retirar este cue da prática e devolvê-lo aos disponíveis"
+                        onClick={() => removeUsedCue(cue.id)}>
+                        <Trash2 aria-hidden="true" /> Remover da prática
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
           </section>
 
             </div>
