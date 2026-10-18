@@ -113,6 +113,87 @@ def test_material_selection_keeps_approved_text_and_export_freezes_cards(
     assert client.get(f"{base}/exports/{job_id}/anki.apkg").status_code == 404
 
 
+def test_short_legacy_voice_reference_is_reported_before_anki_job(client, tmp_path, monkeypatch):
+    import io
+    import wave
+    from hashlib import sha256
+
+    from nova_generator.core.settings import get_settings
+    from nova_generator.domain.voices import VoiceProfile
+    from nova_generator.infrastructure.database.voice_profile_repository import (
+        SqlAlchemyVoiceProfileRepository,
+    )
+    from nova_generator.infrastructure.filesystem.voice_references import FileVoiceReferenceStore
+
+    monkeypatch.setenv("NOVA_GENERATOR_MEDIA_CACHE_ROOT", str(tmp_path / "media"))
+    get_settings.cache_clear()
+    project_id, cue_id, _ = _seed_project()
+    stream = io.BytesIO()
+    with wave.open(stream, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(b"\\x00\\x00" * 16000 * 5)
+    content = stream.getvalue()
+    digest = sha256(content).hexdigest()
+    store = FileVoiceReferenceStore(get_settings().media_cache_root)
+    store.root.mkdir(parents=True)
+    (store.root / f"{digest}.wav").write_bytes(content)
+    voice_id = uuid4()
+    SqlAlchemyVoiceProfileRepository(get_session_factory()).save(
+        VoiceProfile(voice_id, "Juliana", 3, "chatterbox-turbo", "a" * 64, digest)
+    )
+
+    voices_response = client.get("/api/voices").json()
+    assert voices_response[0]["reference_ready"] is False
+    assert "pelo menos 6 segundos" in voices_response[0]["reference_message"]
+    response = client.post(
+        f"/api/projects/{project_id}/materials/{cue_id}/audio",
+        json={"voice_id": str(voice_id)},
+    )
+    assert response.status_code == 422
+    assert "referência" in response.json()["detail"].lower()
+    assert client.get("/api/jobs").json()["total"] == 0
+
+
+def test_short_anki_text_is_allowed_with_valid_voice_sample(client, tmp_path, monkeypatch):
+    import io
+    import wave
+
+    from nova_generator.core.settings import get_settings
+
+    monkeypatch.setenv("NOVA_GENERATOR_MEDIA_CACHE_ROOT", str(tmp_path / "media"))
+    get_settings.cache_clear()
+    project_id, cue_id, _ = _seed_project()
+    stream = io.BytesIO()
+    with wave.open(stream, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(b"\\x00\\x00" * 16000 * 7)
+    reference = client.post(
+        "/api/voices/references",
+        files={"file": ("speaker.wav", stream.getvalue(), "audio/wav")},
+    )
+    assert reference.status_code == 201
+    voice = client.post(
+        "/api/voices",
+        json={
+            "name": "Juliana",
+            "model_sha256": "a" * 64,
+            "reference_audio_sha256": reference.json()["sha256"],
+        },
+    )
+    assert voice.status_code == 201
+    assert voice.json()["reference_ready"] is True
+    response = client.post(
+        f"/api/projects/{project_id}/materials/{cue_id}/audio",
+        json={"voice_id": voice.json()["id"]},
+    )
+    assert response.status_code == 202, response.text
+    assert client.get("/api/jobs").json()["total"] == 2
+
+
 def test_material_audio_requires_project_cue_and_voice(client):
     project_id, first_id, _ = _seed_project()
     base = f"/api/projects/{project_id}/materials"
