@@ -56,7 +56,6 @@ function mount() {
 }
 
 describe("MaterialsPage", () => {
-
   it("prepares WAV for approved cards without external pedagogical material", async () => {
     vi.mocked(studioApi.projects).mockResolvedValue([
       { id: "project-1", title: "Lesson" } as never,
@@ -71,7 +70,9 @@ describe("MaterialsPage", () => {
     });
     vi.mocked(studioApi.externalMaterialsPackageUrl).mockReturnValue("/ai-package.json");
     vi.mocked(studioApi.materials).mockResolvedValue({
-      cards: [{ ...card, audio_ready: false, audio_url: null, reel_start_ms: null, reel_end_ms: null }],
+      cards: [
+        { ...card, audio_ready: false, audio_url: null, reel_start_ms: null, reel_end_ms: null },
+      ],
       voice_id: "voice-1",
       voice_version: 2,
     });
@@ -88,11 +89,7 @@ describe("MaterialsPage", () => {
     expect(screen.getByRole("button", { name: "Exportar APKG" })).toBeDisabled();
     fireEvent.click(prepare);
     await waitFor(() =>
-      expect(studioApi.prepareMaterialAudio).toHaveBeenCalledWith(
-        "project-1",
-        "cue-1",
-        "voice-1",
-      ),
+      expect(studioApi.prepareMaterialAudio).toHaveBeenCalledWith("project-1", "cue-1", "voice-1"),
     );
   });
 
@@ -152,9 +149,12 @@ describe("MaterialsPage", () => {
     });
     vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
     mount();
-    expect(await screen.findByText(/A preparação editorial ainda não está completa/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/A preparação editorial ainda não está completa/),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preparar WAV" })).not.toBeInTheDocument();
   });
+
   it("shows literal approved text, canonical preview, reel interval and submits selection", async () => {
     vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
       status: "approved",
