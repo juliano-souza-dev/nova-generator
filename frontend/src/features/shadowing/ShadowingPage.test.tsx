@@ -177,20 +177,23 @@ describe("ShadowingPage", () => {
   it("synchronizes deletion and undo with the existing edit endpoint", async () => {
     let latest = plan;
     vi.mocked(studioApi.shadowing).mockImplementation(async () => [latest]);
-    vi.mocked(studioApi.editShadowing).mockImplementation(async (_project, _scene, _source, _hash, groups) => {
-      latest = {
-        ...plan,
-        plan_sha256: latest.plan_sha256 === plan.plan_sha256 ? "c".repeat(64) : "d".repeat(64),
-        blocks: groups.map((group, index) => ({
-          ...plan.blocks.find((item) => item.cue_ids.includes(group[0]))!,
-          id: `block-${index + 1}`,
-          cue_ids: group,
-        })),
-        excluded_cues: groups.flat().includes("cue-1") ?
-          plan.excluded_cues : [...plan.excluded_cues, { ...cues[0], reason: "Omitido" }],
-      };
-      return latest;
-    });
+    vi.mocked(studioApi.editShadowing).mockImplementation(
+      async (_project, _scene, _source, _hash, groups) => {
+        latest = {
+          ...plan,
+          plan_sha256: latest.plan_sha256 === plan.plan_sha256 ? "c".repeat(64) : "d".repeat(64),
+          blocks: groups.map((group, index) => ({
+            ...plan.blocks.find((item) => item.cue_ids.includes(group[0]))!,
+            id: `block-${index + 1}`,
+            cue_ids: group,
+          })),
+          excluded_cues: groups.flat().includes("cue-1")
+            ? plan.excluded_cues
+            : [...plan.excluded_cues, { ...cues[0], reason: "Omitido" }],
+        };
+        return latest;
+      },
+    );
     mount();
     await screen.findByText("Prática 1 · Mike");
     fireEvent.click(screen.getAllByRole("button", { name: "Excluir grupo" })[0]);
@@ -199,7 +202,10 @@ describe("ShadowingPage", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Desfazer" }).at(-1)!);
     await waitFor(() => expect(studioApi.editShadowing).toHaveBeenCalledTimes(2));
     expect(studioApi.editShadowing).toHaveBeenLastCalledWith(
-      "project-1", "scene-1", plan.source_sha256, "c".repeat(64),
+      "project-1",
+      "scene-1",
+      plan.source_sha256,
+      "c".repeat(64),
       [["cue-1"], ["cue-3", "cue-4"]],
     );
   });
@@ -210,10 +216,15 @@ describe("ShadowingPage", () => {
     fireEvent.click(screen.getByText("Usados em outras práticas (3)"));
     expect(screen.getByText("Em prática 1")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Remover da prática" })[0]);
-    await waitFor(() => expect(studioApi.editShadowing).toHaveBeenCalledWith(
-      "project-1", "scene-1", plan.source_sha256, plan.plan_sha256,
-      [["cue-3", "cue-4"]],
-    ));
+    await waitFor(() =>
+      expect(studioApi.editShadowing).toHaveBeenCalledWith(
+        "project-1",
+        "scene-1",
+        plan.source_sha256,
+        plan.plan_sha256,
+        [["cue-3", "cue-4"]],
+      ),
+    );
   });
 
   it("deletes a group without touching the editorial cues", async () => {
