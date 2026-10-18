@@ -240,11 +240,26 @@ export type VoiceModelStatus = {
   message?: string;
 };
 
+export type ShadowingCue = {
+  id: string;
+  order: number;
+  speaker: string;
+  start_ms: number;
+  end_ms: number;
+  en: string;
+  pt: string;
+  eligible: boolean;
+};
+
+export type ShadowingExcludedCue = ShadowingCue & { reason: string };
+
 export type ShadowingBlock = {
   id: string;
   start_ms: number;
   end_ms: number;
   pause_duration_ms: number;
+  speaker: string;
+  word_count: number;
   cue_ids: string[];
   en: string;
   pt: string;
@@ -255,9 +270,13 @@ export type ShadowingPlan = {
   project_id: string;
   scene_id: string;
   source_sha256: string;
+  plan_sha256: string;
   duration_ms: number;
   status: "draft" | "approved";
+  origin: "automatic" | "groq" | "external" | "manual";
   blocks: ShadowingBlock[];
+  source_cues: ShadowingCue[];
+  excluded_cues: ShadowingExcludedCue[];
 };
 
 export type MaterialAiSection = {
