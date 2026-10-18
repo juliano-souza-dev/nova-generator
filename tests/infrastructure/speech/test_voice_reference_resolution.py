@@ -1,7 +1,7 @@
 import io
 import json
-from hashlib import sha256
 import wave
+from hashlib import sha256
 from pathlib import Path
 from unittest.mock import Mock, patch
 from uuid import uuid4
