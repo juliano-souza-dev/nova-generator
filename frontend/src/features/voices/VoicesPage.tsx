@@ -145,8 +145,8 @@ function VoiceDetail({
       </dl>
       {voice.reference_ready === false && (
         <p className="field-error" role="alert">
-          {voice.reference_message ?? "A referência desta voz precisa ser substituída."}
-          {" "}Envie uma nova gravação no formulário abaixo e crie uma nova versão deste perfil.
+          {voice.reference_message ?? "A referência desta voz precisa ser substituída."} Envie uma
+          nova gravação no formulário abaixo e crie uma nova versão deste perfil.
         </p>
       )}
       {voice.preview_ready && voice.preview_url ? (
