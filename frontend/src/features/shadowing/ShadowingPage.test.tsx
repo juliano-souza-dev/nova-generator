@@ -149,6 +149,73 @@ describe("ShadowingPage", () => {
     expect(screen.getByRole("button", { name: "Aprovar Shadowing" })).toBeDisabled();
   });
 
+  it("shows project approval progress and keyboard shortcuts", async () => {
+    mount();
+    expect(await screen.findByText("0 de 1 cenas aprovadas")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Etapas do Shadowing" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ver atalhos de teclado" }));
+    expect(screen.getByRole("dialog", { name: "Atalhos de teclado" })).toBeInTheDocument();
+    expect(screen.getByText("Ctrl+Z / Cmd+Z")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Atalhos de teclado" })).not.toBeInTheDocument();
+  });
+
+  it("filters cues by accents without editing source cues", async () => {
+    mount();
+    await screen.findByText("Cue 2 · Donna");
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar cues" }), {
+      target: { value: "QUE" },
+    });
+    expect(screen.getByText("1 de 1 cues disponíveis")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar cues" }), {
+      target: { value: "inexistente" },
+    });
+    expect(screen.getByText("Nenhum cue encontrado com esses filtros.")).toBeInTheDocument();
+    expect(studioApi.editShadowing).not.toHaveBeenCalled();
+  });
+
+  it("synchronizes deletion and undo with the existing edit endpoint", async () => {
+    let latest = plan;
+    vi.mocked(studioApi.shadowing).mockImplementation(async () => [latest]);
+    vi.mocked(studioApi.editShadowing).mockImplementation(async (_project, _scene, _source, _hash, groups) => {
+      latest = {
+        ...plan,
+        plan_sha256: latest.plan_sha256 === plan.plan_sha256 ? "c".repeat(64) : "d".repeat(64),
+        blocks: groups.map((group, index) => ({
+          ...plan.blocks.find((item) => item.cue_ids.includes(group[0]))!,
+          id: `block-${index + 1}`,
+          cue_ids: group,
+        })),
+        excluded_cues: groups.flat().includes("cue-1") ?
+          plan.excluded_cues : [...plan.excluded_cues, { ...cues[0], reason: "Omitido" }],
+      };
+      return latest;
+    });
+    mount();
+    await screen.findByText("Prática 1 · Mike");
+    fireEvent.click(screen.getAllByRole("button", { name: "Excluir grupo" })[0]);
+    await waitFor(() => expect(studioApi.editShadowing).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/Grupo excluído/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Desfazer" }).at(-1)!);
+    await waitFor(() => expect(studioApi.editShadowing).toHaveBeenCalledTimes(2));
+    expect(studioApi.editShadowing).toHaveBeenLastCalledWith(
+      "project-1", "scene-1", plan.source_sha256, "c".repeat(64),
+      [["cue-1"], ["cue-3", "cue-4"]],
+    );
+  });
+
+  it("lets the user remove an in-use cue from its practice", async () => {
+    mount();
+    await screen.findByText("Prática 1 · Mike");
+    fireEvent.click(screen.getByText("Usados em outras práticas (3)"));
+    expect(screen.getByText("Em prática 1")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Remover da prática" })[0]);
+    await waitFor(() => expect(studioApi.editShadowing).toHaveBeenCalledWith(
+      "project-1", "scene-1", plan.source_sha256, plan.plan_sha256,
+      [["cue-3", "cue-4"]],
+    ));
+  });
+
   it("deletes a group without touching the editorial cues", async () => {
     mount();
     await screen.findByText("Prática 1 · Mike");
