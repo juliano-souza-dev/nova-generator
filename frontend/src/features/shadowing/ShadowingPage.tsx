@@ -389,7 +389,7 @@ export function ShadowingPage() {
       const normalized = (value: string) =>
         value
           .normalize("NFD")
-          .replace(/[\\u0300-\\u036f]/g, "")
+          .replace(/[\u0300-\u036f]/g, "")
           .toLocaleLowerCase("pt-BR");
       const matchesText = normalized(`${cue.en} ${cue.pt} ${cue.speaker}`).includes(
         normalized(cueQuery),
@@ -400,7 +400,7 @@ export function ShadowingPage() {
         (durationFilter === "short" && duration <= 2000) ||
         (durationFilter === "medium" && duration > 2000 && duration <= 4000) ||
         (durationFilter === "long" && duration > 4000);
-      const words = cue.en.trim().split(/\\s+/).filter(Boolean).length;
+      const words = cue.en.trim().split(/\s+/).filter(Boolean).length;
       return (
         matchesText &&
         matchesDuration &&
@@ -1044,7 +1044,7 @@ export function ShadowingPage() {
                 <div className="shadowing-excluded-list">
                   {filteredCues.map((cue) => {
                     const duration = (cue.end_ms - cue.start_ms) / 1000;
-                    const words = cue.en.trim().split(/\\s+/).filter(Boolean).length;
+                    const words = cue.en.trim().split(/\s+/).filter(Boolean).length;
                     return (
                       <div
                         className="shadowing-excluded-item"
