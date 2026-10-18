@@ -50,3 +50,22 @@ def test_chatterbox_timeout_is_reported_as_timeout_not_startup_error(tmp_path) -
                 text="Hello", profile=profile, parameters={}, output=output
             )
     assert isinstance(exc_info.value.__cause__, subprocess.TimeoutExpired)
+
+
+def test_chatterbox_timeout_logs_captured_stderr_and_stdout(tmp_path, caplog) -> None:
+    output = tmp_path / "timeout.wav"
+    profile = VoiceProfile(uuid4(), "Ana", 1, "nano", "a" * 64).snapshot()
+    expired = subprocess.TimeoutExpired(
+        cmd=["python", "runner.py"],
+        timeout=300,
+        output=b"loading model...",
+        stderr=b"Traceback: model stalled",
+    )
+    with patch("subprocess.run", side_effect=expired):
+        with pytest.raises(RuntimeError, match="excedeu 300 segundos"):
+            ChatterboxNanoSynthesizer(Path("runner.py"), wav_probe=FakeWavProbe()).synthesize(
+                text="Hello", profile=profile, parameters={}, output=output
+            )
+    assert "Traceback: model stalled" in caplog.text
+    assert "loading model..." in caplog.text
+    assert "chatterbox_subprocess_timeout" in caplog.text
