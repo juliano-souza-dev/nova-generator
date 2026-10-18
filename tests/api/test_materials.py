@@ -133,7 +133,7 @@ def test_short_legacy_voice_reference_is_reported_before_anki_job(client, tmp_pa
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(16000)
-        wav.writeframes(b"\\x00\\x00" * 16000 * 5)
+        wav.writeframes(b"\x00\x00" * 16000 * 5)
     content = stream.getvalue()
     digest = sha256(content).hexdigest()
     store = FileVoiceReferenceStore(get_settings().media_cache_root)
@@ -170,7 +170,7 @@ def test_short_anki_text_is_allowed_with_valid_voice_sample(client, tmp_path, mo
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(16000)
-        wav.writeframes(b"\\x00\\x00" * 16000 * 7)
+        wav.writeframes(b"\x00\x00" * 16000 * 7)
     reference = client.post(
         "/api/voices/references",
         files={"file": ("speaker.wav", stream.getvalue(), "audio/wav")},
