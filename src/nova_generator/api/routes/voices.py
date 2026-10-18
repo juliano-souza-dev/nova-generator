@@ -13,9 +13,10 @@ from nova_generator.application.use_cases.manage_voice_profiles import (
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.voices import VoiceProfile
 from nova_generator.infrastructure.filesystem.voice_references import (
-    MAX_WAV_BYTES,
+    MAX_REFERENCE_UPLOAD_BYTES,
     FileVoiceReferenceStore,
     VoiceReference,
+    normalize_reference_audio,
 )
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 from nova_generator.infrastructure.speech.model_checkpoint import checkpoint_sha256
@@ -58,11 +59,15 @@ def list_references() -> list[ReferenceResponse]:
 
 @router.post("/references", response_model=ReferenceResponse, status_code=201)
 async def upload_reference(file: Annotated[UploadFile, File(...)]) -> ReferenceResponse:
-    if not file.filename or not file.filename.lower().endswith(".wav"):
-        raise HTTPException(422, "Envie um arquivo .wav.")
-    content = await file.read(MAX_WAV_BYTES + 1)
+    extension = (file.filename or "").lower().rsplit(".", 1)[-1]
+    if extension not in {"wav", "ogg", "mp3"}:
+        raise HTTPException(422, "Envie um arquivo WAV, MP3 ou OGG.")
+    content = await file.read(MAX_REFERENCE_UPLOAD_BYTES + 1)
     try:
-        return _reference_response(_references().save(content))
+        if len(content) > MAX_REFERENCE_UPLOAD_BYTES:
+            raise ValueError("O áudio de referência deve ter no máximo 10 MiB.")
+        canonical_wav = normalize_reference_audio(content, extension)
+        return _reference_response(_references().save(canonical_wav))
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -98,7 +103,7 @@ def _prepare(payload: VoiceInput) -> dict[str, Any]:
         raise ValueError("Caminhos de arquivo não são aceitos nos parâmetros da voz.")
     digest = values["reference_audio_sha256"]
     if digest is not None and _references().get(digest) is None:
-        raise ValueError("Envie ou selecione um WAV de referência da biblioteca local.")
+        raise ValueError("Envie ou selecione um áudio de referência da biblioteca local.")
     values["model_sha256"] = values["model_sha256"] or checkpoint_sha256(get_settings())
     return values
 
