@@ -17,6 +17,7 @@ from nova_generator.infrastructure.filesystem.voice_references import (
     FileVoiceReferenceStore,
     VoiceReference,
     normalize_reference_audio,
+    validate_reference_duration,
 )
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 from nova_generator.infrastructure.speech.model_checkpoint import checkpoint_sha256
@@ -102,8 +103,11 @@ def _prepare(payload: VoiceInput) -> dict[str, Any]:
     if any(key.lower().endswith(("_path", "_file")) for key in parameters):
         raise ValueError("Caminhos de arquivo não são aceitos nos parâmetros da voz.")
     digest = values["reference_audio_sha256"]
-    if digest is not None and _references().get(digest) is None:
-        raise ValueError("Envie ou selecione um áudio de referência da biblioteca local.")
+    if digest is not None:
+        stored = _references().get(digest)
+        if stored is None:
+            raise ValueError("Envie ou selecione um áudio de referência da biblioteca local.")
+        validate_reference_duration(stored[0].duration_ms)
     values["model_sha256"] = values["model_sha256"] or checkpoint_sha256(get_settings())
     return values
 
