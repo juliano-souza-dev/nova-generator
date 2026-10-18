@@ -610,6 +610,7 @@ export function ShadowingPage() {
                   active.status === "approved" ? "Esta cena já foi aprovada" :
                   !active.blocks.length ? "Adicione ao menos uma prática" :
                   isBusy ? "Aguarde a operação em andamento" :
+                  missingSpeakers ? "Há práticas sem personagem identificado" :
                   phase !== "finished" ? "Reproduza a prévia completa antes de aprovar" :
                   "Aprovar plano revisado"
                 }
@@ -618,7 +619,7 @@ export function ShadowingPage() {
                   type="button"
                   className="primary-button"
                   onClick={() => approval.mutate(active)}
-                  disabled={active.status === "approved" || !active.blocks.length || isBusy || phase !== "finished"}
+                  disabled={active.status === "approved" || isBusy || !activeReady}
                 >
                   <Check aria-hidden="true" />
                   {active.status === "approved" ? "Shadowing aprovado" : "Aprovar Shadowing"}
