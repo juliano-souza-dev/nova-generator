@@ -223,7 +223,7 @@ export function MaterialsPage() {
           </div>
           {materialReview.isError && (
             <p role="alert">
-              A preparação pedagógica não pôde ser carregada. Revise os cues aprovados no Editorial.
+              Conteúdo pedagógico complementar indisponível. A síntese de voz e a exportação Anki continuam independentes.
             </p>
           )}
           {!materialReview.isError && (
@@ -553,7 +553,7 @@ const statusDetails: Record<
   blocked: {
     label: "Bloqueado",
     icon: CircleAlert,
-    description: "Conclua a preparação editorial e o conteúdo pedagógico.",
+    description: "Conclua a preparação editorial do card para gerar o áudio.",
   },
   ready: {
     label: "Pronto",
