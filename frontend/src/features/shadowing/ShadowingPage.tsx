@@ -92,19 +92,24 @@ export function ShadowingPage() {
   const missingSpeakers =
     active?.blocks.some((block) => !block.speaker.trim() || block.speaker === "Não identificado") ??
     false;
-  const activeReviewed = !!active && (
-    phase === "finished" || reviewedPlans[active.scene_id] === active.plan_sha256
-  );
+  const activeReviewed =
+    !!active && (phase === "finished" || reviewedPlans[active.scene_id] === active.plan_sha256);
   const activeReady = Boolean(active?.blocks.length) && !missingSpeakers && activeReviewed;
-  const scenesReadyForApproval = !!plans.data?.length && plans.data.every((item) =>
-    item.status === "approved" ||
-      (item.blocks.length > 0 &&
-        item.blocks.every((block) => block.speaker.trim() && block.speaker !== "Não identificado") &&
-        reviewedPlans[item.scene_id] === item.plan_sha256),
-  );
+  const scenesReadyForApproval =
+    !!plans.data?.length &&
+    plans.data.every(
+      (item) =>
+        item.status === "approved" ||
+        (item.blocks.length > 0 &&
+          item.blocks.every(
+            (block) => block.speaker.trim() && block.speaker !== "Não identificado",
+          ) &&
+          reviewedPlans[item.scene_id] === item.plan_sha256),
+    );
   const scenesPendingApproval = plans.data?.filter((item) => item.status !== "approved") ?? [];
   const practicesPendingApproval = scenesPendingApproval.reduce(
-    (count, item) => count + item.blocks.length, 0,
+    (count, item) => count + item.blocks.length,
+    0,
   );
   const previewLabel =
     phase === "finished"
@@ -228,8 +233,8 @@ export function ShadowingPage() {
       importGuard.current = false;
     },
   });
-  const isBusy = editing.isPending || groq.isPending || importAi.isPending ||
-    approval.isPending || bulkBusy;
+  const isBusy =
+    editing.isPending || groq.isPending || importAi.isPending || approval.isPending || bulkBusy;
   busy.current = isBusy;
   const historyCount = historyVersion >= 0 ? undoHistory.current.length : 0;
 
@@ -346,11 +351,11 @@ export function ShadowingPage() {
   }
 
   async function approveAllScenes() {
-    if (!scenesReadyForApproval || !scenesPendingApproval.length ||
-        isBusy || bulkGuard.current) return;
+    if (!scenesReadyForApproval || !scenesPendingApproval.length || isBusy || bulkGuard.current)
+      return;
     const confirmed = window.confirm(
       `Aprovar ${scenesPendingApproval.length} cenas e ${practicesPendingApproval} práticas revisadas? ` +
-      "Essa aprovação não pode ser desfeita pela interface atual.",
+        "Essa aprovação não pode ser desfeita pela interface atual.",
     );
     if (!confirmed) return;
     bulkGuard.current = true;
@@ -358,7 +363,10 @@ export function ShadowingPage() {
     try {
       for (const plan of scenesPendingApproval) {
         await studioApi.approveShadowing(
-          projectId, plan.scene_id, plan.source_sha256, plan.plan_sha256,
+          projectId,
+          plan.scene_id,
+          plan.source_sha256,
+          plan.plan_sha256,
         );
       }
       showToast({
@@ -368,7 +376,10 @@ export function ShadowingPage() {
       refreshPlans();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao aprovar cenas.";
-      showToast({ tone: "error", text: `Aprovação parcial ou interrompida: ${message}. Atualize as cenas.` });
+      showToast({
+        tone: "error",
+        text: `Aprovação parcial ou interrompida: ${message}. Atualize as cenas.`,
+      });
       refreshPlans();
     } finally {
       bulkGuard.current = false;
@@ -793,7 +804,7 @@ export function ShadowingPage() {
                 </div>
               </div>
 
-          <div className="shadowing-stage panel" ref={stageRef} aria-label="Prévia da cena">
+              <div className="shadowing-stage panel" ref={stageRef} aria-label="Prévia da cena">
                 <video
                   ref={playerRef}
                   src={media.data?.cut_url ?? undefined}
@@ -817,8 +828,7 @@ export function ShadowingPage() {
                 </div>
                 {previewError && <p role="alert">{previewError}</p>}
               </div>
-
-                          </div>
+            </div>
             <div className="shadowing-content-column">
               <section
                 id="shadowing-ai"
