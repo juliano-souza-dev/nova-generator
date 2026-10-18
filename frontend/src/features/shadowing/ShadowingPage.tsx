@@ -94,16 +94,44 @@ export function ShadowingPage() {
 
   const refreshPlans = () => void client.invalidateQueries({ queryKey: ["shadowing", projectId] });
 
+  const showToast = useCallback((next: Toast) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(next);
+    toastTimer.current = setTimeout(() => setToast(null), 5000);
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
+
+  useEffect(() => {
+    undoHistory.current = [];
+    setHistoryVersion((value) => value + 1);
+    setSelectedBlockIndex(0);
+    setFocusedCueId("");
+    setToolsOpen(false);
+    setToast(null);
+  }, [projectId, active?.scene_id]);
+
   const approval = useMutation({
     mutationFn: (plan: ShadowingPlan) =>
       studioApi.approveShadowing(projectId, plan.scene_id, plan.source_sha256, plan.plan_sha256),
     onSuccess: () => {
-      setActionNotice("Plano de Shadowing aprovado.");
+      showToast({ text: "Shadowing aprovado.", tone: "success" });
       refreshPlans();
     },
+    onError: (error) => showToast({ text: error.message, tone: "error" }),
   });
   const editing = useMutation({
-    mutationFn: ({ plan, groups }: { plan: ShadowingPlan; groups: string[][] }) =>
+    mutationFn: ({
+      plan,
+      groups,
+    }: {
+      plan: ShadowingPlan;
+      groups: string[][];
+      description?: string;
+      undo?: boolean;
+    }) =>
       studioApi.editShadowing(
         projectId,
         plan.scene_id,
@@ -111,29 +139,64 @@ export function ShadowingPage() {
         plan.plan_sha256,
         groups,
       ),
-    onSuccess: () => {
-      setActionNotice("Grupos atualizados. Reproduza a nova prévia antes de aprovar.");
+    onSuccess: (updated, variables) => {
+      client.setQueryData<ShadowingPlan[]>(["shadowing", projectId], (previous) =>
+        previous?.map((item) => item.scene_id === updated.scene_id ? updated : item),
+      );
+      if (variables.undo) {
+        undoHistory.current.pop();
+      } else {
+        undoHistory.current = [
+          ...undoHistory.current,
+          {
+            projectId,
+            sceneId: variables.plan.scene_id,
+            source: variables.plan.source_sha256,
+            groups: variables.plan.blocks.map((item) => [...item.cue_ids]),
+          },
+        ].slice(-30);
+      }
+      setHistoryVersion((value) => value + 1);
+      showToast({
+        text: variables.undo ? "Última edição desfeita." :
+          `${variables.description ?? "Grupos atualizados"}. Reproduza a prévia antes de aprovar.`,
+        tone: "success",
+        undo: undoHistory.current.length > 0,
+      });
       refreshPlans();
     },
+    onError: (error) => showToast({ text: error.message, tone: "error" }),
   });
   const groq = useMutation({
     mutationFn: (plan: ShadowingPlan) => studioApi.generateShadowing(projectId, plan.scene_id),
-    onSuccess: () => {
-      setActionNotice("A Groq gerou uma nova proposta. Revise todos os grupos.");
+    onSuccess: (updated) => {
+      undoHistory.current = [];
+      setHistoryVersion((value) => value + 1);
+      showToast({
+        text: `Proposta gerada: ${updated.blocks.length} grupos. Reproduza a prévia antes de aprovar.`,
+        tone: "success",
+      });
       refreshPlans();
     },
+    onError: (error) => showToast({ text: `Falha ao gerar proposta: ${error.message}`, tone: "error" }),
+    onSettled: () => { generatingGuard.current = false; },
   });
   const importAi = useMutation({
     mutationFn: ({ plan, file }: { plan: ShadowingPlan; file: File }) =>
       studioApi.importShadowing(projectId, plan.scene_id, file),
-    onSuccess: () => {
-      setActionNotice("Proposta da IA externa importada. Revise os grupos antes de aprovar.");
+    onSuccess: (updated) => {
+      undoHistory.current = [];
+      setHistoryVersion((value) => value + 1);
+      showToast({ text: `Proposta importada: ${updated.blocks.length} grupos.`, tone: "success" });
       refreshPlans();
     },
+    onError: (error) => showToast({ text: `Erro no JSON importado: ${error.message}`, tone: "error" }),
+    onSettled: () => { importGuard.current = false; },
   });
   const isBusy = editing.isPending || groq.isPending || importAi.isPending || approval.isPending;
   busy.current = isBusy;
   const actionError = editing.error ?? groq.error ?? importAi.error ?? approval.error;
+  const historyCount = historyVersion >= 0 ? undoHistory.current.length : 0;
 
   useEffect(() => {
     setPreviewIndex(-1);
