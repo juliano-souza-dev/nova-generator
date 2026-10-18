@@ -10,7 +10,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from nova_generator.api.dependencies import get_editorial_repository, get_enqueue_job
+from nova_generator.api.dependencies import (
+    get_editorial_repository,
+    get_enqueue_job,
+    get_session_factory,
+)
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.use_cases.manage_jobs import EnqueueJob
 from nova_generator.application.use_cases.materials_ai_exchange import (
@@ -18,6 +22,7 @@ from nova_generator.application.use_cases.materials_ai_exchange import (
     MaterialsAiExchange,
 )
 from nova_generator.core.settings import get_settings
+from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
 
 router = APIRouter(prefix="/projects/{project_id}/materials-ai", tags=["materials-ai"])
 
@@ -25,6 +30,7 @@ router = APIRouter(prefix="/projects/{project_id}/materials-ai", tags=["material
 class MaterialGenerationResponse(BaseModel):
     job_id: UUID
     status: str
+    error_message: str | None = None
 
 
 class ApproveMaterialRequest(BaseModel):
@@ -119,3 +125,15 @@ def generate_pedagogical_materials(
         idempotency_key=None,
     )
     return MaterialGenerationResponse(job_id=job.id, status=job.status)
+
+
+@router.get("/latest-generation", response_model=MaterialGenerationResponse)
+def latest_pedagogical_generation(project_id: UUID) -> MaterialGenerationResponse:
+    job = SqlAlchemyJobRepository(get_session_factory()).latest_for_project(
+        str(project_id), "generate_pedagogical_materials"
+    )
+    if job is None:
+        raise HTTPException(404, detail="generation not found")
+    return MaterialGenerationResponse(
+        job_id=job.id, status=job.status, error_message=job.error_message
+    )
