@@ -23,6 +23,7 @@ CONTRACT = "nova-generator-shadowing/2.0"
 PROPOSAL_CONTRACT = "nova-generator-shadowing-proposal/1.0"
 MAX_BLOCK_MS = 6_500
 MAX_BLOCK_WORDS = 14
+MAX_MANUAL_BLOCK_WORDS = 24
 MAX_CUE_GAP_MS = 1_000
 MIN_PAUSE_MS = 2_000
 MAX_PAUSE_MS = 9_000
@@ -69,7 +70,11 @@ class PrepareShadowing:
         ):
             try:
                 groups = _group_ids(stored["blocks"])
-                blocks = _validated_blocks(cues, groups)
+                blocks = _validated_blocks(
+                    cues,
+                    groups,
+                    max_words=MAX_MANUAL_BLOCK_WORDS if stored.get("origin") == "manual" else MAX_BLOCK_WORDS,
+                )
                 plan_hash = _plan_hash(fingerprint, blocks)
                 if stored["plan_sha256"] == plan_hash:
                     return self._public(
@@ -250,7 +255,9 @@ class PrepareShadowing:
         scene, cues, fingerprint = self._source(project_id, scene_id)
         if source_sha256 != fingerprint:
             raise ShadowingError("O Editorial mudou. Recarregue a cena e gere outra proposta.")
-        blocks = _validated_blocks(cues, groups)
+        blocks = _validated_blocks(
+            cues, groups, max_words=MAX_MANUAL_BLOCK_WORDS if origin == "manual" else MAX_BLOCK_WORDS
+        )
         result = self._public(
             project_id, scene, cues, fingerprint, blocks, status="draft", origin=origin
         )
@@ -429,7 +436,9 @@ def _group_ids(blocks: Any) -> list[list[str]]:
     return [list(block["cue_ids"]) for block in blocks]
 
 
-def _validated_blocks(cues: list[Cue], groups: list[list[str]]) -> list[dict[str, Any]]:
+def _validated_blocks(
+    cues: list[Cue], groups: list[list[str]], *, max_words: int = MAX_BLOCK_WORDS
+) -> list[dict[str, Any]]:
     if not isinstance(groups, list) or len(groups) > len(cues):
         raise ShadowingError("Quantidade inválida de grupos de shadowing")
     index = {str(cue.id): (position, cue) for position, cue in enumerate(cues)}
@@ -459,10 +468,10 @@ def _validated_blocks(cues: list[Cue], groups: list[list[str]]) -> list[dict[str
         start_ms = selected[0].speech_start_ms
         end_ms = selected[-1].speech_end_ms
         word_count = sum(len(item.approved_en.split()) for item in selected)
-        if end_ms - start_ms > MAX_BLOCK_MS or word_count > MAX_BLOCK_WORDS:
+        if end_ms - start_ms > MAX_BLOCK_MS or word_count > max_words:
             raise ShadowingError(
                 f"Prática longa demais: limite de {MAX_BLOCK_MS / 1000:g} s e "
-                f"{MAX_BLOCK_WORDS} palavras por grupo"
+                f"{max_words} palavras por grupo"
             )
         previous_position = positions[-1]
         used.update(group)

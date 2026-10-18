@@ -217,7 +217,7 @@ export function ShadowingPage() {
     if (durationMs > 6500)
       return `A prática combinada teria ${(durationMs / 1000).toFixed(1)} s; o limite é 6,5 s.`;
     const words = left.word_count + right.word_count;
-    if (words > 14) return `A prática combinada teria ${words} palavras; o limite é 14.`;
+    if (words > 24) return `A prática combinada teria ${words} palavras; o limite manual é 24.`;
     return null;
   }
 
@@ -420,8 +420,9 @@ export function ShadowingPage() {
             <div className="shadowing-section-heading">
               <h2>Práticas selecionadas</h2>
               <p>
-                Juntar exige cues consecutivos, o mesmo locutor informado e limites curtos. Quando
-                ambos estiverem sem locutor, a junção é uma decisão manual.
+                A IA propõe até 14 palavras. Na revisão manual, você pode juntar cues consecutivos
+                em até 24 palavras e 6,5 s. Quando ambos estiverem sem locutor, a junção é uma
+                decisão manual.
               </p>
             </div>
             {active.blocks.length === 0 && (
