@@ -6,19 +6,21 @@ async function arrangeMaterialPage(page: Page) {
   );
   await page.route("**/api/voices", (route) =>
     route.fulfill({
-      json: [{
-        id: "voice-1",
-        name: "Juliana",
-        version: 3,
-        model_id: "chatterbox-turbo",
-        model_sha256: "a".repeat(64),
-        reference_audio_sha256: "b".repeat(64),
-        parameters: {},
-        snapshot_sha256: "c".repeat(64),
-        preview_ready: true,
-        preview_url: null,
-        reference_ready: true,
-      }],
+      json: [
+        {
+          id: "voice-1",
+          name: "Juliana",
+          version: 3,
+          model_id: "chatterbox-turbo",
+          model_sha256: "a".repeat(64),
+          reference_audio_sha256: "b".repeat(64),
+          parameters: {},
+          snapshot_sha256: "c".repeat(64),
+          preview_ready: true,
+          preview_url: null,
+          reference_ready: true,
+        },
+      ],
     }),
   );
   await page.route("**/api/projects/project-1/materials-ai/review", (route) =>
@@ -30,25 +32,27 @@ async function arrangeMaterialPage(page: Page) {
   await page.route(/\/api\/projects\/project-1\/materials(?:\?.*)?$/, (route) =>
     route.fulfill({
       json: {
-        cards: [{
-          cue_id: "cue-1",
-          scene_order: 1,
-          cue_order: 1,
-          approved_en: "Hello!",
-          approved_pt: "Olá!",
-          tags: [],
-          included: true,
-          speaker: "Juliana",
-          speech_start_ms: 0,
-          speech_end_ms: 650,
-          reel_start_ms: null,
-          reel_end_ms: null,
-          audio_ready: false,
-          audio_url: null,
-          audio_error: null,
-          editorial_ready: true,
-          highlights: [],
-        }],
+        cards: [
+          {
+            cue_id: "cue-1",
+            scene_order: 1,
+            cue_order: 1,
+            approved_en: "Hello!",
+            approved_pt: "Olá!",
+            tags: [],
+            included: true,
+            speaker: "Juliana",
+            speech_start_ms: 0,
+            speech_end_ms: 650,
+            reel_start_ms: null,
+            reel_end_ms: null,
+            audio_ready: false,
+            audio_url: null,
+            audio_error: null,
+            editorial_ready: true,
+            highlights: [],
+          },
+        ],
         voice_id: "voice-1",
         voice_version: 3,
       },
@@ -79,7 +83,9 @@ test("Preparar WAV submits a job and shows queue state within the card", async (
   expect(submissions).toBe(1);
 });
 
-test("Preparar WAV reports rejected requests visibly without leaving the table", async ({ page }) => {
+test("Preparar WAV reports rejected requests visibly without leaving the table", async ({
+  page,
+}) => {
   await arrangeMaterialPage(page);
   await page.route("**/api/projects/project-1/materials/cue-1/audio", (route) =>
     route.fulfill({
@@ -93,7 +99,9 @@ test("Preparar WAV reports rejected requests visibly without leaving the table",
   await expect(prepare).toBeEnabled();
   await prepare.click();
   await expect(
-    page.getByText("Não foi possível iniciar a síntese: A referência de voz selecionada não é válida."),
+    page.getByText(
+      "Não foi possível iniciar a síntese: A referência de voz selecionada não é válida.",
+    ),
   ).toBeVisible();
   await expect(prepare).toBeEnabled();
 });
