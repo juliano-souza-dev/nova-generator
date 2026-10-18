@@ -90,4 +90,65 @@ describe("VoicesPage", () => {
       ),
     );
   });
+  it("accepts a WAV dropped on the area and automatically selects the uploaded reference", async () => {
+    const digest = "d".repeat(64);
+    vi.mocked(studioApi.uploadVoiceReference).mockClear();
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: true,
+      model_sha256: "a".repeat(64),
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([]);
+    vi.mocked(studioApi.uploadVoiceReference).mockResolvedValue({
+      sha256: digest,
+      duration_ms: 2500,
+      sample_rate: 16000,
+      channels: 1,
+      size_bytes: 80044,
+      audio_url: `/api/voices/references/${digest}`,
+    });
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+
+    const zone = screen.getByTestId("voice-reference-dropzone");
+    const wav = new File(["wav"], "minha-voz.WAV", { type: "audio/wav" });
+    fireEvent.dragEnter(zone, { dataTransfer: { files: [wav] } });
+    expect(zone).toHaveClass("is-dragging");
+    expect(screen.getByText("Solte o WAV aqui")).toBeInTheDocument();
+    fireEvent.drop(zone, { dataTransfer: { files: [wav] } });
+
+    await waitFor(() => {
+      expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(wav);
+      expect(screen.getByLabelText("Áudio de referência")).toHaveValue(digest);
+    });
+    expect(zone).not.toHaveClass("is-dragging");
+    expect(screen.getByText(/Arquivo selecionado: minha-voz.WAV/)).toBeInTheDocument();
+  });
+
+  it("rejects non-WAV drops without uploading them", () => {
+    vi.mocked(studioApi.uploadVoiceReference).mockClear();
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: true,
+      model_sha256: "a".repeat(64),
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([]);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+
+    const zone = screen.getByTestId("voice-reference-dropzone");
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [new File(["mp3"], "sample.mp3", { type: "audio/mpeg" })] },
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Selecione um arquivo WAV (.wav).");
+    expect(studioApi.uploadVoiceReference).not.toHaveBeenCalled();
+  });
+
 });
