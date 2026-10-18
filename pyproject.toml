@@ -16,6 +16,7 @@ dependencies = [
   "python-multipart>=0.0.20,<1",
   "jsonschema>=4.23,<5",
   "pydantic-settings>=2.6,<3",
+  "reportlab>=4.2,<5",
   "sqlalchemy>=2.0,<3",
   "yt-dlp>=2025.1.15,<2027",
   "uvicorn[standard]>=0.32,<1",
