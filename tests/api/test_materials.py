@@ -243,3 +243,117 @@ def test_materials_exclude_explicit_editorial_drafts(client):
         f"/api/projects/{project_id}/materials", params={"voice_id": voice["id"]}
     ).json()["cards"]
     assert all(card["cue_id"] != first_id for card in cards)
+
+
+def test_gerar_material_requires_review_and_queues_complete_production(
+    client, tmp_path, monkeypatch
+):
+    import io
+    import json
+
+    from nova_generator.core.settings import get_settings
+
+    monkeypatch.setenv("NOVA_GENERATOR_PROJECT_ROOT", str(tmp_path / "projects"))
+    get_settings.cache_clear()
+    project_id, first_id, second_id = _seed_project()
+    base = f"/api/projects/{project_id}"
+    voice = client.post(
+        "/api/voices",
+        json={
+            "name": "Juliana", "model_id": "chatterbox-turbo",
+            "model_sha256": "a" * 64,
+        },
+    ).json()
+    preapproval = client.post(
+        f"{base}/materials/generate", json={"voice_id": voice["id"]}
+    )
+    assert preapproval.status_code == 409
+    assert "aprove" in preapproval.json()["detail"]
+
+    packaged = client.get(f"{base}/materials-ai/package").json()
+    sections = [
+        {
+            "id": section,
+            "title": f"Seção {section}",
+            "paragraphs": ["Explicação sobre uso natural do inglês."],
+            "exercises": [
+                {"prompt": "Como se diz?", "answer": "Usando a expressão correta."}
+            ] if section in {"guided_practice", "activities", "challenge"} else [],
+        }
+        for section in (
+            "learning_path", "vocabulary", "structures", "guided_practice",
+            "activities", "challenge", "review",
+        )
+    ]
+    document = {
+        "contract": "nova-generator-materials-output/1.0",
+        "project_id": project_id,
+        "source_sha256": packaged["source_sha256"],
+        "title": "Aula completa",
+        "sections": sections,
+        "anki_cards": [
+            {
+                "cue_id": cue["id"],
+                "front_en": cue["approved_en"],
+                "back_pt": cue["approved_pt"],
+                "explanation_pt": "Explicação contextual do card.",
+            }
+            for scene in packaged["source"]["scenes"]
+            for cue in scene["cues"]
+        ],
+    }
+    imported = client.post(
+        f"{base}/materials-ai/import",
+        files={"file": ("output.json", io.BytesIO(json.dumps(document).encode()), "application/json")},
+    )
+    assert imported.status_code == 200, imported.text
+    still_draft = client.post(
+        f"{base}/materials/generate", json={"voice_id": voice["id"]}
+    )
+    assert still_draft.status_code == 409
+    approved = client.post(
+        f"{base}/materials-ai/approval",
+        json={"source_sha256": packaged["source_sha256"]},
+    )
+    assert approved.status_code == 200
+    requested = client.post(
+        f"{base}/materials/generate", json={"voice_id": voice["id"]}
+    )
+    assert requested.status_code == 202, requested.text
+    export = requested.json()
+    assert export["status"] == "queued"
+    jobs = client.get("/api/jobs").json()["items"]
+    job = next(item for item in jobs if item["id"] == export["job_id"])
+    assert job["kind"] == "export_materials"
+    assert job["input"]["generate_complete"] is True
+    assert job["input"]["cue_ids"] == [first_id, second_id]
+    assert job["input"]["audio_hashes"] == {}
+    assert len(job["input"]["materials_sha256"]) == 64
+    assert client.get(f"{base}/materials/latest-export").json()["job_id"] == export["job_id"]
+    assert client.get(
+        f"{base}/materials/exports/{export['job_id']}/material-didatico.pdf"
+    ).status_code == 404
+
+
+def test_gerar_material_ai_queues_durable_job_and_recovers_status(client, tmp_path, monkeypatch):
+    from nova_generator.core.settings import get_settings
+
+    monkeypatch.setenv("NOVA_GENERATOR_PROJECT_ROOT", str(tmp_path / "projects"))
+    monkeypatch.delenv("NOVA_GENERATOR_GROQ_API_KEY", raising=False)
+    get_settings.cache_clear()
+    project_id, _, _ = _seed_project()
+    api = f"/api/projects/{project_id}/materials-ai"
+    missing = client.post(f"{api}/generate")
+    assert missing.status_code == 409
+    assert "Groq" in missing.json()["detail"]
+    monkeypatch.setenv("NOVA_GENERATOR_GROQ_API_KEY", "test-only-token")
+    get_settings.cache_clear()
+    queued = client.post(f"{api}/generate")
+    assert queued.status_code == 202, queued.text
+    latest = client.get(f"{api}/latest-generation")
+    assert latest.status_code == 200
+    assert latest.json()["job_id"] == queued.json()["job_id"]
+    job = client.get(f"/api/jobs/{queued.json()['job_id']}").json()
+    assert job["kind"] == "generate_pedagogical_materials"
+    assert job["input"]["selected_cue_ids"]
+    assert len(job["input"]["source_sha256"]) == 64
