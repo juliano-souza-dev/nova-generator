@@ -19,9 +19,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npx vitest run src/features/shadowing/ShadowingPage.test.tsx
+      - run: npx vitest run src/features/shadowing/ShadowingPage.test.tsx src/features/materials/MaterialsPage.test.tsx
       - run: npm run build
-      - run: npx prettier --check src/features/shadowing/ShadowingPage.tsx src/features/shadowing/ShadowingPage.test.tsx src/features/shadowing/shadowing.css e2e/shadowing-ai-review.spec.ts e2e/shadowing-ux-layout.spec.ts
+      - run: npx prettier --check src/features/shadowing/ShadowingPage.tsx src/features/shadowing/ShadowingPage.test.tsx src/features/shadowing/shadowing.css src/features/materials/MaterialsPage.tsx src/features/materials/MaterialsPage.test.tsx e2e/shadowing-ai-review.spec.ts e2e/shadowing-ux-layout.spec.ts
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test e2e/shadowing-ai-review.spec.ts e2e/shadowing-ux-layout.spec.ts
 
@@ -36,4 +36,4 @@ jobs:
       - run: python -m pip install ".[dev]"
       - run: python -m ruff check src tests
       - run: python -m pyright
-      - run: python -m pytest tests/application/test_shadowing_groups.py tests/api/test_shadowing_workflow.py
+      - run: python -m pytest tests/application/test_shadowing_groups.py tests/api/test_shadowing_workflow.py tests/application/test_generate_complete_materials.py
