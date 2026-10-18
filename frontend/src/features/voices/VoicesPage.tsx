@@ -29,7 +29,7 @@ export function VoicesPage() {
     mutationFn: ({ values, existing }: { values: FormValues; existing?: VoiceProfile }) => {
       const input = {
         name: values.name,
-        model_id: "chatterbox-nano",
+        model_id: "chatterbox-turbo",
         model_sha256: existing?.model_sha256,
         reference_audio_sha256: values.reference_audio_sha256 || undefined,
         parameters: {},
@@ -91,6 +91,7 @@ export function VoicesPage() {
                 })
               }
               busy={mutation.isPending}
+              error={mutation.error?.message}
             />
           )}
           <VoiceForm
@@ -108,10 +109,12 @@ function VoiceDetail({
   voice,
   onVersion,
   busy,
+  error,
 }: {
   voice: VoiceProfile;
   onVersion: () => void;
   busy: boolean;
+  error?: string;
 }) {
   return (
     <section className="panel voice-detail">
@@ -142,6 +145,7 @@ function VoiceDetail({
       ) : (
         <p role="status">Prévia em processamento. Acompanhe o estado no monitor de jobs.</p>
       )}
+      {error && <p className="field-error" role="alert">{error}</p>}
       <button className="secondary-button" onClick={onVersion} disabled={busy}>
         <Volume2 />
         {busy ? "Enfileirando…" : "Sintetizar nova versão"}
@@ -233,6 +237,7 @@ function VoiceForm({
   const selectedReference = availableReferences.find(
     (reference) => reference.sha256 === currentReference,
   );
+  const referenceTooShort = selectedReference && selectedReference.duration_ms < 6000;
   return (
     <form className="panel voice-form" onSubmit={form.handleSubmit(onSubmit)}>
       <h2>Nova voz</h2>
@@ -244,11 +249,11 @@ function VoiceForm({
         {model.isPending
           ? "Verificando modelo local…"
           : model.data?.available
-            ? "Modelo Chatterbox Nano disponível."
+            ? "Modelo Chatterbox Turbo disponível."
             : (model.data?.message ?? model.error?.message)}
       </p>
       <div className="voice-upload-field">
-        <span className="voice-upload-title">Enviar áudio de referência (1 a 30 segundos)</span>
+        <span className="voice-upload-title">Enviar áudio de referência (6 a 30 segundos)</span>
         <div
           className={`voice-dropzone${isDragging ? " is-dragging" : ""}${upload.isPending ? " is-uploading" : ""}`}
           onDragEnter={onDragEnter}
@@ -259,7 +264,7 @@ function VoiceForm({
         >
           <input
             id="voice-reference-upload"
-            aria-label="Enviar áudio de referência (1 a 30 segundos)"
+            aria-label="Enviar áudio de referência (6 a 30 segundos)"
             className="voice-file-input"
             type="file"
             accept=".wav,.mp3,.ogg,audio/wav,audio/x-wav,audio/wave,audio/mpeg,audio/ogg,application/ogg"
@@ -275,7 +280,7 @@ function VoiceForm({
               {isDragging ? "Solte o áudio aqui" : "Arraste seu arquivo de áudio para cá"}
             </strong>
             <span>ou clique aqui para escolher um arquivo</span>
-            <small>WAV, MP3 ou OGG · áudio de 1 a 30 segundos</small>
+            <small>WAV, MP3 ou OGG · áudio de 6 a 30 segundos</small>
           </label>
         </div>
         {fileName && (
@@ -308,11 +313,20 @@ function VoiceForm({
       >
         <option value="">Selecione um áudio da biblioteca</option>
         {availableReferences.map((reference) => (
-          <option key={reference.sha256} value={reference.sha256}>
+          <option
+            key={reference.sha256}
+            value={reference.sha256}
+            disabled={reference.duration_ms < 6000}
+          >
             {reference.sha256.slice(0, 12)} · {(reference.duration_ms / 1000).toFixed(1)} s
           </option>
         ))}
       </select>
+      {referenceTooShort && (
+        <p className="field-error" role="alert">
+          Este áudio tem menos de 6 segundos. Escolha uma gravação mais longa para sintetizar a voz.
+        </p>
+      )}
       {selectedReference && (
         <audio
           controls
@@ -328,7 +342,10 @@ function VoiceForm({
       {error && <p className="field-error">{error}</p>}
       <button
         className="primary-button"
-        disabled={busy || !model.data?.available || upload.isPending}
+        disabled={
+          busy || !model.data?.available || upload.isPending ||
+          !selectedReference || !!referenceTooShort
+        }
       >
         <Plus />
         {busy ? "Criando…" : "Criar e sintetizar prévia"}
