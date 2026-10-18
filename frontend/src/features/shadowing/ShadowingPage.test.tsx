@@ -137,7 +137,8 @@ describe("ShadowingPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Montar prática com IA" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Gerar proposta com Groq" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Gerar proposta com IA" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Outras opções" }));
     expect(screen.getByRole("link", { name: "Baixar pacote para IA externa" })).toHaveAttribute(
       "href",
       "/shadowing-package.json",
@@ -145,7 +146,7 @@ describe("ShadowingPage", () => {
     expect(screen.getByText("Prática 1 · Mike")).toBeInTheDocument();
     expect(screen.getByText("Prática 2 · Mike")).toBeInTheDocument();
     expect(screen.getByText("Cue 2 · Donna")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Aprovar Shadowing" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Aprovar Shadowing" })).toBeDisabled();
   });
 
   it("deletes a group without touching the editorial cues", async () => {
@@ -247,12 +248,13 @@ describe("ShadowingPage", () => {
 
   it("generates with Groq and can import a separate external AI proposal", async () => {
     mount();
-    const generate = await screen.findByRole("button", { name: "Gerar proposta com Groq" });
+    const generate = await screen.findByRole("button", { name: "Gerar proposta com IA" });
     fireEvent.click(generate);
     await waitFor(() =>
       expect(studioApi.generateShadowing).toHaveBeenCalledWith("project-1", "scene-1"),
     );
     const file = new File(['{"groups":[]}'], "proposal.json", { type: "application/json" });
+    fireEvent.click(screen.getByRole("button", { name: "Outras opções" }));
     fireEvent.change(screen.getByLabelText("Importar proposta (.json)"), {
       target: { files: [file] },
     });
