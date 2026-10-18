@@ -7,9 +7,9 @@ from typing import Any
 from uuid import UUID
 
 from nova_generator.application.use_cases.materials_ai_exchange import (
+    MaterialOutput,
     MaterialsAiError,
     MaterialsAiExchange,
-    MaterialOutput,
 )
 
 
