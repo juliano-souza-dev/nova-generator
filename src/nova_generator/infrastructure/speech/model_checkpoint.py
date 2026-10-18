@@ -1,4 +1,4 @@
-"""Resolve and fingerprint the actual local Chatterbox Nano checkpoint."""
+"""Resolve and fingerprint the Chatterbox Turbo checkpoint used by the runner."""
 
 from __future__ import annotations
 
@@ -9,19 +9,22 @@ from pathlib import Path
 
 from nova_generator.core.settings import Settings
 
-CHECKPOINT_NAME = "t3_nano_v1.safetensors"
+CHECKPOINT_NAME = "t3_turbo_v1.safetensors"
 
 
 def checkpoint_file(settings: Settings) -> Path:
     if settings.chatterbox_model_file is not None:
         candidate = settings.chatterbox_model_file.expanduser()
-        if candidate.is_file():
+        if candidate.is_file() and candidate.name == CHECKPOINT_NAME:
             return candidate
-        raise ValueError(f"Checkpoint Chatterbox Nano não encontrado: {candidate}")
+        raise ValueError(
+            f"Checkpoint Turbo inválido ou ausente: {candidate}. "
+            f"É necessário o arquivo {CHECKPOINT_NAME}."
+        )
     hub_root = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")) / "hub"
     roots = [
         settings.chatterbox_model_root.expanduser(),
-        hub_root / "models--ResembleAI--chatterbox-nano" / "snapshots",
+        hub_root / "models--ResembleAI--chatterbox-turbo" / "snapshots",
     ]
     candidates = [
         path
@@ -32,8 +35,8 @@ def checkpoint_file(settings: Settings) -> Path:
     ]
     if not candidates:
         raise ValueError(
-            "Checkpoint Chatterbox Nano ausente. Configure "
-            "NOVA_GENERATOR_CHATTERBOX_MODEL_FILE para t3_nano_v1.safetensors."
+            "Pesos do Chatterbox Turbo ausentes. Prepare o modelo localmente "
+            "antes de criar uma voz."
         )
     return max(candidates, key=lambda path: path.stat().st_mtime)
 
