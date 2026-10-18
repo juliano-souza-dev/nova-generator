@@ -25,3 +25,31 @@ alterado ou ausente impede nova síntese, preservando a identidade do perfil.
 Restaure o WAV original com o mesmo conteúdo em `voice_references/`, ou crie
 uma nova versão com outra referência. Se o checkpoint estiver ausente, configure
 o caminho do modelo e reinicie o serviço.
+
+
+## Compatibilidade do runtime Nano (18/10/2026)
+
+A distribuição `chatterbox-tts==0.1.7` do **PyPI** implementa
+`ChatterboxTurboTTS.from_pretrained(device)`, sem suporte ao parâmetro
+`nano=True`. O upstream no GitHub acrescentou `nano=True` para selecionar o
+checkpoint `t3_nano_v1.safetensors`, mas manteve o mesmo número de versão 0.1.7.
+Portanto, checar apenas `chatterbox.__version__` ou conseguir importar o
+pacote não garante compatibilidade.
+
+O inicializador Windows instala Chatterbox a partir da revisão fixa
+`resemble-ai/chatterbox@5de7a54aa4e5e2baadb0182dde554908b48b85c2`,
+em ambiente `.venv-tts` isolado, e valida a assinatura de
+`ChatterboxTurboTTS.from_pretrained`. O carimbo de instalação também incorpora
+essa revisão. Se o usuário estiver com uma instalação PyPI antiga, executar
+`INICIAR.bat` atualiza automaticamente o ambiente; Git é necessário para
+instalar as dependências da distribuição em código-fonte.
+
+O runner verifica a assinatura antes de carregar o modelo e rejeita
+instalações sem suporte Nano, com mensagem de recuperação. **Jamais retirar
+simplesmente `nano=True`**, pois isso carregaria o Turbo e mudaria
+silenciosamente o modelo usado nos perfis.
+
+Teste de regressão sem baixar checkpoints:
+`python -m pytest tests/infrastructure/speech/test_chatterbox_nano_runner.py`.
+O smoke test de síntese real continua dependendo do checkpoint Nano e
+do ambiente local de TTS, fora do CI.
