@@ -29,6 +29,63 @@ vi.mock("../../lib/studio-api", () => ({
 }));
 
 describe("VoicesPage", () => {
+  it("allows replacing an invalid voice reference with a new profile version", async () => {
+    const digest = "f".repeat(64);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      {
+        ...profile,
+        reference_ready: false,
+        reference_message: "A referência da voz precisa ter pelo menos 6 segundos.",
+      },
+    ]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: true,
+      model_sha256: "a".repeat(64),
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([
+      {
+        sha256: digest,
+        duration_ms: 7000,
+        sample_rate: 16000,
+        channels: 1,
+        size_bytes: 224044,
+        audio_url: `/api/voices/references/${digest}`,
+      },
+    ]);
+    vi.mocked(studioApi.createVoiceVersion).mockClear();
+    vi.mocked(studioApi.createVoiceVersion).mockResolvedValue({
+      ...profile,
+      version: 3,
+      reference_audio_sha256: digest,
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /Ana v2/ }));
+    expect(screen.getByText(/A referência da voz precisa ter pelo menos 6 segundos/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sintetizar nova versão" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Áudio de referência"), {
+      target: { value: digest },
+    });
+    const replace = screen.getByRole("button", {
+      name: "Criar nova versão de Ana com este áudio",
+    });
+    await waitFor(() => expect(replace).toBeEnabled());
+    fireEvent.click(replace);
+    await waitFor(() =>
+      expect(studioApi.createVoiceVersion).toHaveBeenCalledWith(
+        "voice-1",
+        expect.objectContaining({
+          name: "Ana",
+          model_sha256: undefined,
+          reference_audio_sha256: digest,
+        }),
+      ),
+    );
+  });
+
   it("shows the selected version and its canonical preview", async () => {
     vi.mocked(studioApi.voices).mockResolvedValue([profile]);
     vi.mocked(studioApi.voiceModel).mockResolvedValue({
