@@ -112,6 +112,7 @@ def test_incomplete_ai_response_never_replaces_previous_approval(tmp_path):
     initial = teaching_document(repo, digest)
     exchange.import_result(repo.project.id, initial)
     exchange.approve(repo.project.id, digest)
+    approved_before = exchange.status(repo.project.id)["document"]
     invalid = {**initial, "anki_cards": [
         {**initial["anki_cards"][0], "cue_id": str(uuid4())}
     ]}
@@ -124,7 +125,7 @@ def test_incomplete_ai_response_never_replaces_previous_approval(tmp_path):
             exchange, api_key=None, model="mock-model", client=client
         ).execute(repo.project.id, source_sha256=digest, selected_ids=[str(repo.cue.id)])
     assert exchange.status(repo.project.id)["status"] == "approved"
-    assert exchange.status(repo.project.id)["document"] == initial
+    assert exchange.status(repo.project.id)["document"] == approved_before
 
 
 def test_complete_job_reuses_canonical_wav_and_creates_pdf_anki_manifest(tmp_path):
