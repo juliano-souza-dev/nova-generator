@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from hashlib import sha256
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Any
 
 from nova_generator.application.ports.wav_probe import WavProbe
@@ -68,6 +71,21 @@ class ChatterboxNanoSynthesizer:
                 timeout=300,
             )
         except subprocess.TimeoutExpired as exc:
+            def _decode(value: bytes | str | None) -> str:
+                if isinstance(value, bytes):
+                    return value.decode("utf-8", errors="replace")
+                return value or ""
+
+            stderr = _decode(exc.stderr).strip()
+            stdout = _decode(exc.stdout).strip()
+            logger.error(
+                "chatterbox_subprocess_timeout runner=%s timeout=%s stderr=%r stdout=%r",
+                self._runner,
+                exc.timeout,
+                stderr[-16000:],
+                stdout[-4000:],
+                exc_info=True,
+            )
             raise RuntimeError(
                 "A síntese do Chatterbox excedeu 300 segundos e foi interrompida. "
                 "Verifique a carga da CPU/GPU, o primeiro carregamento do modelo "
