@@ -237,7 +237,13 @@ function VoiceForm({
   const selectedReference = availableReferences.find(
     (reference) => reference.sha256 === currentReference,
   );
-  const referenceTooShort = selectedReference && selectedReference.duration_ms < 6000;
+  const referenceTooShort = !!selectedReference && selectedReference.duration_ms < 6000;
+  const cannotCreate =
+    busy ||
+    !model.data?.available ||
+    upload.isPending ||
+    !selectedReference ||
+    referenceTooShort;
   return (
     <form className="panel voice-form" onSubmit={form.handleSubmit(onSubmit)}>
       <h2>Nova voz</h2>
@@ -324,7 +330,7 @@ function VoiceForm({
       </select>
       {referenceTooShort && (
         <p className="field-error" role="alert">
-          Este áudio tem menos de 6 segundos. Escolha uma gravação mais longa para sintetizar a voz.
+          Este áudio tem menos de 6 segundos. Escolha uma gravação mais longa.
         </p>
       )}
       {selectedReference && (
@@ -342,10 +348,7 @@ function VoiceForm({
       {error && <p className="field-error">{error}</p>}
       <button
         className="primary-button"
-        disabled={
-          busy || !model.data?.available || upload.isPending ||
-          !selectedReference || !!referenceTooShort
-        }
+        disabled={cannotCreate}
       >
         <Plus />
         {busy ? "Criando…" : "Criar e sintetizar prévia"}
