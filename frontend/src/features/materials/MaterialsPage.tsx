@@ -192,7 +192,8 @@ export function MaterialsPage() {
     generatePedagogical.isPending ||
     produceComplete.isPending ||
     ["queued", "running", "retryable"].includes(latestGeneration.data?.status ?? "") ||
-    (Boolean(exportStatus.data) &&
+    (materialReview.data?.status === "approved" &&
+      Boolean(exportStatus.data) &&
       ["queued", "running", "retryable"].includes(exportStatus.data!.status));
   const pedagogicalDraft = materialReview.data?.status === "draft";
   const pedagogicalApproved = materialReview.data?.status === "approved";
