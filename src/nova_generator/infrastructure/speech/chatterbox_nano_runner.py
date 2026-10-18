@@ -26,7 +26,7 @@ def main() -> None:
             "Instale chatterbox-tts, torch e torchaudio no Python configurado para TTS."
         ) from exc
     profile = request["profile"]
-    if profile["model_id"] != "chatterbox-nano":
+    if profile["model_id"] not in {"chatterbox-turbo", "chatterbox-nano"}:
         raise ValueError("Modelo de voz não suportado pelo runner local.")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     started = time.monotonic()
