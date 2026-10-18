@@ -1214,7 +1214,7 @@ export function EditorialPage() {
                   montar os materiais do projeto.
                 </p>
               </div>
-              <Link className="primary-button" to={`/materials?project=${projectId}`}>
+              <Link className="primary-button" to={`/shadowing?project=${projectId}`}>
                 Preparar shadowing
               </Link>
             </section>
