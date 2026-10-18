@@ -64,7 +64,9 @@ describe("VoicesPage", () => {
       </QueryClientProvider>,
     );
     fireEvent.click(await screen.findByRole("button", { name: /Ana v2/ }));
-    expect(screen.getByText(/A referência da voz precisa ter pelo menos 6 segundos/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/A referência da voz precisa ter pelo menos 6 segundos/),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sintetizar nova versão" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Áudio de referência"), {
       target: { value: digest },
