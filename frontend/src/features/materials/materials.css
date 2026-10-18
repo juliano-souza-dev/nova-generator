@@ -207,6 +207,18 @@
 .material-status-badge.is-ready { color: #fde68a; background: rgb(251 191 36 / 14%); }
 .material-status-badge.is-generated { color: #bbf7d0; background: rgb(74 222 128 / 14%); }
 .material-status-badge.is-blocked { color: #fecdd3; background: rgb(251 113 133 / 14%); }
+.material-audio-feedback {
+  margin-bottom: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  border-color: rgb(56 189 248 / 36%);
+}
+.material-audio-feedback a {
+  margin-left: 0.35rem;
+}
+.materials-table small.material-audio-progress {
+  color: #93d5fc;
+  font-weight: 600;
+}
 .material-audio-action { min-height: 36px; padding: 0.4rem 0.55rem; font-size: 0.78rem; }
 .material-audio-action:disabled {
   background: var(--surface-raised);
