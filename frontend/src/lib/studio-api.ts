@@ -208,6 +208,10 @@ export const studioApi = {
     }),
   externalMaterialsPackageUrl: (projectId: string) =>
     apiUrl(`/projects/${projectId}/materials-ai/package`),
+  latestPedagogicalGeneration: (projectId: string) =>
+    apiRequest<{ job_id: string; status: string; error_message?: string | null }>(
+      `/projects/${projectId}/materials-ai/latest-generation`,
+    ),
   generatePedagogicalMaterials: (projectId: string) =>
     apiRequest<{ job_id: string; status: string }>(
       `/projects/${projectId}/materials-ai/generate`,
