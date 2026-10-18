@@ -191,5 +191,4 @@ describe("VoicesPage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Selecione um áudio WAV, MP3 ou OGG.");
     expect(studioApi.uploadVoiceReference).not.toHaveBeenCalled();
   });
-
 });
