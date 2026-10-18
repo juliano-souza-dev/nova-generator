@@ -51,7 +51,6 @@ export function ShadowingPage() {
   const [durationFilter, setDurationFilter] = useState("all");
   const [wordFilter, setWordFilter] = useState("all");
   const [usedExpanded, setUsedExpanded] = useState(false);
-  const [reviewedPlans, setReviewedPlans] = useState<Record<string, string>>({});
   const [bulkBusy, setBulkBusy] = useState(false);
   const bulkGuard = useRef(false);
   const [historyVersion, setHistoryVersion] = useState(0);
@@ -89,22 +88,12 @@ export function ShadowingPage() {
     0,
     plans.data?.findIndex((item) => item.scene_id === active?.scene_id) ?? 0,
   );
-  const missingSpeakers =
-    active?.blocks.some((block) => !block.speaker.trim() || block.speaker === "Não identificado") ??
-    false;
-  const activeReviewed =
-    !!active && (phase === "finished" || reviewedPlans[active.scene_id] === active.plan_sha256);
-  const activeReady = Boolean(active?.blocks.length) && !missingSpeakers && activeReviewed;
+  const activeReady = Boolean(active?.blocks.length);
   const scenesReadyForApproval =
     !!plans.data?.length &&
     plans.data.every(
       (item) =>
-        item.status === "approved" ||
-        (item.blocks.length > 0 &&
-          item.blocks.every(
-            (block) => block.speaker.trim() && block.speaker !== "Não identificado",
-          ) &&
-          reviewedPlans[item.scene_id] === item.plan_sha256),
+        item.status === "approved" || item.blocks.length > 0,
     );
   const scenesPendingApproval = plans.data?.filter((item) => item.status !== "approved") ?? [];
   const practicesPendingApproval = scenesPendingApproval.reduce(
@@ -134,8 +123,6 @@ export function ShadowingPage() {
     },
     [],
   );
-
-  useEffect(() => setReviewedPlans({}), [projectId]);
 
   useEffect(() => {
     undoHistory.current = [];
@@ -270,7 +257,6 @@ export function ShadowingPage() {
       const nextIndex = previewIndex + 1;
       if (nextIndex >= active.blocks.length) {
         setPhase("finished");
-        setReviewedPlans((current) => ({ ...current, [active.scene_id]: active.plan_sha256 }));
         return;
       }
       setPreviewIndex(nextIndex);
@@ -618,7 +604,7 @@ export function ShadowingPage() {
                 : isBusy
                   ? "Aguarde a operação em andamento"
                   : !scenesReadyForApproval
-                    ? "Revise a prévia e os personagens de todas as cenas antes de aprovar"
+                    ? "Toda cena precisa ter ao menos uma prática"
                     : "Confirmar aprovação de todas as cenas prontas"
             }
           >
@@ -771,9 +757,7 @@ export function ShadowingPage() {
                     tabIndex={
                       active.status === "approved" ||
                       !active.blocks.length ||
-                      isBusy ||
-                      missingSpeakers ||
-                      phase !== "finished"
+                      isBusy
                         ? 0
                         : -1
                     }
@@ -784,11 +768,7 @@ export function ShadowingPage() {
                           ? "Adicione ao menos uma prática"
                           : isBusy
                             ? "Aguarde a operação em andamento"
-                            : missingSpeakers
-                              ? "Há práticas sem personagem identificado"
-                              : phase !== "finished"
-                                ? "Reproduza a prévia completa antes de aprovar"
-                                : "Aprovar plano revisado"
+                            : "Aprovar Shadowing"
                     }
                   >
                     <button

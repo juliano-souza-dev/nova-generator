@@ -146,19 +146,19 @@ describe("ShadowingPage", () => {
     expect(screen.getByText("Prática 1 · Mike")).toBeInTheDocument();
     expect(screen.getByText("Prática 2 · Mike")).toBeInTheDocument();
     expect(screen.getByText("Cue 2 · Donna")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Aprovar Shadowing" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Aprovar Shadowing" })).toBeEnabled();
   });
 
-  it("exposes bulk approval but keeps it disabled until every scene is reviewed", async () => {
+  it("exposes bulk approval when every scene has at least one practice", async () => {
     mount();
     const approveAll = await screen.findByRole("button", {
       name: "Aprovar todas as cenas",
     });
-    expect(approveAll).toBeDisabled();
     await screen.findByText("0 de 1 cenas aprovadas");
+    expect(approveAll).toBeEnabled();
     expect(approveAll.parentElement).toHaveAttribute(
       "title",
-      "Revise a prévia e os personagens de todas as cenas antes de aprovar",
+      "Confirmar aprovação de todas as cenas prontas",
     );
     expect(studioApi.approveShadowing).not.toHaveBeenCalled();
   });
