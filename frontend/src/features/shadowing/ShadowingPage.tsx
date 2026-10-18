@@ -424,6 +424,38 @@ export function ShadowingPage() {
         title="Shadowing"
         description="A IA escolhe práticas curtas de um só personagem. Você revisa, junta, separa ou exclui grupos antes de aprovar."
       />
+      <nav className="shadowing-steps panel" aria-label="Etapas do Shadowing">
+        <ol>
+          {displayedSteps.map((step, index) => (
+            <li key={step.id}>
+              <button
+                type="button"
+                disabled={index > currentStep}
+                aria-current={index === currentStep ? "step" : undefined}
+                className={index < currentStep ? "is-complete" :
+                  index === currentStep ? "is-current" : "is-pending"}
+                onClick={() => document.getElementById(step.target)?.scrollIntoView?.({
+                  behavior: "smooth", block: "start",
+                })}
+              >
+                <span aria-hidden="true">{index < currentStep ? "✓" : index === currentStep ? "●" : "○"}</span>
+                {step.label}
+              </button>
+            </li>
+          ))}
+        </ol>
+        <div className="shadowing-steps-right">
+          <strong>{approvedCount} de {plans.data?.length ?? 0} cenas aprovadas</strong>
+          <button
+            type="button"
+            aria-label="Ver atalhos de teclado"
+            title="Atalhos de teclado (?)"
+            onClick={() => setShortcutsOpen(true)}
+          >
+            <Keyboard aria-hidden="true" /> ?
+          </button>
+        </div>
+      </nav>
       {projects.isPending && <LoadingState label="Carregando projetos" />}
       {projects.isError && (
         <ErrorState message={projects.error.message} retry={() => void projects.refetch()} />
@@ -434,7 +466,7 @@ export function ShadowingPage() {
         </EmptyState>
       )}
       {Boolean(projects.data?.length) && (
-        <div className="shadowing-controls panel">
+        <div className="shadowing-controls panel" id="shadowing-project">
           <label>
             Projeto
             <select
@@ -464,7 +496,7 @@ export function ShadowingPage() {
       )}
       {active && (
         <>
-          <div className="shadowing-controls panel">
+          <div className="shadowing-controls panel" id="shadowing-scene">
             <label>
               Cena
               <select
@@ -488,7 +520,36 @@ export function ShadowingPage() {
             </span>
           </div>
 
-          <section className="shadowing-ai panel" aria-label="Preparação com IA">
+          <div className="shadowing-layout">
+            <div className="shadowing-video-column">
+          <div className="shadowing-stage panel" ref={stageRef} aria-label="Prévia da cena">
+            <video
+              ref={playerRef}
+              src={media.data?.cut_url ?? undefined}
+              preload="metadata"
+              playsInline
+              controls={false}
+              onTimeUpdate={handleProgress}
+              aria-label="Prévia de shadowing"
+            />
+            <div className="shadowing-preview-status" aria-live="polite">
+              {phase === "pause" && active.blocks[previewIndex] && (
+                <>
+                  <strong>PAUSA · REPITA EM VOZ ALTA</strong>
+                  <p>{active.blocks[previewIndex].en}</p>
+                  <small>{active.blocks[previewIndex].pt}</small>
+                </>
+              )}
+              {phase === "finished" && (
+                <strong>Prévia concluída. Você pode aprovar o plano.</strong>
+              )}
+            </div>
+            {previewError && <p role="alert">{previewError}</p>}
+          </div>
+
+            </div>
+            <div className="shadowing-content-column">
+          <section id="shadowing-ai" className="shadowing-ai panel" aria-label="Preparação com IA">
             <div>
               <h2>Montar prática com IA</h2>
               <p>
@@ -548,71 +609,7 @@ export function ShadowingPage() {
             {actionNotice && <p role="status">{actionNotice}</p>}
           </section>
 
-          <div className="shadowing-stage panel">
-            <video
-              ref={playerRef}
-              src={media.data?.cut_url ?? undefined}
-              preload="metadata"
-              playsInline
-              controls={false}
-              onTimeUpdate={handleProgress}
-              aria-label="Prévia de shadowing"
-            />
-            <div className="shadowing-preview-status" aria-live="polite">
-              {phase === "pause" && active.blocks[previewIndex] && (
-                <>
-                  <strong>PAUSA · REPITA EM VOZ ALTA</strong>
-                  <p>{active.blocks[previewIndex].en}</p>
-                  <small>{active.blocks[previewIndex].pt}</small>
-                </>
-              )}
-              {phase === "finished" && (
-                <strong>Prévia concluída. Você pode aprovar o plano.</strong>
-              )}
-            </div>
-            <div className="shadowing-preview-actions">
-              <button
-                type="button"
-                onClick={startPreview}
-                disabled={
-                  !media.data?.cut_url ||
-                  !active.blocks.length ||
-                  phase === "playing" ||
-                  phase === "pause" ||
-                  isBusy
-                }
-              >
-                <Play aria-hidden="true" />{" "}
-                {phase === "finished" ? "Repetir prévia" : "Reproduzir prévia completa"}
-              </button>
-              {(phase === "playing" || phase === "pause") && (
-                <button type="button" onClick={stopPreview}>
-                  <X aria-hidden="true" /> Parar
-                </button>
-              )}
-              <span>
-                {previewIndex < 0
-                  ? "Não iniciada"
-                  : `Bloco ${previewIndex + 1}/${active.blocks.length}`}
-              </span>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => approval.mutate(active)}
-                disabled={
-                  active.status === "approved" ||
-                  !active.blocks.length ||
-                  isBusy
-                }
-              >
-                <Check aria-hidden="true" />{" "}
-                {active.status === "approved" ? "Shadowing aprovado" : "Aprovar Shadowing"}
-              </button>
-            </div>
-            {previewError && <p role="alert">{previewError}</p>}
-          </div>
-
-          <section className="shadowing-review" aria-label="Revisar práticas">
+          <section id="shadowing-review" className="shadowing-review" aria-label="Revisar práticas">
             <div className="shadowing-section-heading">
               <h2>Práticas selecionadas</h2>
               <p>
@@ -720,6 +717,63 @@ export function ShadowingPage() {
             </div>
           </section>
 
+            </div>
+          </div>
+          <div id="shadowing-actions" className="shadowing-sticky-actions panel">
+            <div className="shadowing-action-group">
+              <button
+                type="button"
+                onClick={togglePreview}
+                disabled={!media.data?.cut_url || !active.blocks.length || phase === "pause" || isBusy}
+                title={!media.data?.cut_url ? "Vídeo da cena indisponível" :
+                  !active.blocks.length ? "Adicione uma prática antes da prévia" :
+                  isBusy ? "Aguarde a edição em andamento" : "Reproduzir ou pausar a prévia"}
+              >
+                {phase === "playing" ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+                {phase === "playing" ? "Pausar" : "Reproduzir prévia"}
+              </button>
+              {(phase === "playing" || phase === "paused" || phase === "pause") && (
+                <button type="button" className="shadowing-stop" onClick={stopPreview}>
+                  <X aria-hidden="true" /> Parar
+                </button>
+              )}
+              <span className="shadowing-preview-indicator" role="status">
+                {previewLabel}
+                {previewIndex >= 0 ? ` · Bloco ${previewIndex + 1}/${active.blocks.length}` : ""}
+              </span>
+            </div>
+            <div className="shadowing-action-group">
+              <button
+                type="button"
+                onClick={undoLast}
+                disabled={isBusy || !historyCount}
+                title={historyCount ? `Desfazer última edição (${historyCount} disponível)` : "Nenhuma edição para desfazer"}
+              >
+                <Undo2 aria-hidden="true" /> Desfazer
+              </button>
+              <span
+                className="shadowing-disabled-hint"
+                tabIndex={active.status === "approved" || !active.blocks.length || isBusy || phase !== "finished" ? 0 : -1}
+                title={
+                  active.status === "approved" ? "Esta cena já foi aprovada" :
+                  !active.blocks.length ? "Adicione ao menos uma prática" :
+                  isBusy ? "Aguarde a operação em andamento" :
+                  phase !== "finished" ? "Reproduza a prévia completa antes de aprovar" :
+                  "Aprovar plano revisado"
+                }
+              >
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => approval.mutate(active)}
+                  disabled={active.status === "approved" || !active.blocks.length || isBusy || phase !== "finished"}
+                >
+                  <Check aria-hidden="true" />
+                  {active.status === "approved" ? "Shadowing aprovado" : "Aprovar Shadowing"}
+                </button>
+              </span>
+            </div>
+          </div>
           {allApproved && (
             <section className="shadowing-next panel">
               <strong>Shadowing aprovado em todas as cenas.</strong>
