@@ -405,7 +405,6 @@ export function ShadowingPage() {
                 disabled={
                   active.status === "approved" ||
                   !active.blocks.length ||
-                  phase !== "finished" ||
                   isBusy
                 }
               >

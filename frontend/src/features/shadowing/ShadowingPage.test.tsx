@@ -145,7 +145,7 @@ describe("ShadowingPage", () => {
     expect(screen.getByText("Prática 1 · Mike")).toBeInTheDocument();
     expect(screen.getByText("Prática 2 · Mike")).toBeInTheDocument();
     expect(screen.getByText("Cue 2 · Donna")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Aprovar Shadowing" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Aprovar Shadowing" })).toBeEnabled();
   });
 
   it("deletes a group without touching the editorial cues", async () => {
