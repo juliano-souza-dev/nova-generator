@@ -17,10 +17,10 @@ from nova_generator.domain.exports import ExportCue
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.projects.entities import utf8_sha256
 from nova_generator.domain.voices import VoiceProfileSnapshot
-from nova_generator.infrastructure.exports.material_workbook_pdf import render_material_workbook
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
 )
+from nova_generator.infrastructure.exports.material_workbook_pdf import render_material_workbook
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 from nova_generator.infrastructure.worker.persistent_worker import JobExecution
 
