@@ -21,7 +21,18 @@ jobs:
       - run: npm run lint
       - run: npx vitest run src/features/shadowing/ShadowingPage.test.tsx
       - run: npm run build
-      - run: npx prettier --check src/features/shadowing/ShadowingPage.tsx src/features/shadowing/ShadowingPage.test.tsx src/features/shadowing/shadowing.css
+      - name: Capture exact Shadowing formatter output
+        run: |
+          npx prettier --write src/features/shadowing/ShadowingPage.tsx src/features/shadowing/ShadowingPage.test.tsx src/features/shadowing/shadowing.css
+          echo '<<<FORMAT_BEGIN_PAGE>>>'
+          cat src/features/shadowing/ShadowingPage.tsx
+          echo '<<<FORMAT_END_PAGE>>>'
+          echo '<<<FORMAT_BEGIN_TEST>>>'
+          cat src/features/shadowing/ShadowingPage.test.tsx
+          echo '<<<FORMAT_END_TEST>>>'
+          echo '<<<FORMAT_BEGIN_CSS>>>'
+          cat src/features/shadowing/shadowing.css
+          echo '<<<FORMAT_END_CSS>>>'
   backend:
     runs-on: ubuntu-latest
     steps:
