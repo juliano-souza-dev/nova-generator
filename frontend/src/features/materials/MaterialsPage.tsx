@@ -1,5 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, RefreshCw, Volume2 } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  Download,
+  MonitorPlay,
+  RefreshCw,
+  Search,
+  Volume2,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
@@ -18,6 +27,8 @@ export function MaterialsPage() {
   const [youtube, setYoutube] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [previewCueId, setPreviewCueId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<MaterialStatus | "all">("all");
   const client = useQueryClient();
   const projects = useQuery({
     queryKey: ["projects", "materials"],
@@ -93,6 +104,27 @@ export function MaterialsPage() {
   const cards = materials.data?.cards ?? [];
   const selected = cards.filter((card) => card.included);
   const unprepared = cards.filter((card) => !card.editorial_ready);
+  const materialStatus = (card: MaterialCard): MaterialStatus =>
+    !card.editorial_ready || !pedagogicalReady
+      ? "blocked"
+      : card.audio_ready
+        ? "generated"
+        : "ready";
+  const visibleCards = cards.filter((card) => {
+    const query = search.trim().toLocaleLowerCase();
+    const matchesSearch =
+      !query ||
+      card.approved_en.toLocaleLowerCase().includes(query) ||
+      card.approved_pt.toLocaleLowerCase().includes(query) ||
+      String(card.scene_order).includes(query);
+    return matchesSearch && (statusFilter === "all" || materialStatus(card) === statusFilter);
+  });
+  const cardsByScene = visibleCards.reduce<Map<number, MaterialCard[]>>((groups, card) => {
+    const group = groups.get(card.scene_order) ?? [];
+    group.push(card);
+    groups.set(card.scene_order, group);
+    return groups;
+  }, new Map());
   const previewIndex = cards.findIndex((card) => card.cue_id === previewCueId);
   const previewCard = previewIndex >= 0 ? cards[previewIndex] : null;
   const previewPedagogical = materialReview.data?.document?.anki_cards.find(
@@ -103,6 +135,19 @@ export function MaterialsPage() {
     selected.length > 0 &&
     pedagogicalReady &&
     selected.every((card) => card.audio_ready && card.editorial_ready);
+  const selectedVisible = visibleCards.filter((card) => card.included);
+
+  function setVisibleIncluded(included: boolean) {
+    visibleCards
+      .filter((card) => card.included !== included)
+      .forEach((card) => select.mutate({ cueId: card.cue_id, included }));
+  }
+
+  function prepareSelected() {
+    selectedVisible
+      .filter((card) => materialStatus(card) === "ready")
+      .forEach((card) => audio.mutate(card.cue_id));
+  }
 
   useEffect(() => {
     if (!voiceId && voices.data?.length) setVoiceId(voices.data[0].id);
@@ -297,6 +342,55 @@ export function MaterialsPage() {
         </section>
       )}
       {cards.length > 0 && unprepared.length === 0 && (
+        <>
+        <section className="materials-workbench panel" aria-label="Filtrar cards">
+          <label className="materials-search">
+            <Search aria-hidden="true" />
+            <span className="sr-only">Buscar cards</span>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar inglês, português ou cena"
+            />
+          </label>
+          <div className="materials-status-filters" aria-label="Filtrar por status">
+            {(
+              [
+                ["all", "Todos"],
+                ["ready", "Prontos"],
+                ["generated", "Gerados"],
+                ["blocked", "Bloqueados"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                type="button"
+                key={value}
+                aria-pressed={statusFilter === value}
+                className={statusFilter === value ? "is-active" : undefined}
+                onClick={() => setStatusFilter(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="materials-counter">{selected.length} incluídos no reel</span>
+        </section>
+        {selectedVisible.length > 0 && (
+          <section className="materials-bulk-actions panel" aria-label="Ações em massa">
+            <strong>{selectedVisible.length} selecionado{selectedVisible.length === 1 ? "" : "s"}</strong>
+            <button type="button" className="secondary-button" onClick={() => setVisibleIncluded(false)}>
+              Remover do reel
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              disabled={!selectedVisible.some((card) => materialStatus(card) === "ready") || audio.isPending}
+              onClick={prepareSelected}
+            >
+              <Volume2 aria-hidden="true" /> Preparar selecionados
+            </button>
+          </section>
+        )}
         <div className="materials-table-wrap panel">
           <table className="materials-table">
             <thead>
@@ -309,23 +403,27 @@ export function MaterialsPage() {
               </tr>
             </thead>
             <tbody>
-              {cards.map((card) => (
-                <MaterialRow
-                  key={card.cue_id}
-                  card={card}
+              {[...cardsByScene.entries()].map(([sceneOrder, sceneCards]) => (
+                <SceneCardRows
+                  key={sceneOrder}
+                  sceneOrder={sceneOrder}
+                  cards={sceneCards}
+                  statusOf={materialStatus}
                   voiceName={voices.data?.find((voice) => voice.id === voiceId)?.name ?? "—"}
                   voiceVersion={materials.data?.voice_version}
-                  onInclude={(included) => select.mutate({ cueId: card.cue_id, included })}
-                  onAudio={() => audio.mutate(card.cue_id)}
+                  onInclude={(cueId, included) => select.mutate({ cueId, included })}
+                  onAudio={(cueId) => audio.mutate(cueId)}
                   audioBusy={audio.isPending}
-                  audioJobId={audioJobIds[card.cue_id]}
+                  audioJobIds={audioJobIds}
                   voiceSelected={!!voiceId}
-                  onPreview={() => setPreviewCueId(card.cue_id)}
+                  onPreview={setPreviewCueId}
                 />
               ))}
             </tbody>
           </table>
+          {visibleCards.length === 0 && <p className="materials-no-results">Nenhum card encontrado.</p>}
         </div>
+        </>
       )}
       {(select.error || audio.error || exportCards.error || publication.error) && (
         <p className="field-error" role="alert">
@@ -433,8 +531,81 @@ export function MaterialsPage() {
   );
 }
 
+type MaterialStatus = "blocked" | "ready" | "generated";
+
+const statusDetails: Record<
+  MaterialStatus,
+  { label: string; icon: typeof CheckCircle2; description: string }
+> = {
+  blocked: {
+    label: "Bloqueado",
+    icon: CircleAlert,
+    description: "Conclua a preparação editorial e o conteúdo pedagógico.",
+  },
+  ready: {
+    label: "Pronto",
+    icon: Clock3,
+    description: "Pronto para gerar o áudio canônico.",
+  },
+  generated: {
+    label: "Gerado",
+    icon: CheckCircle2,
+    description: "Áudio canônico disponível para validação.",
+  },
+};
+
+function SceneCardRows({
+  sceneOrder,
+  cards,
+  statusOf,
+  voiceName,
+  voiceVersion,
+  onInclude,
+  onAudio,
+  audioBusy,
+  audioJobIds,
+  voiceSelected,
+  onPreview,
+}: {
+  sceneOrder: number;
+  cards: MaterialCard[];
+  statusOf: (card: MaterialCard) => MaterialStatus;
+  voiceName: string;
+  voiceVersion: number | null | undefined;
+  onInclude: (cueId: string, included: boolean) => void;
+  onAudio: (cueId: string) => void;
+  audioBusy: boolean;
+  audioJobIds: Record<string, string>;
+  voiceSelected: boolean;
+  onPreview: (cueId: string) => void;
+}) {
+  return (
+    <>
+      <tr className="materials-scene-heading">
+        <th colSpan={5}>Cena {sceneOrder} · {cards.length} {cards.length === 1 ? "card" : "cards"}</th>
+      </tr>
+      {cards.map((card) => (
+        <MaterialRow
+          key={card.cue_id}
+          card={card}
+          status={statusOf(card)}
+          voiceName={voiceName}
+          voiceVersion={voiceVersion}
+          onInclude={(included) => onInclude(card.cue_id, included)}
+          onAudio={() => onAudio(card.cue_id)}
+          audioBusy={audioBusy}
+          audioJobId={audioJobIds[card.cue_id]}
+          voiceSelected={voiceSelected}
+          onPreview={() => onPreview(card.cue_id)}
+        />
+      ))}
+    </>
+  );
+}
+
 function MaterialRow({
   card,
+  status,
   voiceName,
   voiceVersion,
   onInclude,
@@ -445,6 +616,7 @@ function MaterialRow({
   onPreview,
 }: {
   card: MaterialCard;
+  status: MaterialStatus;
   voiceName: string;
   voiceVersion: number | null | undefined;
   onInclude: (included: boolean) => void;
@@ -461,8 +633,10 @@ function MaterialRow({
     refetchInterval: (query) =>
       ["queued", "running", "retryable"].includes(query.state.data?.status ?? "") ? 3000 : false,
   });
+  const statusMeta = statusDetails[status];
+  const StatusIcon = statusMeta.icon;
   return (
-    <tr>
+    <tr className={`material-row material-row-${status}`}>
       <td>
         <input
           type="checkbox"
@@ -474,16 +648,22 @@ function MaterialRow({
       <td>
         <HighlightedCueText text={card.approved_en} highlights={card.highlights} />
         <p>{card.approved_pt}</p>
-        <small>
-          Cena {card.scene_order} · cue {card.cue_order} · fala {formatMs(card.speech_start_ms)}–
-          {formatMs(card.speech_end_ms)}
-        </small>
-        <button className="material-card-preview-button" type="button" onClick={onPreview}>
-          Ver como no iHub
+        <small>cue {card.cue_order} · fala {formatMs(card.speech_start_ms)}–{formatMs(card.speech_end_ms)}</small>
+        <button
+          className="material-card-preview-button"
+          type="button"
+          title="Ver como no iHub"
+          aria-label="Ver como no iHub"
+          onClick={onPreview}
+        >
+          <MonitorPlay aria-hidden="true" />
         </button>
       </td>
       <td>
-        {card.editorial_ready ? (
+        <span className={`material-status-badge is-${status}`} title={statusMeta.description}>
+          <StatusIcon aria-hidden="true" /> {statusMeta.label}
+        </span>
+        {status !== "blocked" && card.editorial_ready ? (
           <>
             {card.highlights.length > 0 ? (
               <ul className="material-highlights" aria-label="Destaques pedagógicos">
@@ -518,8 +698,9 @@ function MaterialRow({
         ) : (
           <button
             type="button"
-            disabled={!card.editorial_ready || !voiceSelected || audioBusy}
-            title={card.editorial_ready ? undefined : "Conclua a preparação editorial primeiro."}
+            className="primary-button material-audio-action"
+            disabled={status === "blocked" || !voiceSelected || audioBusy}
+            title={status === "blocked" ? statusMeta.description : undefined}
             onClick={onAudio}
           >
             <Volume2 aria-hidden="true" /> Preparar WAV
