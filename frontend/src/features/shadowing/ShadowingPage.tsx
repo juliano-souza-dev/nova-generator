@@ -209,7 +209,6 @@ export function ShadowingPage() {
     const second = active.source_cues.findIndex((cue) => cue.id === right.cue_ids[0]);
     return (
       left.speaker === right.speaker &&
-      left.speaker !== "Não identificado" &&
       first >= 0 &&
       second === first + 1 &&
       right.start_ms >= left.end_ms &&
@@ -417,7 +416,7 @@ export function ShadowingPage() {
           <section className="shadowing-review" aria-label="Revisar práticas">
             <div className="shadowing-section-heading">
               <h2>Práticas selecionadas</h2>
-              <p>Juntar só é permitido entre falas consecutivas do mesmo personagem.</p>
+              <p>Juntar exige cues consecutivos, o mesmo locutor informado e limites curtos. Quando ambos estiverem sem locutor, a junção é uma decisão manual.</p>
             </div>
             {active.blocks.length === 0 && (
               <p className="panel">

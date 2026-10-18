@@ -120,6 +120,25 @@ def test_manual_merge_remove_restore_and_split_keep_editorial_untouched(tmp_path
     assert repo.cues == before
 
 
+def test_manual_merge_allows_consecutive_cues_when_both_speakers_are_unidentified(tmp_path):
+    repo = Repository()
+    repo.cues[0] = replace(repo.cues[0], speaker="")
+    repo.cues[1] = replace(repo.cues[1], speaker="")
+    service = PrepareShadowing(repo, tmp_path)
+    initial = service.scene(PROJECT, SCENE)
+
+    revised = service.edit(
+        PROJECT,
+        SCENE,
+        initial["source_sha256"],
+        initial["plan_sha256"],
+        [[str(CUE_IDS[0]), str(CUE_IDS[1])]],
+    )
+
+    assert revised["blocks"][0]["speaker"] == "Não identificado"
+    assert revised["blocks"][0]["cue_ids"] == [str(CUE_IDS[0]), str(CUE_IDS[1])]
+
+
 @pytest.mark.parametrize(
     ("groups", "message"),
     [

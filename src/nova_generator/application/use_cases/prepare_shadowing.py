@@ -448,9 +448,7 @@ def _validated_blocks(cues: list[Cue], groups: list[list[str]]) -> list[dict[str
             raise ShadowingError("Os cues devem estar em ordem e aparecer apenas uma vez")
         selected = [index[cue_id][1] for cue_id in group]
         speaker = selected[0].speaker.strip()
-        if len(selected) > 1 and (
-            not speaker or any(item.speaker.strip() != speaker for item in selected[1:])
-        ):
+        if len(selected) > 1 and any(item.speaker.strip() != speaker for item in selected[1:]):
             raise ShadowingError("Um grupo de Shadowing não pode misturar personagens")
         if any(
             right.speech_start_ms < left.speech_end_ms
