@@ -33,13 +33,13 @@ from nova_generator.infrastructure.database.editorial_project_repository import 
     SqlAlchemyEditorialProjectRepository,
 )
 from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
-from nova_generator.infrastructure.integration.ihub_contracts import (
-    ContractViolation,
-    validate_anki_audio,
-)
 from nova_generator.infrastructure.filesystem.voice_references import (
     FileVoiceReferenceStore,
     validate_profile_reference,
+)
+from nova_generator.infrastructure.integration.ihub_contracts import (
+    ContractViolation,
+    validate_anki_audio,
 )
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 
