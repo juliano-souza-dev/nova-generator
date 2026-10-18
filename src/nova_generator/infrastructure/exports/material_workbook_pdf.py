@@ -15,7 +15,10 @@ def render_material_workbook(document: dict[str, Any], output: Path) -> Path:
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import cm
         from reportlab.platypus import (
-            KeepTogether, Paragraph, SimpleDocTemplate, Spacer,
+            KeepTogether,
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
         )
     except ImportError as error:
         raise RuntimeError(
