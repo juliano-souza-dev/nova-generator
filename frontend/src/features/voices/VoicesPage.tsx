@@ -145,7 +145,11 @@ function VoiceDetail({
       ) : (
         <p role="status">Prévia em processamento. Acompanhe o estado no monitor de jobs.</p>
       )}
-      {error && <p className="field-error" role="alert">{error}</p>}
+      {error && (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      )}
       <button className="secondary-button" onClick={onVersion} disabled={busy}>
         <Volume2 />
         {busy ? "Enfileirando…" : "Sintetizar nova versão"}
