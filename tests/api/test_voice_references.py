@@ -161,3 +161,57 @@ def test_compressed_audio_conversion_requires_ffmpeg(client, tmp_path, monkeypat
     )
     assert response.status_code == 422
     assert "FFmpeg" in response.json()["detail"]
+
+
+def test_real_ffmpeg_decodes_mp3_and_ogg_into_voice_library(client, tmp_path, monkeypatch):
+    """Smoke test real decoding when FFmpeg is installed in the test environment."""
+    import shutil
+    import subprocess
+
+    import pytest
+
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("FFmpeg is not installed on this runner")
+
+    monkeypatch.setenv("NOVA_GENERATOR_MEDIA_CACHE_ROOT", str(tmp_path / "media"))
+    get_settings.cache_clear()
+    original = tmp_path / "reference.wav"
+    original.write_bytes(_wav())
+
+    for extension, codec, mime in (
+        ("mp3", "libmp3lame", "audio/mpeg"),
+        ("ogg", "libvorbis", "audio/ogg"),
+    ):
+        output = tmp_path / f"reference.{extension}"
+        encode = subprocess.run(
+            [
+                "ffmpeg",
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(original),
+                "-c:a",
+                codec,
+                str(output),
+            ],
+            capture_output=True,
+            check=False,
+            timeout=20,
+        )
+        if encode.returncode != 0:
+            pytest.skip(f"FFmpeg encoder {codec} not available")
+        response = client.post(
+            "/api/voices/references",
+            files={"file": (output.name, output.read_bytes(), mime)},
+        )
+        assert response.status_code == 201, response.text
+        parsed = response.json()
+        assert 1900 <= parsed["duration_ms"] <= 2200
+        assert parsed["sample_rate"] == 24000
+        assert parsed["channels"] == 1
+        wav = client.get(parsed["audio_url"]).content
+        assert sha256(wav).hexdigest() == parsed["sha256"]
+        assert wav[:4] == b"RIFF"
