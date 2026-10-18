@@ -67,7 +67,13 @@ class ChatterboxNanoSynthesizer:
                 check=False,
                 timeout=300,
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "A síntese do Chatterbox excedeu 300 segundos e foi interrompida. "
+                "Verifique a carga da CPU/GPU, o primeiro carregamento do modelo "
+                "e os logs do worker antes de tentar novamente."
+            ) from exc
+        except OSError as exc:
             raise RuntimeError(
                 "Não foi possível iniciar o processo isolado do Chatterbox."
             ) from exc
