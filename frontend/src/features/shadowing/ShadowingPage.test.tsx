@@ -155,6 +155,7 @@ describe("ShadowingPage", () => {
       name: "Aprovar todas as cenas",
     });
     expect(approveAll).toBeDisabled();
+    await screen.findByText("0 de 1 cenas aprovadas");
     expect(approveAll.parentElement).toHaveAttribute(
       "title",
       "Revise a prévia e os personagens de todas as cenas antes de aprovar",
