@@ -6,12 +6,13 @@ import json
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from nova_generator.api.dependencies import get_editorial_repository
+from nova_generator.api.dependencies import get_editorial_repository, get_enqueue_job
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
+from nova_generator.application.use_cases.manage_jobs import EnqueueJob
 from nova_generator.application.use_cases.materials_ai_exchange import (
     MaterialsAiError,
     MaterialsAiExchange,
@@ -19,6 +20,11 @@ from nova_generator.application.use_cases.materials_ai_exchange import (
 from nova_generator.core.settings import get_settings
 
 router = APIRouter(prefix="/projects/{project_id}/materials-ai", tags=["materials-ai"])
+
+
+class MaterialGenerationResponse(BaseModel):
+    job_id: UUID
+    status: str
 
 
 class ApproveMaterialRequest(BaseModel):
@@ -80,3 +86,36 @@ def approve_external_materials(
     repository: Annotated[EditorialProjectRepository, Depends(get_editorial_repository)],
 ) -> dict:
     return _execute(lambda: _exchange(repository).approve(project_id, payload.source_sha256))
+
+
+@router.post("/generate", response_model=MaterialGenerationResponse, status_code=status.HTTP_202_ACCEPTED)
+def generate_pedagogical_materials(
+    project_id: UUID,
+    repository: Annotated[EditorialProjectRepository, Depends(get_editorial_repository)],
+    enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
+) -> MaterialGenerationResponse:
+    """Generate real pedagogical content as a tracked background job."""
+    if not get_settings().groq_api_key:
+        raise HTTPException(
+            409,
+            detail="Groq não configurada. Configure a chave ou importe o JSON de IA externa.",
+        )
+    package = _execute(lambda: _exchange(repository).package(project_id))
+    selected = [
+        str(cue.id)
+        for scene in repository.get_project_scenes(project_id)
+        for cue in sorted(repository.get_scene_cues(scene.id), key=lambda item: item.order)
+        if cue.provenance.get("anki_included") is not False
+    ]
+    if not selected:
+        raise HTTPException(422, detail="Selecione ao menos um card Anki.")
+    job = enqueue.execute(
+        kind="generate_pedagogical_materials",
+        input={
+            "project_id": str(project_id),
+            "source_sha256": package["source_sha256"],
+            "selected_cue_ids": selected,
+        },
+        idempotency_key=None,
+    )
+    return MaterialGenerationResponse(job_id=job.id, status=job.status)
