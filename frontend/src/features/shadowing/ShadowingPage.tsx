@@ -598,6 +598,27 @@ export function ShadowingPage() {
           <strong>
             {approvedCount} de {plans.data?.length ?? 0} cenas aprovadas
           </strong>
+          <span
+            className="shadowing-disabled-hint"
+            tabIndex={!scenesReadyForApproval || isBusy ? 0 : -1}
+            title={
+              !scenesPendingApproval.length
+                ? "Todas as cenas já foram aprovadas"
+                : isBusy
+                  ? "Aguarde a operação em andamento"
+                  : !scenesReadyForApproval
+                    ? "Revise a prévia e os personagens de todas as cenas antes de aprovar"
+                    : "Confirmar aprovação de todas as cenas prontas"
+            }
+          >
+            <button
+              type="button"
+              disabled={!scenesReadyForApproval || !scenesPendingApproval.length || isBusy}
+              onClick={() => void approveAllScenes()}
+            >
+              <Check aria-hidden="true" /> Aprovar todas as cenas
+            </button>
+          </span>
           <button
             type="button"
             aria-label="Ver atalhos de teclado"
