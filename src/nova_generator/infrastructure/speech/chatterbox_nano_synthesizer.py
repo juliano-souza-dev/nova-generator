@@ -5,14 +5,14 @@ import logging
 import subprocess
 from hashlib import sha256
 from pathlib import Path
-
-logger = logging.getLogger(__name__)
 from typing import Any
 
 from nova_generator.application.ports.wav_probe import WavProbe
 from nova_generator.domain.voices import SynthesizedSpeech, VoiceProfileSnapshot
 from nova_generator.infrastructure.filesystem.voice_references import FileVoiceReferenceStore
 from nova_generator.infrastructure.speech.ffprobe_wav_probe import FfprobeWavProbe
+
+logger = logging.getLogger(__name__)
 
 
 class ChatterboxNanoSynthesizer:
