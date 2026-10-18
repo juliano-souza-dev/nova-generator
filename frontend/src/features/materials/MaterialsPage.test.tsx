@@ -516,17 +516,3 @@ describe("MaterialsPage", () => {
     );
   });
 });
-
-it("temporary generated-material e2e formatter", async () => {
-  const prettier = await import("prettier");
-  const fs = await import("node:fs/promises");
-  const path = "e2e/material-wav-action.spec.ts";
-  const config = await prettier.resolveConfig(path);
-  const formatted = await prettier.format(await fs.readFile(path, "utf8"), {
-    ...config,
-    filepath: path,
-  });
-  console.log("<<<FORMAT_BEGIN_COMPLETE_E2E>>>");
-  console.log(formatted);
-  console.log("<<<FORMAT_END_COMPLETE_E2E>>>");
-});
