@@ -1,0 +1,38 @@
+name: Temporary voice formatter
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Show canonical formatted voice sources
+        run: |
+          node --input-type=module <<'JS'
+          import * as prettier from 'prettier';
+          import { readFileSync } from 'node:fs';
+          const paths = [
+            'src/features/voices/VoicesPage.tsx',
+            'src/features/voices/VoicesPage.test.tsx',
+            'src/features/voices/voices.css',
+            'e2e/voice-references.spec.ts',
+          ];
+          for (const path of paths) {
+            const original = readFileSync(path, 'utf8');
+            const config = await prettier.resolveConfig(path);
+            const formatted = await prettier.format(original, {...config, filepath: path});
+            console.log('VOICE_FORMAT=' + JSON.stringify({ path: 'frontend/' + path, formatted }));
+          }
+          JS
