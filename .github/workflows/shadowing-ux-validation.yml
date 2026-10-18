@@ -36,4 +36,4 @@ jobs:
       - run: python -m pip install ".[dev]"
       - run: python -m ruff check src tests
       - run: python -m pyright
-      - run: python -m pytest tests/application/test_shadowing_groups.py tests/api/test_shadowing_workflow.py tests/application/test_generate_complete_materials.py
+      - run: python -m pytest tests/application/test_shadowing_groups.py tests/api/test_shadowing_workflow.py tests/application/test_generate_complete_materials.py tests/api/test_materials.py
