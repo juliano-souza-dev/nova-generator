@@ -536,7 +536,8 @@ export function ShadowingPage() {
               </select>
             </label>
             <span className="shadowing-info">
-              {active.blocks.length} práticas · {active.excluded_cues.length} cues disponíveis ·{" "}
+              Cena {sceneIndex + 1} de {plans.data?.length ?? 0} · {active.blocks.length} práticas ·{" "}
+              {active.excluded_cues.length} cues disponíveis ·{" "}
               {SOURCE_LABELS[active.origin] ?? "Proposta salva"}
             </span>
             <span className={`shadowing-state ${active.status === "approved" ? "is-approved" : "is-review"}`}>
