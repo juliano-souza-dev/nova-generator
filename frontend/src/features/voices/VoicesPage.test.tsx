@@ -170,9 +170,7 @@ describe("VoicesPage", () => {
     await waitFor(() =>
       expect(studioApi.uploadVoiceReference).toHaveBeenCalledWith(file, expect.anything()),
     );
-    await waitFor(() =>
-      expect(screen.getByLabelText("Áudio de referência")).toHaveValue(digest),
-    );
+    await waitFor(() => expect(screen.getByLabelText("Áudio de referência")).toHaveValue(digest));
   });
 
   it("rejects unsupported file types without uploading them", () => {
