@@ -74,7 +74,7 @@ test("uploads a WAV and creates a selectable voice without entering hashes", asy
     mimeType: "audio/wav",
     buffer: Buffer.from("wav"),
   });
-  await page.getByLabel("Áudio de referência").selectOption(digest);
+  await page.locator("#voice-reference-select").selectOption(digest);
   await page.getByPlaceholder("Narradora Ana").fill("Nova voz");
   await page.getByRole("button", { name: "Criar e sintetizar prévia" }).click();
   await expect(page.getByRole("button", { name: /Nova voz v1/ })).toBeVisible();
@@ -122,6 +122,6 @@ test("uploads a WAV dropped into the reference area without opening the file pic
     element.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer }));
   });
   await expect(zone).not.toHaveClass(/is-dragging/);
-  await expect(page.getByLabel("Áudio de referência")).toHaveValue(digest);
+  await expect(page.locator("#voice-reference-select")).toHaveValue(digest);
   await expect(page.getByText("Arquivo selecionado: voice-drop.wav")).toBeVisible();
 });
