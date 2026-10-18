@@ -190,6 +190,29 @@ class PublishAnkiReel:
                 "editorial_sha256": job.input["editorial_sha256"],
             },
         }
+        if job.input.get("generate_complete"):
+            pedagogical = self._frozen_pedagogical(job)
+            cards = {card["cue_id"]: card for card in pedagogical["anki_cards"]}
+            for item, cue in zip(base["cues"], cues, strict=True):
+                rich = cards.get(str(cue.id))
+                if rich is None:
+                    raise AnkiPublicationError("Card pedagógico ausente no material congelado.")
+                anki = item["anki"]["items"][0]
+                anki.update({
+                    "type": rich.get("card_type") or "EXPRESSION",
+                    "focus": rich.get("focus_text") or cue.approved_en,
+                    "meaning": rich.get("meaning") or cue.approved_pt,
+                    "explanation_pt": rich["explanation_pt"],
+                    "marked_en": rich.get("marked_en", ""),
+                    "marked_pt": rich.get("marked_pt", ""),
+                    "example_en": rich.get("example_en") or cue.approved_en,
+                    "example_pt": rich.get("example_pt") or cue.approved_pt,
+                    "tags": rich.get("tags", []),
+                })
+            base["materials"].append({
+                "label": "Material didático", "type": "PDF",
+                "fileName": "material-didatico.pdf",
+            })
         document = add_manual_youtube_anki_audio(
             base, youtube_video_id=video.video_id, export=export
         )
@@ -211,6 +234,24 @@ class PublishAnkiReel:
         )
         os.replace(temporary, path)
         return AnkiPublication(path, video.video_id, video.canonical_url)
+
+    def _frozen_pedagogical(self, job: Job) -> dict[str, Any]:
+        path = self._export_root / str(job.id) / "material-pedagogico.json"
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            raise AnkiPublicationError("Material pedagógico congelado não encontrado.") from error
+        digest = sha256(json.dumps(
+            document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")).hexdigest()
+        if (
+            digest != job.input.get("materials_sha256")
+            or digest != (job.output or {}).get("materials_sha256")
+        ):
+            raise AnkiPublicationError("Material pedagógico diverge da exportação.")
+        if not (self._export_root / str(job.id) / "material-didatico.pdf").is_file():
+            raise AnkiPublicationError("PDF aprovado não encontrado.")
+        return document
 
     def publication_path(self, project_id: UUID, job_id: UUID) -> Path:
         return (
@@ -274,7 +315,11 @@ class PublishAnkiReel:
                 cue.approved_en_sha256 != interval.text_sha256
                 or cue.approved_en_sha256 != job.input.get("text_hashes", {}).get(str(raw_id))
                 or utf8_sha256(cue.approved_pt) != job.input.get("pt_hashes", {}).get(str(raw_id))
-                or interval.audio_sha256 != job.input.get("audio_hashes", {}).get(str(raw_id))
+                or interval.audio_sha256 != (
+                    (job.output or {}).get("audio_hashes", {})
+                    if job.input.get("generate_complete")
+                    else job.input.get("audio_hashes", {})
+                ).get(str(raw_id))
             ):
                 raise AnkiPublicationError(
                     f"Texto ou WAV do card {raw_id} mudou após a exportação. Exporte novamente."
