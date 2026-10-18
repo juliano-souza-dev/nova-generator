@@ -9,6 +9,7 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Mapear os pipelines equivalentes em `legacy/generator-base/` antes de migrar comportamento de mídia para serviços novos.
 - Separar inspeção leve de metadados, download da fonte e extração do corte em etapas observáveis.
 - Manter perfis de voz versionados, incluindo configuração, referência autorizada e hash de modelo.
+- Aceitar referências WAV, MP3 e OGG; converter áudio comprimido via FFmpeg para WAV PCM validado, com hash do arquivo canônico.
 - Gerar WAV canônico por cue; APKG, manifesto e reel derivam exatamente desse mesmo áudio.
 - Criar reel MP4 com áudio sincronizado aos tempos publicados no contrato do Hub.
 - Validar duração, codec, canais, seek e integridade com FFprobe.
