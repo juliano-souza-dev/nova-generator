@@ -106,7 +106,6 @@ test("Preparar WAV reports rejected requests visibly without leaving the table",
   await expect(prepare).toBeEnabled();
 });
 
-
 test("Gerar material starts generation of the seven sections and Anki explanations", async ({
   page,
 }) => {
@@ -127,9 +126,7 @@ test("Gerar material starts generation of the seven sections and Anki explanatio
   await expect.poll(() => started).toBe(true);
 });
 
-test("Gerar material produces the PDF, APKG and reel after human approval", async ({
-  page,
-}) => {
+test("Gerar material produces the PDF, APKG and reel after human approval", async ({ page }) => {
   await arrangeMaterialPage(page);
   await page.route("**/api/projects/project-1/materials-ai/review", (route) =>
     route.fulfill({
@@ -144,7 +141,8 @@ test("Gerar material produces the PDF, APKG and reel after human approval", asyn
     expect(route.request().postDataJSON()).toEqual({ voice_id: "voice-1" });
     produced = true;
     return route.fulfill({
-      status: 202, json: { job_id: "complete-1", status: "queued" },
+      status: 202,
+      json: { job_id: "complete-1", status: "queued" },
     });
   });
   await page.route("**/api/projects/project-1/materials/exports/complete-1", (route) =>
@@ -164,8 +162,10 @@ test("Gerar material produces the PDF, APKG and reel after human approval", asyn
   await expect(generate).toBeEnabled();
   await generate.click();
   await expect.poll(() => produced).toBe(true);
-  await expect(page.getByRole("link", { name: "Baixar material didático (PDF)" }))
-    .toHaveAttribute("href", "/material-didatico.pdf");
+  await expect(page.getByRole("link", { name: "Baixar material didático (PDF)" })).toHaveAttribute(
+    "href",
+    "/material-didatico.pdf",
+  );
   await expect(page.getByRole("link", { name: "Baixar APKG" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Baixar reel" })).toBeVisible();
 });
