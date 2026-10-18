@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
-import type { ShadowingBlock, ShadowingCue, ShadowingPlan } from "./shadowing.types";
+import type { ShadowingCue, ShadowingPlan } from "./shadowing.types";
 import { studioApi } from "../../lib/studio-api";
 import "./shadowing.css";
 
