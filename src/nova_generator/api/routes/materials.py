@@ -37,6 +37,10 @@ from nova_generator.infrastructure.integration.ihub_contracts import (
     ContractViolation,
     validate_anki_audio,
 )
+from nova_generator.infrastructure.filesystem.voice_references import (
+    FileVoiceReferenceStore,
+    validate_profile_reference,
+)
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 
 router = APIRouter(prefix="/projects/{project_id}/materials", tags=["materials"])
@@ -327,6 +331,13 @@ def prepare_material_audio(
     if cue is None:
         raise HTTPException(404, detail="card not found")
     voice = _voice(voices, payload.voice_id)
+    try:
+        validate_profile_reference(
+            FileVoiceReferenceStore(get_settings().media_cache_root),
+            voice.reference_audio_sha256,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
     job = enqueue.execute(
         kind="synthesize_material_audio",
         input={
