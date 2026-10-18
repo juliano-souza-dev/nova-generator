@@ -164,7 +164,7 @@ function Test-TtsRuntime([string]$Executable) {
 }
 
 function Ensure-Tts([object]$PythonCommand) {
-    Write-Step "Preparando Chatterbox Nano isolado..."
+    Write-Step "Preparando Chatterbox Turbo isolado..."
     $expected = "chatterbox-tts=0.1.7;torch=2.6.0;python=3.12"
     $stamp = Join-Path $RuntimeRoot "tts.sha256"
     $current = if (Test-Path -LiteralPath $stamp) { (Get-Content -Raw $stamp).Trim() } else { "" }
@@ -180,7 +180,7 @@ function Ensure-Tts([object]$PythonCommand) {
         & $TtsPython -m pip install "torch==2.6.0" "torchaudio==2.6.0" --index-url "https://download.pytorch.org/whl/cpu"
         if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar PyTorch CPU do Chatterbox." }
         & $TtsPython -m pip install "chatterbox-tts==0.1.7"
-        if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Chatterbox Nano." }
+        if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Chatterbox Turbo." }
     }
     if (-not (Test-TtsRuntime $TtsPython)) {
         throw "O ambiente isolado do Chatterbox foi criado, mas não passou na verificação."
@@ -287,6 +287,13 @@ try {
     Write-Step "Atualizando banco de dados..."
     & $BackendPython -m alembic upgrade head
     if ($LASTEXITCODE -ne 0) { throw "Falha ao aplicar as migrations Alembic." }
+
+    Write-Step "Preparando modelo local de voz..."
+    $prepareScript = Join-Path $ProjectRoot "scripts/prepare_chatterbox.py"
+    & $ttsExecutable $prepareScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "Preparação automática do Chatterbox falhou. Consulte os detalhes acima."
+    }
 
     if ($CheckOnly) {
         Write-Host "`nAmbiente pronto. Verificação concluída sem iniciar os servidores." -ForegroundColor Green
