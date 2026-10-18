@@ -79,6 +79,7 @@ def main() -> None:
             FfprobeReelValidator(),
         ),
         settings.media_cache_root / "exports",
+        settings.project_root,
     )
     media_cache = FileYoutubeMediaCache(settings.media_cache_root)
     project_media = ProjectMediaJobHandler(
