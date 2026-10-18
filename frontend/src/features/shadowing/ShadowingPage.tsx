@@ -91,10 +91,7 @@ export function ShadowingPage() {
   const activeReady = Boolean(active?.blocks.length);
   const scenesReadyForApproval =
     !!plans.data?.length &&
-    plans.data.every(
-      (item) =>
-        item.status === "approved" || item.blocks.length > 0,
-    );
+    plans.data.every((item) => item.status === "approved" || item.blocks.length > 0);
   const scenesPendingApproval = plans.data?.filter((item) => item.status !== "approved") ?? [];
   const practicesPendingApproval = scenesPendingApproval.reduce(
     (count, item) => count + item.blocks.length,
@@ -755,11 +752,7 @@ export function ShadowingPage() {
                   <span
                     className="shadowing-disabled-hint"
                     tabIndex={
-                      active.status === "approved" ||
-                      !active.blocks.length ||
-                      isBusy
-                        ? 0
-                        : -1
+                      active.status === "approved" || !active.blocks.length || isBusy ? 0 : -1
                     }
                     title={
                       active.status === "approved"
