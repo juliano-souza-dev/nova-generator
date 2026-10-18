@@ -82,7 +82,7 @@ def get_reference(digest: str) -> FileResponse:
 
 class VoiceInput(BaseModel):
     name: str = Field(min_length=1, max_length=255)
-    model_id: str = Field(default="chatterbox-nano", min_length=1, max_length=255)
+    model_id: str = Field(default="chatterbox-turbo", min_length=1, max_length=255)
     model_sha256: str | None = Field(default=None, min_length=64, max_length=64)
     reference_audio_sha256: str | None = Field(default=None, min_length=64, max_length=64)
     parameters: dict[str, Any] = Field(default_factory=dict)
