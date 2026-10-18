@@ -42,7 +42,6 @@ export function ShadowingPage() {
   const [phase, setPhase] = useState<PreviewPhase>("ready");
   const [previewError, setPreviewError] = useState("");
   const [selectedFileName, setSelectedFileName] = useState("");
-  const [actionNotice, setActionNotice] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -195,8 +194,24 @@ export function ShadowingPage() {
   });
   const isBusy = editing.isPending || groq.isPending || importAi.isPending || approval.isPending;
   busy.current = isBusy;
-  const actionError = editing.error ?? groq.error ?? importAi.error ?? approval.error;
   const historyCount = historyVersion >= 0 ? undoHistory.current.length : 0;
+
+  function retryFailedAction() {
+    if (isBusy || !active) return;
+    if (editing.isError && editing.variables) {
+      editing.mutate(editing.variables);
+    } else if (groq.isError) {
+      if (generatingGuard.current) return;
+      generatingGuard.current = true;
+      groq.mutate(active);
+    } else if (importAi.isError && importAi.variables) {
+      if (importGuard.current) return;
+      importGuard.current = true;
+      importAi.mutate(importAi.variables);
+    } else if (approval.isError && approval.variables) {
+      approval.mutate(approval.variables);
+    }
+  }
 
   useEffect(() => {
     setPreviewIndex(-1);
@@ -274,7 +289,6 @@ export function ShadowingPage() {
 
   function changeGroups(next: string[][], description: string) {
     if (!active || busy.current) return;
-    setActionNotice("");
     stopPreview();
     editing.mutate({ plan: active, groups: next, description });
   }
@@ -484,8 +498,7 @@ export function ShadowingPage() {
                 stopPreview();
                 setParams({ project: event.target.value });
                 setActiveSceneId("");
-                setActionNotice("");
-              }}
+                          }}
             >
               {projects.data?.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -513,8 +526,7 @@ export function ShadowingPage() {
                 onChange={(event) => {
                   stopPreview();
                   setActiveSceneId(event.target.value);
-                  setActionNotice("");
-                }}
+                              }}
               >
                 {plans.data?.map((item, index) => (
                   <option key={item.scene_id} value={item.scene_id}>
@@ -574,8 +586,7 @@ export function ShadowingPage() {
                 onClick={() => {
                   if (generatingGuard.current) return;
                   generatingGuard.current = true;
-                  setActionNotice("");
-                  stopPreview();
+                                stopPreview();
                   groq.mutate(active);
                 }}
               >
@@ -626,8 +637,7 @@ export function ShadowingPage() {
                     }
                     importGuard.current = true;
                     setSelectedFileName(file.name);
-                    setActionNotice("");
-                    setToolsOpen(false);
+                                    setToolsOpen(false);
                     stopPreview();
                     importAi.mutate({ plan: active, file });
                   }}
@@ -954,6 +964,46 @@ export function ShadowingPage() {
             </section>
           )}
         </>
+      )}
+      {toast && (
+        <div className={`shadowing-toast is-${toast.tone}`}
+          role={toast.tone === "error" ? "alert" : "status"}>
+          <span>{toast.text}</span>
+          {toast.undo && historyCount > 0 && (
+            <button type="button" onClick={undoLast} disabled={isBusy}>
+              <Undo2 aria-hidden="true" /> Desfazer
+            </button>
+          )}
+          {toast.tone === "error" && (
+            <button type="button" onClick={retryFailedAction} disabled={isBusy}>
+              <RefreshCw aria-hidden="true" /> Tentar novamente
+            </button>
+          )}
+          <button type="button" onClick={() => setToast(null)}
+            aria-label="Fechar mensagem"><X aria-hidden="true" /></button>
+        </div>
+      )}
+      {shortcutsOpen && (
+        <div className="shadowing-dialog-backdrop" onClick={() => setShortcutsOpen(false)}>
+          <section role="dialog" aria-modal="true" aria-label="Atalhos de teclado"
+            className="shadowing-shortcuts panel" onClick={(event) => event.stopPropagation()}>
+            <div className="shadowing-dialog-title">
+              <h2>Atalhos de teclado</h2>
+              <button type="button" autoFocus aria-label="Fechar atalhos"
+                onClick={() => setShortcutsOpen(false)}><X aria-hidden="true" /></button>
+            </div>
+            <dl>
+              <dt>Espaço</dt><dd>Reproduzir ou pausar</dd>
+              <dt>J / K</dt><dd>Selecionar próxima / anterior prática</dd>
+              <dt>A</dt><dd>Adicionar o cue focado</dd>
+              <dt>Delete</dt><dd>Excluir prática selecionada</dd>
+              <dt>M</dt><dd>Juntar com próxima prática, se permitido</dd>
+              <dt>S</dt><dd>Separar após o cue focado, se permitido</dd>
+              <dt>Ctrl+Z / Cmd+Z</dt><dd>Desfazer última edição</dd>
+              <dt>?</dt><dd>Abrir ou fechar esta ajuda</dd>
+            </dl>
+          </section>
+        </div>
       )}
     </section>
   );
