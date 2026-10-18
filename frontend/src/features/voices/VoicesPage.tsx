@@ -241,14 +241,9 @@ function VoiceForm({
   const selectedReference = availableReferences.find(
     (reference) => reference.sha256 === currentReference,
   );
-  const referenceTooShort =
-    !!selectedReference && selectedReference.duration_ms < 6000;
+  const referenceTooShort = !!selectedReference && selectedReference.duration_ms < 6000;
   const cannotCreate =
-    busy ||
-    !model.data?.available ||
-    upload.isPending ||
-    !selectedReference ||
-    referenceTooShort;
+    busy || !model.data?.available || upload.isPending || !selectedReference || referenceTooShort;
   return (
     <form className="panel voice-form" onSubmit={form.handleSubmit(onSubmit)}>
       <h2>Nova voz</h2>
@@ -351,10 +346,7 @@ function VoiceForm({
         </p>
       ))}
       {error && <p className="field-error">{error}</p>}
-      <button
-        className="primary-button"
-        disabled={cannotCreate}
-      >
+      <button className="primary-button" disabled={cannotCreate}>
         <Plus />
         {busy ? "Criando…" : "Criar e sintetizar prévia"}
       </button>
