@@ -174,13 +174,14 @@ export function MaterialsPage() {
     return (
       materialStatus(card) === "ready" &&
       !submittingCueIds.includes(card.cue_id) &&
-      !audioRequestsInFlight.current.has(card.cue_id) &&
+      !audioRequestsInFlight.current.has(`${contextKey}:${card.cue_id}`) &&
       (!jobId || job?.status === "failed" || job?.status === "cancelled")
     );
   }
 
   async function prepareAudio(cueId: string): Promise<void> {
-    if (!projectId || !voiceId || voiceReferenceError || audioRequestsInFlight.current.has(cueId)) {
+    const requestToken = `${contextKey}:${cueId}`;
+    if (!projectId || !voiceId || voiceReferenceError || audioRequestsInFlight.current.has(requestToken)) {
       return;
     }
     const job = audioJobsByCue[cueId];
@@ -188,7 +189,7 @@ export function MaterialsPage() {
       return;
     }
     const requestContext = contextKey;
-    audioRequestsInFlight.current.add(cueId);
+    audioRequestsInFlight.current.add(requestToken);
     setSubmittingCueIds((current) => [...current, cueId]);
     setAudioRequestErrors((current) => {
       const next = { ...current };
@@ -213,7 +214,7 @@ export function MaterialsPage() {
       setAudioRequestErrors((current) => ({ ...current, [cueId]: message }));
       setAudioNotice("Falha ao solicitar um WAV. Consulte o erro no card correspondente.");
     } finally {
-      audioRequestsInFlight.current.delete(cueId);
+      audioRequestsInFlight.current.delete(requestToken);
       if (audioContext.current === requestContext) {
         setSubmittingCueIds((current) => current.filter((id) => id !== cueId));
       }
@@ -482,14 +483,21 @@ export function MaterialsPage() {
               disabled={
                 !voiceId ||
                 !!voiceReferenceError ||
-                !selectedVisible.some((card) => materialStatus(card) === "ready") ||
-                audio.isPending
+                !selectedVisible.some(canPrepareAudio)
               }
               onClick={prepareSelected}
             >
-              <Volume2 aria-hidden="true" /> Preparar selecionados
+              <Volume2 aria-hidden="true" />
+              {submittingCueIds.length ? "Enviando WAVs…" : "Preparar selecionados"}
             </button>
           </section>
+        )}
+        {(audioNotice || activeAudioCount > 0) && (
+          <p className="material-audio-feedback panel" role="status">
+            {audioNotice ?? "Acompanhe a síntese dos WAVs abaixo."}
+            {activeAudioCount > 0 && ` ${activeAudioCount} tarefa(s) em processamento.`}
+            {" "}<Link to="/jobs">Ver monitor de jobs</Link>
+          </p>
         )}
         <div className="materials-table-wrap panel">
           <table className="materials-table">
@@ -529,9 +537,11 @@ export function MaterialsPage() {
                   voiceName={voices.data?.find((voice) => voice.id === voiceId)?.name ?? "—"}
                   voiceVersion={materials.data?.voice_version}
                   onInclude={(cueId, included) => select.mutate({ cueId, included })}
-                  onAudio={(cueId) => audio.mutate(cueId)}
-                  audioBusy={audio.isPending}
+                  onAudio={(cueId) => void prepareAudio(cueId)}
+                  submittingCueIds={submittingCueIds}
+                  audioJobsByCue={audioJobsByCue}
                   audioJobIds={audioJobIds}
+                  audioRequestErrors={audioRequestErrors}
                   voiceSelected={!!voiceId && !voiceReferenceError}
                   onPreview={setPreviewCueId}
                 />
@@ -542,9 +552,9 @@ export function MaterialsPage() {
         </div>
         </>
       )}
-      {(select.error || audio.error || exportCards.error || publication.error) && (
+      {(select.error || exportCards.error || publication.error) && (
         <p className="field-error" role="alert">
-          {(select.error ?? audio.error ?? exportCards.error ?? publication.error)?.message}
+          {(select.error ?? exportCards.error ?? publication.error)?.message}
         </p>
       )}
       {latestExport.isError &&
@@ -680,8 +690,10 @@ function SceneCardRows({
   voiceVersion,
   onInclude,
   onAudio,
-  audioBusy,
+  submittingCueIds,
+  audioJobsByCue,
   audioJobIds,
+  audioRequestErrors,
   voiceSelected,
   onPreview,
 }: {
@@ -693,8 +705,10 @@ function SceneCardRows({
   voiceVersion: number | null | undefined;
   onInclude: (cueId: string, included: boolean) => void;
   onAudio: (cueId: string) => void;
-  audioBusy: boolean;
+  submittingCueIds: string[];
+  audioJobsByCue: Record<string, JobDetail | undefined>;
   audioJobIds: Record<string, string>;
+  audioRequestErrors: Record<string, string>;
   voiceSelected: boolean;
   onPreview: (cueId: string) => void;
 }) {
@@ -714,8 +728,10 @@ function SceneCardRows({
           voiceVersion={voiceVersion}
           onInclude={(included) => onInclude(card.cue_id, included)}
           onAudio={() => onAudio(card.cue_id)}
-          audioBusy={audioBusy}
+          audioSubmitting={submittingCueIds.includes(card.cue_id)}
           audioJobId={audioJobIds[card.cue_id]}
+          audioJob={audioJobsByCue[card.cue_id]}
+          audioRequestError={audioRequestErrors[card.cue_id]}
           voiceSelected={voiceSelected}
           onPreview={() => onPreview(card.cue_id)}
         />
@@ -731,8 +747,10 @@ function MaterialRow({
   voiceVersion,
   onInclude,
   onAudio,
-  audioBusy,
+  audioSubmitting,
   audioJobId,
+  audioJob,
+  audioRequestError,
   voiceSelected,
   onPreview,
 }: {
@@ -742,18 +760,16 @@ function MaterialRow({
   voiceVersion: number | null | undefined;
   onInclude: (included: boolean) => void;
   onAudio: () => void;
-  audioBusy: boolean;
+  audioSubmitting: boolean;
   audioJobId?: string;
+  audioJob?: JobDetail;
+  audioRequestError?: string;
   voiceSelected: boolean;
   onPreview: () => void;
 }) {
-  const audioJob = useQuery({
-    queryKey: ["material-audio-job", audioJobId],
-    queryFn: () => studioApi.job(audioJobId!),
-    enabled: !!audioJobId && !card.audio_ready,
-    refetchInterval: (query) =>
-      ["queued", "running", "retryable"].includes(query.state.data?.status ?? "") ? 3000 : false,
-  });
+  const audioProcessing =
+    !!audioJobId &&
+    (!audioJob || ACTIVE_AUDIO_JOB_STATES.has(audioJob.status) || audioJob.status === "succeeded");
   const statusMeta = statusDetails[status];
   const StatusIcon = statusMeta.icon;
   return (
@@ -820,17 +836,56 @@ function MaterialRow({
           <button
             type="button"
             className="primary-button material-audio-action"
-            disabled={status === "blocked" || !voiceSelected || audioBusy}
+            disabled={status === "blocked" || !voiceSelected || audioSubmitting || audioProcessing}
             title={status === "blocked" ? statusMeta.description : undefined}
             onClick={onAudio}
           >
-            <Volume2 aria-hidden="true" /> Preparar WAV
+            <Volume2 aria-hidden="true" />
+            {audioSubmitting
+              ? "Enviando…"
+              : audioJob?.status === "queued"
+                ? "Na fila"
+                : audioJob?.status === "running"
+                  ? "Sintetizando…"
+                  : audioJob?.status === "retryable"
+                    ? "Nova tentativa…"
+                    : audioJob?.status === "succeeded"
+                      ? "Finalizando…"
+                      : audioJobId && !audioJob
+                        ? "Consultando…"
+                        : audioJob?.status === "failed" || audioJob?.status === "cancelled"
+                          ? "Tentar novamente"
+                          : "Preparar WAV"}
           </button>
         )}
-        {card.audio_error && <small className="field-error">{card.audio_error}</small>}
-        {audioJob.data?.status === "failed" && (
+        {!card.audio_ready && audioJob && ACTIVE_AUDIO_JOB_STATES.has(audioJob.status) && (
+          <small className="material-audio-progress" role="status">
+            {audioJob.status === "queued"
+              ? "Tarefa recebida. Aguardando o worker."
+              : audioJob.status === "running"
+                ? "Gerando WAV com a voz selecionada…"
+                : "Aguardando nova tentativa automática…"}
+          </small>
+        )}
+        {!card.audio_ready && audioJob?.status === "succeeded" && (
+          <small className="material-audio-progress" role="status">
+            WAV concluído. Atualizando card…
+          </small>
+        )}
+        {audioRequestError && (
           <small className="field-error" role="alert">
-            {audioJob.data.error_message ?? "Falha ao preparar WAV"}. Prepare este card novamente.
+            Não foi possível iniciar a síntese: {audioRequestError}
+          </small>
+        )}
+        {card.audio_error && <small className="field-error">{card.audio_error}</small>}
+        {audioJob?.status === "failed" && (
+          <small className="field-error" role="alert">
+            {audioJob.error_message ?? "Falha ao preparar WAV"}. Prepare este card novamente.
+          </small>
+        )}
+        {audioJob?.status === "cancelled" && (
+          <small className="field-error" role="alert">
+            Síntese cancelada. Você pode solicitar novamente.
           </small>
         )}
       </td>
