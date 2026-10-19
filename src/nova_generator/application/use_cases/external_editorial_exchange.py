@@ -174,11 +174,17 @@ class ExternalEditorialExchange:
                     "cues": [asdict(cue) for cue in chunk],
                     "neighbor_context": {
                         "previous": (
-                            {"cue_id": previous.id, "text": previous.current_en or previous.original_en}
+                            {
+                                "cue_id": previous.id,
+                                "text": previous.current_en or previous.original_en,
+                            }
                             if previous else None
                         ),
                         "next": (
-                            {"cue_id": following.id, "text": following.current_en or following.original_en}
+                            {
+                                "cue_id": following.id,
+                                "text": following.current_en or following.original_en,
+                            }
                             if following else None
                         ),
                     },
@@ -587,7 +593,8 @@ Não gere speaker_turns consecutivos com o mesmo interlocutor.
 Para continuar a fala entre duas cues originais, use merge_with_previous=true na
 suggestion da segunda cue; faça isso apenas se for a mesma pessoa e não existir
 pausa significativa. Use neighbor_context.previous/next para avaliar limites
-entre blocos, mas nunca devolva sugestões extras para cues fora do bloco. Caso incerto, deixe false e registre o motivo em notes.
+entre blocos, mas nunca devolva sugestões extras para cues fora do bloco.
+Caso incerto, deixe false e registre o motivo em notes.
 Preserve os tempos originais das palavras; só corrija valores quando houver evidência
 no áudio ou nos timestamps fornecidos. A sequência final deve ser cronológica e sem
 sobreposições; NÃO invente tempos para fazer a divisão parecer precisa.
