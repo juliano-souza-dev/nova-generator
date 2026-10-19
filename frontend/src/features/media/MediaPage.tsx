@@ -47,6 +47,15 @@ export function MediaPage() {
       studioApi.ingestProjectMedia(selected!.id, input),
     onSuccess: refresh,
   });
+  const reprocess = useMutation({
+    mutationFn: (input: { start_ms: number; end_ms: number; language: string }) =>
+      studioApi.reprocessProjectMedia(selected!.id, input),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["project-media", selected?.id] });
+      void client.invalidateQueries({ queryKey: ["editorial"] });
+      refresh();
+    },
+  });
   const sourceWaveform = useQuery({
     queryKey: ["source-waveform", selected?.id],
     queryFn: () => studioApi.projectSourceWaveform(selected!.id),
@@ -100,8 +109,21 @@ export function MediaPage() {
                 project={selected}
                 media={media.data}
                 onStart={() => start.mutate(selected.id)}
-                busy={start.isPending}
+                onReprocess={() => {
+                  const snapshot = media.data;
+                  if (snapshot?.cut_start_ms == null || snapshot.cut_end_ms == null) return;
+                  if (!window.confirm("Reprocessar o corte e gerar nova transcrição? Todo trabalho editorial deste projeto baseado na transcrição anterior será apagado. Essa ação não pode ser desfeita.")) return;
+                  reprocess.mutate({
+                    start_ms: snapshot.cut_start_ms,
+                    end_ms: snapshot.cut_end_ms,
+                    language: "en",
+                  });
+                }}
+                busy={start.isPending || reprocess.isPending}
               />
+              {reprocess.error && (
+                <p className="field-error" role="alert">{reprocess.error.message}</p>
+              )}
               {start.error && (
                 <p className="field-error" role="alert">
                   {start.error.message}
@@ -148,11 +170,13 @@ function SourceStatus({
   project,
   media,
   onStart,
+  onReprocess,
   busy,
 }: {
   project: Project;
   media: ProjectMedia;
   onStart: () => void;
+  onReprocess: () => void;
   busy: boolean;
 }) {
   const hasSource = Boolean(project.youtube_url && project.youtube_video_id);
@@ -174,6 +198,13 @@ function SourceStatus({
         )}
       </div>
       {hasSource ? (
+        <div className="media-source-actions">
+        {media.cut_start_ms !== null && media.cut_end_ms !== null && (
+          <button className="secondary-button" onClick={onReprocess}
+            disabled={busy || ACTIVE.has(media.ingest_status ?? "") || ACTIVE.has(media.download_status ?? "")}>
+            <Scissors aria-hidden="true" /> Reprocessar fonte
+          </button>
+        )}
         <button
           className="primary-button"
           onClick={onStart}
@@ -188,6 +219,7 @@ function SourceStatus({
                 ? "Tentar novamente"
                 : "Iniciar processamento"}
         </button>
+        </div>
       ) : (
         <span className="media-warning">
           <AlertTriangle aria-hidden="true" /> Informe a URL no projeto.
