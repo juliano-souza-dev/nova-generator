@@ -1187,3 +1187,33 @@
   margin-top: 0.1rem;
   accent-color: var(--accent);
 }
+
+.word-surface-editor,
+.cue-timing-alert {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border, #30435f);
+  border-radius: 10px;
+}
+.word-surface-editor label {
+  display: grid;
+  gap: 0.3rem;
+}
+.word-surface-editor input {
+  width: 100%;
+  min-width: 0;
+}
+.word-surface-editor p,
+.cue-timing-alert p,
+.word-review-warning p {
+  margin: 0;
+  font-size: 0.84rem;
+}
+.word-review-warning {
+  display: grid;
+  gap: 0.45rem;
+}
+.cue-timing-alert {
+  margin-bottom: 0.75rem;
+}
