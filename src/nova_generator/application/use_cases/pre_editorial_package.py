@@ -129,9 +129,41 @@ class PreEditorialPackage:
                         "schema_version": "nova-generator-editorial-suggestions/1.3",
                         "scene_id": str(scene_id),
                         "input_sha256": input_hash,
-                        "suggestions": [],
+                        "suggestions": [
+                            {
+                                "cue_id": cue.id,
+                                "order": cue.order,
+                                "approved_en": cue.word_by_word_en,
+                                "approved_pt": "",
+                                "notes": "",
+                                "trailing": cue.trailing,
+                                "word_translations": [
+                                    {
+                                        "word_id": word.id,
+                                        "order": word.order,
+                                        "leading": word.leading,
+                                        "surface": word.surface,
+                                        "start_ms": word.start_ms,
+                                        "end_ms": word.end_ms,
+                                        "pt": "",
+                                    }
+                                    for word in cue.words
+                                ],
+                                "semantic_units": [],
+                            }
+                            for cue in prompts
+                        ],
                     },
-                    "materials": {"sections": [], "anki_cards": []},
+                    "materials": {
+                        "sections": [
+                            {"id": key, "title": "", "paragraphs": [], "exercises": []}
+                            for key in (
+                                "learning_path", "vocabulary", "structures",
+                                "guided_practice", "activities", "challenge", "review",
+                            )
+                        ],
+                        "anki_cards": [],
+                    },
                 },
             },
         }
