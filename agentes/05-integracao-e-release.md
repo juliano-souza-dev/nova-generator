@@ -25,6 +25,8 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
   Vitest e Playwright.
 - Acompanhar métricas de entrega, falhas pós-release e tempo de recuperação.
 
+- Validar o contrato versionado unified-preparation/v1, garantir que o retorno de IA nunca reescreva Shadowing e transportar mini-aulas aprovadas em hub_final.json sem quebrar o importador existente.
+
 ## Limites
 
 - Não aprovar mudança pública baseada apenas em teste unitário de um repositório.

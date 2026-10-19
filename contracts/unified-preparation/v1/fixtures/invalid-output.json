@@ -1,0 +1,126 @@
+{
+  "contract": "nova-generator-unified-preparation-output/1.0",
+  "project_id": "00000000-0000-4000-8000-000000001234",
+  "scene_id": "00000000-0000-4000-8000-000000007890",
+  "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "editorial": {
+    "schema_version": "nova-generator-editorial-suggestions/1.3",
+    "scene_id": "00000000-0000-4000-8000-000000007890",
+    "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "suggestions": [
+      {
+        "cue_id": "00000000-0000-4000-8000-000000000001",
+        "order": 1,
+        "approved_en": "Hello there.",
+        "approved_pt": "Olá!",
+        "trailing": "",
+        "word_translations": [
+          {
+            "word_id": "00000000-0000-4000-8000-000000000002",
+            "order": 1,
+            "leading": "",
+            "surface": "Hello",
+            "start_ms": 10,
+            "end_ms": 210,
+            "pt": "Olá"
+          },
+          {
+            "word_id": "00000000-0000-4000-8000-000000000003",
+            "order": 2,
+            "leading": " ",
+            "surface": "there.",
+            "start_ms": 220,
+            "end_ms": 500,
+            "pt": "(saudação)"
+          }
+        ],
+        "semantic_units": []
+      }
+    ]
+  },
+  "materials": {
+    "sections": [
+      {
+        "id": "learning_path",
+        "title": "learning_path",
+        "paragraphs": [
+          "Pratique Hello there. em situações informais."
+        ],
+        "exercises": []
+      },
+      {
+        "id": "vocabulary",
+        "title": "vocabulary",
+        "paragraphs": [
+          "Pratique Hello there. em situações informais."
+        ],
+        "exercises": []
+      },
+      {
+        "id": "structures",
+        "title": "structures",
+        "paragraphs": [
+          "Pratique Hello there. em situações informais."
+        ],
+        "exercises": []
+      },
+      {
+        "id": "guided_practice",
+        "title": "guided_practice",
+        "paragraphs": [
+          "Pratique Hello there. em situações informais."
+        ],
+        "exercises": [
+          {
+            "prompt": "Cumprimente alguém informalmente em inglês.",
+            "answer": "Hello there."
+          }
+        ]
+      },
+      {
+        "id": "activities",
+        "title": "activities",
+        "paragraphs": [
+          "Pratique Hello there. em situações informais."
+        ],
+        "exercises": [
+          {
+            "prompt": "Cumprimente alguém informalmente em inglês.",
+            "answer": "Hello there."
+          }
+        ]
+      },
+      {
+        "id": "challenge",
+        "title": "challenge",
+        "paragraphs": [
+          "Pratique Hello there. em situações informais."
+        ],
+        "exercises": [
+          {
+            "prompt": "Cumprimente alguém informalmente em inglês.",
+            "answer": "Hello there."
+          }
+        ]
+      }
+    ],
+    "anki_cards": [
+      {
+        "cue_id": "00000000-0000-4000-8000-000000000001",
+        "front_en": "Hello there.",
+        "back_pt": "Olá!",
+        "card_type": "EXPRESSION",
+        "focus_text": "Hello there",
+        "meaning": "Olá!",
+        "marked_en": "Hello there",
+        "marked_pt": "Olá!",
+        "explanation_pt": "Cumprimento informal.",
+        "example_en": "Hello there, Mike!",
+        "example_pt": "Olá, Mike!",
+        "tags": [
+          "greetings"
+        ]
+      }
+    ]
+  }
+}

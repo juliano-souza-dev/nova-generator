@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -73,7 +74,11 @@ class PrepareShadowing:
                 blocks = _validated_blocks(
                     cues,
                     groups,
-                    max_words=MAX_MANUAL_BLOCK_WORDS if stored.get("origin") == "manual" else MAX_BLOCK_WORDS,
+                    max_words=(
+                        MAX_MANUAL_BLOCK_WORDS
+                        if stored.get("origin") == "manual"
+                        else MAX_BLOCK_WORDS
+                    ),
                 )
                 plan_hash = _plan_hash(fingerprint, blocks)
                 if stored["plan_sha256"] == plan_hash:
@@ -88,14 +93,40 @@ class PrepareShadowing:
                     )
             except (KeyError, TypeError, ValueError, ShadowingError):
                 pass
+        # An ASR candidate may already have a Shadowing selection. Rehydrate
+        # the same cue groups against the newly revised/approved literal text.
+        seed_path = (
+            self.project_root / str(project_id) / "preparation" / f"{scene_id}.json"
+        )
+        seed_groups: list[list[str]] | None = None
+        try:
+            seed = json.loads(seed_path.read_text(encoding="utf-8"))
+            if seed.get("contract") == "nova-generator-unified-preparation-input/1.0":
+                seed_groups = _group_ids(seed["shadowing"]["blocks"])
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        if stored and stored.get("contract") == CONTRACT:
+            try:
+                seed_groups = _group_ids(stored["blocks"])
+            except (KeyError, TypeError, ValueError):
+                pass
+        try:
+            blocks = _validated_blocks(
+                cues, seed_groups if seed_groups is not None else _automatic_groups(cues),
+                max_words=MAX_MANUAL_BLOCK_WORDS
+                if stored and stored.get("origin") == "manual"
+                else MAX_BLOCK_WORDS,
+            )
+        except ShadowingError:
+            blocks = _validated_blocks(cues, _automatic_groups(cues))
         return self._public(
             project_id,
             scene,
             cues,
             fingerprint,
-            _validated_blocks(cues, _automatic_groups(cues)),
+            blocks,
             status="draft",
-            origin="automatic",
+            origin="manual" if stored and stored.get("origin") == "manual" else "automatic",
         )
 
     def package(self, project_id: UUID, scene_id: UUID) -> dict[str, Any]:
@@ -175,6 +206,15 @@ class PrepareShadowing:
             raise ShadowingError("editorial content changed; reload shadowing")
         if plan_sha256 is not None and plan_sha256 != plan["plan_sha256"]:
             raise ShadowingError("O plano mudou desde a prévia. Reproduza e aprove a versão atual.")
+        # Preview may start at ASR time, but approval still requires the
+        # operator's explicit editorial approval for every cue.
+        if any(
+            cue.provenance.get("approval") == "draft"
+            or not cue.approved_en.strip()
+            or not cue.approved_pt.strip()
+            for cue in self.repository.get_scene_cues(scene_id)
+        ):
+            raise ShadowingError("Conclua e aprove o Editorial antes de aprovar Shadowing")
         if not plan["blocks"]:
             raise ShadowingError("Selecione ao menos um trecho curto para aprovar o Shadowing")
         result = {**plan, "status": "approved"}
@@ -256,7 +296,9 @@ class PrepareShadowing:
         if source_sha256 != fingerprint:
             raise ShadowingError("O Editorial mudou. Recarregue a cena e gere outra proposta.")
         blocks = _validated_blocks(
-            cues, groups, max_words=MAX_MANUAL_BLOCK_WORDS if origin == "manual" else MAX_BLOCK_WORDS
+            cues,
+            groups,
+            max_words=MAX_MANUAL_BLOCK_WORDS if origin == "manual" else MAX_BLOCK_WORDS,
         )
         result = self._public(
             project_id, scene, cues, fingerprint, blocks, status="draft", origin=origin
@@ -280,21 +322,25 @@ class PrepareShadowing:
         if not cues:
             raise ShadowingError("scene has no reviewed cues")
         for cue in cues:
-            if (
-                cue.provenance.get("approval") == "draft"
-                or not cue.approved_en.strip()
-                or not cue.approved_pt.strip()
-            ):
-                raise ShadowingError("approve all cues before preparing shadowing")
+            if not (cue.approved_en or cue.original_en).strip():
+                raise ShadowingError("scene contains a cue without transcription")
             if (
                 cue.speech_start_ms < 0
                 or cue.speech_end_ms <= cue.speech_start_ms
                 or cue.speech_end_ms > scene.duration_ms
             ):
                 raise ShadowingError(f"cue {cue.order} has invalid timing")
-        snapshot = _snapshot(scene, cues)
+        # Before editorial approval, the literal ASR English is the preview.
+        # Never synthesize a PT translation or mutate a cue in the database.
+        preview_cues = [
+            replace(
+                cue, approved_en=cue.approved_en or cue.original_en
+            )
+            for cue in cues
+        ]
+        snapshot = _snapshot(scene, preview_cues)
         fingerprint = _digest(snapshot)
-        return scene, cues, fingerprint
+        return scene, preview_cues, fingerprint
 
     def _public(
         self,

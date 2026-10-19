@@ -46,6 +46,19 @@ export const studioApi = {
       `/projects?search=${encodeURIComponent(search)}&include_archived=${includeArchived}`,
     ),
   projectMedia: (id: string) => apiRequest<ProjectMedia>(`/projects/${id}/media`),
+  unifiedPreparationPackageUrl: (id: string) => apiUrl(`/projects/${id}/media/preparation-package`),
+  generateUnifiedPreparation: (id: string) =>
+    apiRequest<{ status: string; anki_cards: number }>(`/projects/${id}/media/preparation-groq`, {
+      method: "POST",
+    }),
+  importUnifiedPreparation: (id: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return apiRequest<{ status: string; anki_cards: number }>(
+      `/projects/${id}/media/preparation-result`,
+      { method: "POST", body },
+    );
+  },
   projectSourceWaveform: (id: string) =>
     apiRequest<MediaWaveform>(`/projects/${id}/media/source-waveform`),
   startProjectMedia: (id: string) =>

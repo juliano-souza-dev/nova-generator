@@ -1078,34 +1078,34 @@ export function EditorialPage() {
                 {cues.map((cue) => {
                   const status = cue.provenance?.approval === "approved" ? "approved" : "pending";
                   return (
-                  <li key={cue.id} data-status={status}>
-                    <button
-                      type="button"
-                      aria-current={cue.id === selectedCueId ? "true" : undefined}
-                      onClick={() => selectCue(cue.id)}
-                      onKeyDown={(event) => {
-                        if (event.key !== " ") return;
-                        event.preventDefault();
-                        if (cue.id !== selectedCueId) {
-                          selectCue(cue.id);
-                          return;
-                        }
-                        setTimelineFocusRequest((value) => value + 1);
-                        togglePlayback();
-                      }}
-                      disabled={saving}
-                    >
-                      <span className="review-cue-number">{cue.order}</span>
-                      <span className="review-cue-copy">
-                        <strong>{cue.approved_en || cue.original_en}</strong>
-                        <small className="review-cue-status">
-                          <i aria-hidden="true" />
-                          {formatTime(cue.speech_timing.start_ms)} ·{" "}
-                          {status === "approved" ? "Aprovado" : "Pendente"}
-                        </small>
-                      </span>
-                    </button>
-                  </li>
+                    <li key={cue.id} data-status={status}>
+                      <button
+                        type="button"
+                        aria-current={cue.id === selectedCueId ? "true" : undefined}
+                        onClick={() => selectCue(cue.id)}
+                        onKeyDown={(event) => {
+                          if (event.key !== " ") return;
+                          event.preventDefault();
+                          if (cue.id !== selectedCueId) {
+                            selectCue(cue.id);
+                            return;
+                          }
+                          setTimelineFocusRequest((value) => value + 1);
+                          togglePlayback();
+                        }}
+                        disabled={saving}
+                      >
+                        <span className="review-cue-number">{cue.order}</span>
+                        <span className="review-cue-copy">
+                          <strong>{cue.approved_en || cue.original_en}</strong>
+                          <small className="review-cue-status">
+                            <i aria-hidden="true" />
+                            {formatTime(cue.speech_timing.start_ms)} ·{" "}
+                            {status === "approved" ? "Aprovado" : "Pendente"}
+                          </small>
+                        </span>
+                      </button>
+                    </li>
                   );
                 })}
               </ol>
@@ -1190,7 +1190,9 @@ export function EditorialPage() {
               <ChevronLeft aria-hidden="true" /> Anterior
             </button>
             <div>
-              <strong>Cue {selectedCue.order} de {cues.length}</strong>
+              <strong>
+                Cue {selectedCue.order} de {cues.length}
+              </strong>
               <span className={`cue-state cue-state-${cueStatus.toLowerCase().replace(" ", "-")}`}>
                 {cueStatus}
               </span>
@@ -1225,7 +1227,10 @@ export function EditorialPage() {
             OUT · <kbd>Enter</kbd> salvar palavra + próxima · <kbd>G</kbd> salvar + próxima ·{" "}
             <kbd>←/→</kbd> cursor
           </p>
-          <nav className="cue-navigation cue-navigation-secondary" aria-label="Navegação entre cues">
+          <nav
+            className="cue-navigation cue-navigation-secondary"
+            aria-label="Navegação entre cues"
+          >
             <button
               type="button"
               className="secondary-button"
@@ -1272,109 +1277,110 @@ export function EditorialPage() {
                   className="editorial-assistance"
                   aria-labelledby="editorial-assistance-title"
                 >
-                <div className="editorial-assistance-heading">
-                  <div>
-                    <span className="eyebrow">Preparação editorial</span>
-                    <h3 id="editorial-assistance-title">Groq ou IA externa</h3>
-                  </div>
-                  <span className="assistant-provider-state">
-                    {assistantStatus?.groq_configured
-                      ? `Groq · ${assistantStatus.groq_model}`
-                      : "Groq não configurada"}
-                  </span>
-                </div>
-                <div className="editorial-assistance-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={!assistantStatus?.groq_configured || assistantBusy}
-                    onClick={() => void startEditorialAssistance()}
-                  >
-                    <Bot aria-hidden="true" /> {assistantBusy ? "Processando…" : "Sugerir com Groq"}
-                  </button>
-                  <a
-                    className="secondary-button"
-                    href={studioApi.externalEditorialPackageUrl(sceneId)}
-                    download
-                  >
-                    <Download aria-hidden="true" /> Blocos de texto para IA externa
-                  </a>
-                  <EditorialImportDropzone
-                    disabled={assistantBusy}
-                    onImport={(file) => void importExternalResult(file)}
-                  />
-                </div>
-                {assistantMessage && <p className="assistant-message">{assistantMessage}</p>}
-                {selectedSuggestion && (
-                  <div className="assistant-suggestion">
-                    <div className="assistant-suggestion-copy">
-                      <strong>{selectedSuggestion.approved_en}</strong>
-                      <span>{selectedSuggestion.approved_pt}</span>
-                      {selectedSuggestion.notes && <small>{selectedSuggestion.notes}</small>}
-                      {(selectedSuggestion.semantic_units ?? []).length > 0 && (
-                        <section
-                          className="assistant-semantic-units"
-                          aria-label="Unidades sugeridas"
-                        >
-                          <strong>Unidades sugeridas</strong>
-                          <ul>
-                            {selectedSuggestion.semantic_units.map((unit) => (
-                              <li key={unit.word_ids.join(":")}>
-                                <span>
-                                  <b>{suggestedUnitLabel(unit)}</b> → {unit.pt}
-                                </span>
-                                <div>
-                                  <button
-                                    type="button"
-                                    className="secondary-button"
-                                    onClick={() => playSuggestedUnit(unit)}
-                                  >
-                                    <Play aria-hidden="true" /> Ouvir
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="secondary-button"
-                                    disabled={saving}
-                                    onClick={() => applySuggestedSemanticUnit(unit)}
-                                  >
-                                    Aplicar grupo
-                                  </button>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </section>
-                      )}
+                  <div className="editorial-assistance-heading">
+                    <div>
+                      <span className="eyebrow">Preparação editorial</span>
+                      <h3 id="editorial-assistance-title">Groq ou IA externa</h3>
                     </div>
+                    <span className="assistant-provider-state">
+                      {assistantStatus?.groq_configured
+                        ? `Groq · ${assistantStatus.groq_model}`
+                        : "Groq não configurada"}
+                    </span>
+                  </div>
+                  <div className="editorial-assistance-actions">
                     <button
                       type="button"
-                      className="primary-button"
-                      disabled={saving}
-                      onClick={() => {
-                        setApprovedEn(selectedSuggestion.approved_en);
-                        setApprovedPt(selectedSuggestion.approved_pt);
-                        setMessage(
-                          "Sugestão aplicada como rascunho. Revise antes de salvar ou aprovar.",
-                        );
-                      }}
+                      className="secondary-button"
+                      disabled={!assistantStatus?.groq_configured || assistantBusy}
+                      onClick={() => void startEditorialAssistance()}
                     >
-                      Aplicar texto como rascunho
+                      <Bot aria-hidden="true" />{" "}
+                      {assistantBusy ? "Processando…" : "Sugerir com Groq"}
                     </button>
+                    <a
+                      className="secondary-button"
+                      href={studioApi.externalEditorialPackageUrl(sceneId)}
+                      download
+                    >
+                      <Download aria-hidden="true" /> Blocos de texto para IA externa
+                    </a>
+                    <EditorialImportDropzone
+                      disabled={assistantBusy}
+                      onImport={(file) => void importExternalResult(file)}
+                    />
                   </div>
-                )}
-                {assistance && Object.keys(assistance.rate_limits).length > 0 && (
-                  <details className="assistant-limits">
-                    <summary>Limites informados pela Groq</summary>
-                    <dl>
-                      {Object.entries(assistance.rate_limits).map(([name, value]) => (
-                        <div key={name}>
-                          <dt>{name.replace("x-ratelimit-", "")}</dt>
-                          <dd>{value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </details>
-                )}
+                  {assistantMessage && <p className="assistant-message">{assistantMessage}</p>}
+                  {selectedSuggestion && (
+                    <div className="assistant-suggestion">
+                      <div className="assistant-suggestion-copy">
+                        <strong>{selectedSuggestion.approved_en}</strong>
+                        <span>{selectedSuggestion.approved_pt}</span>
+                        {selectedSuggestion.notes && <small>{selectedSuggestion.notes}</small>}
+                        {(selectedSuggestion.semantic_units ?? []).length > 0 && (
+                          <section
+                            className="assistant-semantic-units"
+                            aria-label="Unidades sugeridas"
+                          >
+                            <strong>Unidades sugeridas</strong>
+                            <ul>
+                              {selectedSuggestion.semantic_units.map((unit) => (
+                                <li key={unit.word_ids.join(":")}>
+                                  <span>
+                                    <b>{suggestedUnitLabel(unit)}</b> → {unit.pt}
+                                  </span>
+                                  <div>
+                                    <button
+                                      type="button"
+                                      className="secondary-button"
+                                      onClick={() => playSuggestedUnit(unit)}
+                                    >
+                                      <Play aria-hidden="true" /> Ouvir
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="secondary-button"
+                                      disabled={saving}
+                                      onClick={() => applySuggestedSemanticUnit(unit)}
+                                    >
+                                      Aplicar grupo
+                                    </button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </section>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={saving}
+                        onClick={() => {
+                          setApprovedEn(selectedSuggestion.approved_en);
+                          setApprovedPt(selectedSuggestion.approved_pt);
+                          setMessage(
+                            "Sugestão aplicada como rascunho. Revise antes de salvar ou aprovar.",
+                          );
+                        }}
+                      >
+                        Aplicar texto como rascunho
+                      </button>
+                    </div>
+                  )}
+                  {assistance && Object.keys(assistance.rate_limits).length > 0 && (
+                    <details className="assistant-limits">
+                      <summary>Limites informados pela Groq</summary>
+                      <dl>
+                        {Object.entries(assistance.rate_limits).map(([name, value]) => (
+                          <div key={name}>
+                            <dt>{name.replace("x-ratelimit-", "")}</dt>
+                            <dd>{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </details>
+                  )}
                   <button
                     type="button"
                     className="preparation-source-dismiss"

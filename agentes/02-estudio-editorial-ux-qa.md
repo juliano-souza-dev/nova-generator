@@ -42,6 +42,8 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   `Ctrl+Shift+Enter` parte do início, e o operador alterna EN, PT e Dual. A prévia usa o texto
   editorial literal e os timings locais de word by word, inclusive antes de salvar.
 
+- Consumir a preparação única feita antes do Editorial sem disparar novas chamadas obrigatórias de IA; preservar seleções Shadowing por cue_id e revisão humana explícita.
+
 ## Limites
 
 - Sugestões automáticas nunca substituem texto aprovado silenciosamente.

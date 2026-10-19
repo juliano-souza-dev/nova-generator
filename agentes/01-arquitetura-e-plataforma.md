@@ -20,6 +20,8 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 - Manter `INICIAR.bat` como ponto único de entrada local no Windows, com bootstrap idempotente,
   migrations, supervisão dos processos e diagnóstico por logs.
 
+- Gerar e persistir um pacote inicial idempotente logo após ASR, contendo snapshot editorial, seleção determinística Shadowing e instruções para gerar Anki na mesma chamada de IA.
+
 ## Limites
 
 - Não decidir regra pedagógica, render artístico ou formato público do iHub sem consultar os agentes 02, 03, 04 e 05 conforme o caso.

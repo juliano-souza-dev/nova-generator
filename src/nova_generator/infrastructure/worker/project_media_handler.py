@@ -9,6 +9,7 @@ from typing import Any
 from uuid import UUID
 
 from nova_generator.application.use_cases.download_youtube_source import DownloadYoutubeSource
+from nova_generator.application.use_cases.pre_editorial_package import PreEditorialPackage
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.media.youtube import YoutubeVideo
 from nova_generator.domain.projects.entities import Project
@@ -92,6 +93,17 @@ class ProjectMediaJobHandler:
         with _keep_lease(execution):
             result = self._ingestion(safe_job, execution)
         result.pop("cut_file", None)
+        # Persist the reusable external-AI input as soon as ASR succeeds,
+        # before anyone opens the Editorial workstation.
+        if (
+            isinstance(result.get("transcript_candidate"), dict)
+            and result["transcript_candidate"].get("cues")
+        ):
+            PreEditorialPackage(self._project_root).stage(
+                project.id,
+                UUID(str(job.id)),
+                {**result, "duration_ms": end_ms - start_ms},
+            )
         return {
             **result,
             "project_id": str(project.id),

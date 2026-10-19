@@ -12,6 +12,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
+from nova_generator.application.use_cases.prepare_shadowing import PrepareShadowing
 
 INPUT_CONTRACT = "nova-generator-materials-input/1.0"
 OUTPUT_CONTRACT = "nova-generator-materials-output/1.0"
@@ -114,6 +115,20 @@ class MaterialsAiExchange:
                 "order": scene.order,
                 "duration_ms": scene.duration_ms,
                 "cues": cues,
+                "shadowing": [
+                    {
+                        "id": block["id"],
+                        "start_ms": block["start_ms"],
+                        "end_ms": block["end_ms"],
+                        "pause_duration_ms": block["pause_duration_ms"],
+                        "cue_ids": block["cue_ids"],
+                        "en": block["en"],
+                        "pt": block["pt"],
+                    }
+                    for block in PrepareShadowing(
+                        self.repository, self.project_root
+                    ).scene(project_id, scene.id)["blocks"]
+                ],
             })
         source = {
             "project_id": str(project.id),
@@ -205,6 +220,33 @@ class MaterialsAiExchange:
             data = self._read(project_id, filename)
             if data and data.get("source_sha256") == source["source_sha256"]:
                 return {"status": state, "source_sha256": source["source_sha256"], "document": data}
+            if data and data.get("project_id") == str(project_id):
+                # Editorial corrections must not erase pedagogical work or cause
+                # another AI download/upload cycle. Keep mini-lessons, refresh
+                # only the exact source literals and invalidate prior approval.
+                latest = {
+                    cue["id"]: cue
+                    for scene in source["source"]["scenes"]
+                    for cue in scene["cues"]
+                }
+                if any(card["cue_id"] not in latest for card in data.get("anki_cards", [])):
+                    continue
+                for card in data.get("anki_cards", []):
+                    cue = latest[card["cue_id"]]
+                    card["front_en"] = cue["approved_en"]
+                    card["back_pt"] = cue["approved_pt"]
+                    if card.get("marked_en", "").casefold() not in card["front_en"].casefold():
+                        card["marked_en"] = ""
+                    if card.get("marked_pt", "").casefold() not in card["back_pt"].casefold():
+                        card["marked_pt"] = ""
+                data["source_sha256"] = source["source_sha256"]
+                self._write(project_id, "external-draft.json", data)
+                self._path(project_id, "approved.json").unlink(missing_ok=True)
+                return {
+                    "status": "draft",
+                    "source_sha256": source["source_sha256"],
+                    "document": data,
+                }
         return {"status": "pending", "source_sha256": source["source_sha256"], "document": None}
 
     def approve(self, project_id: UUID, source_sha256: str) -> dict[str, Any]:
