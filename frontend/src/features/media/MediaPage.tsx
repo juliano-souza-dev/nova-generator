@@ -47,6 +47,10 @@ export function MediaPage() {
       studioApi.ingestProjectMedia(selected!.id, input),
     onSuccess: refresh,
   });
+  const refreshSource = useMutation({
+    mutationFn: (id: string) => studioApi.refreshProjectSource(id),
+    onSuccess: refresh,
+  });
   const reprocess = useMutation({
     mutationFn: (input: { start_ms: number; end_ms: number; language: string }) =>
       studioApi.reprocessProjectMedia(selected!.id, input),
@@ -109,6 +113,10 @@ export function MediaPage() {
                 project={selected}
                 media={media.data}
                 onStart={() => start.mutate(selected.id)}
+                onRefreshSource={() => {
+                  if (!window.confirm("Baixar novamente o vídeo original do YouTube? O editorial baseado na fonte anterior será apagado. Será necessário gerar um novo corte e uma nova transcrição.")) return;
+                  refreshSource.mutate(selected.id);
+                }}
                 onReprocess={() => {
                   const snapshot = media.data;
                   if (snapshot?.cut_start_ms == null || snapshot.cut_end_ms == null) return;
@@ -119,8 +127,11 @@ export function MediaPage() {
                     language: "en",
                   });
                 }}
-                busy={start.isPending || reprocess.isPending}
+                busy={start.isPending || reprocess.isPending || refreshSource.isPending}
               />
+              {refreshSource.error && (
+                <p className="field-error" role="alert">{refreshSource.error.message}</p>
+              )}
               {reprocess.error && (
                 <p className="field-error" role="alert">{reprocess.error.message}</p>
               )}
@@ -171,12 +182,14 @@ function SourceStatus({
   media,
   onStart,
   onReprocess,
+  onRefreshSource,
   busy,
 }: {
   project: Project;
   media: ProjectMedia;
   onStart: () => void;
   onReprocess: () => void;
+  onRefreshSource: () => void;
   busy: boolean;
 }) {
   const hasSource = Boolean(project.youtube_url && project.youtube_video_id);
@@ -199,6 +212,12 @@ function SourceStatus({
       </div>
       {hasSource ? (
         <div className="media-source-actions">
+        {media.source_ready && (
+          <button className="secondary-button" onClick={onRefreshSource}
+            disabled={busy || ACTIVE.has(media.download_status ?? "") || ACTIVE.has(media.ingest_status ?? "")}>
+            <Download aria-hidden="true" /> Recarregar vídeo original
+          </button>
+        )}
         {media.cut_start_ms !== null && media.cut_end_ms !== null && (
           <button className="secondary-button" onClick={onReprocess}
             disabled={busy || ACTIVE.has(media.ingest_status ?? "") || ACTIVE.has(media.download_status ?? "")}>
