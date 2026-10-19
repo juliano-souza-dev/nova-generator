@@ -3,6 +3,7 @@ import zipfile
 from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
+from uuid import uuid4
 
 import jsonschema
 import pytest
@@ -376,6 +377,26 @@ def test_external_batch_applies_atomic_speaker_revision(tmp_path: Path) -> None:
         imported_by="test",
     )
     scene = repository.get_project_scenes(project_id)[0]
+    original = repository.get_scene_cues(scene.id)[0]
+    original_words = repository.get_cue_words(original.id)
+    new_id = uuid4()
+    other = replace(
+        original, id=new_id, order=2,
+        speech_start_ms=2200, speech_end_ms=4100,
+        subtitle_start_ms=2200, subtitle_end_ms=4100,
+    )
+    shifted_words = [
+        replace(
+            word, id=uuid4(), cue_id=new_id,
+            start_ms=word.start_ms + 2100, end_ms=word.end_ms + 2100,
+            original_start_ms=word.original_start_ms + 2100,
+            original_end_ms=word.original_end_ms + 2100,
+        )
+        for word in original_words
+    ]
+    repository.replace_scene_cues(
+        scene.id, [(original, original_words), (other, shifted_words)]
+    )
     exchange = ExternalEditorialExchange(repository, tmp_path)
     exchange._CUES_PER_CHUNK = 1
     with zipfile.ZipFile(exchange.build_package(scene.id)) as archive:
@@ -455,6 +476,10 @@ def test_external_batch_rejects_duplicate_chunks_without_mutation(tmp_path: Path
             )
         )
     original = repository.get_scene_cues(scene.id)
+    for suggestion in first["suggestions"]:
+        suggestion["approved_pt"] = "Tradução."
+        for word in suggestion["word_translations"]:
+            word["pt"] = "tradução"
     serialized = json.dumps(first).encode("utf-8")
     with pytest.raises(EditorialAssistanceError, match="duplicate chunk_id"):
         exchange.import_batch(
