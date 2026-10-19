@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import zipfile
+from io import BytesIO
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Literal
@@ -45,6 +46,15 @@ class _ExternalWordTranslation(BaseModel):
     end_ms: int | None = Field(default=None, gt=0)
 
 
+class _ExternalSpeakerTurn(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    word_ids: list[str] = Field(min_length=1)
+    speaker: str = Field(min_length=1)
+    approved_pt: str = Field(min_length=1)
+    confidence: Literal["high", "medium", "uncertain"] = "uncertain"
+
+
 class _ExternalSuggestion(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -57,15 +67,6 @@ class _ExternalSuggestion(BaseModel):
     semantic_units: list[_ExternalSemanticUnit] = Field(default_factory=list)
     trailing: str = ""
     speaker_turns: list[_ExternalSpeakerTurn] = Field(default_factory=list)
-
-
-class _ExternalSpeakerTurn(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    word_ids: list[str] = Field(min_length=1)
-    speaker: str = Field(min_length=1)
-    approved_pt: str = Field(min_length=1)
-    confidence: Literal["high", "medium", "uncertain"] = "uncertain"
 
 
 class _ExternalResult(BaseModel):
@@ -210,6 +211,149 @@ class ExternalEditorialExchange:
         destination.write_bytes(content)
         return validated
 
+    def import_batch(
+        self, scene_id: UUID, uploads: list[tuple[str, bytes]]
+    ) -> EditorialAssistanceResult:
+        """Preflight every external chunk, then persist one atomic scene revision."""
+        if not uploads or len(uploads) > 24:
+            raise EditorialAssistanceError("select between 1 and 24 JSON files, or one ZIP")
+        expanded: list[tuple[str, bytes]] = []
+        for name, payload in uploads:
+            if not payload:
+                raise EditorialAssistanceError(f"{name}: empty file")
+            if name.lower().endswith(".zip"):
+                try:
+                    with zipfile.ZipFile(BytesIO(payload)) as archive:
+                        candidates = [
+                            item for item in archive.infolist()
+                            if not item.is_dir()
+                            and item.filename.lower().endswith("-result.json")
+                            and not item.filename.startswith("__MACOSX/")
+                        ]
+                        if not candidates or len(candidates) > 24:
+                            raise EditorialAssistanceError(
+                                f"{name}: ZIP must contain 1 to 24 *-result.json files"
+                            )
+                        if sum(item.file_size for item in candidates) > 8_000_000:
+                            raise EditorialAssistanceError("ZIP exceeds the allowed JSON size")
+                        expanded.extend(
+                            (item.filename, archive.read(item)) for item in candidates
+                        )
+                except (zipfile.BadZipFile, OSError, RuntimeError) as error:
+                    raise EditorialAssistanceError(f"{name}: invalid ZIP archive") from error
+            elif name.lower().endswith(".json"):
+                expanded.append((name, payload))
+            else:
+                raise EditorialAssistanceError(f"{name}: only JSON or ZIP is supported")
+        if not expanded or len(expanded) > 24:
+            raise EditorialAssistanceError("too many result files")
+        project_id = self._repository.get_scene_project_id(scene_id)
+        if project_id is None:
+            raise EditorialAssistanceError("scene not found")
+        manifest_path = (
+            self._project_root / str(project_id) / "editorial-ai"
+            / f"scene-{scene_id}-external-ai-manifest.json"
+        )
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise EditorialAssistanceError(
+                "export the current external package before importing results"
+            ) from error
+        manifest_chunks = manifest.get("chunks")
+        if not isinstance(manifest_chunks, list) or not manifest_chunks:
+            raise EditorialAssistanceError("external package has no valid chunk manifest")
+        source_hash, source_cues = build_editorial_prompt(self._repository, scene_id)
+        if source_hash != manifest.get("input_sha256"):
+            raise EditorialAssistanceError(
+                "the scene changed; export a fresh external package before importing"
+            )
+        originals = {cue.id: cue for cue in source_cues}
+        expected_ids = [
+            cue_id for chunk in manifest_chunks for cue_id in chunk.get("cue_ids", [])
+        ]
+        if len(expected_ids) != len(set(expected_ids)) or set(expected_ids) != set(originals):
+            raise EditorialAssistanceError("exported chunks do not match the current scene")
+        documents: dict[str, tuple[_ExternalResult, bytes]] = {}
+        for name, content in expanded:
+            if len(content) > self._maximum_result_bytes:
+                raise EditorialAssistanceError(f"{name}: result is too large")
+            try:
+                document = _ExternalResult.model_validate_json(content)
+            except (ValidationError, ValueError) as error:
+                raise EditorialAssistanceError(
+                    f"{name}: {_validation_detail(error)}"
+                ) from error
+            if document.schema_version not in {
+                "nova-generator-editorial-suggestions/1.4",
+                "nova-generator-editorial-suggestions/1.5",
+            }:
+                raise EditorialAssistanceError(f"{name}: use chunked contract 1.4 or 1.5")
+            if document.scene_id != scene_id or document.input_sha256 != source_hash:
+                raise EditorialAssistanceError(f"{name}: result is for another or stale scene")
+            if not document.chunk_id or document.chunk_id in documents:
+                raise EditorialAssistanceError(f"{name}: missing or duplicate chunk_id")
+            documents[document.chunk_id] = (document, content)
+        manifest_ids = [chunk.get("id") for chunk in manifest_chunks]
+        if len(set(manifest_ids)) != len(manifest_ids) or set(documents) != set(manifest_ids):
+            missing = sorted(set(manifest_ids) - set(documents))
+            extra = sorted(set(documents) - set(manifest_ids))
+            raise EditorialAssistanceError(
+                f"all chunks are required; missing: {missing}; unexpected: {extra}"
+            )
+        versions = {document.schema_version for document, _ in documents.values()}
+        if len(versions) != 1:
+            raise EditorialAssistanceError("all results must use the same contract version")
+        validated_chunks: list[EditorialAssistanceResult] = []
+        turns: dict[str, list[dict[str, object]]] = {}
+        for chunk in manifest_chunks:
+            document, _ = documents[chunk["id"]]
+            expected = tuple(
+                replace(originals[cue_id], order=order)
+                for cue_id, order in zip(
+                    chunk["cue_ids"], chunk["cue_orders"], strict=True
+                )
+            )
+            validated = validate_editorial_result(
+                _as_result(document),
+                scene_id=scene_id,
+                input_sha256=source_hash,
+                cues=expected,
+                require_word_translations=True,
+                require_word_revisions=True,
+            )
+            validated_chunks.append(validated)
+            turns.update({
+                item.cue_id: [turn.model_dump() for turn in item.speaker_turns]
+                for item in document.suggestions
+            })
+        first = validated_chunks[0]
+        combined = EditorialAssistanceResult(
+            scene_id=str(scene_id),
+            input_sha256=source_hash,
+            provider="external",
+            model="external-ai",
+            suggestions=tuple(
+                suggestion
+                for chunk in validated_chunks for suggestion in chunk.suggestions
+            ),
+            rate_limits={},
+            contract_version=first.contract_version,
+        )
+        if combined.contract_version == "nova-generator-editorial-suggestions/1.5":
+            persist_editorial_chunk_with_speaker_turns(
+                self._repository, combined, turns, author="external-editorial-assistant"
+            )
+        else:
+            persist_editorial_chunk_preparation(
+                self._repository, combined, author="external-editorial-assistant"
+            )
+        for chunk in manifest_chunks:
+            _document, content = documents[chunk["id"]]
+            (manifest_path.parent / f"scene-{scene_id}-{chunk['id']}-external-result.json"
+            ).write_bytes(content)
+        return combined
+
     def _import_chunk(
         self, scene_id: UUID, document: _ExternalResult, content: bytes
     ) -> EditorialAssistanceResult:
@@ -285,6 +429,14 @@ class ExternalEditorialExchange:
                 self._repository, validated, author="external-editorial-assistant"
             )
         return validated
+
+
+def _validation_detail(error: ValidationError | ValueError) -> str:
+    if isinstance(error, ValidationError):
+        item = error.errors()[0]
+        location = ".".join(str(part) for part in item["loc"])
+        return f"invalid contract at {location}: {item['msg']}"
+    return str(error)
 
 
 def _instructions() -> str:
