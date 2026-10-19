@@ -410,7 +410,6 @@ def persist_editorial_chunk_with_speaker_turns(
         flattened = [word_id for turn in turns for word_id in turn["word_ids"]]
         if flattened != expected_ids:
             raise EditorialAssistanceError("speaker turns must partition every word exactly once")
-        word_map = {str(word.id): word for word in prepared}
         boundaries = []
         cursor = 0
         for turn in turns:
@@ -428,13 +427,26 @@ def persist_editorial_chunk_with_speaker_turns(
             raise EditorialAssistanceError("semantic units cannot cross speaker boundaries")
         for turn_index, (turn, (left, right)) in enumerate(zip(turns, boundaries, strict=True)):
             selected = prepared[left:right]
-            if not selected or not str(turn["approved_pt"]).strip() or not str(turn["speaker"]).strip():
-                raise EditorialAssistanceError("speaker turn requires words, speaker and Portuguese")
+            if (
+                not selected
+                or not str(turn["approved_pt"]).strip()
+                or not str(turn["speaker"]).strip()
+            ):
+                raise EditorialAssistanceError(
+                    "speaker turn requires words, speaker and Portuguese"
+                )
             start = cue.speech_start_ms if turn_index == 0 else selected[0].start_ms
             end = cue.speech_end_ms if turn_index == len(turns) - 1 else selected[-1].end_ms
-            if not start < end or not all(start <= word.start_ms < word.end_ms <= end for word in selected):
-                raise EditorialAssistanceError("speaker boundary is inconsistent with word timings")
-            new_id = uuid5(NAMESPACE_URL, f"nova-generator/speaker-turn/{cue.id}/{result.input_sha256}/{turn_index}")
+            if not start < end or not all(
+                start <= word.start_ms < word.end_ms <= end for word in selected
+            ):
+                raise EditorialAssistanceError(
+                    "speaker boundary is inconsistent with word timings"
+                )
+            new_id = uuid5(
+                NAMESPACE_URL,
+                f"nova-generator/speaker-turn/{cue.id}/{result.input_sha256}/{turn_index}",
+            )
             moved = [replace(word, cue_id=new_id, order=i + 1) for i, word in enumerate(selected)]
             english = "".join(word.surface for word in moved).strip()
             if turn_index == len(turns) - 1:
