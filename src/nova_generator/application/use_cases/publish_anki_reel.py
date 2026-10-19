@@ -15,8 +15,9 @@ from nova_generator.application.ports.job_repository import JobRepository
 from nova_generator.application.use_cases.build_hub_final_anki_audio import (
     add_anki_audio,
 )
-from nova_generator.application.use_cases.build_hub_shadowing_practice import (
-    build_hub_shadowing_practice,
+from nova_generator.application.use_cases.prepare_shadowing import (
+    PrepareShadowing,
+    ShadowingError,
 )
 from nova_generator.application.use_cases.editorial_publication_snapshot import (
     editorial_publication_sha256,
@@ -203,20 +204,22 @@ class PublishAnkiReel:
                 "editorial_sha256": job.input["editorial_sha256"],
             },
         }
-        # Approved Shadowing is transported separately from Anki. Never fabricate
-        # an approved lesson from raw cues, and never publish stale/draft groups.
-        shadowing = build_hub_shadowing_practice(
-            project_id=project_id,
-            repository=self._repository,
-            project_root=self._project_root,
-            scenes=scenes,
-            cues=cues,
-            cue_times=cue_times,
-            playback_start_ms=scene_start,
-            playback_end_ms=scene_end,
-        )
-        if shadowing is not None:
-            base["shadowingPractice"] = shadowing
+        # Carry the human-approved Generator plan unchanged. The iHub adapter
+        # owns playback normalization; this exporter must not rewrite pedagogy.
+        planner = PrepareShadowing(self._repository, self._project_root)
+        selected_scenes = {cue.scene_id for cue in cues}
+        approved_shadowing = []
+        for scene in scenes:
+            if scene.id not in selected_scenes:
+                continue
+            try:
+                plan = planner.scene(project_id, scene.id)
+            except ShadowingError:
+                continue
+            if plan.get("status") == "approved" and plan.get("blocks"):
+                approved_shadowing.append(plan)
+        if approved_shadowing:
+            base["generatorShadowing"] = approved_shadowing
 
         if job.input.get("generate_complete"):
             pedagogical = self._frozen_pedagogical(job)
