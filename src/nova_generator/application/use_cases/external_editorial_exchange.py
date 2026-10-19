@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import zipfile
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
@@ -242,9 +242,21 @@ class ExternalEditorialExchange:
             raise EditorialAssistanceError("external chunk is not part of this package")
         _current_hash, all_cues = build_editorial_prompt(self._repository, scene_id)
         expected_ids = chunk.get("cue_ids", [])
-        expected = tuple(cue for cue in all_cues if cue.id in expected_ids)
-        if [cue.id for cue in expected] != expected_ids:
+        expected_orders = chunk.get("cue_orders", [])
+        current_by_id = {cue.id: cue for cue in all_cues}
+        if (
+            not isinstance(expected_ids, list)
+            or not isinstance(expected_orders, list)
+            or len(expected_ids) != len(expected_orders)
+            or any(cue_id not in current_by_id for cue_id in expected_ids)
+        ):
             raise EditorialAssistanceError("scene changed; export a new external text package")
+        # Earlier 1.5 chunks can expand cues, shifting downstream scene orders.
+        # Validate against the immutable exported order, not the live scene order.
+        expected = tuple(
+            replace(current_by_id[cue_id], order=order)
+            for cue_id, order in zip(expected_ids, expected_orders, strict=True)
+        )
         result = _as_result(document)
         validated = validate_editorial_result(
             result,
