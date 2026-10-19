@@ -1,0 +1,23 @@
+name: Anki Contextual Cards
+
+on:
+  push:
+    branches:
+      - fix/quality-gates-and-finish-plan
+    paths:
+      - src/nova_generator/infrastructure/exports/genanki_package_writer.py
+      - tests/infrastructure/exports/test_genanki_package_writer.py
+      - .github/workflows/anki-contextual-cards.yml
+  workflow_dispatch:
+
+jobs:
+  contextual-apkg:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[dev]'
+      - run: python -m ruff check src/nova_generator/infrastructure/exports/genanki_package_writer.py tests/infrastructure/exports/test_genanki_package_writer.py
+      - run: python -m pytest tests/infrastructure/exports/test_genanki_package_writer.py tests/application/use_cases/test_export_anki_reel.py -q
