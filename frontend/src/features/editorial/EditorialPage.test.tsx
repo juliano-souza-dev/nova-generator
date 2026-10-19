@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   externalEditorialPackageUrl: vi.fn().mockReturnValue("/api/external.zip"),
   startEditorialAssistance: vi.fn(),
   importExternalEditorialResult: vi.fn(),
+  importExternalEditorialResults: vi.fn(),
   job: vi.fn(),
   editorialCues: vi.fn().mockResolvedValue([
     {
@@ -82,6 +83,7 @@ vi.mock("../../lib/studio-api", () => ({
     externalEditorialPackageUrl: mocks.externalEditorialPackageUrl,
     startEditorialAssistance: mocks.startEditorialAssistance,
     importExternalEditorialResult: mocks.importExternalEditorialResult,
+    importExternalEditorialResults: mocks.importExternalEditorialResults,
     job: mocks.job,
   },
 }));
@@ -265,6 +267,37 @@ describe("EditorialPage", () => {
     await waitFor(() =>
       expect(mocks.importExternalEditorialResult).toHaveBeenCalledWith("s1", file),
     );
+    expect(await screen.findByText(/Todos os blocos foram validados/)).toBeInTheDocument();
+  });
+
+  it("imports three external editorial chunks with one drop and one request", async () => {
+    mocks.importExternalEditorialResults.mockResolvedValueOnce({
+      scene_id: "s1",
+      input_sha256: "a".repeat(64),
+      provider: "external",
+      model: "external-ai",
+      rate_limits: {},
+      suggestions: [],
+    });
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const files = [1, 2, 3].map(
+      (index) =>
+        new File(['{"chunk_id":"chunk-001"}'], `chunk-${index}.json`, {
+          type: "application/json",
+        }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Trocar fonte de preparação" }));
+    fireEvent.drop(await screen.findByLabelText("Importar retorno editorial"), {
+      dataTransfer: { files },
+    });
+    await waitFor(() => {
+      expect(mocks.importExternalEditorialResults).toHaveBeenCalledWith("s1", files);
+      expect(mocks.importExternalEditorialResult).not.toHaveBeenCalled();
+    });
     expect(await screen.findByText(/Todos os blocos foram validados/)).toBeInTheDocument();
   });
 
