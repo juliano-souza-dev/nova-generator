@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -159,9 +159,7 @@ class UnifiedPreparationExchange:
         self, project_id: UUID, ingest_job_id: UUID, *,
         api_key: str | None, model: str, client: Any | None = None,
     ) -> dict[str, Any]:
-        scene_id = __import__("uuid").uuid5(
-            __import__("uuid").NAMESPACE_URL, f"nova-generator/asr-scene/{ingest_job_id}"
-        )
+        scene_id = uuid5(NAMESPACE_URL, f"nova-generator/asr-scene/{ingest_job_id}")
         package = self.preparation.load(project_id, scene_id)
         if not package:
             raise PreparationPackageError("Conclua a transcrição antes de chamar a IA")
