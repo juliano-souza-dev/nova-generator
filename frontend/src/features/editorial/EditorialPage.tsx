@@ -7,6 +7,8 @@ import {
   Download,
   Film,
   MonitorPlay,
+  Merge,
+  Split,
   Play,
   Save,
   Undo2,
@@ -29,6 +31,24 @@ import { EditorialHubPreview } from "./EditorialHubPreview";
 import { nudgeTiming, setTimingEdge, validateTimeline } from "./timeline";
 import "./timeline.css";
 import "./editorial-workspace.css";
+
+type StructureDraft =
+  | { kind: "merge"; count: number; en: string; pt: string }
+  | {
+      kind: "split";
+      afterWordId: string;
+      leftEn: string;
+      rightEn: string;
+      leftPt: string;
+      rightPt: string;
+      leftSpeaker: string;
+      rightSpeaker: string;
+    };
+
+function cueWordText(words: TimelineCue["words"]): string {
+  const literal = words.map((word) => word.surface).join("");
+  return (literal.includes(" ") ? literal : words.map((word) => word.surface).join(" ")).trim();
+}
 
 type EditorialImportDropzoneProps = {
   disabled: boolean;
@@ -164,6 +184,7 @@ export function EditorialPage() {
   const [wordEnd, setWordEnd] = useState(0);
   const [wordPt, setWordPt] = useState("");
   const [saving, setSaving] = useState(false);
+  const [structureDraft, setStructureDraft] = useState<StructureDraft | null>(null);
   const [startingMedia, setStartingMedia] = useState(false);
   const [mediaReload, setMediaReload] = useState(0);
   const [assistantStatus, setAssistantStatus] = useState<EditorialAssistantStatus>();
@@ -341,6 +362,9 @@ export function EditorialPage() {
   useEffect(() => {
     setSemanticDraftUnits(null);
   }, [selectedCue?.id, selectedCue?.revision]);
+  useEffect(() => {
+    setStructureDraft(null);
+  }, [selectedCue?.id, selectedCue?.revision, sceneId]);
   useEffect(() => {
     setWordStart(selectedWord?.start_ms ?? 0);
     setWordEnd(selectedWord?.end_ms ?? 0);
@@ -878,6 +902,115 @@ export function EditorialPage() {
     if (words.length === unit.word_ids.length)
       playRange(words[0].start_ms, words.at(-1)?.end_ms ?? words[0].end_ms);
   }
+  function beginMerge() {
+    if (!selectedCue || saving || isDirty || selectedCueIndex >= cues.length - 1) return;
+    const parts = cues.slice(selectedCueIndex, selectedCueIndex + 2);
+    setStructureDraft({
+      kind: "merge",
+      count: 2,
+      en: parts.map((cue) => cue.approved_en || cue.original_en).join(" ").trim(),
+      pt: parts.map((cue) => cue.approved_pt).join(" ").trim(),
+    });
+  }
+  function changeMergeCount(count: number) {
+    const parts = cues.slice(selectedCueIndex, selectedCueIndex + count);
+    setStructureDraft({
+      kind: "merge",
+      count,
+      en: parts.map((cue) => cue.approved_en || cue.original_en).join(" ").trim(),
+      pt: parts.map((cue) => cue.approved_pt).join(" ").trim(),
+    });
+  }
+  function changeSplitBoundary(afterWordId: string) {
+    if (!selectedCue) return;
+    const index = selectedCue.words.findIndex((word) => word.id === afterWordId);
+    if (index < 0 || index >= selectedCue.words.length - 1) return;
+    setStructureDraft({
+      kind: "split",
+      afterWordId,
+      leftEn: cueWordText(selectedCue.words.slice(0, index + 1)),
+      rightEn: cueWordText(selectedCue.words.slice(index + 1)),
+      leftPt: "",
+      rightPt: "",
+      leftSpeaker: selectedCue.speaker,
+      rightSpeaker: selectedCue.speaker,
+    });
+  }
+  async function applyStructure() {
+    if (!selectedCue || !structureDraft || isDirty || saving) return;
+    setSaving(true);
+    try {
+      let focusId: string;
+      if (structureDraft.kind === "merge") {
+        const selected = cues.slice(selectedCueIndex, selectedCueIndex + structureDraft.count);
+        if (selected.length !== structureDraft.count) throw new Error("Seleção inválida.");
+        const knownSpeakers = new Set(
+          selected.map((cue) => cue.speaker.trim().toLowerCase()).filter(Boolean),
+        );
+        if (knownSpeakers.size > 1) {
+          throw new Error(
+            "As cues têm interlocutores diferentes. Confirme as vozes antes de unir.",
+          );
+        }
+        if (!structureDraft.en.trim() || !structureDraft.pt.trim())
+          throw new Error("Preencha o inglês e o português da cue unificada.");
+        const merged = await studioApi.mergeEditorialCues(
+          selected.map((cue) => cue.id),
+          {
+            author,
+            text: {
+              original_en: selected.map((cue) => cue.original_en).join(" "),
+              approved_en: structureDraft.en,
+              approved_pt: structureDraft.pt,
+            },
+          },
+        );
+        focusId = merged.id;
+      } else {
+        if (
+          !structureDraft.leftEn.trim() ||
+          !structureDraft.rightEn.trim() ||
+          !structureDraft.leftPt.trim() ||
+          !structureDraft.rightPt.trim()
+        ) {
+          throw new Error("Preencha inglês e português das duas partes antes de dividir.");
+        }
+        const parts = await studioApi.splitEditorialCue(selectedCue.id, {
+          author,
+          after_word_id: structureDraft.afterWordId,
+          first: {
+            original_en: structureDraft.leftEn,
+            approved_en: structureDraft.leftEn,
+            approved_pt: structureDraft.leftPt,
+          },
+          second: {
+            original_en: structureDraft.rightEn,
+            approved_en: structureDraft.rightEn,
+            approved_pt: structureDraft.rightPt,
+          },
+          first_speaker: structureDraft.leftSpeaker,
+          second_speaker: structureDraft.rightSpeaker,
+        });
+        focusId = parts[0].id;
+      }
+      const action = structureDraft.kind === "merge" ? "unificadas" : "dividida";
+      const refreshed = await refreshCues();
+      setSelectedCueId(focusId);
+      setSelectedWordId(undefined);
+      setStructureDraft(null);
+      setAssistance(undefined);
+      const focused = refreshed.find((cue) => cue.id === focusId);
+      if (focused) seek(focused.speech_timing.start_ms);
+      setMessage(
+        `Cues ${action} com sucesso. Revise o resultado e aprove novamente antes de gerar os materiais.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível alterar as cues.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function moveCue(offset: number) {
     const next = cues[selectedCueIndex + offset];
     if (next) selectCue(next.id);
@@ -1262,6 +1395,181 @@ export function EditorialPage() {
                 </div>
                 {isDirty && <span className="unsaved-badge">Alterações não salvas</span>}
               </div>
+              <section className="cue-structure" aria-label="Organização de cues">
+                <div className="cue-structure-buttons">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={beginMerge}
+                    disabled={saving || isDirty || selectedCueIndex >= cues.length - 1}
+                  >
+                    <Merge aria-hidden="true" /> Unir com próximas
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={saving || isDirty || selectedCue.words.length < 2}
+                    onClick={() => {
+                      const preferred = Math.min(
+                        Math.max(0, selectedWordIndex),
+                        selectedCue.words.length - 2,
+                      );
+                      changeSplitBoundary(selectedCue.words[preferred].id);
+                    }}
+                  >
+                    <Split aria-hidden="true" /> Dividir por palavra
+                  </button>
+                </div>
+                {isDirty && (
+                  <p>Salve ou descarte as alterações em andamento para reorganizar as cues.</p>
+                )}
+                {structureDraft?.kind === "merge" && (
+                  <div className="cue-structure-editor">
+                    <h3>Unir cues consecutivas</h3>
+                    <label>
+                      Quantas cues, incluindo a atual?
+                      <select
+                        aria-label="Quantidade de cues para unir"
+                        value={structureDraft.count}
+                        onChange={(event) => changeMergeCount(Number(event.target.value))}
+                      >
+                        {Array.from(
+                          { length: Math.min(12, cues.length - selectedCueIndex) - 1 },
+                          (_, index) => index + 2,
+                        ).map((count) => (
+                          <option key={count} value={count}>{count}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <p>
+                      Intervalo: {formatTime(selectedCue.speech_timing.start_ms)} até{" "}
+                      {formatTime(
+                        cues[selectedCueIndex + structureDraft.count - 1]?.speech_timing.end_ms ??
+                          selectedCue.speech_timing.end_ms,
+                      )}. As palavras e seus tempos serão preservados.
+                    </p>
+                    <label>
+                      Inglês unificado
+                      <textarea
+                        aria-label="Inglês unificado"
+                        rows={3}
+                        value={structureDraft.en}
+                        onChange={(event) =>
+                          setStructureDraft({ ...structureDraft, en: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Português unificado
+                      <textarea
+                        aria-label="Português unificado"
+                        rows={3}
+                        value={structureDraft.pt}
+                        onChange={(event) =>
+                          setStructureDraft({ ...structureDraft, pt: event.target.value })
+                        }
+                      />
+                    </label>
+                    <div className="cue-structure-actions">
+                      <button type="button" className="secondary-button" onClick={() => setStructureDraft(null)}>
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={saving}
+                        onClick={() => void applyStructure()}
+                      >
+                        Confirmar união
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {structureDraft?.kind === "split" && (
+                  <div className="cue-structure-editor">
+                    <h3>Dividir a cue</h3>
+                    <label>
+                      Dividir depois da palavra
+                      <select
+                        aria-label="Palavra onde dividir"
+                        value={structureDraft.afterWordId}
+                        onChange={(event) => changeSplitBoundary(event.target.value)}
+                      >
+                        {selectedCue.words.slice(0, -1).map((word, index) => (
+                          <option key={word.id} value={word.id}>
+                            {index + 1}. {word.surface.trim()} ({formatTime(word.end_ms)})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p>
+                      Cada parte terá seus próprios textos, interlocutor e tempo de fala.
+                      Preencha as duas traduções antes de confirmar.
+                    </p>
+                    <div className="cue-structure-halves">
+                      {(["left", "right"] as const).map((side) => (
+                        <div key={side}>
+                          <h4>{side === "left" ? "Primeira parte" : "Segunda parte"}</h4>
+                          <label>
+                            Interlocutor
+                            <input
+                              aria-label={side === "left" ? "Interlocutor da primeira parte" : "Interlocutor da segunda parte"}
+                              value={side === "left" ? structureDraft.leftSpeaker : structureDraft.rightSpeaker}
+                              onChange={(event) =>
+                                setStructureDraft({
+                                  ...structureDraft,
+                                  [side === "left" ? "leftSpeaker" : "rightSpeaker"]: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Inglês
+                            <textarea
+                              aria-label={side === "left" ? "Inglês da primeira parte" : "Inglês da segunda parte"}
+                              rows={2}
+                              value={side === "left" ? structureDraft.leftEn : structureDraft.rightEn}
+                              onChange={(event) =>
+                                setStructureDraft({
+                                  ...structureDraft,
+                                  [side === "left" ? "leftEn" : "rightEn"]: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Português
+                            <textarea
+                              aria-label={side === "left" ? "Português da primeira parte" : "Português da segunda parte"}
+                              rows={2}
+                              value={side === "left" ? structureDraft.leftPt : structureDraft.rightPt}
+                              onChange={(event) =>
+                                setStructureDraft({
+                                  ...structureDraft,
+                                  [side === "left" ? "leftPt" : "rightPt"]: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="cue-structure-actions">
+                      <button type="button" className="secondary-button" onClick={() => setStructureDraft(null)}>
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={saving}
+                        onClick={() => void applyStructure()}
+                      >
+                        Confirmar divisão
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
               {!showPreparationTools && (
                 <button
                   type="button"
