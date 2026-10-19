@@ -489,7 +489,9 @@ class MergeCues:
             for index, (cue, _) in enumerate(selected)
         ):
             raise EditorialCommandError("cues must be consecutive and in scene order")
-        known_speakers = {cue.speaker.strip().casefold() for cue, _ in selected if cue.speaker.strip()}
+        known_speakers = {
+            cue.speaker.strip().casefold() for cue, _ in selected if cue.speaker.strip()
+        }
         if len(known_speakers) > 1:
             raise EditorialCommandError(
                 "cannot merge different speakers into one cue; correct speaker assignment first"
@@ -497,7 +499,7 @@ class MergeCues:
         all_words = [word for _, words in selected for word in words]
         if any(
             current.end_ms > next_word.start_ms
-            for current, next_word in zip(all_words, all_words[1:])
+            for current, next_word in zip(all_words, all_words[1:], strict=False)
         ):
             raise EditorialCommandError("words must be chronological and non-overlapping")
         before = _scene_snapshot(self._repository, first.scene_id)
@@ -528,7 +530,10 @@ class MergeCues:
             else:
                 replacement.append(
                     (
-                        replace(cue, order=cue.order - decrease if cue.order > last.order else cue.order),
+                        replace(
+                            cue,
+                            order=cue.order - decrease if cue.order > last.order else cue.order,
+                        ),
                         self._repository.get_cue_words(cue.id),
                     )
                 )
