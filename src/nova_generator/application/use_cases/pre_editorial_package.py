@@ -21,7 +21,6 @@ from nova_generator.application.use_cases.prepare_shadowing import (
 )
 from nova_generator.application.use_cases.review_asr_candidate import _candidate_entries
 
-
 CONTRACT = "nova-generator-unified-preparation-input/1.0"
 OUTPUT_CONTRACT = "nova-generator-unified-preparation-output/1.0"
 
