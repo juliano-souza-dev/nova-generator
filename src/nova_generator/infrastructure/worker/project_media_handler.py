@@ -46,7 +46,11 @@ class ProjectMediaJobHandler:
         if video.video_id != job.input.get("video_id"):
             raise ValueError("project source changed after download was queued")
         with _keep_lease(execution):
-            result = self._downloader.execute(video.canonical_url, refresh=job.input.get("refresh") is True)
+            result = (
+                self._downloader.execute(video.canonical_url, refresh=True)
+                if job.input.get("refresh") is True
+                else self._downloader.execute(video.canonical_url)
+            )
         execution.heartbeat()
         return {
             "project_id": str(project.id),
