@@ -475,7 +475,13 @@ class MergeCues:
         return self.execute_many([first_cue_id, second_cue_id], text=text, author=author)
 
     def execute_many(
-        self, cue_ids: list[UUID], *, text: dict[str, str], author: str
+        self,
+        cue_ids: list[UUID],
+        *,
+        text: dict[str, str],
+        author: str,
+        speaker_override: str | None = None,
+        confirm_same_speaker: bool = False,
     ) -> Cue:
         if not 2 <= len(cue_ids) <= 12 or len(set(cue_ids)) != len(cue_ids):
             raise EditorialCommandError("merge requires between 2 and 12 distinct cues")
@@ -492,9 +498,11 @@ class MergeCues:
         known_speakers = {
             cue.speaker.strip().casefold() for cue, _ in selected if cue.speaker.strip()
         }
-        if len(known_speakers) > 1:
+        if len(known_speakers) > 1 and not (
+            confirm_same_speaker and speaker_override and speaker_override.strip()
+        ):
             raise EditorialCommandError(
-                "cannot merge different speakers into one cue; correct speaker assignment first"
+                "different speakers detected; confirm the same voice and choose its label"
             )
         all_words = [word for _, words in selected for word in words]
         if any(
@@ -509,13 +517,16 @@ class MergeCues:
             new_id, first.scene_id, first.order,
             first.speech_start_ms, last.speech_end_ms,
             first.subtitle_start_ms, last.subtitle_end_ms,
-            next((cue.speaker for cue, _ in selected if cue.speaker.strip()), ""),
+            speaker_override.strip()
+            if speaker_override is not None and speaker_override.strip()
+            else next((cue.speaker for cue, _ in selected if cue.speaker.strip()), ""),
             text["original_en"], text["approved_en"], text["approved_pt"],
             max(cue.revision for cue, _ in selected) + 1,
             {
                 **first.provenance,
                 "approval": "draft",
                 "structural_edit": "manual_merge",
+                "speaker_verified_by_editor": confirm_same_speaker,
                 "merged_from": [str(cue.id) for cue, _ in selected],
             },
         )
