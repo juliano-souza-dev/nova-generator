@@ -9,6 +9,8 @@ from nova_generator.application.use_cases.editorial_commands import (
     AdjustCueTiming,
     AdjustWordTiming,
     EditApprovedText,
+    EditWordSurface,
+    FitCueToWords,
     EditWordTranslation,
     GroupWordTranslation,
     MergeCues,
@@ -114,6 +116,14 @@ def get_review_asr_candidate() -> ReviewAsrCandidate:
 
 def get_edit_approved_text() -> EditApprovedText:
     return EditApprovedText(_editorial_repository())
+
+
+def get_edit_word_surface() -> EditWordSurface:
+    return EditWordSurface(_editorial_repository())
+
+
+def get_fit_cue_to_words() -> FitCueToWords:
+    return FitCueToWords(_editorial_repository())
 
 
 def get_adjust_cue_timing() -> AdjustCueTiming:
