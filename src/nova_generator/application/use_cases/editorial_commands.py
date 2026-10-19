@@ -342,6 +342,40 @@ def _semantic_members(words: list[WordTiming], index: int) -> list[int]:
     return [i for i, word in enumerate(words) if _semantic_group_id(word) == group_id]
 
 
+def _replace_structure(
+    repository: EditorialProjectRepository,
+    scene_id: UUID,
+    before: dict[str, Any],
+    replacement: list[tuple[Cue, list[WordTiming]]],
+    *,
+    command: str,
+    author: str,
+) -> None:
+    project_id = repository.get_scene_project_id(scene_id)
+    if project_id is None:
+        raise EditorialCommandError("scene not found")
+    revision = EditorialRevision(
+        uuid4(),
+        project_id,
+        scene_id,
+        None,
+        max((item.sequence for item in repository.list_revisions(scene_id)), default=0) + 1,
+        command,
+        author,
+        "editorial-api",
+        before,
+        {
+            "cues": [
+                {"cue": _cue_data(cue), "words": [_word_data(word) for word in words]}
+                for cue, words in replacement
+            ]
+        },
+        datetime.now(UTC),
+    )
+    if not repository.replace_scene_cues_with_revision(scene_id, before, replacement, revision):
+        raise EditorialCommandError("scene changed during structural edit; reload and retry")
+
+
 class SplitCue:
     def __init__(self, repository: EditorialProjectRepository) -> None:
         self._repository = repository
@@ -354,6 +388,8 @@ class SplitCue:
         first: dict[str, str],
         second: dict[str, str],
         author: str,
+        first_speaker: str | None = None,
+        second_speaker: str | None = None,
     ) -> list[Cue]:
         cue, words = _cue_with_words(self._repository, cue_id)
         index = next((i for i, word in enumerate(words) if word.id == after_word_id), None)
@@ -361,56 +397,71 @@ class SplitCue:
             raise EditorialCommandError("after_word_id must identify a non-final word in the cue")
         _split_text(first, "first")
         _split_text(second, "second")
-        before = _scene_snapshot(self._repository, cue.scene_id)
+        if any(not value.strip() for value in (*first.values(), *second.values())):
+            raise EditorialCommandError("split requires English and Portuguese for both parts")
         left_words, right_words = words[: index + 1], words[index + 1 :]
-        boundary = left_words[-1].end_ms
+        left_groups = {
+            word.provenance.get("semantic_group_id")
+            for word in left_words if word.provenance.get("semantic_group_id")
+        }
+        right_groups = {
+            word.provenance.get("semantic_group_id")
+            for word in right_words if word.provenance.get("semantic_group_id")
+        }
+        if left_groups.intersection(right_groups):
+            raise EditorialCommandError(
+                "split boundary crosses a semantic group; ungroup it before splitting"
+            )
+        if left_words[-1].end_ms > right_words[0].start_ms:
+            raise EditorialCommandError("word timings overlap at the selected split boundary")
+        before = _scene_snapshot(self._repository, cue.scene_id)
         left_id, right_id = uuid4(), uuid4()
+        left_end = left_words[-1].end_ms
+        right_start = right_words[0].start_ms
+        provenance = {
+            **cue.provenance,
+            "approval": "draft",
+            "structural_edit": "manual_split",
+            "split_from": str(cue.id),
+        }
         left = Cue(
-            left_id,
-            cue.scene_id,
-            cue.order,
-            cue.speech_start_ms,
-            boundary,
-            cue.subtitle_start_ms,
-            boundary,
-            cue.speaker,
-            first["original_en"],
-            first["approved_en"],
-            first["approved_pt"],
+            left_id, cue.scene_id, cue.order,
+            cue.speech_start_ms, left_end,
+            cue.subtitle_start_ms, left_end,
+            first_speaker if first_speaker is not None else cue.speaker,
+            first["original_en"], first["approved_en"], first["approved_pt"],
             cue.revision + 1,
-            {**cue.provenance, "split_from": str(cue.id), "split_side": "first"},
+            {**provenance, "split_side": "first"},
         )
         right = Cue(
-            right_id,
-            cue.scene_id,
-            cue.order + 1,
-            boundary,
-            cue.speech_end_ms,
-            boundary,
-            cue.subtitle_end_ms,
-            cue.speaker,
-            second["original_en"],
-            second["approved_en"],
-            second["approved_pt"],
+            right_id, cue.scene_id, cue.order + 1,
+            right_start, cue.speech_end_ms,
+            right_start, cue.subtitle_end_ms,
+            second_speaker if second_speaker is not None else cue.speaker,
+            second["original_en"], second["approved_en"], second["approved_pt"],
             cue.revision + 1,
-            {**cue.provenance, "split_from": str(cue.id), "split_side": "second"},
+            {**provenance, "split_side": "second"},
         )
         all_cues = self._repository.get_scene_cues(cue.scene_id)
         replacement: list[tuple[Cue, list[WordTiming]]] = []
         for current in all_cues:
             if current.id == cue.id:
-                replacement.extend(
-                    [
-                        (left, _move_words(left_words, left_id)),
-                        (right, _move_words(right_words, right_id)),
-                    ]
-                )
+                replacement.extend([
+                    (left, _move_words(left_words, left_id)),
+                    (right, _move_words(right_words, right_id)),
+                ])
             else:
-                current_words = self._repository.get_cue_words(current.id)
                 shift = 1 if current.order > cue.order else 0
-                replacement.append((replace(current, order=current.order + shift), current_words))
-        self._repository.replace_scene_cues(cue.scene_id, replacement)
-        _record(self._repository, left, "split_cue", author, before)
+                replacement.append(
+                    (
+                        replace(current, order=current.order + shift),
+                        self._repository.get_cue_words(current.id),
+                    )
+                )
+        _replace_structure(
+            self._repository, cue.scene_id, before, replacement,
+            command="split_cue", author=author,
+        )
         return [left, right]
 
 
@@ -421,45 +472,70 @@ class MergeCues:
     def execute(
         self, first_cue_id: UUID, second_cue_id: UUID, *, text: dict[str, str], author: str
     ) -> Cue:
-        first, first_words = _cue_with_words(self._repository, first_cue_id)
-        second, second_words = _cue_with_words(self._repository, second_cue_id)
-        if first.scene_id != second.scene_id or second.order != first.order + 1:
-            raise EditorialCommandError("cues must be consecutive cues in the same scene")
+        return self.execute_many([first_cue_id, second_cue_id], text=text, author=author)
+
+    def execute_many(
+        self, cue_ids: list[UUID], *, text: dict[str, str], author: str
+    ) -> Cue:
+        if not 2 <= len(cue_ids) <= 12 or len(set(cue_ids)) != len(cue_ids):
+            raise EditorialCommandError("merge requires between 2 and 12 distinct cues")
         _split_text(text, "text")
+        if any(not value.strip() for value in text.values()):
+            raise EditorialCommandError("merged English and Portuguese cannot be empty")
+        selected = [_cue_with_words(self._repository, cue_id) for cue_id in cue_ids]
+        first = selected[0][0]
+        if any(
+            cue.scene_id != first.scene_id or cue.order != first.order + index
+            for index, (cue, _) in enumerate(selected)
+        ):
+            raise EditorialCommandError("cues must be consecutive and in scene order")
+        known_speakers = {cue.speaker.strip().casefold() for cue, _ in selected if cue.speaker.strip()}
+        if len(known_speakers) > 1:
+            raise EditorialCommandError(
+                "cannot merge different speakers into one cue; correct speaker assignment first"
+            )
+        all_words = [word for _, words in selected for word in words]
+        if any(
+            current.end_ms > next_word.start_ms
+            for current, next_word in zip(all_words, all_words[1:])
+        ):
+            raise EditorialCommandError("words must be chronological and non-overlapping")
         before = _scene_snapshot(self._repository, first.scene_id)
-        merged_id = uuid4()
+        last = selected[-1][0]
+        new_id = uuid4()
         merged = Cue(
-            merged_id,
-            first.scene_id,
-            first.order,
-            first.speech_start_ms,
-            second.speech_end_ms,
-            first.subtitle_start_ms,
-            second.subtitle_end_ms,
-            first.speaker,
-            text["original_en"],
-            text["approved_en"],
-            text["approved_pt"],
-            max(first.revision, second.revision) + 1,
-            {**first.provenance, "merged_from": [str(first.id), str(second.id)]},
+            new_id, first.scene_id, first.order,
+            first.speech_start_ms, last.speech_end_ms,
+            first.subtitle_start_ms, last.subtitle_end_ms,
+            next((cue.speaker for cue, _ in selected if cue.speaker.strip()), ""),
+            text["original_en"], text["approved_en"], text["approved_pt"],
+            max(cue.revision for cue, _ in selected) + 1,
+            {
+                **first.provenance,
+                "approval": "draft",
+                "structural_edit": "manual_merge",
+                "merged_from": [str(cue.id) for cue, _ in selected],
+            },
         )
-        all_cues = self._repository.get_scene_cues(first.scene_id)
+        removed_ids = set(cue_ids)
+        decrease = len(selected) - 1
         replacement: list[tuple[Cue, list[WordTiming]]] = []
-        for current in all_cues:
-            if current.id == first.id:
-                replacement.append((merged, _move_words(first_words + second_words, merged_id)))
-            elif current.id == second.id:
+        for cue in self._repository.get_scene_cues(first.scene_id):
+            if cue.id == first.id:
+                replacement.append((merged, _move_words(all_words, new_id)))
+            elif cue.id in removed_ids:
                 continue
             else:
-                shift = -1 if current.order > second.order else 0
                 replacement.append(
                     (
-                        replace(current, order=current.order + shift),
-                        self._repository.get_cue_words(current.id),
+                        replace(cue, order=cue.order - decrease if cue.order > last.order else cue.order),
+                        self._repository.get_cue_words(cue.id),
                     )
                 )
-        self._repository.replace_scene_cues(first.scene_id, replacement)
-        _record(self._repository, merged, "merge_cues", author, before)
+        _replace_structure(
+            self._repository, first.scene_id, before, replacement,
+            command="merge_cues", author=author,
+        )
         return merged
 
 
