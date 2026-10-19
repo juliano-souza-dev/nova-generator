@@ -100,6 +100,14 @@ export const studioApi = {
     }),
   externalEditorialPackageUrl: (sceneId: string) =>
     apiUrl(`/editorial/scenes/${sceneId}/external-package`),
+  importExternalEditorialResults: (sceneId: string, files: File[]) => {
+    const body = new FormData();
+    files.forEach((file) => body.append("files", file));
+    return apiRequest<EditorialAssistance>(`/editorial/scenes/${sceneId}/external-results`, {
+      method: "POST",
+      body,
+    });
+  },
   importExternalEditorialResult: (sceneId: string, file: File) => {
     const body = new FormData();
     body.append("file", file);
