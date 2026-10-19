@@ -118,7 +118,7 @@ class ExternalEditorialExchange:
         directory.mkdir(parents=True, exist_ok=True)
         package = directory / f"scene-{scene_id}-external-ai.zip"
         source = {
-            "schema_version": "nova-generator-editorial-input/1.4",
+            "schema_version": "nova-generator-editorial-input/1.5",
             "scene_id": str(scene_id),
             "input_sha256": input_sha256,
             "cues": [asdict(cue) for cue in cues],
@@ -275,7 +275,7 @@ class ExternalEditorialExchange:
 def _instructions() -> str:
     return """# Assistência editorial externa em blocos
 
-Este pacote contém somente texto: não há vídeo nem áudio. Abra cada arquivo
+Este pacote contém somente texto: não há vídeo nem áudio. Por isso, inferências de\ninterlocutores e tempos devem ser conservadoras e baseadas nos word_ids e timestamps disponíveis. Abra cada arquivo
 `chunks/*-prompt.md`, cole-o em uma conversa nova da Groq e salve a resposta como JSON no
 arquivo `chunks/*-result.json` correspondente. Envie os retornos um a um ao Generator; cada
 bloco é validado e aplicado imediatamente. Nunca misture cues de blocos diferentes.
