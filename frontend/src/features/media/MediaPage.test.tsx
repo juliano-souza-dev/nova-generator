@@ -58,6 +58,9 @@ vi.mock("../../lib/studio-api", () => ({
     downloadProjectMedia: fixtures.download,
     startProjectMedia: fixtures.start,
     ingestProjectMedia: fixtures.ingest,
+    unifiedPreparationPackageUrl: vi.fn().mockReturnValue("/unified-package.json"),
+    generateUnifiedPreparation: vi.fn(),
+    importUnifiedPreparation: vi.fn(),
   },
 }));
 
