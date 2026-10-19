@@ -279,7 +279,7 @@ sequências cuja tradução palavra por palavra soe mecânica. Exemplo: agrupe `
 Mantenha `scene_id`, `input_sha256`, `cue_id`, `order`, a quantidade e a ordem sem alterações.
 Corrija o inglês somente quando necessário e traduza para português brasileiro natural.
 Preserve nomes, acentos, apóstrofos, aspas, vírgulas, pontos, perguntas e reticências.
-Não una, divida, omita ou invente cues.
+Não una, omita ou invente falas. Se houver mudança de interlocutor dentro de uma cue,\nidentifique os pontos exatos de troca pelos word_ids e descreva-os em notes como\nSPEAKER_SPLIT_PROPOSAL, incluindo a sequência de speakers e a confiança.\nEste contrato 1.4 ainda NÃO permite materializar novas cues: não altere cue_id nem\na contagem de suggestions para simular uma divisão. A nova versão do contrato deverá\nrepresentar as divisões como operação estruturada e atômica.\nNunca conclua quem fala apenas por nomes mencionados em vocativos.\nSem áudio, a atribuição de speaker é inferência textual e deve ser marcada como incerta.\nTIMING: preserve a linha do tempo da fonte; os cortes devem ser ancorados preferencialmente\nna fronteira entre end_ms da última palavra do turno anterior e start_ms da primeira\npalavra do próximo turno. Nunca estime milissegundos apenas pelo texto, nunca sobreponha\nintervalos, não mova palavras de posição, e sinalize gaps, sobreposições e ausência de\ntimestamps confiáveis para revisão humana.
 Devolva somente o JSON preenchido. O Generator o importará como sugestão de rascunho.
 """
 
@@ -326,7 +326,7 @@ sem markdown e sem explicações. Complete o JSON de resposta abaixo sem alterar
 scene_id, input_sha256, chunk_id, cue_id, ordem ou ids. Preserve literalmente pontuação e espaços.
 Use português brasileiro natural e crie unidades semânticas para expressões como phrasal verbs;
 por exemplo, “Can I help?” deve ser “Posso ajudar?”, nunca uma tradução mecânica palavra a palavra.
-Cada palavra precisa manter seu tempo dentro do cue e ter uma tradução contextual.
+Cada palavra precisa manter seu tempo dentro do cue e ter uma tradução contextual.\nProcure ativamente trocas de interlocutor dentro das cues. Não presuma que o áudio\ncontém uma só pessoa por cue. Se houver alternância, documente em notes uma proposta\nSPEAKER_SPLIT_PROPOSAL: fronteiras por word_id, trechos, speakers inferidos e grau de\ncerteza. NÃO altere os IDs nem divida o JSON 1.4: essa versão ainda é apenas sugestão.\nPreserve os tempos originais das palavras; só corrija valores quando houver evidência\nno áudio ou nos timestamps fornecidos. A sequência final deve ser cronológica e sem\nsobreposições; NÃO invente tempos para fazer a divisão parecer precisa.
 
 ENTRADA CANÔNICA:
 ```json
