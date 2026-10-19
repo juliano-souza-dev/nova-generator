@@ -170,7 +170,7 @@ class PreEditorialPackage:
                 },
             },
         }
-        return output_data
+        return json.loads(json.dumps(output_data, ensure_ascii=False))
 
     def stage(
         self, project_id: UUID, ingest_job_id: UUID, output: dict[str, Any]
