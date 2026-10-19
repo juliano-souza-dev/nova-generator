@@ -53,6 +53,12 @@ def editorial_publication_sha256(
                         "end_ms": word.end_ms,
                         "original_start_ms": word.original_start_ms,
                         "original_end_ms": word.original_end_ms,
+                        "pt": word.provenance.get("pt"),
+                        "semantic_group_id": word.provenance.get("semantic_group_id"),
+                        "semantic_group_role": word.provenance.get("semantic_group_role"),
+                        "translation_review_required": word.provenance.get(
+                            "translation_review_required", False
+                        ),
                     }
                     for word in words
                 ],
