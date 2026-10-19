@@ -95,7 +95,10 @@ class ProjectMediaJobHandler:
         result.pop("cut_file", None)
         # Persist the reusable external-AI input as soon as ASR succeeds,
         # before anyone opens the Editorial workstation.
-        if isinstance(result.get("transcript_candidate"), dict):
+        if (
+            isinstance(result.get("transcript_candidate"), dict)
+            and result["transcript_candidate"].get("cues")
+        ):
             PreEditorialPackage(self._project_root).stage(
                 project.id,
                 UUID(str(job.id)),
