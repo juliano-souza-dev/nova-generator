@@ -191,6 +191,7 @@ export function EditorialPage() {
   const [wordStart, setWordStart] = useState(0);
   const [wordEnd, setWordEnd] = useState(0);
   const [wordPt, setWordPt] = useState("");
+  const [wordSurface, setWordSurface] = useState("");
   const [saving, setSaving] = useState(false);
   const [structureDraft, setStructureDraft] = useState<StructureDraft | null>(null);
   const [startingMedia, setStartingMedia] = useState(false);
@@ -257,6 +258,7 @@ export function EditorialPage() {
     selectedWord && (wordStart !== selectedWord.start_ms || wordEnd !== selectedWord.end_ms),
   );
   const wordTranslationDirty = Boolean(selectedWord && wordPt !== storedWordPt);
+  const wordSurfaceDirty = Boolean(selectedWord && wordSurface !== selectedWord.surface.trim());
   const selectedWordIndex =
     selectedCue?.words.findIndex((word) => word.id === selectedWordId) ?? -1;
   const previewCues = selectedWord
@@ -266,6 +268,10 @@ export function EditorialPage() {
               ...cue,
               words: cue.words.map((word, index) => ({
                 ...word,
+                surface:
+                  index === selectedWordIndex && wordSurfaceDirty
+                    ? (word.surface.match(/^\s*/)?.[0] ?? "") + wordSurface.trim()
+                    : word.surface,
                 start_ms: index === selectedWordIndex ? wordStart : word.start_ms,
                 end_ms: index === selectedWordIndex ? wordEnd : word.end_ms,
               })),
@@ -274,11 +280,21 @@ export function EditorialPage() {
       )
     : cues;
   const hubPreviewCues = previewCues.map((cue) =>
-    cue.id === selectedCue?.id ? { ...cue, approved_en: approvedEn, approved_pt: approvedPt } : cue,
+    cue.id === selectedCue?.id
+      ? {
+          ...cue,
+          approved_en:
+            wordSurfaceDirty && !textDirty
+              ? cue.words.map((word) => word.surface).join("") +
+                String(cue.provenance.editorial_preparation_trailing ?? "")
+              : approvedEn,
+          approved_pt: approvedPt,
+        }
+      : cue,
   );
   const timingDirty = history.length > 0;
   const isDirty =
-    textDirty || wordDirty || wordTranslationDirty || semanticUnitsDirty || timingDirty;
+    textDirty || wordDirty || wordTranslationDirty || wordSurfaceDirty || semanticUnitsDirty || timingDirty;
   const cueStatus = selectedCue?.provenance?.approval === "approved" ? "Aprovado" : "Pendente";
 
   useEffect(() => {
@@ -377,6 +393,7 @@ export function EditorialPage() {
     setWordStart(selectedWord?.start_ms ?? 0);
     setWordEnd(selectedWord?.end_ms ?? 0);
     setWordPt(storedWordPt);
+    setWordSurface(selectedWord?.surface.trim() ?? "");
   }, [selectedWord, storedWordPt]);
 
   const refreshCues = useCallback(async (): Promise<TimelineCue[]> => {
@@ -482,7 +499,7 @@ export function EditorialPage() {
   }
   function selectWord(id: string) {
     if (saving || id === selectedWordId) return;
-    if (wordDirty || wordTranslationDirty) {
+    if (wordDirty || wordTranslationDirty || wordSurfaceDirty) {
       setMessage("Salve ou descarte a edição da palavra antes de selecionar outra.");
       return;
     }
@@ -500,7 +517,7 @@ export function EditorialPage() {
     }
   }
   function moveWord(offset: number) {
-    if (!selectedCue || wordDirty || wordTranslationDirty) {
+    if (!selectedCue || wordDirty || wordTranslationDirty || wordSurfaceDirty) {
       if (wordDirty || wordTranslationDirty)
         setMessage("Salve ou descarte o ajuste antes de trocar de palavra.");
       return;
@@ -535,6 +552,7 @@ export function EditorialPage() {
     setWordPt(
       originalGroup.find((item) => item.semantic_group_role === "lead")?.pt ?? word?.pt ?? "",
     );
+    setWordSurface(word?.surface.trim() ?? "");
     setSemanticDraftUnits(null);
     setMessage("Alterações locais descartadas.");
   }
