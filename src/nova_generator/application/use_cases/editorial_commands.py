@@ -14,7 +14,7 @@ class EditorialCommandError(ValueError):
     """A command would violate a published editorial invariant."""
 
 
-def _tokens_for_existing_words(text: str, words: list[WordTiming]) -> list[str]:
+def _tokens_for_existing_words(text: str, words: list[WordTiming]) -> tuple[list[str], str]:
     """Reconcile corrected cue text with existing words without inventing timestamps."""
     tokens = re.findall(r"\s*\S+", text)
     if len(tokens) != len(words):
@@ -22,9 +22,10 @@ def _tokens_for_existing_words(text: str, words: list[WordTiming]) -> list[str]:
             "approved English has a different number of words. "
             "Review word segmentation before saving; timings cannot be guessed."
         )
-    if not tokens or "".join(tokens) != text:
-        raise EditorialCommandError("approved English has invalid spacing or trailing whitespace")
-    return tokens
+    trailing = text[len("".join(tokens)):]
+    if not tokens or trailing.strip():
+        raise EditorialCommandError("approved English has invalid word boundaries")
+    return tokens, trailing
 
 
 def _changed_word_provenance(word: WordTiming, surface: str) -> dict[str, Any]:
@@ -66,7 +67,7 @@ class EditApprovedText:
         updated_words = words
         provenance = dict(cue.provenance)
         if approved_en != current_text:
-            tokens = _tokens_for_existing_words(approved_en, words)
+            tokens, trailing = _tokens_for_existing_words(approved_en, words)
             updated_words = [
                 replace(
                     word,
@@ -75,7 +76,7 @@ class EditApprovedText:
                 )
                 for word, token in zip(words, tokens, strict=True)
             ]
-            provenance["editorial_preparation_trailing"] = ""
+            provenance["editorial_preparation_trailing"] = trailing
             provenance["editorial_text_manually_corrected"] = True
             provenance["editorial_text_ai_reference"] = cue.provenance.get(
                 "editorial_text_ai_reference", cue.approved_en
