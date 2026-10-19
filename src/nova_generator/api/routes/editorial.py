@@ -146,6 +146,8 @@ class MergeCueRequest(ActorRequest):
 class MergeManyCueRequest(ActorRequest):
     cue_ids: list[UUID] = Field(min_length=2, max_length=12)
     text: CueText
+    speaker: str | None = None
+    confirm_same_speaker: bool = False
 
 
 class UndoRequest(ActorRequest):
@@ -645,6 +647,8 @@ def merge_many_cues(
             payload.cue_ids,
             text=payload.text.model_dump(),
             author=payload.author,
+            speaker_override=payload.speaker,
+            confirm_same_speaker=payload.confirm_same_speaker,
         )
     )
     return _cue_response(cue)
