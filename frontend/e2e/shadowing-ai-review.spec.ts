@@ -73,7 +73,7 @@ test("Shadowing lets the user exclude a speaker's cue without editing the Editor
   });
 
   await page.goto("/shadowing?project=project-1");
-  await expect(page.getByRole("heading", { name: "Montar prática com IA" })).toBeVisible();
+  await expect(page.getByText("Prática 1 · Mike")).toBeVisible();
   await expect(page.getByText("Prática 1 · Mike")).toBeVisible();
   await expect(page.getByText("Prática 2 · Donna")).toBeVisible();
   await page.getByRole("button", { name: "Excluir grupo" }).first().click();
@@ -89,6 +89,7 @@ test("Shadowing sends the current scene to Groq and displays revised origin", as
     return route.fulfill({ json: { ...plan, origin: "groq" } });
   });
   await page.goto("/shadowing?project=project-1");
+  await page.getByText("Recuperação manual (opcional)").click();
   await page.getByRole("button", { name: "Gerar proposta com Groq" }).click();
   await expect(page.getByText(/A Groq gerou uma nova proposta/)).toBeVisible();
   expect(generated).toBe(true);
