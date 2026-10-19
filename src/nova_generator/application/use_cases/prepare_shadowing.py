@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -326,7 +327,7 @@ class PrepareShadowing:
         # Before editorial approval, the literal ASR English is the preview.
         # Never synthesize a PT translation or mutate a cue in the database.
         preview_cues = [
-            __import__("dataclasses").replace(
+            replace(
                 cue, approved_en=cue.approved_en or cue.original_en
             )
             for cue in cues
