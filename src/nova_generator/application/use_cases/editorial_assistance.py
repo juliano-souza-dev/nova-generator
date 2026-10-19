@@ -365,6 +365,7 @@ def persist_editorial_chunk_with_speaker_turns(
     turns_by_cue: dict[str, list[dict[str, Any]]],
     *,
     author: str,
+    merge_with_previous: set[str] | None = None,
 ) -> bool:
     """Atomically apply an external 1.5 chunk, including speaker-based cue splits.
 
@@ -407,6 +408,35 @@ def persist_editorial_chunk_with_speaker_turns(
             continue
         if len(turns) < 2:
             raise EditorialAssistanceError("speaker turns must have at least two segments")
+        # Never create a new subtitle only because one speaker paused or used a vocative.
+        collapsed: list[dict[str, Any]] = []
+        for turn in turns:
+            if collapsed and str(collapsed[-1]["speaker"]).strip().casefold() == str(
+                turn["speaker"]
+            ).strip().casefold():
+                collapsed[-1]["word_ids"] = [
+                    *collapsed[-1]["word_ids"], *turn["word_ids"]
+                ]
+                collapsed[-1]["approved_pt"] = (
+                    str(collapsed[-1]["approved_pt"]).strip()
+                    + " " + str(turn["approved_pt"]).strip()
+                )
+            else:
+                collapsed.append(dict(turn))
+        turns = collapsed
+        if len(turns) == 1:
+            entries.append((
+                replace(
+                    cue,
+                    speaker=str(turns[0]["speaker"]),
+                    approved_en=suggestion.approved_en,
+                    approved_pt=str(turns[0]["approved_pt"]),
+                    revision=cue.revision + 1,
+                    provenance=provenance,
+                ),
+                prepared,
+            ))
+            continue
         expected_ids = [str(word.id) for word in prepared]
         flattened = [word_id for turn in turns for word_id in turn["word_ids"]]
         if flattened != expected_ids:
@@ -462,6 +492,63 @@ def persist_editorial_chunk_with_speaker_turns(
                 {**provenance, "split_from": str(cue.id), "speaker_turn_index": turn_index,
                  "speaker_confidence": turn.get("confidence", "uncertain")},
             ), moved))
+    # Join adjacent source cues only when explicitly proposed by the AI.
+    # This is applied in the same scene transaction as split suggestions.
+    for original in repository.get_scene_cues(scene_id):
+        if str(original.id) not in (merge_with_previous or set()):
+            continue
+        current_index = next(
+            (i for i, (cue, _) in enumerate(entries) if cue.id == original.id),
+            None,
+        )
+        if current_index is None:
+            raise EditorialAssistanceError(
+                "merge_with_previous cannot target an already split source cue"
+            )
+        if current_index == 0:
+            raise EditorialAssistanceError("first cue cannot merge with previous")
+        previous, previous_words = entries[current_index - 1]
+        current, current_words = entries[current_index]
+        if previous.speaker.strip() and current.speaker.strip() and (
+            previous.speaker.strip().casefold() != current.speaker.strip().casefold()
+        ):
+            raise EditorialAssistanceError(
+                "automatic merge cannot combine different speakers"
+            )
+        all_words = previous_words + current_words
+        if any(
+            a.end_ms > b.start_ms
+            for a, b in zip(all_words, all_words[1:], strict=False)
+        ):
+            raise EditorialAssistanceError("automatic merge would overlap word timings")
+        new_id = uuid5(
+            NAMESPACE_URL,
+            f"nova-generator/ai-merge/{previous.id}/{current.id}/{result.input_sha256}",
+        )
+        moved = [
+            replace(word, cue_id=new_id, order=i)
+            for i, word in enumerate(all_words, 1)
+        ]
+        merged = Cue(
+            new_id,
+            scene_id,
+            previous.order,
+            previous.speech_start_ms,
+            max(previous.speech_end_ms, current.speech_end_ms),
+            previous.subtitle_start_ms,
+            max(previous.subtitle_end_ms, current.subtitle_end_ms),
+            previous.speaker or current.speaker,
+            (previous.original_en.rstrip() + " " + current.original_en.lstrip()).strip(),
+            (previous.approved_en.rstrip() + " " + current.approved_en.lstrip()).strip(),
+            (previous.approved_pt.rstrip() + " " + current.approved_pt.lstrip()).strip(),
+            max(previous.revision, current.revision) + 1,
+            {
+                **previous.provenance,
+                "approval": "draft",
+                "ai_merged_from": [str(previous.id), str(current.id)],
+            },
+        )
+        entries[current_index - 1 : current_index + 1] = [(merged, moved)]
     entries = [(replace(cue, order=i), words) for i, (cue, words) in enumerate(entries, 1)]
     after = _entries_snapshot(entries)
     revision = EditorialRevision(
