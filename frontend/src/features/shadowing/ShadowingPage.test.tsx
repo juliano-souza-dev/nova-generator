@@ -132,10 +132,12 @@ describe("ShadowingPage", () => {
     });
   });
 
-  it("shows short speaker-specific practices and the separate AI preparation step", async () => {
+  it("shows prebuilt Shadowing and optional recovery tools", async () => {
     mount();
+    await screen.findByText("Prática 1 · Mike");
+    fireEvent.click(screen.getByText("Recuperação manual (opcional)"));
     expect(
-      await screen.findByRole("heading", { name: "Montar prática com IA" }),
+      screen.getByRole("heading", { name: "Substituir a preparação existente" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Gerar proposta com Groq" })).toBeEnabled();
     expect(screen.getByRole("link", { name: "Baixar pacote para IA externa" })).toHaveAttribute(
@@ -245,8 +247,10 @@ describe("ShadowingPage", () => {
     expect(studioApi.editShadowing).not.toHaveBeenCalled();
   });
 
-  it("generates with Groq and can import a separate external AI proposal", async () => {
+  it("can optionally regenerate and import a replacement practice", async () => {
     mount();
+    await screen.findByText("Prática 1 · Mike");
+    fireEvent.click(screen.getByText("Recuperação manual (opcional)"));
     const generate = await screen.findByRole("button", { name: "Gerar proposta com Groq" });
     fireEvent.click(generate);
     await waitFor(() =>
