@@ -1,7 +1,7 @@
 import json
 import zipfile
-from io import BytesIO
 from dataclasses import replace
+from io import BytesIO
 from pathlib import Path
 
 import jsonschema
@@ -365,7 +365,7 @@ def test_external_speaker_turns_preserve_word_times(tmp_path: Path) -> None:
     assert new_starts == [word.start_ms for word in words_before]
 
 
-def test_external_batch_applies_all_chunks_in_single_atomic_speaker_revision(tmp_path: Path) -> None:
+def test_external_batch_applies_atomic_speaker_revision(tmp_path: Path) -> None:
     engine = create_database_engine(f"sqlite:///{tmp_path / 'batch.db'}")
     Base.metadata.create_all(engine)
     repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
