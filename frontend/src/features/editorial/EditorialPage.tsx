@@ -1884,6 +1884,24 @@ export function EditorialPage() {
                 </button>
               </div>
 
+              {selectedCue.words.some(
+                (word) =>
+                  word.start_ms < selectedCue.speech_timing.start_ms ||
+                  word.end_ms > selectedCue.speech_timing.end_ms,
+              ) && (
+                <div className="cue-timing-alert" role="status">
+                  <p>Há palavras fora dos limites da cue. Você pode revisar os tempos
+                    independentemente da sugestão da IA.</p>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={saving || isDirty}
+                    onClick={() => void fitCueToWords()}
+                  >
+                    Ajustar limites às palavras
+                  </button>
+                </div>
+              )}
               <details className="technical-details">
                 <summary>Ajuste fino da fala do cue</summary>
                 <div className="timing-controls">
@@ -1972,6 +1990,33 @@ export function EditorialPage() {
               </ol>
               {selectedWord && (
                 <div className="word-timing-editor">
+                  <section className="word-surface-editor" aria-label="Correção do inglês da palavra">
+                    <label>
+                      <span>Palavra em inglês (corrigir transcrição da IA)</span>
+                      <input
+                        type="text"
+                        aria-label="Corrigir palavra em inglês"
+                        value={wordSurface}
+                        onChange={(event) => setWordSurface(event.target.value)}
+                      />
+                    </label>
+                    <p>A correção atualiza o inglês da cue, a timeline e os próximos
+                      materiais gerados. O ID e o tempo da palavra são preservados.</p>
+                    {selectedWord.provenance.translation_review_required === true && (
+                      <div className="word-review-warning">
+                        <strong>Tradução precisa de confirmação</strong>
+                        <p>Confira o português após a correção do inglês.</p>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={saving || wordSurfaceDirty || !wordPt.trim()}
+                          onClick={() => void confirmWordTranslation()}
+                        >
+                          Confirmar tradução
+                        </button>
+                      </div>
+                    )}
+                  </section>
                   <section className="semantic-unit-editor" aria-label="Unidade semântica">
                     <div className="semantic-unit-heading">
                       <div>
