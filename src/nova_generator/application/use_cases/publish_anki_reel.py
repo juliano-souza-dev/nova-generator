@@ -13,7 +13,7 @@ from uuid import UUID
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.ports.job_repository import JobRepository
 from nova_generator.application.use_cases.build_hub_final_anki_audio import (
-    add_manual_youtube_anki_audio,
+    add_anki_audio,
 )
 from nova_generator.application.use_cases.editorial_publication_snapshot import (
     editorial_publication_sha256,
@@ -33,8 +33,9 @@ class AnkiPublicationError(ValueError):
 @dataclass(frozen=True)
 class AnkiPublication:
     path: Path
-    youtube_video_id: str
-    youtube_url: str
+    youtube_video_id: str | None
+    youtube_url: str | None
+    direct_audio_base_url: str | None
 
 
 class PublishAnkiReel:
@@ -50,16 +51,23 @@ class PublishAnkiReel:
         self._export_root = export_root
         self._project_root = project_root
 
-    def execute(self, *, project_id: UUID, job: Job, youtube: str) -> AnkiPublication:
+    def execute(
+        self, *, project_id: UUID, job: Job, youtube: str = "", direct_audio_base_url: str = ""
+    ) -> AnkiPublication:
         if job.kind != "export_materials" or job.status != "succeeded":
             raise AnkiPublicationError("Conclua a exportação Anki antes de publicar.")
         if job.input.get("project_id") != str(project_id):
             raise AnkiPublicationError("A exportação não pertence a este projeto.")
         raw = youtube.strip()
-        try:
-            video = YoutubeVideo(raw) if len(raw) == 11 else YoutubeVideo.from_url(raw)
-        except ValueError as error:
-            raise AnkiPublicationError(str(error)) from error
+        direct_base = direct_audio_base_url.strip().rstrip("/")
+        if not raw and not direct_base:
+            raise AnkiPublicationError("Informe o reel do YouTube ou a URL base dos áudios hospedados.")
+        video: YoutubeVideo | None = None
+        if raw:
+            try:
+                video = YoutubeVideo(raw) if len(raw) == 11 else YoutubeVideo.from_url(raw)
+            except ValueError as error:
+                raise AnkiPublicationError(str(error)) from error
         project = self._repository.get_project(project_id)
         if project is None:
             raise AnkiPublicationError("Projeto não encontrado.")
@@ -101,6 +109,8 @@ class PublishAnkiReel:
         # and relative to kit.scene_start_ms for music. Its *_ms fallback is
         # heuristic, so publish both cues and words in this explicit convention.
         timeline_origin = scene_start if project.content_type == "music" else 0
+        if not has_source and video is None:
+            raise AnkiPublicationError("Áudio direto requer uma fonte de vídeo no projeto.")
         kit_youtube = source_url if has_source else video.canonical_url
         base: dict[str, Any] = {
             "version": 3,
@@ -209,31 +219,38 @@ class PublishAnkiReel:
                     "example_pt": rich.get("example_pt") or cue.approved_pt,
                     "tags": rich.get("tags", []),
                 })
-            base["materials"].append({
-                "label": "Material didático", "type": "PDF",
-                "fileName": "material-didatico.pdf",
-            })
-        document = add_manual_youtube_anki_audio(
-            base, youtube_video_id=video.video_id, export=export
+            base["materials"].append({"label": "Material didático", "type": "PDF", "fileName": "material-didatico.pdf"})
+        document = add_anki_audio(
+            base,
+            export=export,
+            youtube_video_id=video.video_id if video else None,
+            direct_audio_base_url=direct_base or None,
         )
         validate_anki_audio(document)
         path = self.publication_path(project_id, job.id)
         if path.is_file():
             existing = json.loads(path.read_text(encoding="utf-8"))
-            old_video = existing.get("ankiAudio", {}).get("youtube", {}).get("video_id")
-            if old_video != video.video_id:
-                raise AnkiPublicationError(
+            old_audio = existing.get("ankiAudio", {})
+            old_video = old_audio.get("youtube", {}).get("video_id")
+            old_direct = old_audio.get("direct", {}).get("base_url")
+            current_video = video.video_id if video else None
+            if old_video != current_video or old_direct != (direct_base or None):
+                message = (
                     "Esta exportação já foi vinculada a outro vídeo. "
                     "Crie uma nova exportação para corrigir o vínculo."
+                    if old_video != current_video
+                    else "Esta exportação já foi vinculada a outra fonte de áudio. "
+                    "Crie uma nova exportação para corrigir o vínculo."
                 )
-            return AnkiPublication(path, video.video_id, video.canonical_url)
+                raise AnkiPublicationError(message)
+            return AnkiPublication(path, current_video, video.canonical_url if video else None, direct_base or None)
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(".tmp.json")
         temporary.write_text(
             json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         os.replace(temporary, path)
-        return AnkiPublication(path, video.video_id, video.canonical_url)
+        return AnkiPublication(path, video.video_id if video else None, video.canonical_url if video else None, direct_base or None)
 
     def _frozen_pedagogical(self, job: Job) -> dict[str, Any]:
         path = self._export_root / str(job.id) / "material-pedagogico.json"
@@ -241,13 +258,8 @@ class PublishAnkiReel:
             document = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as error:
             raise AnkiPublicationError("Material pedagógico congelado não encontrado.") from error
-        digest = sha256(json.dumps(
-            document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-        ).encode("utf-8")).hexdigest()
-        if (
-            digest != job.input.get("materials_sha256")
-            or digest != (job.output or {}).get("materials_sha256")
-        ):
+        digest = sha256(json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        if digest != job.input.get("materials_sha256") or digest != (job.output or {}).get("materials_sha256"):
             raise AnkiPublicationError("Material pedagógico diverge da exportação.")
         if not (self._export_root / str(job.id) / "material-didatico.pdf").is_file():
             raise AnkiPublicationError("PDF aprovado não encontrado.")
@@ -315,11 +327,7 @@ class PublishAnkiReel:
                 cue.approved_en_sha256 != interval.text_sha256
                 or cue.approved_en_sha256 != job.input.get("text_hashes", {}).get(str(raw_id))
                 or utf8_sha256(cue.approved_pt) != job.input.get("pt_hashes", {}).get(str(raw_id))
-                or interval.audio_sha256 != (
-                    (job.output or {}).get("audio_hashes", {})
-                    if job.input.get("generate_complete")
-                    else job.input.get("audio_hashes", {})
-                ).get(str(raw_id))
+                or interval.audio_sha256 != job.input.get("audio_hashes", {}).get(str(raw_id))
             ):
                 raise AnkiPublicationError(
                     f"Texto ou WAV do card {raw_id} mudou após a exportação. Exporte novamente."

@@ -31,6 +31,8 @@ export function MaterialsPage() {
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const audioRequestsInFlight = useRef(new Set<string>());
   const [youtube, setYoutube] = useState("");
+  const [directAudioBaseUrl, setDirectAudioBaseUrl] = useState("");
+  const [audioDelivery, setAudioDelivery] = useState<"youtube" | "direct">("youtube");
   const [confirmed, setConfirmed] = useState(false);
   const [previewCueId, setPreviewCueId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -145,11 +147,15 @@ export function MaterialsPage() {
     onSuccess: (result) => {
       setExportJobId(result.job_id);
       setYoutube("");
+      setDirectAudioBaseUrl("");
       setConfirmed(false);
     },
   });
   const publication = useMutation({
-    mutationFn: () => studioApi.publishMaterialExport(projectId, activeExportId!, youtube.trim()),
+    mutationFn: () => studioApi.publishMaterialExport(projectId, activeExportId!, {
+      youtube: audioDelivery === "youtube" ? youtube.trim() : "",
+      directAudioBaseUrl: audioDelivery === "direct" ? directAudioBaseUrl.trim() : "",
+    }),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["material-export", projectId] }),
   });
   const selectedVoice = voices.data?.find((voice) => voice.id === voiceId);
@@ -702,7 +708,7 @@ export function MaterialsPage() {
             onClick={() => exportCards.mutate()}
           >
             <Download aria-hidden="true" />{" "}
-            {exportCards.isPending ? "Enfileirando…" : "Exportar APKG"}
+            {exportCards.isPending ? "Enfileirando…" : "Gerar pacote Anki"}
           </button>
         </section>
       )}
@@ -740,9 +746,12 @@ export function MaterialsPage() {
             <a href={exportStatus.data.manifest_url}>Baixar manifesto</a>
           )}
           {exportStatus.data.reel_url && <a href={exportStatus.data.reel_url}>Baixar reel</a>}
+          {exportStatus.data.bundle_url && (
+            <a href={exportStatus.data.bundle_url}>Baixar pacote completo (ZIP)</a>
+          )}
           {exportStatus.data.hub_final_url ? (
             <div>
-              <p>Reel vinculado ao YouTube: {exportStatus.data.youtube_video_id}</p>
+              <p>{exportStatus.data.youtube_video_id ? `Reel vinculado ao YouTube: ${exportStatus.data.youtube_video_id}` : `Áudios diretos: ${exportStatus.data.direct_audio_base_url ?? "fonte hospedada"}`}</p>
               <a href={exportStatus.data.hub_final_url}>Baixar hub_final.json</a>
             </div>
           ) : exportStatus.data.status === "succeeded" ? (
@@ -753,27 +762,34 @@ export function MaterialsPage() {
               }}
             >
               <h3>Publicar no iHub</h3>
-              <p>Faça o upload manual do reel no YouTube e informe a URL ou o ID do vídeo.</p>
+              <p>Escolha como a área do aluno reproduzirá cada card. O pacote ZIP já contém os WAVs nomeados card-0001.wav, card-0002.wav e assim por diante.</p>
+              <fieldset>
+                <legend>Fonte de áudio dos cards</legend>
+                <label>
+                  <input type="radio" checked={audioDelivery === "youtube"} onChange={() => setAudioDelivery("youtube")} />
+                  Reel no YouTube
+                </label>
+                <label>
+                  <input type="radio" checked={audioDelivery === "direct"} onChange={() => setAudioDelivery("direct")} />
+                  Arquivos WAV hospedados
+                </label>
+              </fieldset>
+              {audioDelivery === "youtube" ? (
+                <label>
+                  URL ou ID do reel no YouTube
+                  <input value={youtube} onChange={(event) => setYoutube(event.target.value)} required />
+                </label>
+              ) : (
+                <label>
+                  URL base da pasta audio hospedada
+                  <input value={directAudioBaseUrl} onChange={(event) => setDirectAudioBaseUrl(event.target.value)} placeholder="https://seu-dominio.com/storage/card-audio/kit-123/audio" required />
+                </label>
+              )}
               <label>
-                URL ou ID do reel no YouTube
-                <input
-                  value={youtube}
-                  onChange={(event) => setYoutube(event.target.value)}
-                  required
-                />
+                <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+                Confirmo que a fonte escolhida está disponível para o iHub.
               </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={confirmed}
-                  onChange={(event) => setConfirmed(event.target.checked)}
-                />
-                Confirmo que fiz o upload do reel e conferi o vídeo informado.
-              </label>
-              <button
-                type="submit"
-                disabled={!youtube.trim() || !confirmed || publication.isPending}
-              >
+              <button type="submit" disabled={!(audioDelivery === "youtube" ? youtube.trim() : directAudioBaseUrl.trim()) || !confirmed || publication.isPending}>
                 {publication.isPending ? "Publicando…" : "Gerar hub_final.json"}
               </button>
             </form>

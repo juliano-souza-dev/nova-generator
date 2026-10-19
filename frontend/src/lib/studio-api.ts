@@ -260,12 +260,18 @@ export const studioApi = {
     apiRequest<MaterialExport>(`/projects/${projectId}/materials/exports/${jobId}`),
   latestMaterialExport: (projectId: string) =>
     apiRequest<MaterialExport>(`/projects/${projectId}/materials/latest-export`),
-  publishMaterialExport: (projectId: string, jobId: string, youtube: string) =>
+  publishMaterialExport: (
+    projectId: string, jobId: string, source: { youtube?: string; directAudioBaseUrl?: string },
+  ) =>
     apiRequest<MaterialPublication>(
       `/projects/${projectId}/materials/exports/${jobId}/publication`,
       {
         method: "POST",
-        body: JSON.stringify({ youtube, confirmed: true }),
+        body: JSON.stringify({
+          youtube: source.youtube ?? "",
+          direct_audio_base_url: source.directAudioBaseUrl ?? "",
+          confirmed: true,
+        }),
       },
     ),
   voices: () => apiRequest<VoiceProfile[]>("/voices"),

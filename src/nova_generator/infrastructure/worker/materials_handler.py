@@ -132,8 +132,10 @@ class MaterialsJobHandler:
         execution.heartbeat()
         return {
             "apkg": str(result.apkg_path),
+            "silent_apkg": str(result.silent_apkg_path),
             "manifest": str(result.manifest_path),
             "reel": str(result.reel_path),
+            "bundle": str(result.bundle_path),
             "cards": len(cues),
         }
 

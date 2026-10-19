@@ -371,7 +371,7 @@ describe("MaterialsPage", () => {
     const prepare = await screen.findByRole("button", { name: "Preparar WAV" });
     await waitFor(() => expect(prepare).toBeEnabled());
     expect(screen.getByRole("button", { name: "Preparar selecionados" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Exportar APKG" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Gerar pacote Anki" })).toBeDisabled();
     fireEvent.click(prepare);
     await waitFor(() =>
       expect(studioApi.prepareMaterialAudio).toHaveBeenCalledWith("project-1", "cue-1", "voice-1"),
@@ -406,7 +406,7 @@ describe("MaterialsPage", () => {
     });
     mount();
     await screen.findByText("Café?");
-    const exportButton = screen.getByRole("button", { name: "Exportar APKG" });
+    const exportButton = screen.getByRole("button", { name: "Gerar pacote Anki" });
     await waitFor(() => expect(exportButton).toBeEnabled());
     fireEvent.click(exportButton);
     await waitFor(() =>
@@ -494,7 +494,7 @@ describe("MaterialsPage", () => {
     await waitFor(() =>
       expect(studioApi.updateMaterial).toHaveBeenCalledWith("project-1", "cue-1", false),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Exportar APKG" }));
+    fireEvent.click(screen.getByRole("button", { name: "Gerar pacote Anki" }));
     await waitFor(() =>
       expect(studioApi.exportMaterials).toHaveBeenCalledWith("project-1", "voice-1"),
     );
@@ -505,13 +505,13 @@ describe("MaterialsPage", () => {
     fireEvent.change(screen.getByLabelText("URL ou ID do reel no YouTube"), {
       target: { value: "bbbbbbbbbbb" },
     });
-    fireEvent.click(screen.getByRole("checkbox", { name: /Confirmo que fiz o upload/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Confirmo que a fonte escolhida/ }));
     fireEvent.click(screen.getByRole("button", { name: "Gerar hub_final.json" }));
     await waitFor(() =>
       expect(studioApi.publishMaterialExport).toHaveBeenCalledWith(
         "project-1",
         "job-1",
-        "bbbbbbbbbbb",
+        { youtube: "bbbbbbbbbbb", directAudioBaseUrl: "" },
       ),
     );
   });

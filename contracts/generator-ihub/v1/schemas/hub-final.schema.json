@@ -3,26 +3,128 @@
   "$id": "https://nova-generator.local/contracts/generator-ihub/v1/hub-final.schema.json",
   "title": "Anki audio extension for a legacy hub_final.json",
   "type": "object",
-  "required": ["ankiAudio"],
+  "required": [
+    "ankiAudio"
+  ],
   "properties": {
     "ankiAudio": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["youtube", "cues"],
       "properties": {
-        "youtube": {"type": "object", "additionalProperties": false, "required": ["video_id"], "properties": {"video_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{11}$"}}},
-        "cues": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/audioCue"}}
-      }
+        "youtube": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "video_id"
+          ],
+          "properties": {
+            "video_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{11}$"
+            }
+          }
+        },
+        "cues": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/audioCue"
+          }
+        },
+        "direct": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "base_url",
+            "cards"
+          ],
+          "properties": {
+            "base_url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cards": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/directCard"
+              }
+            }
+          }
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "youtube",
+            "cues"
+          ]
+        },
+        {
+          "required": [
+            "direct"
+          ]
+        }
+      ]
     }
   },
   "$defs": {
     "audioCue": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cue_order", "start_ms", "end_ms", "voice_id", "voice_name", "variant_index"],
+      "required": [
+        "cue_order",
+        "start_ms",
+        "end_ms",
+        "voice_id",
+        "voice_name",
+        "variant_index"
+      ],
       "properties": {
-        "cue_order": {"type": "integer", "minimum": 1}, "start_ms": {"type": "integer", "minimum": 0}, "end_ms": {"type": "integer", "minimum": 1},
-        "voice_id": {"type": "string", "minLength": 1, "maxLength": 128}, "voice_name": {"type": "string", "minLength": 1, "maxLength": 128}, "variant_index": {"type": "integer", "minimum": 0}
+        "cue_order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "start_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "voice_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "voice_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "variant_index": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "directCard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cue_order",
+        "file"
+      ],
+      "properties": {
+        "cue_order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "file": {
+          "type": "string",
+          "pattern": "^card-[0-9]{4}\\.wav$"
+        }
       }
     }
   }

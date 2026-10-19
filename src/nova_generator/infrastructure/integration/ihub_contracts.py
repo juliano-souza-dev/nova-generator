@@ -42,17 +42,20 @@ def validate_anki_audio(document: dict[str, Any]) -> None:
     it also carries legacy material fields owned by iHub.
     """
     _validate_schema(document, "hub-final.schema.json")
-    cues = document["ankiAudio"]["cues"]
+    audio = document["ankiAudio"]
     issues: list[ContractIssue] = []
-    _validate_timeline(
-        cues,
-        order_key="cue_order",
-        start_key="start_ms",
-        end_key="end_ms",
-        duration=None,
-        path="$.ankiAudio.cues",
-        issues=issues,
-    )
+    if "cues" in audio:
+        _validate_timeline(
+            audio["cues"], order_key="cue_order", start_key="start_ms", end_key="end_ms",
+            duration=None, path="$.ankiAudio.cues", issues=issues,
+        )
+    if "direct" in audio:
+        cards = audio["direct"]["cards"]
+        for index, card in enumerate(cards):
+            if card["cue_order"] != index + 1:
+                issues.append(ContractIssue(
+                    f"$.ankiAudio.direct.cards[{index}].cue_order", "must be sequential from 1"
+                ))
     _raise_if_issues(issues)
 
 

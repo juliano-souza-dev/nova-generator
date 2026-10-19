@@ -205,12 +205,15 @@ export type MaterialExport = {
   manifest_url: string | null;
   reel_url: string | null;
   workbook_url?: string | null;
+  bundle_url?: string | null;
   hub_final_url?: string | null;
   youtube_video_id?: string | null;
+  direct_audio_base_url?: string | null;
 };
 export type MaterialPublication = {
-  youtube_video_id: string;
-  youtube_url: string;
+  youtube_video_id?: string | null;
+  youtube_url?: string | null;
+  direct_audio_base_url?: string | null;
   hub_final_url: string;
 };
 export type VoiceProfile = {

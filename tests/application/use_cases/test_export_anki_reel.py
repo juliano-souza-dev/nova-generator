@@ -16,8 +16,8 @@ class FakeWavProbe:
 
 
 class FakePackageWriter:
-    def write(self, *, cues, output: Path, deck_name: str) -> Path:
-        output.write_bytes(b"apkg")
+    def write(self, *, cues, output: Path, deck_name: str, include_audio: bool = True, rich_cards=None) -> Path:
+        output.write_bytes(b"apkg with audio" if include_audio else b"apkg without audio")
         return output
 
 
@@ -67,10 +67,16 @@ def test_export_uses_same_wavs_for_manifest_anki_and_reel(tmp_path: Path) -> Non
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     assert validator.validated
     assert result.apkg_path.is_file() and result.reel_path.is_file()
+    assert result.silent_apkg_path is not None and result.silent_apkg_path.is_file()
+    assert result.bundle_path is not None and result.bundle_path.is_file()
     assert manifest["voice"]["snapshot_sha256"] == voice.sha256
     assert [(cue["start_ms"], cue["end_ms"]) for cue in manifest["cues"]] == [
         (0, 1200),
         (1200, 2000),
+    ]
+    assert [item["file"] for item in manifest["direct_audio"]["cards"]] == [
+        "card-0001.wav",
+        "card-0002.wav",
     ]
 
 

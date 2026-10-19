@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import zipfile
 from hashlib import sha256
 from pathlib import Path
 
@@ -45,15 +47,20 @@ class ExportAnkiReel:
             if abs(duration - cue.duration_ms) > 100:
                 raise ValueError(f"Duração do WAV diverge do cue {cue.order}.")
         output_directory.mkdir(parents=True, exist_ok=True)
-        writer_args = {
-            "cues": cues,
-            "output": output_directory / "anki.apkg",
-            "deck_name": deck_name,
-        }
-        if rich_cards is not None:
-            apkg = self._package_writer.write(**writer_args, rich_cards=rich_cards)
-        else:
-            apkg = self._package_writer.write(**writer_args)
+        audio_directory = output_directory / "audio"
+        audio_directory.mkdir(exist_ok=True)
+        audio_files = _copy_audio_files(cues, audio_directory)
+        apkg = self._package_writer.write(
+            cues=cues, output=output_directory / "anki.apkg", deck_name=deck_name,
+            rich_cards=rich_cards,
+        )
+        silent_apkg = self._package_writer.write(
+            cues=cues,
+            output=output_directory / "anki-sem-audio.apkg",
+            deck_name=deck_name,
+            include_audio=False,
+            rich_cards=rich_cards,
+        )
         reel, intervals = self._reel_renderer.render(
             cues=cues, output=output_directory / "anki-reel.mp4"
         )
@@ -66,7 +73,23 @@ class ExportAnkiReel:
             "schema_version": "1.0",
             "voice": _voice_payload(voice),
             "apkg_sha256": _file_hash(apkg),
+            "silent_apkg_sha256": _file_hash(silent_apkg),
             "reel_sha256": _file_hash(reel),
+            "direct_audio": {
+                "directory": "audio",
+                "reel": {"file": reel.name, "sha256": _file_hash(reel)},
+                "cards": [
+                    {
+                        "cue_order": cue.order,
+                        "cue_id": str(cue.cue_id),
+                        "file": audio_files[cue.order].name,
+                        "duration_ms": cue.duration_ms,
+                        "audio_sha256": cue.audio_sha256,
+                        "text_sha256": cue.text_sha256,
+                    }
+                    for cue in cues
+                ],
+            },
             "cues": [
                 {
                     "cue_order": interval.cue_order,
@@ -83,8 +106,25 @@ class ExportAnkiReel:
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         os.replace(staging, manifest)
+        bundle = _write_bundle(
+            output_directory=output_directory,
+            apkg=apkg,
+            silent_apkg=silent_apkg,
+            reel=reel,
+            manifest=manifest,
+            audio_directory=audio_directory,
+        )
         metrics.record("anki_export_succeeded")
-        return AnkiAudioExport(apkg, reel, manifest, voice, tuple(intervals))
+        return AnkiAudioExport(
+            apkg,
+            reel,
+            manifest,
+            voice,
+            tuple(intervals),
+            audio_directory,
+            bundle,
+            silent_apkg,
+        )
 
 
 def _file_hash(path: Path) -> str:
@@ -104,3 +144,32 @@ def _voice_payload(voice: VoiceProfileSnapshot) -> dict[str, object]:
         "parameters": voice.parameters,
         "snapshot_sha256": voice.sha256,
     }
+
+
+def _copy_audio_files(cues: list[ExportCue], destination: Path) -> dict[int, Path]:
+    copied: dict[int, Path] = {}
+    for cue in cues:
+        target = destination / f"card-{cue.order:04d}.wav"
+        shutil.copyfile(cue.audio_path, target)
+        copied[cue.order] = target
+    return copied
+
+
+def _write_bundle(
+    *,
+    output_directory: Path,
+    apkg: Path,
+    silent_apkg: Path,
+    reel: Path,
+    manifest: Path,
+    audio_directory: Path,
+) -> Path:
+    bundle = output_directory / "anki-export.zip"
+    with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.write(apkg, "anki-com-audio.apkg")
+        archive.write(silent_apkg, "anki-sem-audio.apkg")
+        archive.write(reel, reel.name)
+        archive.write(manifest, manifest.name)
+        for audio in sorted(audio_directory.glob("*.wav")):
+            archive.write(audio, f"audio/{audio.name}")
+    return bundle

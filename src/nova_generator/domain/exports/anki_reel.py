@@ -55,3 +55,6 @@ class AnkiAudioExport:
     manifest_path: Path
     voice: VoiceProfileSnapshot
     intervals: tuple[ReelInterval, ...]
+    audio_directory: Path | None = None
+    bundle_path: Path | None = None
+    silent_apkg_path: Path | None = None
