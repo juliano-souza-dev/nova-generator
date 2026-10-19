@@ -33,11 +33,11 @@ class DownloadYoutubeSource:
         self._downloader = downloader
         self._probe = probe
 
-    def execute(self, raw_url: str) -> DownloadYoutubeSourceResult:
+    def execute(self, raw_url: str, *, refresh: bool = False) -> DownloadYoutubeSourceResult:
         video = YoutubeVideo.from_url(raw_url)
         with self._cache.acquire(video):
             reusable = self._cache.find_verified(video)
-            if reusable:
+            if reusable and not refresh:
                 metrics.record("youtube_cache_hit")
                 metadata = reusable.mark_used()
                 self._cache.save_verified(metadata)
