@@ -114,13 +114,23 @@ export function MediaPage() {
                 media={media.data}
                 onStart={() => start.mutate(selected.id)}
                 onRefreshSource={() => {
-                  if (!window.confirm("Baixar novamente o vídeo original do YouTube? O editorial baseado na fonte anterior será apagado. Será necessário gerar um novo corte e uma nova transcrição.")) return;
+                  if (
+                    !window.confirm(
+                      "Baixar novamente o vídeo original do YouTube? O editorial baseado na fonte anterior será apagado. Será necessário gerar um novo corte e uma nova transcrição.",
+                    )
+                  )
+                    return;
                   refreshSource.mutate(selected.id);
                 }}
                 onReprocess={() => {
                   const snapshot = media.data;
                   if (snapshot?.cut_start_ms == null || snapshot.cut_end_ms == null) return;
-                  if (!window.confirm("Reprocessar o corte e gerar nova transcrição? Todo trabalho editorial deste projeto baseado na transcrição anterior será apagado. Essa ação não pode ser desfeita.")) return;
+                  if (
+                    !window.confirm(
+                      "Reprocessar o corte e gerar nova transcrição? Todo trabalho editorial deste projeto baseado na transcrição anterior será apagado. Essa ação não pode ser desfeita.",
+                    )
+                  )
+                    return;
                   reprocess.mutate({
                     start_ms: snapshot.cut_start_ms,
                     end_ms: snapshot.cut_end_ms,
@@ -130,10 +140,14 @@ export function MediaPage() {
                 busy={start.isPending || reprocess.isPending || refreshSource.isPending}
               />
               {refreshSource.error && (
-                <p className="field-error" role="alert">{refreshSource.error.message}</p>
+                <p className="field-error" role="alert">
+                  {refreshSource.error.message}
+                </p>
               )}
               {reprocess.error && (
-                <p className="field-error" role="alert">{reprocess.error.message}</p>
+                <p className="field-error" role="alert">
+                  {reprocess.error.message}
+                </p>
               )}
               {start.error && (
                 <p className="field-error" role="alert">
@@ -212,32 +226,46 @@ function SourceStatus({
       </div>
       {hasSource ? (
         <div className="media-source-actions">
-        {media.source_ready && (
-          <button className="secondary-button" onClick={onRefreshSource}
-            disabled={busy || ACTIVE.has(media.download_status ?? "") || ACTIVE.has(media.ingest_status ?? "")}>
-            <Download aria-hidden="true" /> Recarregar vídeo original
+          {media.source_ready && (
+            <button
+              className="secondary-button"
+              onClick={onRefreshSource}
+              disabled={
+                busy ||
+                ACTIVE.has(media.download_status ?? "") ||
+                ACTIVE.has(media.ingest_status ?? "")
+              }
+            >
+              <Download aria-hidden="true" /> Recarregar vídeo original
+            </button>
+          )}
+          {media.cut_start_ms !== null && media.cut_end_ms !== null && (
+            <button
+              className="secondary-button"
+              onClick={onReprocess}
+              disabled={
+                busy ||
+                ACTIVE.has(media.ingest_status ?? "") ||
+                ACTIVE.has(media.download_status ?? "")
+              }
+            >
+              <Scissors aria-hidden="true" /> Reprocessar fonte
+            </button>
+          )}
+          <button
+            className="primary-button"
+            onClick={onStart}
+            disabled={busy || ACTIVE.has(media.download_status ?? "") || !media.can_start}
+          >
+            <Download aria-hidden="true" />
+            {busy || ACTIVE.has(media.download_status ?? "")
+              ? "Preparando fonte…"
+              : media.source_ready
+                ? "Fonte pronta"
+                : media.state === "failed"
+                  ? "Tentar novamente"
+                  : "Iniciar processamento"}
           </button>
-        )}
-        {media.cut_start_ms !== null && media.cut_end_ms !== null && (
-          <button className="secondary-button" onClick={onReprocess}
-            disabled={busy || ACTIVE.has(media.ingest_status ?? "") || ACTIVE.has(media.download_status ?? "")}>
-            <Scissors aria-hidden="true" /> Reprocessar fonte
-          </button>
-        )}
-        <button
-          className="primary-button"
-          onClick={onStart}
-          disabled={busy || ACTIVE.has(media.download_status ?? "") || !media.can_start}
-        >
-          <Download aria-hidden="true" />
-          {busy || ACTIVE.has(media.download_status ?? "")
-            ? "Preparando fonte…"
-            : media.source_ready
-              ? "Fonte pronta"
-              : media.state === "failed"
-                ? "Tentar novamente"
-                : "Iniciar processamento"}
-        </button>
         </div>
       ) : (
         <span className="media-warning">
