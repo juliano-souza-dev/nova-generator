@@ -36,6 +36,7 @@ type StructureDraft =
   | {
       kind: "merge";
       count: number;
+      startIndex: number;
       en: string;
       pt: string;
       speaker: string;
@@ -909,12 +910,15 @@ export function EditorialPage() {
     if (words.length === unit.word_ids.length)
       playRange(words[0].start_ms, words.at(-1)?.end_ms ?? words[0].end_ms);
   }
-  function beginMerge() {
-    if (!selectedCue || saving || isDirty || selectedCueIndex >= cues.length - 1) return;
-    const parts = cues.slice(selectedCueIndex, selectedCueIndex + 2);
+  function beginMerge(direction: "previous" | "next") {
+    const startIndex = selectedCueIndex - (direction === "previous" ? 1 : 0);
+    if (!selectedCue || saving || isDirty || startIndex < 0 || startIndex + 1 >= cues.length)
+      return;
+    const parts = cues.slice(startIndex, startIndex + 2);
     setStructureDraft({
       kind: "merge",
       count: 2,
+      startIndex,
       speaker: parts.find((cue) => cue.speaker.trim())?.speaker ?? "",
       confirmedSameSpeaker: false,
       en: parts.map((cue) => cue.approved_en || cue.original_en).join(" ").trim(),
@@ -922,10 +926,13 @@ export function EditorialPage() {
     });
   }
   function changeMergeCount(count: number) {
-    const parts = cues.slice(selectedCueIndex, selectedCueIndex + count);
+    if (structureDraft?.kind !== "merge") return;
+    const startIndex = structureDraft.startIndex;
+    const parts = cues.slice(startIndex, startIndex + count);
     setStructureDraft({
       kind: "merge",
       count,
+      startIndex,
       speaker: parts.find((cue) => cue.speaker.trim())?.speaker ?? "",
       confirmedSameSpeaker: false,
       en: parts.map((cue) => cue.approved_en || cue.original_en).join(" ").trim(),
@@ -953,7 +960,10 @@ export function EditorialPage() {
     try {
       let focusId: string;
       if (structureDraft.kind === "merge") {
-        const selected = cues.slice(selectedCueIndex, selectedCueIndex + structureDraft.count);
+        const selected = cues.slice(
+          structureDraft.startIndex,
+          structureDraft.startIndex + structureDraft.count,
+        );
         if (selected.length !== structureDraft.count) throw new Error("Seleção inválida.");
         const knownSpeakers = new Set(
           selected.map((cue) => cue.speaker.trim().toLowerCase()).filter(Boolean),
@@ -1413,10 +1423,18 @@ export function EditorialPage() {
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={beginMerge}
+                    onClick={() => beginMerge("next")}
                     disabled={saving || isDirty || selectedCueIndex >= cues.length - 1}
                   >
                     <Merge aria-hidden="true" /> Unir com próximas
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => beginMerge("previous")}
+                    disabled={saving || isDirty || selectedCueIndex === 0}
+                  >
+                    <Merge aria-hidden="true" /> Unir com anterior
                   </button>
                   <button
                     type="button"
@@ -1447,7 +1465,7 @@ export function EditorialPage() {
                         onChange={(event) => changeMergeCount(Number(event.target.value))}
                       >
                         {Array.from(
-                          { length: Math.min(12, cues.length - selectedCueIndex) - 1 },
+                          { length: Math.min(12, cues.length - structureDraft.startIndex) - 1 },
                           (_, index) => index + 2,
                         ).map((count) => (
                           <option key={count} value={count}>{count}</option>
@@ -1455,9 +1473,11 @@ export function EditorialPage() {
                       </select>
                     </label>
                     <p>
-                      Intervalo: {formatTime(selectedCue.speech_timing.start_ms)} até{" "}
+                      Intervalo: {formatTime(
+                        cues[structureDraft.startIndex]?.speech_timing.start_ms ?? 0,
+                      )} até{" "}
                       {formatTime(
-                        cues[selectedCueIndex + structureDraft.count - 1]?.speech_timing.end_ms ??
+                        cues[structureDraft.startIndex + structureDraft.count - 1]?.speech_timing.end_ms ??
                           selectedCue.speech_timing.end_ms,
                       )}. As palavras e seus tempos serão preservados.
                     </p>
@@ -1472,7 +1492,7 @@ export function EditorialPage() {
                       />
                     </label>
                     {new Set(
-                      cues.slice(selectedCueIndex, selectedCueIndex + structureDraft.count)
+                      cues.slice(structureDraft.startIndex, structureDraft.startIndex + structureDraft.count)
                         .map((cue) => cue.speaker.trim().toLowerCase()).filter(Boolean),
                     ).size > 1 && (
                       <label className="cue-structure-confirm">
