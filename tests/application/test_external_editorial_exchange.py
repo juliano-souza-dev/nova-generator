@@ -487,3 +487,111 @@ def test_external_batch_rejects_duplicate_chunks_without_mutation(tmp_path: Path
             [("first.json", serialized), ("duplicate.json", serialized)],
         )
     assert repository.get_scene_cues(scene.id) == original
+
+
+def test_ai_coalesces_adjacent_turns_with_the_same_speaker(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'coalesce.db'}")
+    Base.metadata.create_all(engine)
+    repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repository).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="external-coalesce",
+        imported_by="test",
+    )
+    scene = repository.get_project_scenes(project_id)[0]
+    exchange = ExternalEditorialExchange(repository, tmp_path)
+    with zipfile.ZipFile(exchange.build_package(scene.id)) as archive:
+        name = next(
+            name for name in archive.namelist() if name.endswith("-result.json")
+        )
+        payload = json.loads(archive.read(name))
+    suggestion = payload["suggestions"][0]
+    suggestion["approved_pt"] = "Eu não posso ir?"
+    for word in suggestion["word_translations"]:
+        word["pt"] = "tradução"
+    word_ids = [word["word_id"] for word in suggestion["word_translations"]]
+    suggestion["speaker_turns"] = [
+        {
+            "word_ids": word_ids[:1],
+            "speaker": "Liam",
+            "approved_pt": "Eu",
+            "confidence": "medium",
+        },
+        {
+            "word_ids": word_ids[1:],
+            "speaker": "Liam",
+            "approved_pt": "não posso ir?",
+            "confidence": "medium",
+        },
+    ]
+    result = exchange.import_batch(
+        scene.id, [(name, json.dumps(payload).encode("utf-8"))]
+    )
+    assert len(result.suggestions) == 1
+    cues = repository.get_scene_cues(scene.id)
+    assert len(cues) == 1
+    assert cues[0].speaker == "Liam"
+    assert cues[0].approved_pt == "Eu não posso ir?"
+    assert len(repository.get_cue_words(cues[0].id)) == 3
+
+
+def test_ai_merge_with_previous_preserves_words_and_is_one_revision(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'ai-merge.db'}")
+    Base.metadata.create_all(engine)
+    repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repository).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="external-ai-merge",
+        imported_by="test",
+    )
+    scene = repository.get_project_scenes(project_id)[0]
+    original = repository.get_scene_cues(scene.id)[0]
+    original_words = repository.get_cue_words(original.id)
+    other_id = uuid4()
+    other = replace(
+        original, id=other_id, order=2,
+        speech_start_ms=2200, speech_end_ms=4100,
+        subtitle_start_ms=2200, subtitle_end_ms=4100,
+    )
+    new_words = [
+        replace(
+            word, id=uuid4(), cue_id=other_id,
+            start_ms=word.start_ms + 2100,
+            end_ms=word.end_ms + 2100,
+            original_start_ms=word.original_start_ms + 2100,
+            original_end_ms=word.original_end_ms + 2100,
+        )
+        for word in original_words
+    ]
+    repository.replace_scene_cues(
+        scene.id, [(original, original_words), (other, new_words)]
+    )
+    exchange = ExternalEditorialExchange(repository, tmp_path)
+    exchange._CUES_PER_CHUNK = 1
+    with zipfile.ZipFile(exchange.build_package(scene.id)) as archive:
+        names = sorted(
+            name for name in archive.namelist() if name.endswith("-result.json")
+        )
+        payloads = [json.loads(archive.read(name)) for name in names]
+    for payload in payloads:
+        for suggestion in payload["suggestions"]:
+            suggestion["approved_pt"] = "Tradução contextual."
+            for word in suggestion["word_translations"]:
+                word["pt"] = "tradução"
+    payloads[1]["suggestions"][0]["merge_with_previous"] = True
+    before_revisions = len(repository.list_revisions(scene.id))
+    result = exchange.import_batch(
+        scene.id,
+        [
+            (name, json.dumps(payload).encode("utf-8"))
+            for name, payload in zip(names, payloads, strict=True)
+        ],
+    )
+    assert len(result.suggestions) == 2
+    cues = repository.get_scene_cues(scene.id)
+    assert len(cues) == 1
+    assert cues[0].provenance["ai_merged_from"]
+    assert len(repository.get_cue_words(cues[0].id)) == 6
+    assert len(repository.list_revisions(scene.id)) == before_revisions + 1
