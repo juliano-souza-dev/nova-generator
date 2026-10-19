@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import zipfile
-from io import BytesIO
 from dataclasses import asdict, replace
+from io import BytesIO
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
