@@ -5,12 +5,19 @@ import os
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from nova_generator.api.dependencies import get_enqueue_job, get_session_factory
 from nova_generator.application.use_cases.manage_jobs import EnqueueJob
+from nova_generator.application.use_cases.pre_editorial_package import (
+    PreEditorialPackage,
+    PreparationPackageError,
+)
+from nova_generator.application.use_cases.unified_preparation_exchange import (
+    UnifiedPreparationExchange,
+)
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.media.youtube import YoutubeVideo
@@ -273,3 +280,65 @@ def queue_scene_ingestion(
         idempotency_key=None,
     )
     return JobReference(id=job.id, status=job.status)
+
+
+def _preparation_source(project_id: UUID) -> tuple[Job, dict[str, Any]]:
+    _source(project_id)
+    job = _latest(project_id, "ingest_scene_media", "succeeded")
+    if not job or not isinstance(job.output, dict):
+        raise HTTPException(409, detail="Finalize a transcrição antes de preparar com IA")
+    project_root = get_settings().project_root
+    try:
+        source = PreEditorialPackage(project_root).stage(project_id, UUID(str(job.id)), job.output)
+    except (ValueError, PreparationPackageError) as error:
+        raise HTTPException(422, detail=str(error)) from error
+    return job, source
+
+
+@router.get("/preparation-package")
+def download_pre_editorial_package(project_id: UUID) -> JSONResponse:
+    """The one external JSON can be downloaded before the Editorial workstation."""
+    _job, document = _preparation_source(project_id)
+    return JSONResponse(
+        content=document,
+        headers={"Content-Disposition": 'attachment; filename="nova-unified-ai-input.json"'},
+    )
+
+
+@router.post("/preparation-result")
+async def import_unified_preparation(
+    project_id: UUID, file: Annotated[UploadFile, File()],
+) -> dict[str, Any]:
+    job, _source_document = _preparation_source(project_id)
+    content = await file.read(3_000_001)
+    if len(content) > 3_000_000:
+        raise HTTPException(413, detail="O JSON ultrapassa 3 MB")
+    try:
+        response = json.loads(content)
+    except (UnicodeError, ValueError) as error:
+        raise HTTPException(422, detail="O arquivo enviado não é um JSON válido") from error
+    service = UnifiedPreparationExchange(
+        _projects(), _jobs(), get_settings().project_root
+    )
+    try:
+        return service.import_result(project_id, UUID(str(job.id)), response)
+    except (ValueError, PreparationPackageError) as error:
+        raise HTTPException(422, detail=str(error)) from error
+
+
+@router.post("/preparation-groq")
+def generate_unified_preparation(project_id: UUID) -> dict[str, Any]:
+    job, _source_document = _preparation_source(project_id)
+    service = UnifiedPreparationExchange(
+        _projects(), _jobs(), get_settings().project_root
+    )
+    settings = get_settings()
+    try:
+        return service.generate_groq(
+            project_id,
+            UUID(str(job.id)),
+            api_key=settings.groq_api_key,
+            model=settings.groq_editorial_model,
+        )
+    except PreparationPackageError as error:
+        raise HTTPException(422, detail=str(error)) from error
