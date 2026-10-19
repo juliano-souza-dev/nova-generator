@@ -211,7 +211,9 @@ function NextMediaAction({ media, projectId }: { media: ProjectMedia; projectId:
         `Preparação salva: Editorial e ${result.anki_cards} cards Anki. Revise as próximas etapas sem gerar outro JSON.`,
       );
     } catch (error) {
-      setPreparationError(error instanceof Error ? error.message : "Não foi possível preparar o projeto.");
+      setPreparationError(
+        error instanceof Error ? error.message : "Não foi possível preparar o projeto.",
+      );
     } finally {
       setPreparing(false);
     }
@@ -224,16 +226,17 @@ function NextMediaAction({ media, projectId }: { media: ProjectMedia; projectId:
           <span className="eyebrow">Próximo passo</span>
           <h2>Revise a legenda</h2>
           <p>
-            O corte e a transcrição estão prontos. O Generator já selecionou os blocos
-            de Shadowing. Prepare Editorial, traduções, Anki e mini-aulas uma única
-            vez, antes de revisar.
+            O corte e a transcrição estão prontos. O Generator já selecionou os blocos de Shadowing.
+            Prepare Editorial, traduções, Anki e mini-aulas uma única vez, antes de revisar.
           </p>
           <div className="media-unified-actions">
             <button
               type="button"
               className="primary-button"
               disabled={preparing}
-              onClick={() => void runPreparation(() => studioApi.generateUnifiedPreparation(projectId))}
+              onClick={() =>
+                void runPreparation(() => studioApi.generateUnifiedPreparation(projectId))
+              }
             >
               {preparing ? "Preparando conteúdo…" : "Preparar tudo com Groq"}
             </button>
@@ -252,16 +255,19 @@ function NextMediaAction({ media, projectId }: { media: ProjectMedia; projectId:
                 disabled={preparing}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (file) void runPreparation(
-                    () => studioApi.importUnifiedPreparation(projectId, file),
-                  );
+                  if (file)
+                    void runPreparation(() => studioApi.importUnifiedPreparation(projectId, file));
                   event.target.value = "";
                 }}
               />
             </label>
           </div>
           {preparationNotice && <p role="status">{preparationNotice}</p>}
-          {preparationError && <p role="alert" className="field-error">{preparationError}</p>}
+          {preparationError && (
+            <p role="alert" className="field-error">
+              {preparationError}
+            </p>
+          )}
         </div>
         <Link className="secondary-button" to={media.review_url}>
           Revisar legenda

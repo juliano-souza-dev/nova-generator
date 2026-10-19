@@ -296,9 +296,9 @@ export function ShadowingPage() {
             <div>
               <h2>Substituir a preparação existente</h2>
               <p>
-                O Shadowing já foi preparado após a transcrição. Normalmente basta revisar,
-                ajustar e aprovar. Use estas ferramentas apenas se quiser substituir a
-                seleção automática original.
+                O Shadowing já foi preparado após a transcrição. Normalmente basta revisar, ajustar
+                e aprovar. Use estas ferramentas apenas se quiser substituir a seleção automática
+                original.
               </p>
             </div>
             <div className="shadowing-ai-actions">
@@ -404,11 +404,7 @@ export function ShadowingPage() {
                 type="button"
                 className="primary-button"
                 onClick={() => approval.mutate(active)}
-                disabled={
-                  active.status === "approved" ||
-                  !active.blocks.length ||
-                  isBusy
-                }
+                disabled={active.status === "approved" || !active.blocks.length || isBusy}
               >
                 <Check aria-hidden="true" />{" "}
                 {active.status === "approved" ? "Shadowing aprovado" : "Aprovar Shadowing"}
