@@ -1,5 +1,6 @@
 import json
 import zipfile
+from io import BytesIO
 from dataclasses import replace
 from pathlib import Path
 
@@ -362,3 +363,102 @@ def test_external_speaker_turns_preserve_word_times(tmp_path: Path) -> None:
         word.start_ms for cue in (left, right) for word in repository.get_cue_words(cue.id)
     ]
     assert new_starts == [word.start_ms for word in words_before]
+
+
+def test_external_batch_applies_all_chunks_in_single_atomic_speaker_revision(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'batch.db'}")
+    Base.metadata.create_all(engine)
+    repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repository).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="external-batch",
+        imported_by="test",
+    )
+    scene = repository.get_project_scenes(project_id)[0]
+    exchange = ExternalEditorialExchange(repository, tmp_path)
+    exchange._CUES_PER_CHUNK = 1
+    with zipfile.ZipFile(exchange.build_package(scene.id)) as archive:
+        names = sorted(name for name in archive.namelist() if name.endswith("-result.json"))
+        results = [json.loads(archive.read(name)) for name in names]
+    initial_cues = repository.get_scene_cues(scene.id)
+    initial_revisions = len(repository.list_revisions(scene.id))
+    for payload in results:
+        for suggestion in payload["suggestions"]:
+            suggestion["approved_pt"] = "Tradução do turno."
+            for word in suggestion["word_translations"]:
+                word["pt"] = "tradução"
+    first = results[0]["suggestions"][0]
+    ids = [word["word_id"] for word in first["word_translations"]]
+    assert len(ids) >= 2
+    first["speaker_turns"] = [
+        {
+            "word_ids": ids[:1],
+            "speaker": "speaker_1",
+            "approved_pt": "Primeiro.",
+            "confidence": "medium",
+        },
+        {
+            "word_ids": ids[1:],
+            "speaker": "speaker_2",
+            "approved_pt": "Segundo.",
+            "confidence": "medium",
+        },
+    ]
+    uploads = [
+        (name, json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+        for name, payload in zip(names, results, strict=True)
+    ]
+    with pytest.raises(EditorialAssistanceError, match="all chunks"):
+        exchange.import_batch(scene.id, uploads[:-1])
+    assert repository.get_scene_cues(scene.id) == initial_cues
+    assert len(repository.list_revisions(scene.id)) == initial_revisions
+
+    bad = json.loads(json.dumps(results[-1]))
+    bad["suggestions"][0]["order"] = "invalid"
+    with pytest.raises(EditorialAssistanceError, match="invalid contract"):
+        exchange.import_batch(
+            scene.id,
+            uploads[:-1] + [(names[-1], json.dumps(bad).encode("utf-8"))],
+        )
+    assert repository.get_scene_cues(scene.id) == initial_cues
+
+    output = BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        for name, payload in uploads:
+            archive.writestr(f"chunks/{name}", payload)
+        archive.writestr("INSTRUCOES.md", "Text instructions are ignored.")
+    result = exchange.import_batch(scene.id, [("completed.zip", output.getvalue())])
+    assert len(result.suggestions) == len(initial_cues)
+    assert len(repository.get_scene_cues(scene.id)) == len(initial_cues) + 1
+    assert len(repository.list_revisions(scene.id)) == initial_revisions + 1
+    assert scene_is_editorially_prepared(repository, scene.id)
+
+
+def test_external_batch_rejects_duplicate_chunks_without_mutation(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'duplicate.db'}")
+    Base.metadata.create_all(engine)
+    repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repository).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="external-batch-duplicates",
+        imported_by="test",
+    )
+    scene = repository.get_project_scenes(project_id)[0]
+    exchange = ExternalEditorialExchange(repository, tmp_path)
+    exchange._CUES_PER_CHUNK = 1
+    with zipfile.ZipFile(exchange.build_package(scene.id)) as archive:
+        first = json.loads(
+            archive.read(
+                next(name for name in archive.namelist() if name.endswith("-result.json"))
+            )
+        )
+    original = repository.get_scene_cues(scene.id)
+    serialized = json.dumps(first).encode("utf-8")
+    with pytest.raises(EditorialAssistanceError, match="duplicate chunk_id"):
+        exchange.import_batch(
+            scene.id,
+            [("first.json", serialized), ("duplicate.json", serialized)],
+        )
+    assert repository.get_scene_cues(scene.id) == original
