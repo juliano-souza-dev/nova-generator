@@ -12,6 +12,8 @@ from uuid import UUID
 
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.ports.job_repository import JobRepository
+from nova_generator.application.use_cases.prepare_shadowing import PrepareShadowing
+from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
 from nova_generator.application.use_cases.build_hub_final_anki_audio import (
     add_manual_youtube_anki_audio,
 )
@@ -190,6 +192,66 @@ class PublishAnkiReel:
                 "editorial_sha256": job.input["editorial_sha256"],
             },
         }
+        # Shadowing is transported only after human approval, in its original
+        # Generator 2.0 format. The iHub adapter owns coordinate conversion.
+        shadow_root = self._project_root / str(project_id) / "shadowing"
+        if shadow_root.exists():
+            approved_plans = []
+            exported_ids = {str(cue.id) for cue in cues}
+            shadow_service = PrepareShadowing(self._repository, self._project_root)
+            for scene in scenes:
+                if not (shadow_root / f"{scene.id}.json").is_file():
+                    continue
+                plan = shadow_service.scene(project_id, scene.id)
+                if plan["status"] != "approved":
+                    continue
+                if any(
+                    set(block["cue_ids"]).issubset(exported_ids)
+                    for block in plan["blocks"]
+                ):
+                    approved_plans.append(plan)
+            if approved_plans:
+                base["generatorShadowing"] = approved_plans
+
+        # The one-time AI preparation is kept intact through Editorial and
+        # Shadowing reviews. Only approved mini-lessons may enter publication.
+        materials_root = self._project_root / str(project_id) / "materials"
+        if (materials_root / "approved.json").is_file() or (
+            materials_root / "external-draft.json"
+        ).is_file():
+            review = MaterialsAiExchange(
+                self._repository, self._project_root
+            ).status(project_id)
+            if review["status"] != "approved":
+                raise AnkiPublicationError(
+                    "Aprove os materiais e as mini-aulas do Anki antes de publicar."
+                )
+            enriched = review["document"]
+            card_lookup = {
+                card["cue_id"]: card for card in enriched.get("anki_cards", [])
+            }
+            for cue, published in zip(cues, base["cues"], strict=True):
+                card = card_lookup.get(str(cue.id))
+                if card is None:
+                    continue
+                item = published["anki"]["items"][0]
+                item.update({
+                    "card_type": card.get("card_type", "EXPRESSION"),
+                    "focus": card.get("focus_text") or cue.approved_en,
+                    "meaning": card.get("meaning") or cue.approved_pt,
+                    "marked_en": card.get("marked_en", ""),
+                    "marked_pt": card.get("marked_pt", ""),
+                    "explanation_pt": card.get("explanation_pt", ""),
+                    "example_en": card.get("example_en", ""),
+                    "example_pt": card.get("example_pt", ""),
+                    "tags": card.get("tags", []),
+                })
+            base["pedagogicalContent"] = {
+                "source_sha256": enriched["source_sha256"],
+                "sections": enriched["sections"],
+                "anki_cards": enriched["anki_cards"],
+            }
+
         document = add_manual_youtube_anki_audio(
             base, youtube_video_id=video.video_id, export=export
         )
@@ -203,7 +265,10 @@ class PublishAnkiReel:
                     "Esta exportação já foi vinculada a outro vídeo. "
                     "Crie uma nova exportação para corrigir o vínculo."
                 )
-            return AnkiPublication(path, video.video_id, video.canonical_url)
+            if existing == document:
+                return AnkiPublication(path, video.video_id, video.canonical_url)
+            # Safe re-publication of the same frozen reel may update approved
+            # pedagogical data and Shadowing without re-uploading audio.
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(".tmp.json")
         temporary.write_text(
