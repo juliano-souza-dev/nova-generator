@@ -316,9 +316,11 @@ def refresh_project_source(
     _project, video, _metadata = _source(project_id)
     if video is None:
         raise HTTPException(422, detail="project has no YouTube source")
-    if any(_latest(project_id, kind) and _latest(project_id, kind).status in
-           {"queued", "running", "retryable"}
-           for kind in ("ingest_scene_media", "download_youtube")):
+    if any(
+        (job := _latest(project_id, kind)) is not None
+        and job.status in {"queued", "running", "retryable"}
+        for kind in ("ingest_scene_media", "download_youtube")
+    ):
         raise HTTPException(409, detail="media processing is already active")
     job = enqueue.execute(
         kind="download_youtube",
