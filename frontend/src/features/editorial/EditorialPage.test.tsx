@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   updateCueTiming: vi.fn().mockResolvedValue({}),
   updateWordTiming: vi.fn().mockResolvedValue({}),
   updateWordTranslation: vi.fn().mockResolvedValue({}),
+  updateWordSurface: vi.fn().mockResolvedValue({ approved_en: "I stay." }),
+  fitCueToWords: vi.fn().mockResolvedValue({}),
   groupWordTranslation: vi.fn().mockResolvedValue({}),
   ungroupWordTranslation: vi.fn().mockResolvedValue({}),
   replaceSemanticUnits: vi.fn().mockResolvedValue({}),
@@ -77,6 +79,8 @@ vi.mock("../../lib/studio-api", () => ({
     updateCueTiming: mocks.updateCueTiming,
     updateWordTiming: mocks.updateWordTiming,
     updateWordTranslation: mocks.updateWordTranslation,
+    updateWordSurface: mocks.updateWordSurface,
+    fitCueToWords: mocks.fitCueToWords,
     groupWordTranslation: mocks.groupWordTranslation,
     ungroupWordTranslation: mocks.ungroupWordTranslation,
     replaceSemanticUnits: mocks.replaceSemanticUnits,
@@ -131,6 +135,44 @@ describe("EditorialPage", () => {
         ],
       },
     ]);
+  });
+
+  it("saves a corrected AI word and updates the canonical cue text", async () => {
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(list).getByRole("button", { name: /can't/ }));
+    const field = await screen.findByRole("textbox", { name: "Corrigir palavra em inglês" });
+    fireEvent.change(field, { target: { value: "can" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    await waitFor(() =>
+      expect(mocks.updateWordSurface).toHaveBeenCalledWith("c1", "w1", "can", "local-editor"),
+    );
+  });
+
+  it("offers to adjust a cue whose words exceed its speech interval", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([
+      {
+        ...cue,
+        words: [
+          { ...cue.words[0], start_ms: 50, end_ms: 1900 },
+        ],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const button = await screen.findByRole("button", { name: "Ajustar limites às palavras" });
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(mocks.fitCueToWords).toHaveBeenCalledWith("c1", "local-editor"),
+    );
   });
 
   it("links approved editorial projects to Shadowing instead of Anki materials", async () => {
