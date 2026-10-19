@@ -2002,7 +2002,7 @@ export function EditorialPage() {
                     </label>
                     <p>A correção atualiza o inglês da cue, a timeline e os próximos
                       materiais gerados. O ID e o tempo da palavra são preservados.</p>
-                    {selectedWord.provenance.translation_review_required === true && (
+                    {selectedWord.provenance?.translation_review_required === true && (
                       <div className="word-review-warning">
                         <strong>Tradução precisa de confirmação</strong>
                         <p>Confira o português após a correção do inglês.</p>
