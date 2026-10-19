@@ -45,6 +45,7 @@ export type WordTiming = {
   id: string;
   order: number;
   surface: string;
+  provenance?: Record<string, unknown>;
   start_ms: number;
   end_ms: number;
   pt?: string | null;
