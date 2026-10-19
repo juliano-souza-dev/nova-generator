@@ -147,7 +147,7 @@ describe("EditorialPage", () => {
     fireEvent.click(within(list).getByRole("button", { name: /can't/ }));
     const field = await screen.findByRole("textbox", { name: "Corrigir palavra em inglês" });
     fireEvent.change(field, { target: { value: "can" } });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar palavra" }));
     await waitFor(() =>
       expect(mocks.updateWordSurface).toHaveBeenCalledWith("c1", "w1", "can", "local-editor"),
     );
@@ -169,6 +169,7 @@ describe("EditorialPage", () => {
       </MemoryRouter>,
     );
     const button = await screen.findByRole("button", { name: "Ajustar limites às palavras" });
+    await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
     await waitFor(() =>
       expect(mocks.fitCueToWords).toHaveBeenCalledWith("c1", "local-editor"),
