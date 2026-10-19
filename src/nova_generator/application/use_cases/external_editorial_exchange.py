@@ -67,6 +67,7 @@ class _ExternalSuggestion(BaseModel):
     semantic_units: list[_ExternalSemanticUnit] = Field(default_factory=list)
     trailing: str = ""
     speaker_turns: list[_ExternalSpeakerTurn] = Field(default_factory=list)
+    merge_with_previous: bool = False
 
 
 class _ExternalResult(BaseModel):
@@ -342,7 +343,16 @@ class ExternalEditorialExchange:
         )
         if combined.contract_version == "nova-generator-editorial-suggestions/1.5":
             persist_editorial_chunk_with_speaker_turns(
-                self._repository, combined, turns, author="external-editorial-assistant"
+                self._repository,
+                combined,
+                turns,
+                author="external-editorial-assistant",
+                merge_with_previous={
+                    item.cue_id
+                    for chunk in manifest_chunks
+                    for item in documents[chunk["id"]][0].suggestions
+                    if item.merge_with_previous
+                },
             )
         else:
             persist_editorial_chunk_preparation(
@@ -423,6 +433,9 @@ class ExternalEditorialExchange:
                     for item in document.suggestions
                 },
                 author="external-editorial-assistant",
+                merge_with_previous={
+                    item.cue_id for item in document.suggestions if item.merge_with_previous
+                },
             )
         else:
             persist_editorial_chunk_preparation(
@@ -471,7 +484,12 @@ sequências cuja tradução palavra por palavra soe mecânica. Exemplo: agrupe `
 Mantenha `scene_id`, `input_sha256`, `cue_id`, `order`, a quantidade e a ordem sem alterações.
 Corrija o inglês somente quando necessário e traduza para português brasileiro natural.
 Preserve nomes, acentos, apóstrofos, aspas, vírgulas, pontos, perguntas e reticências.
-Não una, omita ou invente falas. Procure mudanças de interlocutor em cada cue.
+Não invente, apague ou troque a ordem das falas. Organize os turnos com coerência:
+UMA cue pode conter várias frases, vocativos e interjeições da MESMA pessoa.
+Não divida apenas por ponto final, exclamação, respiração ou mudança de assunto.
+"Nunca volto! Lizzie!" deve permanecer na MESMA cue se ambos vierem da mesma voz.
+Só forneça speaker_turns quando houver real mudança de interlocutor; nunca crie
+dois turnos consecutivos com o mesmo speaker. Mantenha rótulos consistentes em toda cena.
 No contrato 1.5, quando houver certeza suficiente, forneça speaker_turns com pelo menos
 dois turnos, cada um contendo speaker, approved_pt, confidence e word_ids contíguos.
 A concatenação dos word_ids de todos os turnos deve corresponder exatamente à sequência
@@ -483,6 +501,13 @@ das palavras na fronteira de cada turno. Preserve gaps e nunca permita sobreposi
 Se não houver evidência suficiente de alternância ou de limites temporais confiáveis,
 deixe speaker_turns vazio e indique a dúvida em notes.
 Evite grupos semânticos que cruzem as fronteiras de speaker_turns.
+Se duas cues ORIGINAIS consecutivas representam a continuação imediata da fala
+da mesma pessoa (por exemplo uma cue só com "Lizzie!"), marque merge_with_previous=true
+na segunda suggestion, preservando seu cue_id e suas palavras. A união será realizada
+pelo Generator após validar o pacote inteiro. Nunca una falas de pessoas distintas
+e nunca una somente porque são frases curtas; leve em conta speaker, vocativo,
+pontuação, contexto e tempo entre as falas. Em caso de dúvida, deixe false em
+merge_with_previous e explique em notes. Não invente tempos, não apague palavras.
 Devolva somente o JSON preenchido. O Generator o importará como sugestão de rascunho.
 """
 
@@ -516,6 +541,7 @@ def _template(
                 ],
                 "semantic_units": [],
                 "speaker_turns": [],
+                "merge_with_previous": False,
                 "trailing": cue.trailing,
             }
             for cue in cues
@@ -534,10 +560,15 @@ Cada palavra precisa manter seu tempo dentro do cue e ter uma tradução context
 Procure ativamente trocas de interlocutor dentro das cues. Não presuma que o áudio
 contém uma só pessoa por cue. Se houver alternância, documente em notes uma proposta
 SPEAKER_SPLIT_PROPOSAL: fronteiras por word_id, trechos, speakers inferidos e grau de
-certeza. NÃO altere os IDs nem divida o JSON 1.4: essa versão ainda é apenas sugestão.
+certeza. Preserve sempre os IDs de origem no JSON de resposta 1.5.
 Para dividir, preencha speaker_turns com word_ids contíguos na ordem, speaker, approved_pt
 e confidence (high, medium ou uncertain). A soma dos turnos deve incluir TODAS as palavras
 da cue, sem repetições. Deixe [] quando não houver mudança confiável.
+NÃO isole vocativos ("Lizzie!") ou interjeições se pertencem à mesma fala.
+Não gere speaker_turns consecutivos com o mesmo interlocutor.
+Para continuar a fala entre duas cues originais, use merge_with_previous=true na
+suggestion da segunda cue; faça isso apenas se for a mesma pessoa e não existir
+pausa significativa. Caso incerto, deixe false e registre o motivo em notes.
 Preserve os tempos originais das palavras; só corrija valores quando houver evidência
 no áudio ou nos timestamps fornecidos. A sequência final deve ser cronológica e sem
 sobreposições; NÃO invente tempos para fazer a divisão parecer precisa.
