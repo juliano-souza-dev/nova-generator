@@ -484,7 +484,7 @@ class MergeCues:
         confirm_same_speaker: bool = False,
     ) -> Cue:
         if not 2 <= len(cue_ids) <= 12 or len(set(cue_ids)) != len(cue_ids):
-            raise EditorialCommandError("merge requires between 2 and 12 distinct cues")
+            raise EditorialCommandError("merge requires between 2 and 12 distinct consecutive cues")
         _split_text(text, "text")
         if any(not value.strip() for value in text.values()):
             raise EditorialCommandError("merged English and Portuguese cannot be empty")
