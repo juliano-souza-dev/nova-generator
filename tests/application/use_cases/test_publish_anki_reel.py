@@ -13,6 +13,7 @@ from nova_generator.application.use_cases.publish_anki_reel import (
     AnkiPublicationError,
     PublishAnkiReel,
 )
+from nova_generator.application.use_cases.prepare_shadowing import PrepareShadowing
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.projects.entities import Cue, Project, Scene, WordTiming, utf8_sha256
 from nova_generator.domain.voices import VoiceProfile
@@ -56,6 +57,7 @@ def test_publication_keeps_literal_text_words_and_card_timeline(
         Scene(scene_id, project_id, 1, 1000, provenance={"ingest_job_id": str(ingest_id)})
     ]
     repository.get_cue_words.return_value = [word]
+    repository.get_scene_cues.return_value = [cue]
     jobs = Mock()
     jobs.get.return_value = Job(
         ingest_id,
@@ -123,6 +125,11 @@ def test_publication_keeps_literal_text_words_and_card_timeline(
         1,
         3,
     )
+    planner = PrepareShadowing(repository, tmp_path / "projects")
+    proposed = planner.scene(project_id, scene_id)
+    approved_shadowing = planner.approve(
+        project_id, scene_id, proposed["source_sha256"], proposed["plan_sha256"]
+    )
     publisher = PublishAnkiReel(repository, jobs, tmp_path / "exports", tmp_path / "projects")
     published = publisher.execute(project_id=project_id, job=job, youtube="bbbbbbbbbbb")
     document = json.loads(published.path.read_text(encoding="utf-8"))
@@ -148,9 +155,19 @@ def test_publication_keeps_literal_text_words_and_card_timeline(
     assert document["ankiAudio"]["youtube"]["video_id"] == "bbbbbbbbbbb"
     assert document["ankiAudio"]["cues"][0]["start_ms"] == 0
     assert document["generator"]["editorial_sha256"] == job.input["editorial_sha256"]
+    # Playback normalization belongs to iHub, not the Generator.
+    assert document["generatorShadowing"] == [approved_shadowing]
     assert publisher.execute(project_id=project_id, job=job, youtube="bbbbbbbbbbb") == published
     with pytest.raises(AnkiPublicationError, match="outro vídeo"):
         publisher.execute(project_id=project_id, job=job, youtube="ccccccccccc")
+    revised = planner.edit(
+        project_id, scene_id, approved_shadowing["source_sha256"],
+        approved_shadowing["plan_sha256"], [[str(cue_id)]],
+    )
+    assert revised["status"] == "draft"
+    # Republish on the same reel updates only the final JSON.
+    publisher.execute(project_id=project_id, job=job, youtube="bbbbbbbbbbb")
+    assert "generatorShadowing" not in json.loads(published.path.read_text(encoding="utf-8"))
     changed = Job(
         job.id,
         job.kind,
