@@ -321,8 +321,8 @@ export function MaterialsPage() {
               <span className="eyebrow">Preparação pedagógica</span>
               <h2>Conteúdo pedagógico da IA externa</h2>
               <p>
-                O contrato inclui sete seções didáticas, exercícios com respostas e cards Anki. Essa
-                etapa complementar é independente da síntese de voz e da exportação Anki.
+                As sete seções e as mini-aulas do Anki já vêm da preparação inicial, antes do
+                Editorial. Aqui você revisa e aprova o conteúdo preservado, sem repetir a IA.
               </p>
             </div>
           </div>
@@ -335,26 +335,30 @@ export function MaterialsPage() {
           {!materialReview.isError && (
             <>
               <div className="materials-ai-actions">
-                <a
-                  className="secondary-button"
-                  href={studioApi.externalMaterialsPackageUrl(projectId)}
-                  download
-                >
-                  <Download aria-hidden="true" /> Baixar contrato para IA externa
-                </a>
-                <label className="materials-ai-import">
-                  Importar conteúdo produzido (.json)
-                  <input
-                    type="file"
-                    accept=".json,application/json"
-                    disabled={importMaterial.isPending}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) importMaterial.mutate(file);
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
+                {materialReview.data?.status === "pending" && (
+                  <>
+                    <a
+                      className="secondary-button"
+                      href={studioApi.externalMaterialsPackageUrl(projectId)}
+                      download
+                    >
+                      <Download aria-hidden="true" /> Recuperação: baixar contrato legado
+                    </a>
+                    <label className="materials-ai-import">
+                      Importar materiais de projeto antigo (.json)
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        disabled={importMaterial.isPending}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) importMaterial.mutate(file);
+                          event.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </>
+                )}
                 <strong>
                   {materialReview.data?.status === "approved"
                     ? "Material aprovado"
