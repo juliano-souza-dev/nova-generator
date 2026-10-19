@@ -15,6 +15,9 @@ from nova_generator.application.ports.job_repository import JobRepository
 from nova_generator.application.use_cases.build_hub_final_anki_audio import (
     add_anki_audio,
 )
+from nova_generator.application.use_cases.build_hub_shadowing_practice import (
+    build_hub_shadowing_practice,
+)
 from nova_generator.application.use_cases.editorial_publication_snapshot import (
     editorial_publication_sha256,
 )
@@ -200,6 +203,21 @@ class PublishAnkiReel:
                 "editorial_sha256": job.input["editorial_sha256"],
             },
         }
+        # Approved Shadowing is transported separately from Anki. Never fabricate
+        # an approved lesson from raw cues, and never publish stale/draft groups.
+        shadowing = build_hub_shadowing_practice(
+            project_id=project_id,
+            repository=self._repository,
+            project_root=self._project_root,
+            scenes=scenes,
+            cues=cues,
+            cue_times=cue_times,
+            playback_start_ms=scene_start,
+            playback_end_ms=scene_end,
+        )
+        if shadowing is not None:
+            base["shadowingPractice"] = shadowing
+
         if job.input.get("generate_complete"):
             pedagogical = self._frozen_pedagogical(job)
             cards = {card["cue_id"]: card for card in pedagogical["anki_cards"]}
@@ -243,7 +261,12 @@ class PublishAnkiReel:
                     "Crie uma nova exportação para corrigir o vínculo."
                 )
                 raise AnkiPublicationError(message)
-            return AnkiPublication(path, current_video, video.canonical_url if video else None, direct_base or None)
+            # Keep the exported file in sync when Shadowing gets approved or
+            # revised after the Anki reel was already linked to this publication.
+            if existing == document:
+                return AnkiPublication(
+                    path, current_video, video.canonical_url if video else None, direct_base or None
+                )
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(".tmp.json")
         temporary.write_text(
