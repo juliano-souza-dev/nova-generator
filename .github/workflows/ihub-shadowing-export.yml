@@ -1,0 +1,22 @@
+name: iHub Shadowing Export Contract
+
+on:
+  push:
+    branches:
+      - fix/quality-gates-and-finish-plan
+    paths:
+      - src/nova_generator/application/use_cases/publish_anki_reel.py
+      - tests/application/use_cases/test_publish_anki_reel.py
+      - .github/workflows/ihub-shadowing-export.yml
+  workflow_dispatch:
+
+jobs:
+  approved-shadowing-transport:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[dev]'
+      - run: python -m pytest tests/application/use_cases/test_publish_anki_reel.py -q
