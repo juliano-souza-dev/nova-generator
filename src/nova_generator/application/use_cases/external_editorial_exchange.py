@@ -18,10 +18,10 @@ from nova_generator.application.ports.editorial_assistant import (
 )
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.use_cases.editorial_assistance import (
-    persist_editorial_chunk_with_speaker_turns,
     EditorialAssistanceError,
     build_editorial_prompt,
     persist_editorial_chunk_preparation,
+    persist_editorial_chunk_with_speaker_turns,
     validate_editorial_result,
 )
 
@@ -56,7 +56,7 @@ class _ExternalSuggestion(BaseModel):
     word_translations: list[_ExternalWordTranslation] = Field(default_factory=list)
     semantic_units: list[_ExternalSemanticUnit] = Field(default_factory=list)
     trailing: str = ""
-    speaker_turns: list["_ExternalSpeakerTurn"] = Field(default_factory=list)
+    speaker_turns: list[_ExternalSpeakerTurn] = Field(default_factory=list)
 
 
 class _ExternalSpeakerTurn(BaseModel):
@@ -183,7 +183,10 @@ class ExternalEditorialExchange:
             document = _ExternalResult.model_validate_json(content)
         except ValidationError as error:
             raise EditorialAssistanceError("external result does not match the contract") from error
-        if document.schema_version in {"nova-generator-editorial-suggestions/1.4", "nova-generator-editorial-suggestions/1.5"}:
+        if document.schema_version in {
+            "nova-generator-editorial-suggestions/1.4",
+            "nova-generator-editorial-suggestions/1.5",
+        }:
             return self._import_chunk(scene_id, document, content)
         input_sha256, cues = build_editorial_prompt(self._repository, scene_id)
         result = _as_result(document)
@@ -275,7 +278,9 @@ class ExternalEditorialExchange:
 def _instructions() -> str:
     return """# Assistência editorial externa em blocos
 
-Este pacote contém somente texto: não há vídeo nem áudio. Por isso, inferências de\ninterlocutores e tempos devem ser conservadoras e baseadas nos word_ids e timestamps disponíveis. Abra cada arquivo
+Este pacote contém somente texto: não há vídeo nem áudio. Por isso, inferências de
+interlocutores e tempos devem ser conservadoras e baseadas nos word_ids e
+timestamps disponíveis. Abra cada arquivo
 `chunks/*-prompt.md`, cole-o em uma conversa nova da Groq e salve a resposta como JSON no
 arquivo `chunks/*-result.json` correspondente. Envie os retornos um a um ao Generator; cada
 bloco é validado e aplicado imediatamente. Nunca misture cues de blocos diferentes.
@@ -361,7 +366,17 @@ sem markdown e sem explicações. Complete o JSON de resposta abaixo sem alterar
 scene_id, input_sha256, chunk_id, cue_id, ordem ou ids. Preserve literalmente pontuação e espaços.
 Use português brasileiro natural e crie unidades semânticas para expressões como phrasal verbs;
 por exemplo, “Can I help?” deve ser “Posso ajudar?”, nunca uma tradução mecânica palavra a palavra.
-Cada palavra precisa manter seu tempo dentro do cue e ter uma tradução contextual.\nProcure ativamente trocas de interlocutor dentro das cues. Não presuma que o áudio\ncontém uma só pessoa por cue. Se houver alternância, documente em notes uma proposta\nSPEAKER_SPLIT_PROPOSAL: fronteiras por word_id, trechos, speakers inferidos e grau de\ncerteza. NÃO altere os IDs nem divida o JSON 1.4: essa versão ainda é apenas sugestão.\nPara dividir, preencha speaker_turns com word_ids contíguos na ordem, speaker, approved_pt\ne confidence (high, medium ou uncertain). A soma dos turnos deve incluir TODAS as palavras\nda cue, sem repetições. Deixe [] quando não houver mudança confiável.\nPreserve os tempos originais das palavras; só corrija valores quando houver evidência\nno áudio ou nos timestamps fornecidos. A sequência final deve ser cronológica e sem\nsobreposições; NÃO invente tempos para fazer a divisão parecer precisa.
+Cada palavra precisa manter seu tempo dentro do cue e ter uma tradução contextual.
+Procure ativamente trocas de interlocutor dentro das cues. Não presuma que o áudio
+contém uma só pessoa por cue. Se houver alternância, documente em notes uma proposta
+SPEAKER_SPLIT_PROPOSAL: fronteiras por word_id, trechos, speakers inferidos e grau de
+certeza. NÃO altere os IDs nem divida o JSON 1.4: essa versão ainda é apenas sugestão.
+Para dividir, preencha speaker_turns com word_ids contíguos na ordem, speaker, approved_pt
+e confidence (high, medium ou uncertain). A soma dos turnos deve incluir TODAS as palavras
+da cue, sem repetições. Deixe [] quando não houver mudança confiável.
+Preserve os tempos originais das palavras; só corrija valores quando houver evidência
+no áudio ou nos timestamps fornecidos. A sequência final deve ser cronológica e sem
+sobreposições; NÃO invente tempos para fazer a divisão parecer precisa.
 
 ENTRADA CANÔNICA:
 ```json
