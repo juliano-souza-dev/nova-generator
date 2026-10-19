@@ -198,6 +198,60 @@ class AdjustCueTiming:
         return updated
 
 
+class FitCueToWords:
+    """Expand a cue to contain every word, without changing a single word timestamp."""
+
+    def __init__(self, repository: EditorialProjectRepository) -> None:
+        self._repository = repository
+
+    def execute(self, cue_id: UUID, *, author: str) -> Cue:
+        cue, words = _cue_with_words(self._repository, cue_id)
+        if not words:
+            raise EditorialCommandError("cue has no words to align")
+        first = min(word.start_ms for word in words)
+        last = max(word.end_ms for word in words)
+        new_start = min(cue.speech_start_ms, first)
+        new_end = max(cue.speech_end_ms, last)
+        if new_start == cue.speech_start_ms and new_end == cue.speech_end_ms:
+            return cue
+        ordered = sorted(self._repository.get_scene_cues(cue.scene_id), key=lambda item: item.order)
+        index = next(i for i, item in enumerate(ordered) if item.id == cue.id)
+        if (index > 0 and ordered[index - 1].speech_end_ms > new_start) or (
+            index + 1 < len(ordered) and ordered[index + 1].speech_start_ms < new_end
+        ):
+            raise EditorialCommandError(
+                "word timestamps cross an adjacent cue. Review the boundary or merge/split "
+                "the affected cues first; automatic adjustment would overlap speakers."
+            )
+        project_id = self._repository.get_scene_project_id(cue.scene_id)
+        scenes = self._repository.get_project_scenes(project_id) if project_id else []
+        scene = next((item for item in scenes if item.id == cue.scene_id), None)
+        if scene is None or new_end > scene.duration_ms:
+            raise EditorialCommandError("word timings exceed scene duration")
+        updated = replace(
+            cue,
+            speech_start_ms=new_start,
+            speech_end_ms=new_end,
+            subtitle_start_ms=min(cue.subtitle_start_ms, new_start),
+            subtitle_end_ms=max(cue.subtitle_end_ms, new_end),
+            revision=cue.revision + 1,
+            provenance={**cue.provenance, "approval": "draft"},
+        )
+        before = _scene_snapshot(self._repository, cue.scene_id)
+        entries = [
+            (
+                updated if item.id == cue.id else item,
+                words if item.id == cue.id else self._repository.get_cue_words(item.id),
+            )
+            for item in ordered
+        ]
+        _replace_structure(
+            self._repository, cue.scene_id, before, entries,
+            command="fit_cue_to_words", author=author,
+        )
+        return updated
+
+
 class AdjustWordTiming:
     def __init__(self, repository: EditorialProjectRepository) -> None:
         self._repository = repository
