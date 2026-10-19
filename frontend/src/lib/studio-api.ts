@@ -121,6 +121,32 @@ export const studioApi = {
       method: "POST",
       body: JSON.stringify({ author }),
     }),
+  splitEditorialCue: (
+    cueId: string,
+    input: {
+      author: string;
+      after_word_id: string;
+      first: { original_en: string; approved_en: string; approved_pt: string };
+      second: { original_en: string; approved_en: string; approved_pt: string };
+      first_speaker?: string;
+      second_speaker?: string;
+    },
+  ) =>
+    apiRequest<Cue[]>(`/editorial/cues/${cueId}/split`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  mergeEditorialCues: (
+    cueIds: string[],
+    input: {
+      author: string;
+      text: { original_en: string; approved_en: string; approved_pt: string };
+    },
+  ) =>
+    apiRequest<Cue>("/editorial/cues/merge-many", {
+      method: "POST",
+      body: JSON.stringify({ cue_ids: cueIds, ...input }),
+    }),
   updateCueText: (
     id: string,
     input: { author: string; approved_en: string; approved_pt: string; approve?: boolean },
