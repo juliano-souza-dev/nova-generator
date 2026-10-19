@@ -13,7 +13,6 @@ from nova_generator.application.use_cases.prepare_shadowing import (
 from nova_generator.application.use_cases.review_asr_candidate import _candidate_entries
 from nova_generator.domain.projects.entities import Scene
 
-
 PROJECT_ID = UUID("00000000-0000-4000-8000-000000001234")
 JOB_ID = UUID("00000000-0000-4000-8000-000000005678")
 
@@ -102,4 +101,5 @@ def test_shadowing_from_transcription_survives_editorial_approval(tmp_path):
     reviewed = shadowing.scene(PROJECT_ID, scene_id)
     assert [block["cue_ids"] for block in reviewed["blocks"]] == early_groups
     assert reviewed["blocks"][0]["pt"] == "Olá!"
-    assert shadowing.approve(PROJECT_ID, scene_id, reviewed["source_sha256"])["status"] == "approved"
+    approved = shadowing.approve(PROJECT_ID, scene_id, reviewed["source_sha256"])
+    assert approved["status"] == "approved"
