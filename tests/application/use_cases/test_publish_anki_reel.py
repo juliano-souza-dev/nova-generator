@@ -9,11 +9,11 @@ import pytest
 from nova_generator.application.use_cases.editorial_publication_snapshot import (
     editorial_publication_sha256,
 )
+from nova_generator.application.use_cases.prepare_shadowing import PrepareShadowing
 from nova_generator.application.use_cases.publish_anki_reel import (
     AnkiPublicationError,
     PublishAnkiReel,
 )
-from nova_generator.application.use_cases.prepare_shadowing import PrepareShadowing
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.projects.entities import Cue, Project, Scene, WordTiming, utf8_sha256
 from nova_generator.domain.voices import VoiceProfile
