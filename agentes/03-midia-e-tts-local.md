@@ -18,6 +18,8 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Expor download, corte, waveform e ASR como jornada derivada dos jobs e artefatos; o ASR usa
   sempre o MP4 cortado e o downloader registra sua estratégia de fallback.
 
+- Preservar o plano Shadowing aprovado sem alterar seus grupos ou pausas ao publicar o reel Anki e os materiais pedagógicos do pacote inicial.
+
 ## Limites
 
 - O Generator não faz upload automático ao YouTube: registra e valida URL/ID após publicação manual.
