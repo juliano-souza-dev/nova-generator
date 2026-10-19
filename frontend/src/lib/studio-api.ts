@@ -172,6 +172,16 @@ export const studioApi = {
       method: "POST",
       body: JSON.stringify({ target_start_ms: targetStartMs, author }),
     }),
+  updateWordSurface: (cueId: string, wordId: string, surface: string, author: string) =>
+    apiRequest<Cue>(`/editorial/cues/${cueId}/words/surface`, {
+      method: "PUT",
+      body: JSON.stringify({ word_id: wordId, surface, author }),
+    }),
+  fitCueToWords: (cueId: string, author: string) =>
+    apiRequest<Cue>(`/editorial/cues/${cueId}/fit-words`, {
+      method: "POST",
+      body: JSON.stringify({ author }),
+    }),
   updateWordTranslation: (cueId: string, wordId: string, pt: string, author: string) =>
     apiRequest<WordTiming[]>(`/editorial/cues/${cueId}/words/translation`, {
       method: "PUT",
