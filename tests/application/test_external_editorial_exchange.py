@@ -304,6 +304,50 @@ def test_external_text_chunks_are_small_and_apply_progressively(tmp_path: Path) 
         for word in suggestion["word_translations"]:
             word["pt"] = "tradução"
     imported = exchange.import_result(scene.id, json.dumps(first).encode("utf-8"))
-    assert imported.contract_version.endswith("/1.4")
+    assert imported.contract_version.endswith("/1.5")
     changed = repository.get_scene_cues(scene.id)[0]
-    assert changed.provenance["editorial_preparation_contract"].endswith("/1.4")
+    assert changed.provenance["editorial_preparation_contract"].endswith("/1.5")
+
+
+def test_external_speaker_turns_split_atomically_without_inventing_word_times(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'speaker-turns.db'}")
+    Base.metadata.create_all(engine)
+    repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repository).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="external-speaker-turns",
+        imported_by="test",
+    )
+    scene = repository.get_project_scenes(project_id)[0]
+    exchange = ExternalEditorialExchange(repository, tmp_path)
+    exchange._CUES_PER_CHUNK = 1
+    with zipfile.ZipFile(exchange.build_package(scene.id)) as archive:
+        result_name = next(name for name in archive.namelist() if name.endswith("-result.json"))
+        payload = json.loads(archive.read(result_name))
+    cue_before = repository.get_scene_cues(scene.id)[0]
+    words_before = repository.get_cue_words(cue_before.id)
+    assert len(words_before) >= 2
+    suggestion = payload["suggestions"][0]
+    suggestion["approved_pt"] = "Tradução completa."
+    for word in suggestion["word_translations"]:
+        word["pt"] = "tradução"
+    ids = [item["word_id"] for item in suggestion["word_translations"]]
+    suggestion["speaker_turns"] = [
+        {"word_ids": ids[:1], "speaker": "speaker_1", "approved_pt": "Eu.", "confidence": "uncertain"},
+        {"word_ids": ids[1:], "speaker": "speaker_2", "approved_pt": "Não posso ir.", "confidence": "medium"},
+    ]
+    original_count = len(repository.get_scene_cues(scene.id))
+    result = exchange.import_result(scene.id, json.dumps(payload).encode("utf-8"))
+    assert result.contract_version.endswith("/1.5")
+    cues = repository.get_scene_cues(scene.id)
+    assert len(cues) == original_count + 1
+    left, right = cues[:2]
+    assert [left.speaker, right.speaker] == ["speaker_1", "speaker_2"]
+    assert left.speech_end_ms <= right.speech_start_ms
+    assert [word.id for cue in (left, right) for word in repository.get_cue_words(cue.id)] == [
+        word.id for word in words_before
+    ]
+    assert [word.start_ms for cue in (left, right) for word in repository.get_cue_words(cue.id)] == [
+        word.start_ms for word in words_before
+    ]
