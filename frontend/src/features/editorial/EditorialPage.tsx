@@ -33,7 +33,14 @@ import "./timeline.css";
 import "./editorial-workspace.css";
 
 type StructureDraft =
-  | { kind: "merge"; count: number; en: string; pt: string }
+  | {
+      kind: "merge";
+      count: number;
+      en: string;
+      pt: string;
+      speaker: string;
+      confirmedSameSpeaker: boolean;
+    }
   | {
       kind: "split";
       afterWordId: string;
@@ -908,6 +915,8 @@ export function EditorialPage() {
     setStructureDraft({
       kind: "merge",
       count: 2,
+      speaker: parts.find((cue) => cue.speaker.trim())?.speaker ?? "",
+      confirmedSameSpeaker: false,
       en: parts.map((cue) => cue.approved_en || cue.original_en).join(" ").trim(),
       pt: parts.map((cue) => cue.approved_pt).join(" ").trim(),
     });
@@ -917,6 +926,8 @@ export function EditorialPage() {
     setStructureDraft({
       kind: "merge",
       count,
+      speaker: parts.find((cue) => cue.speaker.trim())?.speaker ?? "",
+      confirmedSameSpeaker: false,
       en: parts.map((cue) => cue.approved_en || cue.original_en).join(" ").trim(),
       pt: parts.map((cue) => cue.approved_pt).join(" ").trim(),
     });
@@ -947,9 +958,9 @@ export function EditorialPage() {
         const knownSpeakers = new Set(
           selected.map((cue) => cue.speaker.trim().toLowerCase()).filter(Boolean),
         );
-        if (knownSpeakers.size > 1) {
+        if (knownSpeakers.size > 1 && !structureDraft.confirmedSameSpeaker) {
           throw new Error(
-            "As cues têm interlocutores diferentes. Confirme as vozes antes de unir.",
+            "As cues têm interlocutores diferentes. Confirme que são a mesma voz antes de unir.",
           );
         }
         if (!structureDraft.en.trim() || !structureDraft.pt.trim())
@@ -958,6 +969,8 @@ export function EditorialPage() {
           selected.map((cue) => cue.id),
           {
             author,
+            speaker: structureDraft.speaker,
+            confirm_same_speaker: structureDraft.confirmedSameSpeaker,
             text: {
               original_en: selected.map((cue) => cue.original_en).join(" "),
               approved_en: structureDraft.en,
@@ -1448,6 +1461,35 @@ export function EditorialPage() {
                           selectedCue.speech_timing.end_ms,
                       )}. As palavras e seus tempos serão preservados.
                     </p>
+                    <label>
+                      Interlocutor da fala unificada
+                      <input
+                        aria-label="Interlocutor da cue unificada"
+                        value={structureDraft.speaker}
+                        onChange={(event) =>
+                          setStructureDraft({ ...structureDraft, speaker: event.target.value })
+                        }
+                      />
+                    </label>
+                    {new Set(
+                      cues.slice(selectedCueIndex, selectedCueIndex + structureDraft.count)
+                        .map((cue) => cue.speaker.trim().toLowerCase()).filter(Boolean),
+                    ).size > 1 && (
+                      <label className="cue-structure-confirm">
+                        <input
+                          type="checkbox"
+                          checked={structureDraft.confirmedSameSpeaker}
+                          onChange={(event) =>
+                            setStructureDraft({
+                              ...structureDraft,
+                              confirmedSameSpeaker: event.target.checked,
+                            })
+                          }
+                        />
+                        Confirmei no vídeo que estas falas são da mesma pessoa. A IA pode ter
+                        atribuído nomes diferentes.
+                      </label>
+                    )}
                     <label>
                       Inglês unificado
                       <textarea
