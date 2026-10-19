@@ -236,11 +236,13 @@ class PublishAnkiReel:
                     continue
                 item = published["anki"]["items"][0]
                 item.update({
+                    "type": card.get("card_type", "EXPRESSION"),
                     "card_type": card.get("card_type", "EXPRESSION"),
                     "focus": card.get("focus_text") or cue.approved_en,
                     "meaning": card.get("meaning") or cue.approved_pt,
                     "marked_en": card.get("marked_en", ""),
                     "marked_pt": card.get("marked_pt", ""),
+                    "explanation": card.get("explanation_pt", ""),
                     "explanation_pt": card.get("explanation_pt", ""),
                     "example_en": card.get("example_en", ""),
                     "example_pt": card.get("example_pt", ""),
