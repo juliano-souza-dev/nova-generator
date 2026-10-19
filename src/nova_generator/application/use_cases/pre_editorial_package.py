@@ -13,13 +13,13 @@ from pathlib import Path
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+from nova_generator.application.ports.editorial_assistant import EditorialCuePrompt
 from nova_generator.application.use_cases.editorial_assistance import _word_prompts
 from nova_generator.application.use_cases.prepare_shadowing import (
     _automatic_groups,
     _validated_blocks,
 )
 from nova_generator.application.use_cases.review_asr_candidate import _candidate_entries
-from nova_generator.application.ports.editorial_assistant import EditorialCuePrompt
 
 
 CONTRACT = "nova-generator-unified-preparation-input/1.0"
@@ -44,14 +44,18 @@ class PreEditorialPackage:
             return None
         return data if isinstance(data, dict) and data.get("contract") == CONTRACT else None
 
-    def build(self, project_id: UUID, ingest_job_id: UUID, output: dict[str, Any]) -> dict[str, Any]:
+    def build(
+        self, project_id: UUID, ingest_job_id: UUID, output: dict[str, Any]
+    ) -> dict[str, Any]:
         scene_id = uuid5(NAMESPACE_URL, f"nova-generator/asr-scene/{ingest_job_id}")
         entries, duration_ms = _candidate_entries(output, scene_id, ingest_job_id)
         cues = [cue for cue, _ in entries]
         prompts = []
         for cue, words in entries:
             tokens, trailing = _word_prompts(words, cue.original_en)
-            reconstructed = "".join(f"{token.leading}{token.surface}" for token in tokens) + trailing
+            reconstructed = (
+                "".join(f"{token.leading}{token.surface}" for token in tokens) + trailing
+            )
             prompts.append(EditorialCuePrompt(
                 id=str(cue.id),
                 order=cue.order,
@@ -169,7 +173,9 @@ class PreEditorialPackage:
         }
         return output_data
 
-    def stage(self, project_id: UUID, ingest_job_id: UUID, output: dict[str, Any]) -> dict[str, Any]:
+    def stage(
+        self, project_id: UUID, ingest_job_id: UUID, output: dict[str, Any]
+    ) -> dict[str, Any]:
         candidate = self.build(project_id, ingest_job_id, output)
         scene_id = UUID(candidate["scene_id"])
         previous = self.load(project_id, scene_id)
@@ -179,7 +185,9 @@ class PreEditorialPackage:
         path.parent.mkdir(parents=True, exist_ok=True)
         temp = path.with_suffix(".tmp")
         try:
-            temp.write_text(json.dumps(candidate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            temp.write_text(
+                json.dumps(candidate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
             os.replace(temp, path)
         finally:
             temp.unlink(missing_ok=True)
