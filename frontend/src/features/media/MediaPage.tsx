@@ -108,7 +108,7 @@ export function MediaPage() {
                 </p>
               )}
               <JourneySteps media={media.data} />
-              <NextMediaAction media={media.data} />
+              <NextMediaAction media={media.data} projectId={selected!.id} />
               <div className="media-cut-workspace">
                 {media.data.source_ready && (
                   <MediaPlayer
@@ -197,7 +197,25 @@ function SourceStatus({
   );
 }
 
-function NextMediaAction({ media }: { media: ProjectMedia }) {
+function NextMediaAction({ media, projectId }: { media: ProjectMedia; projectId: string }) {
+  const [preparing, setPreparing] = useState(false);
+  const [preparationNotice, setPreparationNotice] = useState("");
+  const [preparationError, setPreparationError] = useState("");
+  async function runPreparation(action: () => Promise<{ status: string; anki_cards: number }>) {
+    setPreparing(true);
+    setPreparationNotice("");
+    setPreparationError("");
+    try {
+      const result = await action();
+      setPreparationNotice(
+        `Preparação salva: Editorial e ${result.anki_cards} cards Anki. Revise as próximas etapas sem gerar outro JSON.`,
+      );
+    } catch (error) {
+      setPreparationError(error instanceof Error ? error.message : "Não foi possível preparar o projeto.");
+    } finally {
+      setPreparing(false);
+    }
+  }
   const processing = ACTIVE.has(media.ingest_status ?? "");
   if (media.can_review && media.review_url) {
     return (
@@ -206,10 +224,46 @@ function NextMediaAction({ media }: { media: ProjectMedia }) {
           <span className="eyebrow">Próximo passo</span>
           <h2>Revise a legenda</h2>
           <p>
-            O corte e a transcrição estão prontos. Abra a revisão editorial para ajustar as falas.
+            O corte e a transcrição estão prontos. O Generator já selecionou os blocos
+            de Shadowing. Prepare Editorial, traduções, Anki e mini-aulas uma única
+            vez, antes de revisar.
           </p>
+          <div className="media-unified-actions">
+            <button
+              type="button"
+              className="primary-button"
+              disabled={preparing}
+              onClick={() => void runPreparation(() => studioApi.generateUnifiedPreparation(projectId))}
+            >
+              {preparing ? "Preparando conteúdo…" : "Preparar tudo com Groq"}
+            </button>
+            <a
+              className="secondary-button"
+              href={studioApi.unifiedPreparationPackageUrl(projectId)}
+              download
+            >
+              <Download aria-hidden="true" /> Baixar JSON único para IA externa
+            </a>
+            <label className="secondary-button">
+              Importar retorno único (.json)
+              <input
+                type="file"
+                accept=".json,application/json"
+                disabled={preparing}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void runPreparation(
+                    () => studioApi.importUnifiedPreparation(projectId, file),
+                  );
+                  event.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+          {preparationNotice && <p role="status">{preparationNotice}</p>}
+          {preparationError && <p role="alert" className="field-error">{preparationError}</p>}
         </div>
-        <Link className="primary-button" to={media.review_url}>
+        <Link className="secondary-button" to={media.review_url}>
           Revisar legenda
         </Link>
       </section>
