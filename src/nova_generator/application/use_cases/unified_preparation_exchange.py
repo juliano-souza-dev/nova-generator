@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -147,6 +148,20 @@ class UnifiedPreparationExchange:
         persist_editorial_preparation(
             self.repository, editorial, author="unified-ai-preparation"
         )
+        # Apply the AI's pedagogical selection once. The operator may later
+        # include/exclude individual Anki cards in Materials as usual.
+        included_ids = {str(card.cue_id) for card in material.anki_cards}
+        for cue in self.repository.get_scene_cues(payload.scene_id):
+            if "anki_included" in cue.provenance:
+                continue
+            updated = replace(
+                cue,
+                provenance={
+                    **cue.provenance,
+                    "anki_included": str(cue.id) in included_ids,
+                },
+            )
+            self.repository.save_cue(updated, self.repository.get_cue_words(cue.id))
         materials_exchange = MaterialsAiExchange(self.repository, self.project_root)
         proposed["source_sha256"] = materials_exchange.package(project_id)["source_sha256"]
         materials_exchange.import_result(project_id, proposed)
