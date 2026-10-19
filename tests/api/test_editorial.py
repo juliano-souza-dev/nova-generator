@@ -301,3 +301,124 @@ def test_ai_semantic_units_are_saved_atomically_as_draft_without_changing_timing
         None,
     ]
     assert [(word.start_ms, word.end_ms) for word in persisted] == original_timings
+
+
+def test_editorial_can_merge_three_consecutive_cues_in_one_revision(client: TestClient) -> None:
+    repository, scene_id, original = _seed(client)
+    words = repository.get_cue_words(original.id)
+    first_split = client.post(
+        f"/api/editorial/cues/{original.id}/split",
+        json={
+            "author": "editor",
+            "after_word_id": str(words[0].id),
+            "first": {
+                "original_en": "I",
+                "approved_en": "I",
+                "approved_pt": "Eu",
+            },
+            "second": {
+                "original_en": "can't go?",
+                "approved_en": "can't go?",
+                "approved_pt": "não posso ir?",
+            },
+        },
+    )
+    assert first_split.status_code == 200, first_split.text
+    left, right = first_split.json()
+    right_words = repository.get_cue_words(
+        next(cue.id for cue in repository.get_scene_cues(scene_id) if str(cue.id) == right["id"])
+    )
+    second_split = client.post(
+        f"/api/editorial/cues/{right['id']}/split",
+        json={
+            "author": "editor",
+            "after_word_id": str(right_words[0].id),
+            "first": {
+                "original_en": "can't",
+                "approved_en": "can't",
+                "approved_pt": "não posso",
+            },
+            "second": {
+                "original_en": "go?",
+                "approved_en": "go?",
+                "approved_pt": "ir?",
+            },
+        },
+    )
+    assert second_split.status_code == 200, second_split.text
+    three = repository.get_scene_cues(scene_id)
+    assert len(three) == 3
+    before_revisions = len(repository.list_revisions(scene_id))
+    merged = client.post(
+        "/api/editorial/cues/merge-many",
+        json={
+            "author": "editor",
+            "cue_ids": [str(cue.id) for cue in three],
+            "text": {
+                "original_en": "I can't go?",
+                "approved_en": "I can't go?",
+                "approved_pt": "Eu não posso ir?",
+            },
+        },
+    )
+    assert merged.status_code == 200, merged.text
+    assert merged.json()["provenance"]["approval"] == "draft"
+    assert len(repository.list_revisions(scene_id)) == before_revisions + 1
+    merged_cue = repository.get_scene_cues(scene_id)[0]
+    assert [word.id for word in repository.get_cue_words(merged_cue.id)] == [
+        word.id for word in words
+    ]
+    assert [(word.start_ms, word.end_ms) for word in repository.get_cue_words(merged_cue.id)] == [
+        (word.start_ms, word.end_ms) for word in words
+    ]
+    revision = repository.list_revisions(scene_id)[-1]
+    undo = client.post(
+        f"/api/editorial/scenes/{scene_id}/undo",
+        json={"author": "editor", "revision_id": str(revision.id)},
+    )
+    assert undo.status_code == 200
+    assert len(undo.json()) == 3
+
+
+def test_editorial_merge_requires_manual_confirmation_for_different_labels(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    result = client.post(
+        f"/api/editorial/cues/{cue.id}/split",
+        json={
+            "author": "editor",
+            "after_word_id": str(words[0].id),
+            "first": {"original_en": "I", "approved_en": "I", "approved_pt": "Eu"},
+            "second": {
+                "original_en": "can't go?",
+                "approved_en": "can't go?",
+                "approved_pt": "não posso ir?",
+            },
+            "first_speaker": "Liam",
+            "second_speaker": "Otis",
+        },
+    )
+    assert result.status_code == 200
+    ids = [str(cue.id) for cue in repository.get_scene_cues(scene_id)]
+    payload = {
+        "author": "editor",
+        "cue_ids": ids,
+        "text": {
+            "original_en": "I can't go?",
+            "approved_en": "I can't go?",
+            "approved_pt": "Eu não posso ir?",
+        },
+        "speaker": "Liam",
+    }
+    denied = client.post("/api/editorial/cues/merge-many", json=payload)
+    assert denied.status_code == 422
+    assert len(repository.get_scene_cues(scene_id)) == 2
+    accepted = client.post(
+        "/api/editorial/cues/merge-many",
+        json={**payload, "confirm_same_speaker": True},
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["speaker"] == "Liam"
+    assert accepted.json()["provenance"]["speaker_verified_by_editor"] is True
