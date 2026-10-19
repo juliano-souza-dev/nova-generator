@@ -309,7 +309,7 @@ def test_external_text_chunks_are_small_and_apply_progressively(tmp_path: Path) 
     assert changed.provenance["editorial_preparation_contract"].endswith("/1.5")
 
 
-def test_external_speaker_turns_split_atomically_without_inventing_word_times(tmp_path: Path) -> None:
+def test_external_speaker_turns_preserve_word_times(tmp_path: Path) -> None:
     engine = create_database_engine(f"sqlite:///{tmp_path / 'speaker-turns.db'}")
     Base.metadata.create_all(engine)
     repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
@@ -334,8 +334,18 @@ def test_external_speaker_turns_split_atomically_without_inventing_word_times(tm
         word["pt"] = "tradução"
     ids = [item["word_id"] for item in suggestion["word_translations"]]
     suggestion["speaker_turns"] = [
-        {"word_ids": ids[:1], "speaker": "speaker_1", "approved_pt": "Eu.", "confidence": "uncertain"},
-        {"word_ids": ids[1:], "speaker": "speaker_2", "approved_pt": "Não posso ir.", "confidence": "medium"},
+        {
+            "word_ids": ids[:1],
+            "speaker": "speaker_1",
+            "approved_pt": "Eu.",
+            "confidence": "uncertain",
+        },
+        {
+            "word_ids": ids[1:],
+            "speaker": "speaker_2",
+            "approved_pt": "Não posso ir.",
+            "confidence": "medium",
+        },
     ]
     original_count = len(repository.get_scene_cues(scene.id))
     result = exchange.import_result(scene.id, json.dumps(payload).encode("utf-8"))
@@ -348,6 +358,7 @@ def test_external_speaker_turns_split_atomically_without_inventing_word_times(tm
     assert [word.id for cue in (left, right) for word in repository.get_cue_words(cue.id)] == [
         word.id for word in words_before
     ]
-    assert [word.start_ms for cue in (left, right) for word in repository.get_cue_words(cue.id)] == [
-        word.start_ms for word in words_before
+    new_starts = [
+        word.start_ms for cue in (left, right) for word in repository.get_cue_words(cue.id)
     ]
+    assert new_starts == [word.start_ms for word in words_before]
