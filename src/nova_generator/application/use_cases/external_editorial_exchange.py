@@ -164,7 +164,25 @@ class ExternalEditorialExchange:
                 json.dumps(legacy_template, ensure_ascii=False, indent=2) + "\n",
             )
             for item, chunk in zip(manifest["chunks"], chunks, strict=True):
-                chunk_source = {**source, "chunk": item, "cues": [asdict(cue) for cue in chunk]}
+                offset = (item["index"] - 1) * self._CUES_PER_CHUNK
+                previous = cues[offset - 1] if offset > 0 else None
+                following_at = offset + len(chunk)
+                following = cues[following_at] if following_at < len(cues) else None
+                chunk_source = {
+                    **source,
+                    "chunk": item,
+                    "cues": [asdict(cue) for cue in chunk],
+                    "neighbor_context": {
+                        "previous": (
+                            {"cue_id": previous.id, "text": previous.current_en or previous.original_en}
+                            if previous else None
+                        ),
+                        "next": (
+                            {"cue_id": following.id, "text": following.current_en or following.original_en}
+                            if following else None
+                        ),
+                    },
+                }
                 template = _template(scene_id, input_sha256, item["id"], chunk)
                 prefix = f"chunks/{item['index']:03d}-{item['id']}"
                 archive.writestr(
@@ -568,7 +586,8 @@ NÃO isole vocativos ("Lizzie!") ou interjeições se pertencem à mesma fala.
 Não gere speaker_turns consecutivos com o mesmo interlocutor.
 Para continuar a fala entre duas cues originais, use merge_with_previous=true na
 suggestion da segunda cue; faça isso apenas se for a mesma pessoa e não existir
-pausa significativa. Caso incerto, deixe false e registre o motivo em notes.
+pausa significativa. Use neighbor_context.previous/next para avaliar limites
+entre blocos, mas nunca devolva sugestões extras para cues fora do bloco. Caso incerto, deixe false e registre o motivo em notes.
 Preserve os tempos originais das palavras; só corrija valores quando houver evidência
 no áudio ou nos timestamps fornecidos. A sequência final deve ser cronológica e sem
 sobreposições; NÃO invente tempos para fazer a divisão parecer precisa.
