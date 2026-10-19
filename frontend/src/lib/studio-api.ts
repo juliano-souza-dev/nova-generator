@@ -52,6 +52,11 @@ export const studioApi = {
     apiRequest<ProjectMedia>(`/projects/${id}/media/start`, { method: "POST" }),
   downloadProjectMedia: (id: string) =>
     apiRequest<MediaJobReference>(`/projects/${id}/media/download`, { method: "POST" }),
+  reprocessProjectMedia: (id: string, input: { start_ms: number; end_ms: number; language: string }) =>
+    apiRequest<MediaJobReference>(`/projects/${id}/media/reprocess`, {
+      method: "POST",
+      body: JSON.stringify({ ...input, confirm_reset: true }),
+    }),
   ingestProjectMedia: (id: string, input: { start_ms: number; end_ms: number; language: string }) =>
     apiRequest<MediaJobReference>(`/projects/${id}/media/ingest`, {
       method: "POST",
