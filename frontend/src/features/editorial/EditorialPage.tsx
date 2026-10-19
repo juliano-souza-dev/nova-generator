@@ -286,7 +286,7 @@ export function EditorialPage() {
           approved_en:
             wordSurfaceDirty && !textDirty
               ? cue.words.map((word) => word.surface).join("") +
-                String(cue.provenance.editorial_preparation_trailing ?? "")
+                String(cue.provenance?.editorial_preparation_trailing ?? "")
               : approvedEn,
           approved_pt: approvedPt,
         }
