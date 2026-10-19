@@ -338,6 +338,39 @@ async def import_external_editorial_result(
     )
 
 
+
+@router.post("/scenes/{scene_id}/external-results", response_model=EditorialAssistanceResponse)
+async def import_external_editorial_results(
+    scene_id: UUID,
+    exchange: Annotated[ExternalEditorialExchange, Depends(get_external_editorial_exchange)],
+    files: Annotated[list[UploadFile], File()],
+) -> EditorialAssistanceResponse:
+    """Upload JSON results together (or ZIP), with all-or-nothing scene persistence."""
+    if not files or len(files) > 24:
+        raise HTTPException(422, detail="select between 1 and 24 JSON/ZIP files")
+    uploads = []
+    for file in files:
+        payload = await file.read(10_000_001)
+        if len(payload) > 10_000_000:
+            raise HTTPException(413, detail=f"{file.filename}: upload exceeds 10 MB")
+        uploads.append((file.filename or "unnamed", payload))
+    try:
+        result = exchange.import_batch(scene_id, uploads)
+    except EditorialAssistanceError as error:
+        raise HTTPException(422, detail=str(error)) from error
+    return EditorialAssistanceResponse(
+        scene_id=result.scene_id,
+        input_sha256=result.input_sha256,
+        provider=result.provider,
+        model=result.model,
+        rate_limits=result.rate_limits,
+        suggestions=[
+            EditorialSuggestionResponse.model_validate(asdict(item))
+            for item in result.suggestions
+        ],
+    )
+
+
 @router.get("/projects/{project_id}/scenes", response_model=list[SceneResponse])
 def list_scenes(
     project_id: UUID,
