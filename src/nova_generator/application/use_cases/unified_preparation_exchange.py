@@ -16,8 +16,8 @@ from nova_generator.application.use_cases.editorial_assistance import (
     validate_editorial_result,
 )
 from nova_generator.application.use_cases.external_editorial_exchange import (
-    _ExternalResult,
     _as_result,
+    _ExternalResult,
 )
 from nova_generator.application.use_cases.materials_ai_exchange import (
     MaterialOutput,
@@ -68,9 +68,13 @@ class UnifiedPreparationExchange:
             or payload.input_sha256 != original["input_sha256"]
             or str(ingest_job_id) != original["ingest_job_id"]
         ):
-            raise PreparationPackageError("O retorno pertence a outro projeto ou a uma transcrição antiga")
+            raise PreparationPackageError(
+                "O retorno pertence a outro projeto ou a uma transcrição antiga"
+            )
 
-        result_file = self.project_root / str(project_id) / "preparation" / f"{payload.scene_id}-result.json"
+        result_file = (
+            self.project_root / str(project_id) / "preparation" / f"{payload.scene_id}-result.json"
+        )
         if result_file.is_file():
             previous = json.loads(result_file.read_text(encoding="utf-8"))
             if previous == raw:
@@ -146,7 +150,9 @@ class UnifiedPreparationExchange:
         materials_exchange = MaterialsAiExchange(self.repository, self.project_root)
         proposed["source_sha256"] = materials_exchange.package(project_id)["source_sha256"]
         materials_exchange.import_result(project_id, proposed)
-        result_file.write_text(json.dumps(raw, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        result_file.write_text(
+            json.dumps(raw, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
         return {
             "status": "draft",
             "scene_id": str(payload.scene_id),
@@ -179,9 +185,10 @@ class UnifiedPreparationExchange:
                         "content": (
                             "You are a bilingual editorial and English learning curriculum editor. "
                             "Return only one JSON object matching instructions.output_shape. "
-                            "Correct and translate all cues with word-level alignment and contextual "
-                            "semantic units. Produce the seven sections with answers and selected Anki "
-                            "mini-lessons in the SAME response. Never modify Shadowing. Preserve every "
+                            "Correct and translate all cues with word-level alignment "
+                            "and contextual semantic units. Produce seven sections "
+                            "with answers and selected Anki mini-lessons in the same "
+                            "response. Never modify Shadowing. Preserve every "
                             "ID, timestamp and literal spacing rule."
                         ),
                     },
