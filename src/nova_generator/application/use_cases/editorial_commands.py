@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import re
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -11,6 +12,32 @@ from nova_generator.domain.projects.entities import Cue, EditorialRevision, Word
 
 class EditorialCommandError(ValueError):
     """A command would violate a published editorial invariant."""
+
+
+def _tokens_for_existing_words(text: str, words: list[WordTiming]) -> list[str]:
+    """Reconcile corrected cue text with existing words without inventing timestamps."""
+    tokens = re.findall(r"\s*\S+", text)
+    if len(tokens) != len(words):
+        raise EditorialCommandError(
+            "approved English has a different number of words. "
+            "Review word segmentation before saving; timings cannot be guessed."
+        )
+    if not tokens or "".join(tokens) != text:
+        raise EditorialCommandError("approved English has invalid spacing or trailing whitespace")
+    return tokens
+
+
+def _changed_word_provenance(word: WordTiming, surface: str) -> dict[str, Any]:
+    provenance = dict(word.provenance)
+    if surface == word.surface:
+        return provenance
+    provenance.setdefault("editorial_original_surface", word.surface)
+    provenance["editorial_word_edited"] = True
+    old_lexeme = re.sub(r"[^\w]+", "", word.surface).casefold()
+    new_lexeme = re.sub(r"[^\w]+", "", surface).casefold()
+    if old_lexeme != new_lexeme:
+        provenance["translation_review_required"] = True
+    return provenance
 
 
 class EditApprovedText:
@@ -32,14 +59,41 @@ class EditApprovedText:
         if not approved_en.strip() or not approved_pt.strip():
             raise EditorialCommandError("editorial text requires non-empty EN and PT text")
         before = _scene_snapshot(self._repository, cue.scene_id)
+        current_text = (
+            "".join(word.surface for word in words)
+            + str(cue.provenance.get("editorial_preparation_trailing", ""))
+        )
+        updated_words = words
+        provenance = dict(cue.provenance)
+        if approved_en != current_text:
+            tokens = _tokens_for_existing_words(approved_en, words)
+            updated_words = [
+                replace(
+                    word,
+                    surface=token,
+                    provenance=_changed_word_provenance(word, token),
+                )
+                for word, token in zip(words, tokens, strict=True)
+            ]
+            provenance["editorial_preparation_trailing"] = ""
+            provenance["editorial_text_manually_corrected"] = True
+            provenance["editorial_text_ai_reference"] = cue.provenance.get(
+                "editorial_text_ai_reference", cue.approved_en
+            )
+        if approve and any(
+            word.provenance.get("translation_review_required") for word in updated_words
+        ):
+            raise EditorialCommandError(
+                "review translations for the corrected words before approving the cue"
+            )
         updated = replace(
             cue,
             approved_en=approved_en,
             approved_pt=approved_pt,
             revision=cue.revision + 1,
-            provenance={**cue.provenance, "approval": "approved" if approve else "draft"},
+            provenance={**provenance, "approval": "approved" if approve else "draft"},
         )
-        self._repository.save_cue(updated, words)
+        self._repository.save_cue(updated, updated_words)
         _record(
             self._repository,
             updated,
@@ -48,6 +102,65 @@ class EditApprovedText:
             before,
         )
         return updated
+
+
+class EditWordSurface:
+    """Correct a word everywhere without changing its ID, order or recorded times."""
+
+    def __init__(self, repository: EditorialProjectRepository) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        cue_id: UUID,
+        *,
+        word_id: UUID,
+        surface: str,
+        author: str,
+    ) -> Cue:
+        cue, words = _cue_with_words(self._repository, cue_id)
+        index = next((i for i, word in enumerate(words) if word.id == word_id), None)
+        if index is None:
+            raise EditorialCommandError("word not found in cue")
+        _literal(surface, "surface")
+        if not surface.strip() or len(surface.split()) != 1:
+            raise EditorialCommandError(
+                "word correction must contain exactly one word; use cue reconciliation "
+                "or manual segmentation to change word count"
+            )
+        target = words[index]
+        leading = re.match(r"\s*", target.surface)
+        preserved_space = leading.group(0) if leading else ""
+        updated_surface = preserved_space + surface.strip()
+        if updated_surface == target.surface:
+            return cue
+        updated_words = list(words)
+        updated_words[index] = replace(
+            target,
+            surface=updated_surface,
+            provenance=_changed_word_provenance(target, updated_surface),
+        )
+        before = _scene_snapshot(self._repository, cue.scene_id)
+        new_text = (
+            "".join(word.surface for word in updated_words)
+            + str(cue.provenance.get("editorial_preparation_trailing", ""))
+        )
+        new_cue = replace(
+            cue,
+            approved_en=new_text,
+            revision=cue.revision + 1,
+            provenance={
+                **cue.provenance,
+                "approval": "draft",
+                "editorial_text_manually_corrected": True,
+                "editorial_text_ai_reference": cue.provenance.get(
+                    "editorial_text_ai_reference", cue.approved_en
+                ),
+            },
+        )
+        self._repository.save_cue(new_cue, updated_words)
+        _record(self._repository, new_cue, "edit_word_surface", author, before)
+        return new_cue
 
 
 class AdjustCueTiming:
@@ -169,6 +282,7 @@ class EditWordTranslation:
         for position in members:
             provenance = dict(updated[position].provenance)
             provenance["pt"] = pt if position == lead else None
+            provenance.pop("translation_review_required", None)
             updated[position] = replace(updated[position], provenance=provenance)
         changed_cue = _word_edit_draft(cue)
         self._repository.save_cue(changed_cue, updated)
