@@ -141,6 +141,8 @@ export const studioApi = {
     input: {
       author: string;
       text: { original_en: string; approved_en: string; approved_pt: string };
+      speaker?: string;
+      confirm_same_speaker?: boolean;
     },
   ) =>
     apiRequest<Cue>("/editorial/cues/merge-many", {
