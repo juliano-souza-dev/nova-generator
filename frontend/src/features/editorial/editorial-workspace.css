@@ -1113,3 +1113,64 @@
   gap: 0.75rem;
   margin-top: 1rem;
 }
+
+.cue-structure {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0.75rem 0 1rem;
+}
+.cue-structure-buttons,
+.cue-structure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cue-structure-editor {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface, #101b2f);
+}
+.cue-structure-editor h3,
+.cue-structure-editor h4,
+.cue-structure-editor p {
+  margin: 0;
+}
+.cue-structure-editor p {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.cue-structure-editor label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.cue-structure-editor select,
+.cue-structure-editor input,
+.cue-structure-editor textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem;
+  color: var(--text);
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.cue-structure-halves {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.cue-structure-halves > div {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}
+@media (max-width: 780px) {
+  .cue-structure-halves {
+    grid-template-columns: 1fr;
+  }
+}
