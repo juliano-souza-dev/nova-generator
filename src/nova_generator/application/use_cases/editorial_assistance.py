@@ -5,6 +5,7 @@ import re
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from hashlib import sha256
+from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from nova_generator.application.ports.editorial_assistant import (
@@ -361,7 +362,7 @@ def persist_editorial_chunk_preparation(
 def persist_editorial_chunk_with_speaker_turns(
     repository: EditorialProjectRepository,
     result: EditorialAssistanceResult,
-    turns_by_cue: dict[str, list[dict[str, object]]],
+    turns_by_cue: dict[str, list[dict[str, Any]]],
     *,
     author: str,
 ) -> bool:
