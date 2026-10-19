@@ -13,6 +13,8 @@ from nova_generator.api.dependencies import (
     get_adjust_cue_timing,
     get_adjust_word_timing,
     get_edit_approved_text,
+    get_edit_word_surface,
+    get_fit_cue_to_words,
     get_edit_word_translation,
     get_editorial_repository,
     get_enqueue_job,
@@ -38,6 +40,8 @@ from nova_generator.application.use_cases.editorial_commands import (
     AdjustCueTiming,
     AdjustWordTiming,
     EditApprovedText,
+    EditWordSurface,
+    FitCueToWords,
     EditorialCommandError,
     EditWordTranslation,
     GroupWordTranslation,
@@ -103,6 +107,11 @@ class RealignCueRequest(ActorRequest):
 class WordTranslationRequest(ActorRequest):
     word_id: UUID
     pt: str = Field(min_length=1)
+
+
+class WordSurfaceRequest(ActorRequest):
+    word_id: UUID
+    surface: str = Field(min_length=1)
 
 
 class GroupWordRequest(WordTranslationRequest):
@@ -554,6 +563,30 @@ def realign_cue(
 ) -> dict[str, Any]:
     _require_prepared_cue(repository, cue_id)
     cue = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
+    return _cue_response(cue)
+
+
+@router.put("/cues/{cue_id}/words/surface", response_model=CueResponse)
+def edit_word_surface(
+    cue_id: UUID,
+    payload: WordSurfaceRequest,
+    use_case: Annotated[EditWordSurface, Depends(get_edit_word_surface)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+) -> dict[str, Any]:
+    _require_prepared_cue(repository, cue_id)
+    cue = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
+    return _cue_response(cue)
+
+
+@router.post("/cues/{cue_id}/fit-words", response_model=CueResponse)
+def fit_cue_to_words(
+    cue_id: UUID,
+    payload: ActorRequest,
+    use_case: Annotated[FitCueToWords, Depends(get_fit_cue_to_words)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+) -> dict[str, Any]:
+    _require_prepared_cue(repository, cue_id)
+    cue = _command(lambda: use_case.execute(cue_id, author=payload.author))
     return _cue_response(cue)
 
 
