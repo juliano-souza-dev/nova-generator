@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   startEditorialAssistance: vi.fn(),
   importExternalEditorialResult: vi.fn(),
   importExternalEditorialResults: vi.fn(),
+  mergeEditorialCues: vi.fn(),
+  splitEditorialCue: vi.fn(),
   job: vi.fn(),
   editorialCues: vi.fn().mockResolvedValue([
     {
@@ -84,6 +86,8 @@ vi.mock("../../lib/studio-api", () => ({
     startEditorialAssistance: mocks.startEditorialAssistance,
     importExternalEditorialResult: mocks.importExternalEditorialResult,
     importExternalEditorialResults: mocks.importExternalEditorialResults,
+    mergeEditorialCues: mocks.mergeEditorialCues,
+    splitEditorialCue: mocks.splitEditorialCue,
     job: mocks.job,
   },
 }));
@@ -299,6 +303,94 @@ describe("EditorialPage", () => {
       expect(mocks.importExternalEditorialResult).not.toHaveBeenCalled();
     });
     expect(await screen.findByText(/Todos os blocos foram validados/)).toBeInTheDocument();
+  });
+
+  it("joins adjacent cues from the editor without changing their individual word timings", async () => {
+    const first = (await mocks.editorialCues())[0];
+    const second = {
+      ...first,
+      id: "c2",
+      order: 2,
+      original_en: "Lizzie!",
+      approved_en: "Lizzie!",
+      approved_pt: "Lizzie!",
+      speech_timing: { start_ms: 1900, end_ms: 2200 },
+      subtitle_timing: { start_ms: 1900, end_ms: 2200 },
+      words: [
+        { id: "w2", order: 1, surface: "Lizzie!", start_ms: 1900, end_ms: 2200, pt: "Lizzie!" },
+      ],
+    };
+    mocks.editorialCues.mockResolvedValueOnce([first, second]);
+    mocks.mergeEditorialCues.mockResolvedValueOnce({ id: "merged" });
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Unir com próximas" }));
+    expect(screen.getByRole("heading", { name: "Unir cues consecutivas" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Português unificado" }), {
+      target: { value: "Não até eu falar com você, Lizzie!" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar união" }));
+    await waitFor(() =>
+      expect(mocks.mergeEditorialCues).toHaveBeenCalledWith(["c1", "c2"], {
+        author: "local-editor",
+        speaker: "",
+        confirm_same_speaker: false,
+        text: {
+          original_en: "“I can't… go?” Lizzie!",
+          approved_en: "“I can't… go?” Lizzie!",
+          approved_pt: "Não até eu falar com você, Lizzie!",
+        },
+      }),
+    );
+  });
+
+  it("splits a cue after a chosen word and asks for both translations", async () => {
+    const original = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([
+      {
+        ...original,
+        words: [
+          { id: "w1", order: 1, surface: "I", start_ms: 100, end_ms: 400, pt: "Eu" },
+          {
+            id: "w2",
+            order: 2,
+            surface: " can't go?",
+            start_ms: 500,
+            end_ms: 1600,
+            pt: "não posso ir?",
+          },
+        ],
+      },
+    ]);
+    mocks.splitEditorialCue.mockResolvedValueOnce([{ id: "left" }, { id: "right" }]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Dividir por palavra" }));
+    expect(screen.getByRole("combobox", { name: "Palavra onde dividir" })).toHaveValue("w1");
+    fireEvent.change(screen.getByRole("textbox", { name: "Português da primeira parte" }), {
+      target: { value: "Eu" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Português da segunda parte" }), {
+      target: { value: "não posso ir?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar divisão" }));
+    await waitFor(() =>
+      expect(mocks.splitEditorialCue).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({
+          author: "local-editor",
+          after_word_id: "w1",
+          first: expect.objectContaining({ approved_pt: "Eu" }),
+          second: expect.objectContaining({ approved_pt: "não posso ir?" }),
+        }),
+      ),
+    );
   });
 
   it("explains a validated source and starts processing from the empty state", async () => {
