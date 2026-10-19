@@ -349,6 +349,45 @@ describe("EditorialPage", () => {
     );
   });
 
+  it("can merge a short selected cue directly with the previous one", async () => {
+    const first = (await mocks.editorialCues())[0];
+    const last = {
+      ...first,
+      id: "c2",
+      order: 2,
+      original_en: "Lizzie!",
+      approved_en: "Lizzie!",
+      approved_pt: "Lizzie!",
+      speech_timing: { start_ms: 1900, end_ms: 2200 },
+      subtitle_timing: { start_ms: 1900, end_ms: 2200 },
+      words: [
+        { id: "w2", order: 1, surface: "Lizzie!", start_ms: 1900, end_ms: 2200, pt: "Lizzie!" },
+      ],
+    };
+    mocks.editorialCues.mockResolvedValueOnce([first, last]);
+    mocks.mergeEditorialCues.mockResolvedValueOnce({ id: "merged" });
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const cueList = await screen.findByRole("navigation", { name: "Lista de cues" });
+    const nextCue = within(cueList).getAllByRole("button")[1];
+    await waitFor(() => expect(nextCue).toBeEnabled());
+    fireEvent.click(nextCue);
+    const mergePrevious = await screen.findByRole("button", { name: "Unir com anterior" });
+    await waitFor(() => expect(mergePrevious).toBeEnabled());
+    fireEvent.click(mergePrevious);
+    expect(await screen.findByRole("heading", { name: "Unir cues consecutivas" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar união" }));
+    await waitFor(() =>
+      expect(mocks.mergeEditorialCues).toHaveBeenCalledWith(
+        ["c1", "c2"],
+        expect.objectContaining({ author: "local-editor" }),
+      ),
+    );
+  });
+
   it("splits a cue after a chosen word and asks for both translations", async () => {
     const original = (await mocks.editorialCues())[0];
     mocks.editorialCues.mockResolvedValueOnce([
