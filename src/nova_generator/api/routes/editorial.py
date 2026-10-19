@@ -133,11 +133,18 @@ class SplitCueRequest(ActorRequest):
     after_word_id: UUID
     first: CueText
     second: CueText
+    first_speaker: str | None = None
+    second_speaker: str | None = None
 
 
 class MergeCueRequest(ActorRequest):
     first_cue_id: UUID
     second_cue_id: UUID
+    text: CueText
+
+
+class MergeManyCueRequest(ActorRequest):
+    cue_ids: list[UUID] = Field(min_length=2, max_length=12)
     text: CueText
 
 
@@ -618,9 +625,29 @@ def split_cue(
             first=payload.first.model_dump(),
             second=payload.second.model_dump(),
             author=payload.author,
+            first_speaker=payload.first_speaker,
+            second_speaker=payload.second_speaker,
         )
     )
     return [_cue_response(cue) for cue in cues]
+
+
+@router.post("/cues/merge-many", response_model=CueResponse)
+def merge_many_cues(
+    payload: MergeManyCueRequest,
+    use_case: Annotated[MergeCues, Depends(get_merge_cues)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+) -> dict[str, Any]:
+    for cue_id in payload.cue_ids:
+        _require_prepared_cue(repository, cue_id)
+    cue = _command(
+        lambda: use_case.execute_many(
+            payload.cue_ids,
+            text=payload.text.model_dump(),
+            author=payload.author,
+        )
+    )
+    return _cue_response(cue)
 
 
 @router.post("/cues/merge", response_model=CueResponse)
