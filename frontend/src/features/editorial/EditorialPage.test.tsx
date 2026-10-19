@@ -327,7 +327,9 @@ describe("EditorialPage", () => {
         <EditorialPage />
       </MemoryRouter>,
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Unir com próximas" }));
+    const mergeButton = await screen.findByRole("button", { name: "Unir com próximas" });
+    await waitFor(() => expect(mergeButton).toBeEnabled());
+    fireEvent.click(mergeButton);
     expect(screen.getByRole("heading", { name: "Unir cues consecutivas" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Português unificado" }), {
       target: { value: "Não até eu falar com você, Lizzie!" },
@@ -371,7 +373,9 @@ describe("EditorialPage", () => {
         <EditorialPage />
       </MemoryRouter>,
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Dividir por palavra" }));
+    const splitButton = await screen.findByRole("button", { name: "Dividir por palavra" });
+    await waitFor(() => expect(splitButton).toBeEnabled());
+    fireEvent.click(splitButton);
     expect(screen.getByRole("combobox", { name: "Palavra onde dividir" })).toHaveValue("w1");
     fireEvent.change(screen.getByRole("textbox", { name: "Português da primeira parte" }), {
       target: { value: "Eu" },
