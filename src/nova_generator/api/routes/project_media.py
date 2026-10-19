@@ -130,10 +130,10 @@ def get_project_media(project_id: UUID) -> MediaSnapshot:
         state, step = "asr_processing", "cut_and_asr"
     elif output and output.get("transcript_candidate"):
         state, step = "ready_for_review", "review"
-    elif metadata:
-        state, step = "cut_required", "cut"
     elif download_active:
         state, step = "source_processing", "source"
+    elif metadata:
+        state, step = "cut_required", "cut"
     else:
         state, step = "source_validated", "source"
     review_url = f"/editorial?project={project_id}" if state == "ready_for_review" else None
@@ -141,7 +141,7 @@ def get_project_media(project_id: UUID) -> MediaSnapshot:
         state=state,
         current_step=step,
         can_start=state in {"source_validated", "failed"} and not metadata,
-        can_cut=metadata is not None and not ingest_active,
+        can_cut=metadata is not None and not ingest_active and not download_active,
         can_review=state == "ready_for_review",
         review_url=review_url,
         source_ready=metadata is not None,
@@ -302,3 +302,31 @@ def reprocess_project_media(
         if scene.provenance.get("source") == "asr_candidate":
             repo.replace_scene_cues(scene.id, [])
     return reference
+
+
+@router.post("/refresh-source", response_model=JobReference, status_code=status.HTTP_202_ACCEPTED)
+def refresh_project_source(
+    project_id: UUID,
+    enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
+    confirm_reset: bool = False,
+) -> JobReference:
+    """Explicitly redownload YouTube video and invalidate ASR editorial drafts."""
+    if not confirm_reset:
+        raise HTTPException(422, detail="explicit confirmation is required to refresh the source")
+    _project, video, _metadata = _source(project_id)
+    if video is None:
+        raise HTTPException(422, detail="project has no YouTube source")
+    if any(_latest(project_id, kind) and _latest(project_id, kind).status in
+           {"queued", "running", "retryable"}
+           for kind in ("ingest_scene_media", "download_youtube")):
+        raise HTTPException(409, detail="media processing is already active")
+    job = enqueue.execute(
+        kind="download_youtube",
+        input={"project_id": str(project_id), "video_id": video.video_id, "refresh": True},
+        idempotency_key=None,
+    )
+    repo = _projects()
+    for scene in repo.get_project_scenes(project_id):
+        if scene.provenance.get("source") == "asr_candidate":
+            repo.replace_scene_cues(scene.id, [])
+    return JobReference(id=job.id, status=job.status)
