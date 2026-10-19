@@ -32,6 +32,10 @@ class CutInput(BaseModel):
     language: str | None = Field(default="en", max_length=12)
 
 
+class ReprocessInput(CutInput):
+    confirm_reset: bool = False
+
+
 class JobReference(BaseModel):
     id: UUID
     status: str
@@ -122,10 +126,10 @@ def get_project_media(project_id: UUID) -> MediaSnapshot:
     if failure:
         failed_step = "cut_and_asr" if failure.kind == "ingest_scene_media" else "source"
         state, step = "failed", failed_step
-    elif output and output.get("transcript_candidate"):
-        state, step = "ready_for_review", "review"
     elif ingest_active:
         state, step = "asr_processing", "cut_and_asr"
+    elif output and output.get("transcript_candidate"):
+        state, step = "ready_for_review", "review"
     elif metadata:
         state, step = "cut_required", "cut"
     elif download_active:
@@ -273,3 +277,28 @@ def queue_scene_ingestion(
         idempotency_key=None,
     )
     return JobReference(id=job.id, status=job.status)
+
+
+@router.post("/reprocess", response_model=JobReference, status_code=status.HTTP_202_ACCEPTED)
+def reprocess_project_media(
+    project_id: UUID,
+    payload: ReprocessInput,
+    enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
+) -> JobReference:
+    """Start fresh ASR and invalidate the previous ASR-based editorial draft.
+
+    The verified global video cache is preserved. Only this project's generated
+    editorial cues are reset; the project and unrelated scenes are retained.
+    """
+    if not payload.confirm_reset:
+        raise HTTPException(422, detail="explicit confirmation is required to reset editorial work")
+    reference = queue_scene_ingestion(
+        project_id,
+        CutInput(start_ms=payload.start_ms, end_ms=payload.end_ms, language=payload.language),
+        enqueue,
+    )
+    repo = _projects()
+    for scene in repo.get_project_scenes(project_id):
+        if scene.provenance.get("source") == "asr_candidate":
+            repo.replace_scene_cues(scene.id, [])
+    return reference
