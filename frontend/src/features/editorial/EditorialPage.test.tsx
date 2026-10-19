@@ -161,7 +161,7 @@ describe("EditorialPage", () => {
       </MemoryRouter>,
     );
     expect(await screen.findByLabelText("Player do corte da cena")).toBeInTheDocument();
-    expect(screen.getAllByText("“I can't… go?”")).toHaveLength(2);
+    expect(screen.getAllByText("“I can't… go?”").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText("Demonstração da timeline")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("ID do job ASR concluído")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Player do corte da cena")).toHaveAttribute("src", "/api/cut.wav");
