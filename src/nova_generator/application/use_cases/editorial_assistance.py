@@ -357,6 +357,111 @@ def persist_editorial_chunk_preparation(
     return True
 
 
+
+def persist_editorial_chunk_with_speaker_turns(
+    repository: EditorialProjectRepository,
+    result: EditorialAssistanceResult,
+    turns_by_cue: dict[str, list[dict[str, object]]],
+    *,
+    author: str,
+) -> bool:
+    """Atomically apply an external 1.5 chunk, including speaker-based cue splits.
+
+    Boundaries come from original word IDs and timings; no synthetic timestamp is
+    generated. The transaction either applies the entire scene or nothing.
+    """
+    if result.contract_version != "nova-generator-editorial-suggestions/1.5":
+        raise EditorialAssistanceError("speaker-turn import requires contract 1.5")
+    scene_id = UUID(result.scene_id)
+    project_id = repository.get_scene_project_id(scene_id)
+    if project_id is None:
+        raise EditorialAssistanceError("scene not found")
+    before = _scene_snapshot(repository, scene_id)
+    suggestions = {item.cue_id: item for item in result.suggestions}
+    entries: list[tuple[Cue, list[WordTiming]]] = []
+    for cue in repository.get_scene_cues(scene_id):
+        suggestion = suggestions.get(str(cue.id))
+        words = repository.get_cue_words(cue.id)
+        if suggestion is None:
+            entries.append((cue, words))
+            continue
+        prepared = _prepared_words(words, suggestion, result.input_sha256)
+        provenance = {
+            **cue.provenance,
+            "approval": "draft",
+            "editorial_preparation": "complete",
+            "editorial_preparation_provider": result.provider,
+            "editorial_preparation_model": result.model,
+            "editorial_preparation_sha256": result.input_sha256,
+            "editorial_preparation_notes": suggestion.notes,
+            "editorial_preparation_trailing": suggestion.trailing,
+            "editorial_preparation_contract": result.contract_version,
+        }
+        turns = turns_by_cue.get(str(cue.id), [])
+        if not turns:
+            entries.append((replace(cue, approved_en=suggestion.approved_en,
+                                    approved_pt=suggestion.approved_pt,
+                                    revision=cue.revision + 1,
+                                    provenance=provenance), prepared))
+            continue
+        if len(turns) < 2:
+            raise EditorialAssistanceError("speaker turns must have at least two segments")
+        expected_ids = [str(word.id) for word in prepared]
+        flattened = [word_id for turn in turns for word_id in turn["word_ids"]]
+        if flattened != expected_ids:
+            raise EditorialAssistanceError("speaker turns must partition every word exactly once")
+        word_map = {str(word.id): word for word in prepared}
+        boundaries = []
+        cursor = 0
+        for turn in turns:
+            count = len(turn["word_ids"])
+            boundaries.append((cursor, cursor + count))
+            cursor += count
+        groups = {}
+        for index, word in enumerate(prepared):
+            group = word.provenance.get("semantic_group_id")
+            if group:
+                groups.setdefault(str(group), set()).add(next(
+                    i for i, (left, right) in enumerate(boundaries) if left <= index < right
+                ))
+        if any(len(indices) > 1 for indices in groups.values()):
+            raise EditorialAssistanceError("semantic units cannot cross speaker boundaries")
+        for turn_index, (turn, (left, right)) in enumerate(zip(turns, boundaries, strict=True)):
+            selected = prepared[left:right]
+            if not selected or not str(turn["approved_pt"]).strip() or not str(turn["speaker"]).strip():
+                raise EditorialAssistanceError("speaker turn requires words, speaker and Portuguese")
+            start = cue.speech_start_ms if turn_index == 0 else selected[0].start_ms
+            end = cue.speech_end_ms if turn_index == len(turns) - 1 else selected[-1].end_ms
+            if not start < end or not all(start <= word.start_ms < word.end_ms <= end for word in selected):
+                raise EditorialAssistanceError("speaker boundary is inconsistent with word timings")
+            new_id = uuid5(NAMESPACE_URL, f"nova-generator/speaker-turn/{cue.id}/{result.input_sha256}/{turn_index}")
+            moved = [replace(word, cue_id=new_id, order=i + 1) for i, word in enumerate(selected)]
+            english = "".join(word.surface for word in moved).strip()
+            if turn_index == len(turns) - 1:
+                english += suggestion.trailing
+            english = english.strip()
+            if not english:
+                raise EditorialAssistanceError("speaker turn has empty English text")
+            entries.append((Cue(
+                new_id, cue.scene_id, cue.order, start, end, start, end,
+                str(turn["speaker"]), english, english, str(turn["approved_pt"]),
+                cue.revision + 1,
+                {**provenance, "split_from": str(cue.id), "speaker_turn_index": turn_index,
+                 "speaker_confidence": turn.get("confidence", "uncertain")},
+            ), moved))
+    entries = [(replace(cue, order=i), words) for i, (cue, words) in enumerate(entries, 1)]
+    after = _entries_snapshot(entries)
+    revision = EditorialRevision(
+        uuid4(), project_id, scene_id, None,
+        max((item.sequence for item in repository.list_revisions(scene_id)), default=0) + 1,
+        "prepare_editorial_speaker_turns", author, result.provider,
+        before, after, datetime.now(UTC),
+    )
+    if not repository.replace_scene_cues_with_revision(scene_id, before, entries, revision):
+        raise EditorialAssistanceError("scene changed during speaker-turn import")
+    return True
+
+
 def scene_is_editorially_prepared(repository: EditorialProjectRepository, scene_id: UUID) -> bool:
     cues = repository.get_scene_cues(scene_id)
     return bool(cues) and all(
@@ -367,6 +472,7 @@ def scene_is_editorially_prepared(repository: EditorialProjectRepository, scene_
         in {
             "nova-generator-editorial-suggestions/1.3",
             "nova-generator-editorial-suggestions/1.4",
+            "nova-generator-editorial-suggestions/1.5",
         }
         and all(
             (
