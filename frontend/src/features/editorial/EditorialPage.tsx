@@ -32,16 +32,16 @@ import "./editorial-workspace.css";
 
 type EditorialImportDropzoneProps = {
   disabled: boolean;
-  onImport: (file: File) => void;
+  onImport: (files: File[]) => void;
 };
 
 function EditorialImportDropzone({ disabled, onImport }: EditorialImportDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
-  const receiveFile = (file: File | undefined) => {
-    if (!file || disabled) return;
-    onImport(file);
+  const receiveFiles = (files: FileList | null) => {
+    if (!files || disabled || files.length === 0) return;
+    onImport(Array.from(files));
   };
 
   return (
@@ -68,22 +68,23 @@ function EditorialImportDropzone({ disabled, onImport }: EditorialImportDropzone
       onDrop={(event) => {
         event.preventDefault();
         setDragging(false);
-        receiveFile(event.dataTransfer.files[0]);
+        receiveFiles(event.dataTransfer.files);
       }}
     >
       <Upload aria-hidden="true" />
       <span>
-        <strong>Arraste um retorno JSON aqui</strong>
-        <small>importe um bloco por vez</small>
+        <strong>Arraste os JSONs ou um ZIP aqui</strong>
+        <small>Selecione todos os blocos juntos para validar e importar em uma só etapa.</small>
       </span>
       <input
         ref={inputRef}
         type="file"
-        accept="application/json,.json"
+        accept="application/json,.json,application/zip,.zip"
+        multiple
         disabled={disabled}
         tabIndex={-1}
         onChange={(event) => {
-          receiveFile(event.target.files?.[0]);
+          receiveFiles(event.target.files);
           event.target.value = "";
         }}
       />
@@ -389,19 +390,22 @@ export function EditorialPage() {
       setAssistantBusy(false);
     }
   }, [assistantBusy, cues, refreshCues, sceneId]);
-  async function importExternalResult(file: File) {
+  async function importExternalResult(files: File[]) {
     if (!sceneId || assistantBusy) return;
     setAssistantBusy(true);
-    setAssistantMessage("Validando o retorno da IA externa…");
+    setAssistantMessage(`Validando ${files.length} arquivo(s) da IA externa…`);
     try {
-      const result = await studioApi.importExternalEditorialResult(sceneId, file);
+      const result =
+        files.length === 1 && files[0].name.toLowerCase().endsWith(".json")
+          ? await studioApi.importExternalEditorialResult(sceneId, files[0])
+          : await studioApi.importExternalEditorialResults(sceneId, files);
       setAssistance(result);
       const refreshed = await refreshCues();
       const remaining = refreshed.filter(cueNeedsEditorialTreatment).length;
       setAssistantFallbackRequired(remaining > 0);
       setAssistantMessage(
         remaining > 0
-          ? `Bloco importado: ${result.suggestions.length} cues tratados. Restam ${remaining} cues; envie o próximo JSON.`
+          ? `${result.suggestions.length} cues processadas. Restam ${remaining}; envie os blocos que faltam.`
           : "Todos os blocos foram validados. A revisão editorial está liberada.",
       );
     } catch (error) {
@@ -1060,7 +1064,7 @@ export function EditorialPage() {
                 </a>
                 <EditorialImportDropzone
                   disabled={assistantBusy}
-                  onImport={(file) => void importExternalResult(file)}
+                  onImport={(files) => void importExternalResult(files)}
                 />
               </div>
             )}
