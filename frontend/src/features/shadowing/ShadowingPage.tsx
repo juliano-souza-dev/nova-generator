@@ -291,12 +291,14 @@ export function ShadowingPage() {
             </span>
           </div>
 
-          <section className="shadowing-ai panel" aria-label="Preparação com IA">
+          <details className="shadowing-ai panel" aria-label="Ferramentas opcionais de recuperação">
+            <summary>Recuperação manual (opcional)</summary>
             <div>
-              <h2>Montar prática com IA</h2>
+              <h2>Substituir a preparação existente</h2>
               <p>
-                A IA seleciona grupos com até 6,5 segundos e 14 palavras, sempre com um só
-                personagem. As traduções e os textos aprovados não são modificados.
+                O Shadowing já foi preparado após a transcrição. Normalmente basta revisar,
+                ajustar e aprovar. Use estas ferramentas apenas se quiser substituir a
+                seleção automática original.
               </p>
             </div>
             <div className="shadowing-ai-actions">
@@ -349,7 +351,7 @@ export function ShadowingPage() {
               </p>
             )}
             {actionNotice && <p role="status">{actionNotice}</p>}
-          </section>
+          </details>
 
           <div className="shadowing-stage panel">
             <video
