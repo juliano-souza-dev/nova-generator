@@ -422,3 +422,111 @@ def test_editorial_merge_requires_manual_confirmation_for_different_labels(
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["speaker"] == "Liam"
     assert accepted.json()["provenance"]["speaker_verified_by_editor"] is True
+
+
+def test_manual_cue_text_edit_updates_words_and_requires_translation_review(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    originals = repository.get_cue_words(cue.id)
+    changed = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "“I can't… stay?”",
+            "approved_pt": "Eu não posso ficar?",
+            "approve": False,
+        },
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["original_en"] == cue.original_en
+    assert changed.json()["approved_en"] == "“I can't… stay?”"
+    words = repository.get_cue_words(cue.id)
+    assert "".join(word.surface for word in words) == "“I can't… stay?”"
+    assert [word.id for word in words] == [word.id for word in originals]
+    assert [(word.start_ms, word.end_ms) for word in words] == [
+        (word.start_ms, word.end_ms) for word in originals
+    ]
+    assert words[-1].provenance["translation_review_required"] is True
+    rejected = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "“I can't… stay?”",
+            "approved_pt": "Eu não posso ficar?",
+            "approve": True,
+        },
+    )
+    assert rejected.status_code == 422
+    reviewed = client.put(
+        f"/api/editorial/cues/{cue.id}/words/translation",
+        json={"author": "editor", "word_id": str(words[-1].id), "pt": "ficar?"},
+    )
+    assert reviewed.status_code == 200
+    approved = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "“I can't… stay?”",
+            "approved_pt": "Eu não posso ficar?",
+            "approve": True,
+        },
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["provenance"]["approval"] == "approved"
+    assert [rev.command for rev in repository.list_revisions(scene_id)][-3:] == [
+        "edit_draft_text",
+        "edit_word_translation",
+        "edit_approved_text",
+    ]
+
+
+def test_manual_word_surface_edit_changes_approved_cue_and_keeps_history(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    changed = client.put(
+        f"/api/editorial/cues/{cue.id}/words/surface",
+        json={"author": "editor", "word_id": str(words[-1].id), "surface": "stay"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["original_en"] == cue.original_en
+    assert changed.json()["approved_en"] == "".join(
+        word.surface for word in repository.get_cue_words(cue.id)
+    )
+    assert changed.json()["provenance"]["approval"] == "draft"
+    after = repository.get_cue_words(cue.id)
+    assert after[-1].id == words[-1].id
+    assert after[-1].start_ms == words[-1].start_ms
+    assert after[-1].original_start_ms == words[-1].original_start_ms
+    assert after[-1].provenance["editorial_original_surface"] == words[-1].surface
+    revision = repository.list_revisions(scene_id)[-1]
+    assert revision.command == "edit_word_surface"
+    undone = client.post(
+        f"/api/editorial/scenes/{scene_id}/undo",
+        json={"author": "editor", "revision_id": str(revision.id)},
+    )
+    assert undone.status_code == 200
+    assert repository.get_cue_words(cue.id)[-1].surface == words[-1].surface
+
+
+def test_word_timing_fit_respects_words_without_shifting_neighbors(
+    client: TestClient,
+) -> None:
+    repository, _, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    repository.save_cue(
+        replace(cue, speech_start_ms=150, speech_end_ms=1700),
+        words,
+    )
+    fitted = client.post(
+        f"/api/editorial/cues/{cue.id}/fit-words",
+        json={"author": "editor"},
+    )
+    assert fitted.status_code == 200, fitted.text
+    assert fitted.json()["speech_timing"] == {"start_ms": 100, "end_ms": 1900}
+    assert fitted.json()["provenance"]["approval"] == "draft"
+    assert [word.id for word in repository.get_cue_words(cue.id)] == [
+        word.id for word in words
+    ]
