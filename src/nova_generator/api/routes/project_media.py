@@ -118,6 +118,9 @@ def get_project_media(project_id: UUID) -> MediaSnapshot:
     base = f"{get_settings().api_prefix}/projects/{project_id}/media"
     download_active = bool(download and download.status in {"queued", "running", "retryable"})
     ingest_active = bool(ingest and ingest.status in {"queued", "running", "retryable"})
+    refreshing_source = bool(
+        download_active and download and download.input.get("refresh") is True
+    )
     failure = (
         ingest
         if ingest and ingest.status == "failed"
@@ -130,10 +133,12 @@ def get_project_media(project_id: UUID) -> MediaSnapshot:
         state, step = "asr_processing", "cut_and_asr"
     elif output and output.get("transcript_candidate"):
         state, step = "ready_for_review", "review"
-    elif download_active:
+    elif refreshing_source:
         state, step = "source_processing", "source"
     elif metadata:
         state, step = "cut_required", "cut"
+    elif download_active:
+        state, step = "source_processing", "source"
     else:
         state, step = "source_validated", "source"
     review_url = f"/editorial?project={project_id}" if state == "ready_for_review" else None
@@ -141,7 +146,7 @@ def get_project_media(project_id: UUID) -> MediaSnapshot:
         state=state,
         current_step=step,
         can_start=state in {"source_validated", "failed"} and not metadata,
-        can_cut=metadata is not None and not ingest_active and not download_active,
+        can_cut=metadata is not None and not ingest_active and not refreshing_source,
         can_review=state == "ready_for_review",
         review_url=review_url,
         source_ready=metadata is not None,
