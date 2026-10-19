@@ -745,8 +745,51 @@ export function EditorialPage() {
       player.currentTime = start / 1000;
     playbackEnd.current = end;
   }
+  async function fitCueToWords() {
+    if (!selectedCue || saving || isDirty) {
+      setMessage("Salve ou descarte as edições antes de ajustar os tempos.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await studioApi.fitCueToWords(selectedCue.id, author);
+      await refreshCues();
+      setMessage("Limites da cue ajustados às palavras. Confira e aprove novamente.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível ajustar a cue.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmWordTranslation() {
+    if (!selectedCue || !selectedWord || saving || !wordPt.trim() || wordSurfaceDirty) {
+      setMessage("Salve a correção da palavra antes de confirmar sua tradução.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await studioApi.updateWordTranslation(
+        selectedCue.id,
+        selectedWord.id,
+        wordPt,
+        author,
+      );
+      await refreshCues();
+      setMessage("Tradução revisada. Agora você pode aprovar a cue.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível revisar a tradução.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveChanges(approve = false, advance = false) {
     if (!selectedCue || saving) return;
+    if (wordSurfaceDirty && textDirty) {
+      setMessage("Salve a correção da palavra e a edição do texto em etapas separadas.");
+      return;
+    }
     if (approve && (!approvedEn || !approvedPt)) {
       setMessage("Preencha os textos em inglês e português antes de aprovar o cue.");
       return;
@@ -765,6 +808,14 @@ export function EditorialPage() {
     }
     setSaving(true);
     try {
+      let correctedEnglish = approvedEn;
+      if (wordSurfaceDirty && selectedWord) {
+        const corrected = await studioApi.updateWordSurface(
+          selectedCue.id, selectedWord.id, wordSurface, author,
+        );
+        correctedEnglish = corrected.approved_en;
+        setApprovedEn(correctedEnglish);
+      }
       const originalCue = history[0]?.find((cue) => cue.id === selectedCue.id) ?? selectedCue;
       const expandedCue =
         candidate.speech_timing.end_ms - candidate.speech_timing.start_ms >
@@ -796,7 +847,7 @@ export function EditorialPage() {
       if (textDirty || approve)
         await studioApi.updateCueText(selectedCue.id, {
           author,
-          approved_en: approvedEn,
+          approved_en: correctedEnglish,
           approved_pt: approvedPt,
           approve,
         });
