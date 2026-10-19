@@ -18,6 +18,7 @@ from nova_generator.application.ports.editorial_assistant import (
 )
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.use_cases.editorial_assistance import (
+    persist_editorial_chunk_with_speaker_turns,
     EditorialAssistanceError,
     build_editorial_prompt,
     persist_editorial_chunk_preparation,
@@ -55,6 +56,16 @@ class _ExternalSuggestion(BaseModel):
     word_translations: list[_ExternalWordTranslation] = Field(default_factory=list)
     semantic_units: list[_ExternalSemanticUnit] = Field(default_factory=list)
     trailing: str = ""
+    speaker_turns: list["_ExternalSpeakerTurn"] = Field(default_factory=list)
+
+
+class _ExternalSpeakerTurn(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    word_ids: list[str] = Field(min_length=1)
+    speaker: str = Field(min_length=1)
+    approved_pt: str = Field(min_length=1)
+    confidence: Literal["high", "medium", "uncertain"] = "uncertain"
 
 
 class _ExternalResult(BaseModel):
@@ -66,6 +77,7 @@ class _ExternalResult(BaseModel):
         "nova-generator-editorial-suggestions/1.2",
         "nova-generator-editorial-suggestions/1.3",
         "nova-generator-editorial-suggestions/1.4",
+        "nova-generator-editorial-suggestions/1.5",
     ]
     scene_id: UUID
     input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -116,7 +128,7 @@ class ExternalEditorialExchange:
             for index in range(0, len(cues), self._CUES_PER_CHUNK)
         ]
         manifest = {
-            "schema_version": "nova-generator-editorial-exchange/1.4",
+            "schema_version": "nova-generator-editorial-exchange/1.5",
             "scene_id": str(scene_id),
             "input_sha256": input_sha256,
             "chunks": [
@@ -171,7 +183,7 @@ class ExternalEditorialExchange:
             document = _ExternalResult.model_validate_json(content)
         except ValidationError as error:
             raise EditorialAssistanceError("external result does not match the contract") from error
-        if document.schema_version == "nova-generator-editorial-suggestions/1.4":
+        if document.schema_version in {"nova-generator-editorial-suggestions/1.4", "nova-generator-editorial-suggestions/1.5"}:
             return self._import_chunk(scene_id, document, content)
         input_sha256, cues = build_editorial_prompt(self._repository, scene_id)
         result = _as_result(document)
@@ -243,9 +255,20 @@ class ExternalEditorialExchange:
             manifest_path.parent / f"scene-{scene_id}-{document.chunk_id}-external-result.json"
         )
         destination.write_bytes(content)
-        persist_editorial_chunk_preparation(
-            self._repository, validated, author="external-editorial-assistant"
-        )
+        if document.schema_version.endswith("/1.5"):
+            persist_editorial_chunk_with_speaker_turns(
+                self._repository,
+                validated,
+                {
+                    item.cue_id: [turn.model_dump() for turn in item.speaker_turns]
+                    for item in document.suggestions
+                },
+                author="external-editorial-assistant",
+            )
+        else:
+            persist_editorial_chunk_preparation(
+                self._repository, validated, author="external-editorial-assistant"
+            )
         return validated
 
 
@@ -279,7 +302,18 @@ sequências cuja tradução palavra por palavra soe mecânica. Exemplo: agrupe `
 Mantenha `scene_id`, `input_sha256`, `cue_id`, `order`, a quantidade e a ordem sem alterações.
 Corrija o inglês somente quando necessário e traduza para português brasileiro natural.
 Preserve nomes, acentos, apóstrofos, aspas, vírgulas, pontos, perguntas e reticências.
-Não una, omita ou invente falas. Se houver mudança de interlocutor dentro de uma cue,\nidentifique os pontos exatos de troca pelos word_ids e descreva-os em notes como\nSPEAKER_SPLIT_PROPOSAL, incluindo a sequência de speakers e a confiança.\nEste contrato 1.4 ainda NÃO permite materializar novas cues: não altere cue_id nem\na contagem de suggestions para simular uma divisão. A nova versão do contrato deverá\nrepresentar as divisões como operação estruturada e atômica.\nNunca conclua quem fala apenas por nomes mencionados em vocativos.\nSem áudio, a atribuição de speaker é inferência textual e deve ser marcada como incerta.\nTIMING: preserve a linha do tempo da fonte; os cortes devem ser ancorados preferencialmente\nna fronteira entre end_ms da última palavra do turno anterior e start_ms da primeira\npalavra do próximo turno. Nunca estime milissegundos apenas pelo texto, nunca sobreponha\nintervalos, não mova palavras de posição, e sinalize gaps, sobreposições e ausência de\ntimestamps confiáveis para revisão humana.
+Não una, omita ou invente falas. Procure mudanças de interlocutor em cada cue.
+No contrato 1.5, quando houver certeza suficiente, forneça speaker_turns com pelo menos
+dois turnos, cada um contendo speaker, approved_pt, confidence e word_ids contíguos.
+A concatenação dos word_ids de todos os turnos deve corresponder exatamente à sequência
+original de palavras da cue, sem repetir, perder nem reordenar palavras.
+Use nomes de interlocutor somente quando sustentados pelo contexto; quando não for possível
+identificar a pessoa, utilize um identificador neutro, como "speaker_2".
+Não infira tempos por proporção do texto: os novos limites são obtidos dos timestamps
+das palavras na fronteira de cada turno. Preserve gaps e nunca permita sobreposição.
+Se não houver evidência suficiente de alternância ou de limites temporais confiáveis,
+deixe speaker_turns vazio e indique a dúvida em notes.
+Evite grupos semânticos que cruzem as fronteiras de speaker_turns.
 Devolva somente o JSON preenchido. O Generator o importará como sugestão de rascunho.
 """
 
@@ -288,7 +322,7 @@ def _template(
     scene_id: UUID, input_sha256: str, chunk_id: str, cues: tuple[EditorialCuePrompt, ...]
 ) -> dict[str, object]:
     return {
-        "schema_version": "nova-generator-editorial-suggestions/1.4",
+        "schema_version": "nova-generator-editorial-suggestions/1.5",
         "scene_id": str(scene_id),
         "input_sha256": input_sha256,
         "chunk_id": chunk_id,
@@ -312,6 +346,7 @@ def _template(
                     for word in cue.words
                 ],
                 "semantic_units": [],
+                "speaker_turns": [],
                 "trailing": cue.trailing,
             }
             for cue in cues
@@ -326,7 +361,7 @@ sem markdown e sem explicações. Complete o JSON de resposta abaixo sem alterar
 scene_id, input_sha256, chunk_id, cue_id, ordem ou ids. Preserve literalmente pontuação e espaços.
 Use português brasileiro natural e crie unidades semânticas para expressões como phrasal verbs;
 por exemplo, “Can I help?” deve ser “Posso ajudar?”, nunca uma tradução mecânica palavra a palavra.
-Cada palavra precisa manter seu tempo dentro do cue e ter uma tradução contextual.\nProcure ativamente trocas de interlocutor dentro das cues. Não presuma que o áudio\ncontém uma só pessoa por cue. Se houver alternância, documente em notes uma proposta\nSPEAKER_SPLIT_PROPOSAL: fronteiras por word_id, trechos, speakers inferidos e grau de\ncerteza. NÃO altere os IDs nem divida o JSON 1.4: essa versão ainda é apenas sugestão.\nPreserve os tempos originais das palavras; só corrija valores quando houver evidência\nno áudio ou nos timestamps fornecidos. A sequência final deve ser cronológica e sem\nsobreposições; NÃO invente tempos para fazer a divisão parecer precisa.
+Cada palavra precisa manter seu tempo dentro do cue e ter uma tradução contextual.\nProcure ativamente trocas de interlocutor dentro das cues. Não presuma que o áudio\ncontém uma só pessoa por cue. Se houver alternância, documente em notes uma proposta\nSPEAKER_SPLIT_PROPOSAL: fronteiras por word_id, trechos, speakers inferidos e grau de\ncerteza. NÃO altere os IDs nem divida o JSON 1.4: essa versão ainda é apenas sugestão.\nPara dividir, preencha speaker_turns com word_ids contíguos na ordem, speaker, approved_pt\ne confidence (high, medium ou uncertain). A soma dos turnos deve incluir TODAS as palavras\nda cue, sem repetições. Deixe [] quando não houver mudança confiável.\nPreserve os tempos originais das palavras; só corrija valores quando houver evidência\nno áudio ou nos timestamps fornecidos. A sequência final deve ser cronológica e sem\nsobreposições; NÃO invente tempos para fazer a divisão parecer precisa.
 
 ENTRADA CANÔNICA:
 ```json
