@@ -317,9 +317,9 @@ async def import_external_editorial_result(
                 result=result,
                 author="external-editorial-assistant",
             )
-        elif result.contract_version != "nova-generator-editorial-suggestions/1.4":
+        elif result.contract_version not in {"nova-generator-editorial-suggestions/1.4", "nova-generator-editorial-suggestions/1.5"}:
             raise EditorialAssistanceError(
-                "external result must use contract 1.3 or chunked contract 1.4"
+                "external result must use contract 1.3, 1.4 or 1.5"
             )
     except EditorialAssistanceError as error:
         raise HTTPException(422, detail=str(error)) from error
