@@ -391,3 +391,20 @@
 .cut-editor details {
   margin-top: 1rem;
 }
+
+.media-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+}
+.media-source-actions button {
+  min-height: 44px;
+  white-space: normal;
+}
+@media (max-width: 720px) {
+  .media-source-actions {
+    justify-content: flex-start;
+  }
+}
