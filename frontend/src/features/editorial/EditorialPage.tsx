@@ -1411,47 +1411,106 @@ export function EditorialPage() {
       )}
       {selectedCue && editorialGateReady && (
         <>
-          <div className="review-overview">
-            <nav className="review-cue-list panel" aria-label="Lista de cues">
-              <h2>
-                Cues <span>{cues.length}</span>
-              </h2>
-              <ol>
-                {cues.map((cue) => {
-                  const status = cue.provenance?.approval === "approved" ? "approved" : "pending";
-                  return (
-                  <li key={cue.id} data-status={status}>
-                    <button
-                      type="button"
-                      aria-current={cue.id === selectedCueId ? "true" : undefined}
-                      onClick={() => selectCue(cue.id)}
-                      onKeyDown={(event) => {
-                        if (event.key !== " ") return;
-                        event.preventDefault();
-                        if (cue.id !== selectedCueId) {
-                          selectCue(cue.id);
-                          return;
-                        }
-                        setTimelineFocusRequest((value) => value + 1);
-                        togglePlayback();
-                      }}
-                      disabled={saving}
-                    >
-                      <span className="review-cue-number">{cue.order}</span>
-                      <span className="review-cue-copy">
-                        <strong>{cue.approved_en || cue.original_en}</strong>
-                        <small className="review-cue-status">
-                          <i aria-hidden="true" />
-                          {formatTime(cue.speech_timing.start_ms)} ·{" "}
-                          {status === "approved" ? "Aprovado" : "Pendente"}
-                        </small>
-                      </span>
-                    </button>
-                  </li>
-                  );
-                })}
-              </ol>
+          <div className="editorial-review-shell">
+            <nav className="editorial-station-dock" aria-label="Controles da estação editorial">
+              <div className="editorial-dock-navigation">
+                <button type="button" className="secondary-button"
+                  aria-label="Cue anterior" title="Cue anterior (Alt + ←)"
+                  disabled={saving || selectedCueIndex <= 0}
+                  onClick={() => moveCue(-1)}>
+                  <ChevronLeft aria-hidden="true" /> Anterior
+                </button>
+                <div className="editorial-dock-position" aria-live="polite">
+                  <strong>Cue {selectedCue.order} de {cues.length}</strong>
+                  <span className={`cue-state cue-state-${cueStatus.toLowerCase().replace(" ", "-")}`}>
+                    {cueStatus}{isDirty ? " · Não salvo" : ""}
+                  </span>
+                </div>
+                <button type="button" className="secondary-button"
+                  aria-label="Próximo cue" title="Próxima cue (Alt + →)"
+                  disabled={saving || selectedCueIndex >= cues.length - 1}
+                  onClick={() => moveCue(1)}>
+                  Próxima <ChevronRight aria-hidden="true" />
+                </button>
+              </div>
+              <div className="editorial-mode-switch" role="group" aria-label="Modo de edição">
+                <button type="button" aria-pressed={!selectedWord}
+                  onClick={() => void leaveWordMode()} disabled={!selectedWord || saving}>
+                  Cue
+                </button>
+                <button type="button" aria-pressed={Boolean(selectedWord)}
+                  onClick={() => {
+                    if (!selectedWord && visibleWords[0]) void selectWord(visibleWords[0].id);
+                  }}
+                  disabled={Boolean(selectedWord) || visibleWords.length === 0 || saving}>
+                  Word
+                </button>
+              </div>
+              <div className="editorial-dock-actions">
+                <button type="button" className="secondary-button"
+                  aria-label={selectedWord ? "Salvar palavra" : "Salvar alterações"}
+                  title="Salvar alterações" disabled={!isDirty || saving}
+                  onClick={() => void saveChanges()}>
+                  <Save aria-hidden="true" /> Salvar
+                </button>
+                <button type="button" className="primary-button"
+                  aria-label="Aprovar cue" disabled={saving}
+                  onClick={() => void saveChanges(true, true)}>
+                  <Check aria-hidden="true" /> Aprovar e próxima
+                </button>
+                <button type="button" className="secondary-button"
+                  aria-pressed={showCompactVideo}
+                  onClick={() => setShowCompactVideo((value) => !value)}>
+                  <Film aria-hidden="true" /> Vídeo
+                </button>
+                <button type="button" className="secondary-button"
+                  aria-expanded={showSupportingPanels}
+                  aria-controls="editorial-support-panels"
+                  onClick={() => setShowSupportingPanels((value) => !value)}>
+                  {showSupportingPanels ? "Ocultar painéis" : "Texto e ferramentas"}
+                </button>
+              </div>
+              <details className="editorial-dock-shortcuts">
+                <summary>Atalhos</summary>
+                <p>Alt + ←/→: navegar entre cues · Esc: modo Cue · Ctrl + Enter: aprovar e avançar ·
+                   Ctrl + Shift + Enter: prévia iHub · Espaço: ouvir · A/S: IN/OUT · G: salvar e próxima</p>
+              </details>
             </nav>
+            <section className="editorial-station-stage" aria-label="Área principal da waveform">
+              <div className="editorial-station-wave">
+          <CueWordTimeline
+            cues={previewCues}
+            waveform={matchingMedia ? media?.waveform : null}
+            durationMs={durationMs}
+            playheadMs={playheadMs}
+            playing={playing}
+            zoom={zoom}
+            focusRequest={timelineFocusRequest}
+            selectedCueId={selectedCueId}
+            selectedWordId={selectedWordId}
+            onPlayToggle={togglePlayback}
+            onPlayContext={() => {
+              if (!selectedCue || !selectedWord) return;
+              playRange(
+                Math.max(selectedCue.speech_timing.start_ms, wordStart - 650),
+                Math.min(selectedCue.speech_timing.end_ms, wordEnd + 850),
+              );
+            }}
+            onPreviousWord={() => moveWord(-1)}
+            onContinuousPlayToggle={toggleContinuousPlayback}
+            onSaveAndNext={() => void saveChanges(false, true)}
+            onPlayheadChange={seek}
+            onZoomChange={setZoom}
+            onSelectCue={selectCue}
+            onSelectWord={(wordId, cueId) => void selectWord(wordId, cueId)}
+            onSetEdge={markActiveEdge}
+            onEdgeDragStart={beginEdgeDrag}
+            onEdgeChange={(edge, timeMs) => setActiveEdgeAt(edge, timeMs, false)}
+            onNudge={nudge}
+            onUndo={undo}
+          />
+              </div>
+              <div className="editorial-compact-video" hidden={!showCompactVideo}>
             <section className="review-player panel" aria-labelledby="cut-player-title">
               <div className="player-copy">
                 <span className="eyebrow">Corte da cena {selectedScene?.order}</span>
@@ -1521,31 +1580,54 @@ export function EditorialPage() {
                 </button>
               </div>
             </section>
+              </div>
+            </section>
+            <div id="editorial-support-panels" className="editorial-support-panels"
+              hidden={!showSupportingPanels}>
+          <div className="review-overview">
+            <nav className="review-cue-list panel" aria-label="Lista de cues">
+              <h2>
+                Cues <span>{cues.length}</span>
+              </h2>
+              <ol>
+                {cues.map((cue) => {
+                  const status = cue.provenance?.approval === "approved" ? "approved" : "pending";
+                  return (
+                  <li key={cue.id} data-status={status}>
+                    <button
+                      type="button"
+                      aria-current={cue.id === selectedCueId ? "true" : undefined}
+                      onClick={() => selectCue(cue.id)}
+                      onKeyDown={(event) => {
+                        if (event.key !== " ") return;
+                        event.preventDefault();
+                        if (cue.id !== selectedCueId) {
+                          selectCue(cue.id);
+                          return;
+                        }
+                        setTimelineFocusRequest((value) => value + 1);
+                        togglePlayback();
+                      }}
+                      disabled={saving}
+                    >
+                      <span className="review-cue-number">{cue.order}</span>
+                      <span className="review-cue-copy">
+                        <strong>{cue.approved_en || cue.original_en}</strong>
+                        <small className="review-cue-status">
+                          <i aria-hidden="true" />
+                          {formatTime(cue.speech_timing.start_ms)} ·{" "}
+                          {status === "approved" ? "Aprovado" : "Pendente"}
+                        </small>
+                      </span>
+                    </button>
+                  </li>
+                  );
+                })}
+              </ol>
+            </nav>
+
           </div>
-          <nav className="cue-navigation cue-navigation-primary" aria-label="Navegação entre cues">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => moveCue(-1)}
-              disabled={selectedCueIndex <= 0}
-            >
-              <ChevronLeft aria-hidden="true" /> Anterior
-            </button>
-            <div>
-              <strong>Cue {selectedCue.order} de {cues.length}</strong>
-              <span className={`cue-state cue-state-${cueStatus.toLowerCase().replace(" ", "-")}`}>
-                {cueStatus}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => moveCue(1)}
-              disabled={selectedCueIndex >= cues.length - 1}
-            >
-              Próxima <ChevronRight aria-hidden="true" />
-            </button>
-          </nav>
+
           {allCuesApproved && (
             <section className="editorial-next-stage panel" aria-label="Próxima etapa">
               <div>
@@ -1561,36 +1643,8 @@ export function EditorialPage() {
               </Link>
             </section>
           )}
-          <p className="review-keyboard-hints">
-            <kbd>Ctrl Enter</kbd> prévia iHub · <kbd>Ctrl Shift Enter</kbd> desde o início ·{" "}
-            <kbd>Espaço</kbd> cue · <kbd>Shift Espaço</kbd> cena · <kbd>A</kbd> IN · <kbd>S</kbd>
-            OUT · <kbd>Enter</kbd> salvar palavra + próxima · <kbd>G</kbd> salvar + próxima ·{" "}
-            <kbd>←/→</kbd> cursor
-          </p>
-          <nav className="cue-navigation cue-navigation-secondary" aria-label="Navegação entre cues">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => moveCue(-1)}
-              disabled={selectedCueIndex <= 0}
-            >
-              <ChevronLeft aria-hidden="true" /> Cue anterior
-            </button>
-            <div>
-              <strong>Cue {selectedCue.order}</strong>
-              <span className={`cue-state cue-state-${cueStatus.toLowerCase().replace(" ", "-")}`}>
-                {cueStatus}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => moveCue(1)}
-              disabled={selectedCueIndex >= cues.length - 1}
-            >
-              Próximo cue <ChevronRight aria-hidden="true" />
-            </button>
-          </nav>
+
+
           <div className="editorial-grid">
             <article className="panel cue-editor">
               <div className="section-heading">
@@ -2175,71 +2229,9 @@ export function EditorialPage() {
               )}
             </aside>
           </div>
-          <footer className="review-actions" aria-label="Ações da revisão">
-            <div>
-              <strong>
-                {selectedWord
-                  ? `Palavra ${selectedWordIndex + 1} de ${visibleWords.length} · Cue ${selectedCue.order}`
-                  : `Cue ${selectedCue.order} de ${cues.length}`}
-              </strong>
-              <span>{isDirty ? "Há alterações não salvas" : cueStatus}</span>
+
+
             </div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={discardChanges}
-              disabled={!isDirty || saving}
-            >
-              <Undo2 aria-hidden="true" /> Descartar
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void saveChanges()}
-              disabled={!isDirty || saving}
-            >
-              <Save aria-hidden="true" /> {selectedWord ? "Salvar palavra" : "Salvar alterações"}
-            </button>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => void saveChanges(true, true)}
-              disabled={saving}
-            >
-              <Check aria-hidden="true" /> Aprovar cue
-            </button>
-          </footer>
-          <CueWordTimeline
-            cues={previewCues}
-            waveform={matchingMedia ? media?.waveform : null}
-            durationMs={durationMs}
-            playheadMs={playheadMs}
-            playing={playing}
-            zoom={zoom}
-            focusRequest={timelineFocusRequest}
-            selectedCueId={selectedCueId}
-            selectedWordId={selectedWordId}
-            onPlayToggle={togglePlayback}
-            onPlayContext={() => {
-              if (!selectedCue || !selectedWord) return;
-              playRange(
-                Math.max(selectedCue.speech_timing.start_ms, wordStart - 650),
-                Math.min(selectedCue.speech_timing.end_ms, wordEnd + 850),
-              );
-            }}
-            onPreviousWord={() => moveWord(-1)}
-            onContinuousPlayToggle={toggleContinuousPlayback}
-            onSaveAndNext={() => void saveChanges(false, true)}
-            onPlayheadChange={seek}
-            onZoomChange={setZoom}
-            onSelectCue={selectCue}
-            onSelectWord={selectWord}
-            onSetEdge={markActiveEdge}
-            onEdgeDragStart={beginEdgeDrag}
-            onEdgeChange={(edge, timeMs) => setActiveEdgeAt(edge, timeMs, false)}
-            onNudge={nudge}
-            onUndo={undo}
-          />
           {hubPreviewStartMs !== null && matchingMedia && media?.cut_url && (
             <EditorialHubPreview
               mediaUrl={media.cut_url}
@@ -2248,6 +2240,7 @@ export function EditorialPage() {
               onClose={() => setHubPreviewStartMs(null)}
             />
           )}
+          </div>
         </>
       )}
     </section>
