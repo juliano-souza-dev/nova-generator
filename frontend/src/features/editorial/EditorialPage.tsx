@@ -225,8 +225,6 @@ export function EditorialPage() {
     : selectedWord
       ? [selectedWord]
       : [];
-  const selectedGroupStart = selectedGroupWords[0]?.start_ms ?? wordStart;
-  const selectedGroupEnd = selectedGroupWords.at(-1)?.end_ms ?? wordEnd;
   const selectedUnitLabel = selectedGroupWords.map((item) => item.surface).join(" ");
   const selectedGroupStartIndex = selectedCue
     ? selectedCue.words.indexOf(selectedGroupWords[0] ?? selectedWord!)
