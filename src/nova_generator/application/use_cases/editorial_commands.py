@@ -294,7 +294,9 @@ class EditApprovedText:
                     provenance_word.pop("translation_review_required", None)
                 revised_translations.append(replace(word, provenance=provenance_word))
             updated_words = revised_translations
-        if (confirm_word_timings or confirm_word_translations or group_cue_translation) and not approve:
+        if (
+            confirm_word_timings or confirm_word_translations or group_cue_translation
+        ) and not approve:
             raise EditorialCommandError("review confirmations require approval")
         if group_cue_translation:
             # Explicit editorial decision: the complete cue is one semantic
