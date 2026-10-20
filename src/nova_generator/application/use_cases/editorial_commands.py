@@ -248,7 +248,12 @@ class EditApprovedText:
                 "editorial_text_ai_reference", cue.approved_en
             )
         new_start = cue.speech_start_ms
-        new_end = max(cue.speech_end_ms, updated_words[-1].end_ms)
+        # Existing cues must never expand silently during approval or PT edits.
+        # Expansion is allowed only when a real English edit adds/repositions words.
+        new_end = (
+            max(cue.speech_end_ms, updated_words[-1].end_ms)
+            if structural_reconciliation else cue.speech_end_ms
+        )
         if proposed_speech_timing is not None:
             new_start, new_end = _range(
                 proposed_speech_timing.get("start_ms"),
