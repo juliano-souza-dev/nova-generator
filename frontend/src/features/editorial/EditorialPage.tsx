@@ -193,6 +193,7 @@ export function EditorialPage() {
   const [wordPt, setWordPt] = useState("");
   const [wordSurface, setWordSurface] = useState("");
   const [saving, setSaving] = useState(false);
+  const wordNavigationLock = useRef(false);
   const [structureDraft, setStructureDraft] = useState<StructureDraft | null>(null);
   const [startingMedia, setStartingMedia] = useState(false);
   const [mediaReload, setMediaReload] = useState(0);
@@ -495,36 +496,37 @@ export function EditorialPage() {
     const cue = cues.find((item) => item.id === id);
     if (cue) seek(cue.speech_timing.start_ms);
   }
-  function selectWord(id: string) {
-    if (saving || id === selectedWordId) return;
-    if (wordDirty || wordTranslationDirty || wordSurfaceDirty) {
-      setMessage("Salve ou descarte a edição da palavra antes de selecionar outra.");
-      return;
-    }
+  async function selectWord(id: string) {
+    if (saving || wordNavigationLock.current || id === selectedWordId) return;
     const word = selectedCue?.words.find((item) => item.id === id);
-    if (word) {
-      // Stop any pending bounded preview before moving its selection.
+    if (!word) return;
+    wordNavigationLock.current = true;
+    try {
+      // Clicking another word automatically commits edits for the current one.
+      // Never navigate after an unsuccessful save, to prevent silent data loss.
+      if (selectedWord && isDirty) {
+        const saved = await saveChanges(false, false);
+        if (!saved) return;
+      }
       playbackEnd.current = null;
       mediaRef.current?.pause();
-      setSelectedWordId(id);
+      setSelectedWordId(word.id);
       seek(word.start_ms);
       const group = word.semantic_group_id
         ? (selectedCue?.words.filter((item) => item.semantic_group_id === word.semantic_group_id) ??
           [])
         : [word];
       setMessage(
-        `Editando “${group.map((item) => item.surface).join(" ")}”. Espaço ouve somente esta unidade.`,
+        `Palavra anterior concluída. Editando “${group.map((item) => item.surface).join(" ")}”.`,
       );
+    } finally {
+      wordNavigationLock.current = false;
     }
   }
   function moveWord(offset: number) {
-    if (!selectedCue || wordDirty || wordTranslationDirty || wordSurfaceDirty) {
-      if (wordDirty || wordTranslationDirty)
-        setMessage("Salve ou descarte o ajuste antes de trocar de palavra.");
-      return;
-    }
+    if (!selectedCue || saving || wordNavigationLock.current) return;
     const next = selectedCue.words[selectedWordIndex + offset];
-    if (next) selectWord(next.id);
+    if (next) void selectWord(next.id);
   }
   function leaveWordMode() {
     if (wordDirty || wordTranslationDirty) {
@@ -807,15 +809,15 @@ export function EditorialPage() {
     }
   }
 
-  async function saveChanges(approve = false, advance = false) {
-    if (!selectedCue || saving) return;
+  async function saveChanges(approve = false, advance = false): Promise<boolean> {
+    if (!selectedCue || saving) return false;
     if (wordSurfaceDirty && textDirty) {
       setMessage("Salve a correção da palavra e a edição do texto em etapas separadas.");
-      return;
+      return false;
     }
     if (approve && (!approvedEn || !approvedPt)) {
       setMessage("Preencha os textos em inglês e português antes de aprovar o cue.");
-      return;
+      return false;
     }
     const candidate = previewCues.find((cue) => cue.id === selectedCue.id) ?? selectedCue;
     const errors = validateTimeline([candidate]);
@@ -827,7 +829,7 @@ export function EditorialPage() {
       errors.push("Use milissegundos inteiros nos tempos da palavra.");
     if (errors.length) {
       setMessage(errors[0]);
-      return;
+      return false;
     }
     setSaving(true);
     try {
@@ -913,8 +915,10 @@ export function EditorialPage() {
               ? `Cue ${selectedCue.order} salva. Próxima cue aberta.`
               : "Alterações salvas.",
       );
+      return true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha ao salvar revisão.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -2102,38 +2106,6 @@ export function EditorialPage() {
                       </button>
                     </div>
                   </section>
-                  <div className="word-timing-fields">
-                    <label>
-                      <span>IN (ms)</span>
-                      <input
-                        type="number"
-                        min={selectedCue.speech_timing.start_ms}
-                        max={wordEnd - 1}
-                        step={1}
-                        value={wordStart}
-                        onChange={(event) => setWordStart(Number(event.target.value))}
-                      />
-                    </label>
-                    <label>
-                      <span>OUT (ms)</span>
-                      <input
-                        type="number"
-                        min={wordStart + 1}
-                        max={selectedCue.speech_timing.end_ms}
-                        step={1}
-                        value={wordEnd}
-                        onChange={(event) => setWordEnd(Number(event.target.value))}
-                      />
-                    </label>
-                  </div>
-                  <p className="word-duration">
-                    Duração <strong>{Math.max(0, wordEnd - wordStart)} ms</strong>
-                  </p>
-                  <p className="word-timing-guidance">
-                    Para sincronizar a legenda, use a timeline abaixo: ouça com contexto,
-                    marque o início e o fim da palavra e clique em “Salvar e próxima”.
-                    O tempo da cue não será alterado.
-                  </p>
                 </div>
               )}
             </aside>
