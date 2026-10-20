@@ -1054,6 +1054,11 @@ export function EditorialPage() {
             start_ms: word.start_ms,
             end_ms: word.end_ms,
           })),
+          proposed_word_translations: candidate.words.map((word, index) =>
+            index === selectedWordIndex && wordTranslationDirty
+              ? activeWordPt
+              : (pendingWordDrafts.current.get(word.id)?.pt ?? word.pt ?? null),
+          ),
         });
         const fresh = await refreshCues();
         const freshCue = fresh.find((cue) => cue.id === selectedCue.id);
