@@ -225,10 +225,15 @@ class EditApprovedText:
         )
         updated_words = words
         provenance = dict(cue.provenance)
-        if (
+        # Reconcile only an explicit English edit. Old imports may intentionally
+        # have a text/word mismatch; editing PT or approving must not silently
+        # regenerate words and estimates from those historical rows.
+        english_changed = approved_en != cue.approved_en
+        structural_reconciliation = english_changed and (
             approved_en != current_text
             or len(re.findall(r"\s*\S+", approved_en)) != len(words)
-        ):
+        )
+        if structural_reconciliation:
             updated_words, trailing, removed_ids = _reconcile_approved_words(
                 approved_en, words, cue.speech_start_ms
             )
@@ -286,24 +291,33 @@ class EditApprovedText:
                     provenance_word.pop("translation_review_required", None)
                 revised_translations.append(replace(word, provenance=provenance_word))
             updated_words = revised_translations
-        previous_end = new_start
-        for word in updated_words:
-            if (
-                word.start_ms < previous_end
-                or word.end_ms > new_end
-                or word.start_ms >= word.end_ms
-            ):
+        changing_timing = (
+            structural_reconciliation
+            or proposed_speech_timing is not None
+            or proposed_word_timings is not None
+        )
+        if changing_timing or approve:
+            previous_end = new_start
+            for word in updated_words:
+                if (
+                    word.start_ms < previous_end
+                    or word.end_ms > new_end
+                    or word.start_ms >= word.end_ms
+                ):
+                    raise EditorialCommandError(
+                        "word timing outside edited cue or overlapping; adjust IN/OUT"
+                    )
+                previous_end = word.end_ms
+        # Existing historical timing inconsistencies must not prevent a
+        # translation-only draft save. Validate scene limits for new timings.
+        if changing_timing:
+            project_id = self._repository.get_scene_project_id(cue.scene_id)
+            scenes = self._repository.get_project_scenes(project_id) if project_id else []
+            scene = next((item for item in scenes if item.id == cue.scene_id), None)
+            if scene is None or new_start < 0 or new_end > scene.duration_ms:
                 raise EditorialCommandError(
-                    "word timing outside edited cue or overlapping; adjust IN/OUT"
+                    "expanded cue exceeds scene duration; shorten it before saving"
                 )
-            previous_end = word.end_ms
-        project_id = self._repository.get_scene_project_id(cue.scene_id)
-        scenes = self._repository.get_project_scenes(project_id) if project_id else []
-        scene = next((scene for scene in scenes if scene.id == cue.scene_id), None)
-        if scene is None or new_start < 0 or new_end > scene.duration_ms:
-            raise EditorialCommandError(
-                "expanded cue exceeds scene duration; shorten it before saving"
-            )
         if approve and any(
             word.provenance.get("editorial_timing_estimated")
             and not word.provenance.get("word_timing_reviewed")
