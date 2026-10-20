@@ -36,9 +36,31 @@ describe("approved-English word reconciliation", () => {
     expect(updated.words[5].surface).toBe(" you,");
   });
 
-  it("does not invent timestamps for an added word", () => {
+  it("estimates each inserted word separately without discarding original anchors", () => {
     const result = reconcileCueWords("Not until I speak to you and Lizzie!", words);
-    expect(result.error).toMatch(/tempos IN\/OUT/);
+    expect(result.error).toBeUndefined();
+    expect(result.insertedCount).toBe(1);
+    expect(result.words).toHaveLength(8);
+    expect(result.words[6].surface).toBe(" and");
+    expect(result.words[6].provenance?.editorial_timing_estimated).toBe(true);
+    expect(result.words[6].start_ms).toBeGreaterThan(words[5].end_ms);
+    expect(result.words[6].end_ms).toBeGreaterThan(result.words[6].start_ms);
+    expect(result.words[7].id).toBe(words[6].id);
+    expect(result.words[7].start_ms).toBeGreaterThanOrEqual(result.words[6].end_ms);
+  });
+
+  it("extends a short cue using speaking-rate estimates for all new words", () => {
+    const base = [{
+      id: "what", order: 1, surface: "What's", start_ms: 29550, end_ms: 29930, pt: "o que",
+    }];
+    const result = reconcileCueWords("What's the point?", base, 29550);
+    expect(result.words.map((word) => word.surface)).toEqual(["What's", " the", " point?"]);
+    expect(result.insertedCount).toBe(2);
+    expect(result.words[0].start_ms).toBe(29550);
+    expect(result.words[0].end_ms).toBe(29930);
+    expect(result.words[1].start_ms).toBeGreaterThan(result.words[0].end_ms);
+    expect(result.words[2].start_ms).toBeGreaterThanOrEqual(result.words[1].end_ms);
+    expect(result.suggestedEndMs).toBeGreaterThan(29930);
   });
 
   it("invalidates a partially deleted semantic group instead of keeping a stale translation", () => {
