@@ -212,6 +212,9 @@ class EditApprovedText:
         proposed_speech_timing: dict[str, int] | None = None,
         proposed_word_timings: list[dict[str, int]] | None = None,
         proposed_word_translations: list[str | None] | None = None,
+        confirm_word_timings: bool = False,
+        confirm_word_translations: bool = False,
+        group_cue_translation: bool = False,
     ) -> Cue:
         cue, words = _cue_with_words(self._repository, cue_id)
         _literal(approved_en, "approved_en")
@@ -291,6 +294,52 @@ class EditApprovedText:
                     provenance_word.pop("translation_review_required", None)
                 revised_translations.append(replace(word, provenance=provenance_word))
             updated_words = revised_translations
+        if (confirm_word_timings or confirm_word_translations or group_cue_translation) and not approve:
+            raise EditorialCommandError("review confirmations require approval")
+        if group_cue_translation:
+            # Explicit editorial decision: the complete cue is one semantic
+            # translation unit; word-level audio timings remain independent.
+            group_id = f"semantic-{uuid4()}" if len(updated_words) > 1 else None
+            grouped: list[WordTiming] = []
+            for index, word in enumerate(updated_words):
+                original_provenance = dict(word.provenance)
+                original_provenance.setdefault(
+                    "pt_original", original_provenance.get("pt") or ""
+                )
+                original_provenance["pt"] = approved_pt if index == 0 else None
+                original_provenance.pop("translation_review_required", None)
+                if group_id:
+                    original_provenance["semantic_group_id"] = group_id
+                    original_provenance["semantic_group_role"] = (
+                        "lead" if index == 0 else "member"
+                    )
+                else:
+                    original_provenance.pop("semantic_group_id", None)
+                    original_provenance.pop("semantic_group_role", None)
+                grouped.append(replace(word, provenance=original_provenance))
+            updated_words = grouped
+        if confirm_word_translations:
+            translated: list[WordTiming] = []
+            for word in updated_words:
+                provenance_word = dict(word.provenance)
+                if (
+                    provenance_word.get("semantic_group_role") != "member"
+                    and not str(provenance_word.get("pt") or "").strip()
+                ):
+                    raise EditorialCommandError(
+                        "missing word translation; revise it or use the approved cue translation"
+                    )
+                provenance_word.pop("translation_review_required", None)
+                translated.append(replace(word, provenance=provenance_word))
+            updated_words = translated
+        if confirm_word_timings:
+            confirmed: list[WordTiming] = []
+            for word in updated_words:
+                provenance_word = dict(word.provenance)
+                provenance_word["word_timing_reviewed"] = True
+                provenance_word["word_timing_reviewed_by"] = author
+                confirmed.append(replace(word, provenance=provenance_word))
+            updated_words = confirmed
         changing_timing = (
             structural_reconciliation
             or proposed_speech_timing is not None
