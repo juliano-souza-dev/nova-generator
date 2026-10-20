@@ -85,6 +85,9 @@ class TextRequest(ActorRequest):
     proposed_speech_timing: dict[str, int] | None = None
     proposed_word_timings: list[dict[str, int]] | None = None
     proposed_word_translations: list[str | None] | None = None
+    confirm_word_timings: bool = False
+    confirm_word_translations: bool = False
+    group_cue_translation: bool = False
 
 
 class Timing(BaseModel):
