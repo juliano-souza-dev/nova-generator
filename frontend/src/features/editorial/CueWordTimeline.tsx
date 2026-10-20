@@ -326,6 +326,38 @@ export function CueWordTimeline(props: Props) {
           </div>
         </>
       )}
+      {selectedCue && selectedCue.words.length > 0 && (
+        <nav className="timeline-word-rail" aria-label="Palavras da cue selecionada">
+          <div className="timeline-word-rail-title">
+            <strong>Palavras da cue {selectedCue.order}</strong>
+            <span>Cada palavra mantém seu próprio tempo; o grupo compartilha só a tradução.</span>
+          </div>
+          <div className="timeline-word-rail-items">
+            {selectedCue.words.map((word, index) => {
+              const span = word.end_ms - word.start_ms;
+              const invalid = span <= 0 ||
+                word.start_ms < selectedCue.speech_timing.start_ms ||
+                word.end_ms > selectedCue.speech_timing.end_ms ||
+                (index > 0 && word.start_ms < selectedCue.words[index - 1].end_ms);
+              return (
+                <button
+                  key={word.id}
+                  type="button"
+                  className={`timeline-word-chip${word.id === props.selectedWordId ? " is-selected" : ""}${invalid ? " is-invalid" : ""}`}
+                  aria-pressed={word.id === props.selectedWordId}
+                  aria-label={`Palavra ${index + 1}: ${word.surface.trim()}, IN ${word.start_ms} ms, OUT ${word.end_ms} ms${invalid ? ", revisar sincronização" : ""}`}
+                  onClick={() => props.onSelectWord(word.id, selectedCue.id)}
+                  title={`${word.surface.trim()} · ${word.start_ms}–${word.end_ms} ms`}
+                >
+                  <span className="timeline-word-chip-number">{index + 1}</span>
+                  <strong>{word.surface.trim() || "Palavra sem texto"}</strong>
+                  <small>{invalid ? "Revisar tempo" : `${span} ms`}</small>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
       <div className="editorial-timeline-ruler" aria-label="Intervalo visível">
         {ticks.map((tick) => (
           <span key={tick.x}>{tick.label}</span>
@@ -387,38 +419,57 @@ export function CueWordTimeline(props: Props) {
               <text x={pct(cue.speech_timing.start_ms) * 10 + 5} y="67" className="cue-label">
                 {cue.order}
               </text>
-              {cue.words.map((word) => (
-                <g key={word.id}>
-                  <rect
-                    x={pct(word.start_ms) * 10}
-                    width={Math.max(2, (pct(word.end_ms) - pct(word.start_ms)) * 10)}
-                    y="112"
-                    height="30"
-                    rx="3"
-                    className={`word-block${word.id === props.selectedWordId ? " word-selected" : ""}${
-                      selectedWord?.semantic_group_id &&
-                      word.semantic_group_id === selectedWord.semantic_group_id
-                        ? " word-grouped"
-                        : ""
-                    }`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      props.onSelectWord(word.id, cue.id);
-                    }}
-                  >
-                    <title>{word.surface}</title>
-                  </rect>
-                  <foreignObject
-                    x={pct(word.start_ms) * 10 + 3}
-                    y="114"
-                    width={Math.max(0, (pct(word.end_ms) - pct(word.start_ms)) * 10 - 6)}
-                    height="26"
-                    pointerEvents="none"
-                  >
-                    <div className="timeline-word-label">{word.surface}</div>
-                  </foreignObject>
-                </g>
-              ))}
+              {cue.words.map((word) => {
+                const actualWidth = Math.max(0, (pct(word.end_ms) - pct(word.start_ms)) * 10);
+                const compact = actualWidth < 36;
+                return (
+                  <g key={word.id}>
+                    <rect
+                      x={pct(word.start_ms) * 10}
+                      width={Math.max(2, actualWidth)}
+                      y="112"
+                      height="30"
+                      rx="3"
+                      className={`word-block${word.id === props.selectedWordId ? " word-selected" : ""}${
+                        selectedWord?.semantic_group_id &&
+                        word.semantic_group_id === selectedWord.semantic_group_id
+                          ? " word-grouped"
+                          : ""
+                      }`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        props.onSelectWord(word.id, cue.id);
+                      }}
+                    >
+                      <title>{word.surface.trim()} · ${word.start_ms}–${word.end_ms} ms</title>
+                    </rect>
+                    {compact ? (
+                      <circle
+                        cx={pct(word.start_ms) * 10}
+                        cy="127"
+                        r="5"
+                        className={`timeline-short-word-marker${word.id === props.selectedWordId ? " is-selected" : ""}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          props.onSelectWord(word.id, cue.id);
+                        }}
+                      >
+                        <title>{word.surface.trim()} · ${word.start_ms}–${word.end_ms} ms</title>
+                      </circle>
+                    ) : (
+                      <foreignObject
+                        x={pct(word.start_ms) * 10 + 3}
+                        y="114"
+                        width={actualWidth - 6}
+                        height="26"
+                        pointerEvents="none"
+                      >
+                        <div className="timeline-word-label">{word.surface}</div>
+                      </foreignObject>
+                    )}
+                  </g>
+                );
+              })}
             </g>
           ))}
           {activeRange && (
