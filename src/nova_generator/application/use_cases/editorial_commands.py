@@ -167,6 +167,56 @@ class EditWordSurface:
         return new_cue
 
 
+def _remap_words_for_cue(
+    words: list[WordTiming],
+    *,
+    original_start_ms: int,
+    original_end_ms: int,
+    target_start_ms: int,
+    target_end_ms: int,
+) -> list[WordTiming]:
+    """Reposition child words proportionally when their parent speech interval changes.
+
+    The transformation preserves ordering and proportional pauses, with a 1 ms
+    minimum per word. It never changes the original ASR timestamps or word IDs.
+    """
+    if (
+        original_start_ms == target_start_ms
+        and original_end_ms == target_end_ms
+    ):
+        return words
+    original_span = original_end_ms - original_start_ms
+    target_span = target_end_ms - target_start_ms
+    if original_span <= 0 or target_span < len(words):
+        raise EditorialCommandError(
+            "cue duration is too short to fit its words; increase the cue interval"
+        )
+
+    def project(time_ms: int) -> int:
+        relative = max(0, min(original_span, time_ms - original_start_ms))
+        # Integer half-up rounding; stable with the equivalent UI calculation.
+        return target_start_ms + (
+            2 * relative * target_span + original_span
+        ) // (2 * original_span)
+
+    updated: list[WordTiming] = []
+    previous_end = target_start_ms
+    for index, word in enumerate(words):
+        remaining = len(words) - index - 1
+        start = max(previous_end, min(project(word.start_ms), target_end_ms - remaining - 1))
+        end = max(start + 1, min(project(word.end_ms), target_end_ms - remaining))
+        provenance = dict(word.provenance)
+        if start != word.start_ms or end != word.end_ms:
+            provenance.pop("word_timing_reviewed", None)
+            provenance.pop("word_timing_reviewed_by", None)
+            provenance["timing_remapped_with_cue"] = True
+        updated.append(
+            replace(word, start_ms=start, end_ms=end, provenance=provenance)
+        )
+        previous_end = end
+    return updated
+
+
 class AdjustCueTiming:
     def __init__(self, repository: EditorialProjectRepository) -> None:
         self._repository = repository
@@ -184,10 +234,13 @@ class AdjustCueTiming:
         cue, words = _cue_with_words(self._repository, cue_id)
         _range(speech_start_ms, speech_end_ms, "speech_timing")
         _range(subtitle_start_ms, subtitle_end_ms, "subtitle_timing")
-        if any(
-            not speech_start_ms <= word.start_ms < word.end_ms <= speech_end_ms for word in words
-        ):
-            raise EditorialCommandError("speech_timing must contain every word timing")
+        updated_words = _remap_words_for_cue(
+            words,
+            original_start_ms=cue.speech_start_ms,
+            original_end_ms=cue.speech_end_ms,
+            target_start_ms=speech_start_ms,
+            target_end_ms=speech_end_ms,
+        )
         before = _scene_snapshot(self._repository, cue.scene_id)
         updated = replace(
             cue,
@@ -196,8 +249,9 @@ class AdjustCueTiming:
             subtitle_start_ms=subtitle_start_ms,
             subtitle_end_ms=subtitle_end_ms,
             revision=cue.revision + 1,
+            provenance={**cue.provenance, "approval": "draft"},
         )
-        self._repository.save_cue(updated, words)
+        self._repository.save_cue(updated, updated_words)
         _record(self._repository, updated, "adjust_cue_timing", author, before)
         return updated
 
