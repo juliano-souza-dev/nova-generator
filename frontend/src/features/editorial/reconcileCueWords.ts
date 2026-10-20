@@ -175,7 +175,10 @@ export function reconcileCueWords(
     if (positions.every((position, rank) => position === positions[0] + rank)) continue;
     for (const index of positions) {
       const word = updated[index];
-      const provenance = { ...word.provenance, translation_review_required: true };
+      const provenance: Record<string, unknown> = {
+        ...word.provenance,
+        translation_review_required: true,
+      };
       const pt = String(provenance.pt_original || word.pt || "");
       delete provenance.semantic_group_id;
       delete provenance.semantic_group_role;
