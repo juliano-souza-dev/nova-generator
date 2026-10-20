@@ -756,30 +756,83 @@ def test_inserted_words_receive_provisional_timings_and_can_extend_cue(
     assert len(repository.list_revisions(scene_id)) == revisions + 1
 
 
-def test_existing_approved_text_repairs_stale_incomplete_word_rows(
+def test_portuguese_only_save_preserves_historic_corrected_english_and_timings(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    original = repository.get_cue_words(cue.id)
+    corrected_text = "What's the point?"
+    repository.save_cue(
+        replace(
+            cue,
+            approved_en=corrected_text,
+            provenance={
+                **cue.provenance,
+                "editorial_text_manually_corrected": True,
+            },
+        ),
+        original,
+    )
+    revision_count = len(repository.list_revisions(scene_id))
+    updated = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": corrected_text,
+            "approved_pt": "Pra quê?",
+            "approve": False,
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["approved_pt"] == "Pra quê?"
+    assert repository.get_cue_words(cue.id) == original
+    assert len(repository.list_revisions(scene_id)) == revision_count + 1
+
+
+def test_approval_does_not_recreate_word_rows_from_historic_text_mismatch(
     client: TestClient,
 ) -> None:
     repository, _, cue = _seed(client)
     original = repository.get_cue_words(cue.id)
+    corrected_text = "What's the point?"
     repository.save_cue(
-        replace(cue, approved_en="I can't go now please?"),
+        replace(cue, approved_en=corrected_text),
         original,
     )
+    response = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": corrected_text,
+            "approved_pt": "Pra quê?",
+            "approve": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["provenance"]["approval"] == "approved"
+    assert repository.get_cue_words(cue.id) == original
+
+
+def test_translation_draft_saves_even_when_stored_word_timing_needs_repair(
+    client: TestClient,
+) -> None:
+    repository, _, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    invalid = list(words)
+    invalid[-1] = replace(invalid[-1], end_ms=cue.speech_end_ms + 40)
+    repository.save_cue(cue, invalid)
     result = client.put(
         f"/api/editorial/cues/{cue.id}/text",
         json={
             "author": "editor",
-            "approved_en": "I can't go now please?",
-            "approved_pt": "Eu não posso ir agora, por favor?",
+            "approved_en": cue.approved_en,
+            "approved_pt": "Correção ainda não revisada.",
             "approve": False,
         },
     )
     assert result.status_code == 200, result.text
-    words = repository.get_cue_words(cue.id)
-    assert len(words) == len(original) + 2
-    assert [word.id for word in words[:len(original)]] == [
-        word.id for word in original
-    ]
+    assert repository.get_cue_words(cue.id) == invalid
+    assert result.json()["approved_pt"] == "Correção ainda não revisada."
 
 
 def test_new_words_can_be_retimed_in_the_same_atomic_text_save(
