@@ -223,31 +223,49 @@ class EditApprovedText:
             )
         if proposed_word_timings is not None:
             if len(proposed_word_timings) != len(updated_words):
-                raise EditorialCommandError("proposed_word_timings must match the edited word count")
+                raise EditorialCommandError(
+                    "proposed_word_timings must match the edited word count"
+                )
             revised: list[WordTiming] = []
             for word, timing in zip(updated_words, proposed_word_timings, strict=True):
-                start, end = _range(timing.get("start_ms"), timing.get("end_ms"), "proposed_word_timing")
+                start, end = _range(
+                    timing.get("start_ms"), timing.get("end_ms"), "proposed_word_timing"
+                )
                 provenance_word = dict(word.provenance)
                 if (start, end) != (word.start_ms, word.end_ms):
                     provenance_word.pop("word_timing_reviewed", None)
                     provenance_word.pop("word_timing_reviewed_by", None)
                     provenance_word["editorial_timing_estimated"] = True
-                revised.append(replace(word, start_ms=start, end_ms=end, provenance=provenance_word))
+                revised.append(
+                    replace(word, start_ms=start, end_ms=end, provenance=provenance_word)
+                )
             updated_words = revised
         previous_end = new_start
         for word in updated_words:
-            if word.start_ms < previous_end or word.end_ms > new_end or word.start_ms >= word.end_ms:
-                raise EditorialCommandError("word timing outside edited cue or overlapping; adjust IN/OUT")
+            if (
+                word.start_ms < previous_end
+                or word.end_ms > new_end
+                or word.start_ms >= word.end_ms
+            ):
+                raise EditorialCommandError(
+                    "word timing outside edited cue or overlapping; adjust IN/OUT"
+                )
             previous_end = word.end_ms
         project_id = self._repository.get_scene_project_id(cue.scene_id)
         scenes = self._repository.get_project_scenes(project_id) if project_id else []
         scene = next((scene for scene in scenes if scene.id == cue.scene_id), None)
         if scene is None or new_start < 0 or new_end > scene.duration_ms:
-            raise EditorialCommandError("expanded cue exceeds scene duration; shorten it before saving")
-        if approve and any(word.provenance.get("editorial_timing_estimated") and
-                           not word.provenance.get("word_timing_reviewed")
-                           for word in updated_words):
-            raise EditorialCommandError("review the estimated timing for each new or shifted word before approval")
+            raise EditorialCommandError(
+                "expanded cue exceeds scene duration; shorten it before saving"
+            )
+        if approve and any(
+            word.provenance.get("editorial_timing_estimated")
+            and not word.provenance.get("word_timing_reviewed")
+            for word in updated_words
+        ):
+            raise EditorialCommandError(
+                "review estimated IN/OUT for each new or shifted word before approval"
+            )
         if approve and any(
             word.provenance.get("translation_review_required") for word in updated_words
         ):
