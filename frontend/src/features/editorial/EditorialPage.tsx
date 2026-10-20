@@ -223,6 +223,8 @@ export function EditorialPage() {
   const [approvedEn, setApprovedEn] = useState("");
   const [textDraftCueId, setTextDraftCueId] = useState("");
   const [approvedPt, setApprovedPt] = useState("");
+  // A provisional range remains editable before any inserted word is persisted.
+  const [draftCueTiming, setDraftCueTiming] = useState<{ start_ms: number; end_ms: number } | null>(null);
   const [wordDraftId, setWordDraftId] = useState<string | undefined>();
   const [wordStart, setWordStart] = useState(0);
   const [wordEnd, setWordEnd] = useState(0);
@@ -274,10 +276,26 @@ export function EditorialPage() {
   );
   const textReconciliation =
     selectedCue && textDraftCueId === selectedCue.id && approvedEn !== selectedCue.approved_en
-      ? reconcileCueWords(approvedEn, selectedCue.words)
+      ? reconcileCueWords(approvedEn, selectedCue.words, selectedCue.speech_timing.start_ms)
       : null;
-  // The inspector and timeline reflect the editor draft, not stale ASR words.
-  const visibleWords = textReconciliation?.words ?? selectedCue?.words ?? [];
+  const hasInsertedWords = Boolean(textReconciliation?.insertedCount);
+  const proposedCueTiming = selectedCue
+    ? {
+        start_ms: selectedCue.speech_timing.start_ms,
+        end_ms: Math.max(
+          selectedCue.speech_timing.end_ms,
+          textReconciliation?.suggestedEndMs ?? selectedCue.speech_timing.end_ms,
+        ),
+      }
+    : { start_ms: 0, end_ms: 1 };
+  const activeCueTiming = hasInsertedWords && draftCueTiming
+    ? draftCueTiming
+    : proposedCueTiming;
+  // Preview the same word count and provisional audio intervals as the server.
+  const reconciledWords = textReconciliation?.words ?? selectedCue?.words ?? [];
+  const visibleWords = hasInsertedWords && draftCueTiming && reconciledWords.length
+    ? remapWordsToCue(reconciledWords, proposedCueTiming, activeCueTiming)
+    : reconciledWords;
   const selectedWord = visibleWords.find((item) => item.id === selectedWordId);
   const selectedGroupWords = selectedWord?.semantic_group_id
     ? visibleWords.filter(
@@ -335,6 +353,13 @@ export function EditorialPage() {
     cue.id === selectedCue?.id
       ? {
           ...cue,
+          speech_timing: hasInsertedWords ? activeCueTiming : cue.speech_timing,
+          subtitle_timing: hasInsertedWords
+            ? {
+                start_ms: Math.min(cue.subtitle_timing.start_ms, activeCueTiming.start_ms),
+                end_ms: Math.max(cue.subtitle_timing.end_ms, activeCueTiming.end_ms),
+              }
+            : cue.subtitle_timing,
           words: visibleWords.map((word, index) => ({
             ...word,
             surface:
@@ -366,7 +391,8 @@ export function EditorialPage() {
   );
   const timingDirty = history.length > 0;
   const isDirty =
-    textDirty || wordDirty || wordTranslationDirty || wordSurfaceDirty || semanticUnitsDirty || timingDirty;
+    textDirty || wordDirty || wordTranslationDirty || wordSurfaceDirty || semanticUnitsDirty || timingDirty ||
+    Boolean(draftCueTiming);
   const cueStatus = selectedCue?.provenance?.approval === "approved" ? "Aprovado" : "Pendente";
 
   useEffect(() => {
@@ -449,6 +475,7 @@ export function EditorialPage() {
     };
   }, [sceneId]);
   useEffect(() => {
+    setDraftCueTiming(null);
     setTextDraftCueId(selectedCue?.id ?? "");
     setApprovedEn(selectedCue?.approved_en ?? "");
     setApprovedPt(selectedCue?.approved_pt ?? "");
@@ -689,6 +716,7 @@ export function EditorialPage() {
     );
     setWordSurface(word?.surface.trim() ?? "");
     setSemanticDraftUnits(null);
+    setDraftCueTiming(null);
     setMessage("Alterações locais descartadas.");
   }
   function playRange(start: number, end: number) {
@@ -804,7 +832,7 @@ export function EditorialPage() {
     setCues(next);
   }
   function beginEdgeDrag() {
-    if (!selectedWord && selectedCue) {
+    if (!selectedWord && selectedCue && !hasInsertedWords) {
       cueDragBaseline.current = selectedCue;
       if (history.length === 0) setHistory([cues]);
     }
@@ -831,8 +859,8 @@ export function EditorialPage() {
   // Neighbor conflicts are validated at save time, not allowed to freeze a handle.
   function changeSelectedWordEdge(edge: "start" | "end", targetMs: number) {
     if (!selectedCue || !selectedWord || saving) return;
-    const cueStart = selectedCue.speech_timing.start_ms;
-    const cueEnd = selectedCue.speech_timing.end_ms;
+    const cueStart = hasInsertedWords ? activeCueTiming.start_ms : selectedCue.speech_timing.start_ms;
+    const cueEnd = hasInsertedWords ? activeCueTiming.end_ms : selectedCue.speech_timing.end_ms;
     const time = Math.round(targetMs);
     if (edge === "start") {
       setWordStart(Math.max(cueStart, Math.min(time, activeWordEnd - 1)));
@@ -847,6 +875,10 @@ export function EditorialPage() {
       return;
     }
     cueDragBaseline.current = null;
+    if (hasInsertedWords) {
+      setDraftCueTiming(nudgeTiming(activeCueTiming, edge, deltaMs, durationMs));
+      return;
+    }
     updateParentCueTiming(
       selectedCue,
       nudgeTiming(selectedCue.speech_timing, edge, deltaMs, durationMs),
@@ -860,6 +892,10 @@ export function EditorialPage() {
       setMessage(
         `${edge === "start" ? "IN" : "OUT"} da palavra “${selectedWord.surface}” marcado em ${formatTime(timeMs)}.`,
       );
+      return;
+    }
+    if (hasInsertedWords) {
+      setDraftCueTiming(setTimingEdge(activeCueTiming, edge, timeMs, durationMs));
       return;
     }
     const baseCue =
@@ -878,6 +914,11 @@ export function EditorialPage() {
   }
   function undo() {
     cueDragBaseline.current = null;
+    if (draftCueTiming) {
+      setDraftCueTiming(null);
+      setMessage("Estimativa restaurada. Você pode ajustar os limites novamente.");
+      return;
+    }
     if (wordDirty && selectedWord) {
       setWordStart(selectedWord.start_ms);
       setWordEnd(selectedWord.end_ms);
