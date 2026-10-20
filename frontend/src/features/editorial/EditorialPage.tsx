@@ -270,12 +270,22 @@ export function EditorialPage() {
   );
   const selectedCueIndex = cues.findIndex((cue) => cue.id === selectedCueId);
   const selectedCue = cues[selectedCueIndex];
+  // Some previously imported projects already have corrected cue text while
+  // their canonical word rows still represent an incomplete ASR transcript.
+  // Repair the mismatch even when the text field itself was not edited today.
+  const canonicalWordCountMismatch = Boolean(
+    selectedCue &&
+    (approvedEn.match(/\S+/g)?.length ?? 0) !== selectedCue.words.length,
+  );
   const textDirty = Boolean(
     selectedCue && textDraftCueId === selectedCue.id &&
-    (approvedEn !== selectedCue.approved_en || approvedPt !== selectedCue.approved_pt),
+    (approvedEn !== selectedCue.approved_en ||
+      approvedPt !== selectedCue.approved_pt ||
+      canonicalWordCountMismatch),
   );
   const textReconciliation =
-    selectedCue && textDraftCueId === selectedCue.id && approvedEn !== selectedCue.approved_en
+    selectedCue && textDraftCueId === selectedCue.id &&
+      (approvedEn !== selectedCue.approved_en || canonicalWordCountMismatch)
       ? reconcileCueWords(approvedEn, selectedCue.words, selectedCue.speech_timing.start_ms)
       : null;
   const hasInsertedWords = Boolean(textReconciliation?.insertedCount);
