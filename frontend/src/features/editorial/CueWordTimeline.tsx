@@ -16,6 +16,8 @@ type Props = {
   selectedCueId?: string;
   selectedWordId?: string;
   onPlayToggle: () => void;
+  onPlayContext: () => void;
+  onPreviousWord: () => void;
   onContinuousPlayToggle: () => void;
   onSaveAndNext: () => void;
   onPlayheadChange: (timeMs: number) => void;
@@ -32,6 +34,7 @@ type Props = {
 export function CueWordTimeline(props: Props) {
   const { durationMs, onZoomChange } = props;
   const root = useRef<HTMLDivElement>(null);
+  const lastAutoFocusedWordId = useRef<string | null>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
   const draggingEdgeRef = useRef<"start" | "end" | null>(null);
@@ -42,6 +45,7 @@ export function CueWordTimeline(props: Props) {
   const selectedCue = props.cues.find((cue) => cue.id === props.selectedCueId);
   const selectedWord = selectedCue?.words.find((word) => word.id === props.selectedWordId);
   const activeLabel = selectedWord ? "palavra" : "cue";
+  const selectedWordIndex = selectedCue?.words.findIndex((word) => word.id === selectedWord?.id) ?? -1;
   const visibleDuration = Math.max(1, durationMs) / Math.max(1, props.zoom);
   const windowStart = Math.max(0, Math.min(viewStart, durationMs - visibleDuration));
   const pct = (time: number) => timeToPercent(time - windowStart, visibleDuration);
@@ -72,12 +76,20 @@ export function CueWordTimeline(props: Props) {
     const length = Math.max(100, end - start);
     const zoom = Math.max(1, Math.min(64, Math.floor(durationMs / (length * 1.5))));
     onZoomChange(zoom);
-    setViewStart(Math.max(0, start - length * 0.25));
+    const visibleWindow = Math.max(1, durationMs) / zoom;
+    setViewStart(Math.max(0, Math.min(durationMs - visibleWindow,
+      (start + end) / 2 - visibleWindow / 2)));
   }, [durationMs, onZoomChange, selectedCue, selectedWord]);
   useEffect(() => {
     if (!focusActive) return;
     focusSelectedRange();
   }, [focusActive, props.selectedCueId, props.selectedWordId, focusSelectedRange]);
+  useEffect(() => {
+    if (!selectedWord || lastAutoFocusedWordId.current === selectedWord.id) return;
+    lastAutoFocusedWordId.current = selectedWord.id;
+    setFocusActive(true);
+    focusSelectedRange();
+  }, [selectedWord, focusSelectedRange]);
   useEffect(() => {
     if (!props.focusRequest) return;
     root.current?.focus({ preventScroll: true });
@@ -173,133 +185,141 @@ export function CueWordTimeline(props: Props) {
   const activeRange = selectedWord ?? selectedCue?.speech_timing;
   return (
     <section
-      className="timeline-panel"
+      className={`timeline-panel${selectedWord ? " timeline-word-guided" : ""}`}
       aria-label="Timeline de cues e palavras"
       ref={root}
       tabIndex={0}
     >
-      <div className="timeline-toolbar">
-        <button
-          className="transport-action"
-          type="button"
-          onClick={props.onPlayToggle}
-          aria-label={props.playing ? `Pausar ${activeLabel}` : `Reproduzir ${activeLabel}`}
-        >
-          {props.playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-          {props.playing ? `Pausar ${activeLabel}` : `Reproduzir ${activeLabel}`}
-        </button>
-        <div className="zoom-controls" aria-label="Zoom da timeline">
-          <button
-            className="icon-action"
-            type="button"
-            onClick={() => props.onZoomChange(Math.max(1, props.zoom - 1))}
-            aria-label="Diminuir zoom"
-          >
-            <ZoomOut aria-hidden="true" />
-          </button>
-          <output aria-label="Zoom atual">Zoom {props.zoom}×</output>
-          <button
-            className="icon-action"
-            type="button"
-            onClick={() => props.onZoomChange(Math.min(64, props.zoom + 1))}
-            aria-label="Aumentar zoom"
-          >
-            <ZoomIn aria-hidden="true" />
-          </button>
+      {selectedWord && (
+        <div className="word-guided-panel" aria-label="Sincronização da palavra selecionada">
+          <div className="word-guided-title">
+            <div>
+              <span className="word-guided-eyebrow">
+                Palavra {selectedWordIndex + 1} de {selectedCue?.words.length ?? 0} · Cue {selectedCue?.order}
+              </span>
+              <strong>{selectedWord.surface.trim()}</strong>
+              <small>O destaque no iHub ficará ativo apenas entre IN e OUT. As pausas ficam sem destaque.</small>
+            </div>
+            <div className="word-guided-times" aria-live="polite">
+              <span><b>IN</b> {timeLabel(selectedWord.start_ms)}</span>
+              <span><b>OUT</b> {timeLabel(selectedWord.end_ms)}</span>
+            </div>
+          </div>
+          <div className="word-guided-actions">
+            <button type="button" className="secondary-button"
+              onClick={props.onPlayContext}>
+              <Play aria-hidden="true" /> Ouvir com contexto
+            </button>
+            <button type="button" className="secondary-button"
+              onClick={props.onPlayToggle}>
+              {props.playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+              {props.playing ? "Pausar" : "Ouvir só a palavra"}
+            </button>
+            <button type="button" className="word-edge-action word-edge-start"
+              onClick={() => props.onSetEdge("start")}
+              title="Marcar o início no ponto atual da reprodução (A)">
+              <kbd>A</kbd> Marcar início
+            </button>
+            <button type="button" className="word-edge-action word-edge-end"
+              onClick={() => props.onSetEdge("end")}
+              title="Marcar o fim no ponto atual da reprodução (S)">
+              <kbd>S</kbd> Marcar fim
+            </button>
+            <button type="button" className="secondary-button"
+              disabled={selectedWordIndex <= 0} onClick={props.onPreviousWord}>
+              Palavra anterior
+            </button>
+            <button type="button" className="primary-button" onClick={props.onSaveAndNext}>
+              Salvar e próxima <kbd>G</kbd>
+            </button>
+          </div>
         </div>
-        <button className="secondary-button" type="button" onClick={props.onUndo}>
-          <RotateCcw aria-hidden="true" /> Desfazer ajuste
-        </button>
-        <details className="shortcut-help">
-          <summary>Atalhos</summary>
-          <span>
-            Espaço: cue · Shift + Espaço: cena · A: IN · S: OUT · G: salvar + próxima · Setas:
-            playhead 10 ms · Shift: 100 ms · Alt: 1 ms
-          </span>
+      )}
+      {selectedWord ? (
+        <details className="word-advanced-controls">
+          <summary>Zoom, ajuste em milissegundos e outros controles</summary>
+          <div className="timeline-toolbar">
+            <div className="zoom-controls" aria-label="Zoom da timeline">
+              <button className="icon-action" type="button"
+                onClick={() => props.onZoomChange(Math.max(1, props.zoom - 1))}
+                aria-label="Diminuir zoom"><ZoomOut aria-hidden="true" /></button>
+              <output aria-label="Zoom atual">Zoom {props.zoom}×</output>
+              <button className="icon-action" type="button"
+                onClick={() => props.onZoomChange(Math.min(64, props.zoom + 1))}
+                aria-label="Aumentar zoom"><ZoomIn aria-hidden="true" /></button>
+            </div>
+            <button className="secondary-button" type="button"
+              onClick={() => { setFocusActive(true); focusSelectedRange(); }}>
+              Centralizar palavra
+            </button>
+            <button className="secondary-button" type="button" onClick={() => {
+              setFocusActive(false); onZoomChange(1); setViewStart(0);
+            }}>Ver cena toda</button>
+            <button className="secondary-button" type="button" onClick={props.onUndo}>
+              <RotateCcw aria-hidden="true" /> Desfazer ajuste
+            </button>
+          </div>
+          <div className="cue-boundary-controls" aria-label="Ajustes precisos da palavra">
+            <strong>Início</strong>
+            <button type="button" className="secondary-button" onClick={() => props.onNudge("start", -25)}>−25 ms</button>
+            <button type="button" className="secondary-button" onClick={() => props.onNudge("start", 25)}>+25 ms</button>
+            <span className="cue-boundary-divider" aria-hidden="true" />
+            <strong>Fim</strong>
+            <button type="button" className="secondary-button" onClick={() => props.onNudge("end", -25)}>−25 ms</button>
+            <button type="button" className="secondary-button" onClick={() => props.onNudge("end", 25)}>+25 ms</button>
+          </div>
+          <p className="word-advanced-shortcuts">
+            Espaço: reproduzir · A/S: marcar início/fim · G: salvar e próxima ·
+            Setas: mover cursor · Arraste as bordas verde e rosa na timeline.
+          </p>
         </details>
-      </div>
-      <div className="cue-boundary-controls" aria-label={`Limites da ${activeLabel} selecionada`}>
-        <span className="active-edit-scope">Editando {activeLabel}</span>
-        {selectedWord && <span className="drag-hint">Arraste IN/OUT na timeline</span>}
-        <strong>IN</strong>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => props.onNudge("start", -25)}
-          aria-label={`Aumentar ${activeLabel} antecipando o início em 25 milissegundos`}
-        >
-          −25 ms
-        </button>
-        <button
-          className="secondary-button cue-edge-button"
-          type="button"
-          onClick={() => props.onSetEdge("start")}
-        >
-          <kbd>A</kbd> Marcar IN
-        </button>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => props.onNudge("start", 25)}
-          aria-label={`Encurtar ${activeLabel} atrasando o início em 25 milissegundos`}
-        >
-          +25 ms
-        </button>
-        <span className="cue-boundary-divider" aria-hidden="true" />
-        <strong>OUT</strong>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => props.onNudge("end", -25)}
-          aria-label={`Encurtar ${activeLabel} antecipando o fim em 25 milissegundos`}
-        >
-          −25 ms
-        </button>
-        <button
-          className="secondary-button cue-edge-button"
-          type="button"
-          onClick={() => props.onSetEdge("end")}
-        >
-          <kbd>S</kbd> Marcar OUT
-        </button>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => props.onNudge("end", 25)}
-          aria-label={`Aumentar ${activeLabel} atrasando o fim em 25 milissegundos`}
-        >
-          +25 ms
-        </button>
-      </div>
-      <div className="timeline-focus-controls">
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={!props.selectedCueId}
-          onClick={() => {
-            setFocusActive(true);
-            focusSelectedRange();
-          }}
-          aria-pressed={focusActive}
-        >
-          {focusActive ? "Foco ativo" : `Focar ${activeLabel}`}
-        </button>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => {
-            setFocusActive(false);
-            onZoomChange(1);
-            setViewStart(0);
-          }}
-        >
-          Ver tudo
-        </button>
-        <span>
-          Espaço: cue · Shift + Espaço: cena · A/S: IN/OUT · G: salvar + próxima · ←/→: cursor 10 ms
-          · Shift: 100 ms · Alt: 1 ms · Roda: navegar visão
-        </span>
-      </div>
+      ) : (
+        <>
+          <div className="timeline-toolbar">
+            <button className="transport-action" type="button" onClick={props.onPlayToggle}
+              aria-label={props.playing ? "Pausar cue" : "Reproduzir cue"}>
+              {props.playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+              {props.playing ? "Pausar cue" : "Reproduzir cue"}
+            </button>
+            <div className="zoom-controls" aria-label="Zoom da timeline">
+              <button className="icon-action" type="button"
+                onClick={() => props.onZoomChange(Math.max(1, props.zoom - 1))}
+                aria-label="Diminuir zoom"><ZoomOut aria-hidden="true" /></button>
+              <output aria-label="Zoom atual">Zoom {props.zoom}×</output>
+              <button className="icon-action" type="button"
+                onClick={() => props.onZoomChange(Math.min(64, props.zoom + 1))}
+                aria-label="Aumentar zoom"><ZoomIn aria-hidden="true" /></button>
+            </div>
+            <button className="secondary-button" type="button" onClick={props.onUndo}>
+              <RotateCcw aria-hidden="true" /> Desfazer ajuste
+            </button>
+            <details className="shortcut-help"><summary>Atalhos</summary>
+              <span>Espaço: cue · Shift + Espaço: cena · A: IN · S: OUT · G: salvar e próxima</span>
+            </details>
+          </div>
+          <div className="cue-boundary-controls" aria-label="Limites da cue selecionada">
+            <span className="active-edit-scope">Editando cue</span>
+            <strong>IN</strong>
+            <button type="button" className="secondary-button" onClick={() => props.onNudge("start", -25)}>−25 ms</button>
+            <button type="button" className="secondary-button cue-edge-button" onClick={() => props.onSetEdge("start")}><kbd>A</kbd> Marcar IN</button>
+            <button type="button" className="secondary-button" onClick={() => props.onNudge("start", 25)}>+25 ms</button>
+            <span className="cue-boundary-divider" aria-hidden="true" />
+            <strong>OUT</strong>
+            <button type="button" className="secondary-button" onClick={() => props.onNudge("end", -25)}>−25 ms</button>
+            <button type="button" className="secondary-button cue-edge-button" onClick={() => props.onSetEdge("end")}><kbd>S</kbd> Marcar OUT</button>
+            <button type="button" className="secondary-button" onClick={() => props.onNudge("end", 25)}>+25 ms</button>
+          </div>
+          <div className="timeline-focus-controls">
+            <button type="button" className="secondary-button" disabled={!props.selectedCueId}
+              onClick={() => { setFocusActive(true); focusSelectedRange(); }}
+              aria-pressed={focusActive}>Focar cue</button>
+            <button type="button" className="secondary-button" onClick={() => {
+              setFocusActive(false); onZoomChange(1); setViewStart(0);
+            }}>Ver tudo</button>
+            <span>Arraste IN/OUT na timeline ou marque usando A/S.</span>
+          </div>
+        </>
+      )}
       <div className="editorial-timeline-ruler" aria-label="Intervalo visível">
         {ticks.map((tick) => (
           <span key={tick.x}>{tick.label}</span>
