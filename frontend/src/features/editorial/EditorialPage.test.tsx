@@ -174,6 +174,10 @@ describe("EditorialPage", () => {
       </MemoryRouter>,
     );
     const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "Inglês aprovado" }))
+        .toHaveValue(before.approved_en),
+    );
     expect(within(list).getByRole("button", { name: /you!/ })).toBeInTheDocument();
     expect(within(list).getByRole("button", { name: /Lizzie!/ })).toBeInTheDocument();
 
