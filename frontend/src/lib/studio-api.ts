@@ -158,6 +158,7 @@ export const studioApi = {
       approve?: boolean;
       proposed_speech_timing?: Timing;
       proposed_word_timings?: Timing[];
+      proposed_word_translations?: Array<string | null>;
     },
   ) =>
     apiRequest<Cue>(`/editorial/cues/${id}/text`, { method: "PUT", body: JSON.stringify(input) }),
