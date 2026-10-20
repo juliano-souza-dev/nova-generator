@@ -1537,7 +1537,7 @@ export function EditorialPage() {
           )}
         </div>
       </header>
-      {message && (
+      {message && !saveFeedback && (
         <p className="review-message" role="status">
           {message}
         </p>
