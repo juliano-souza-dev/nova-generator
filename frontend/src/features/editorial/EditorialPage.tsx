@@ -2189,7 +2189,7 @@ export function EditorialPage() {
                       <div>
                         <span className="eyebrow">
                           {selectedGroupWords.length > 1
-                            ? "Unidade semântica"
+                            ? "Unidade semântica (somente sentido/tradução)"
                             : "Tradução da palavra"}
                         </span>
                         <strong>{selectedUnitLabel}</strong>
