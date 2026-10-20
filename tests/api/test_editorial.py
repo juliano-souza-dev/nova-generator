@@ -727,25 +727,72 @@ def test_deleting_intrusive_english_word_preserves_following_word_timestamps_and
     ]
 
 
-def test_editing_approved_text_cannot_invent_timestamps_for_inserted_word(
+def test_inserted_words_receive_provisional_timings_and_can_extend_cue(
     client: TestClient,
 ) -> None:
     repository, scene_id, cue = _seed(client)
     before = repository.get_cue_words(cue.id)
-    count = len(repository.list_revisions(scene_id))
+    revisions = len(repository.list_revisions(scene_id))
+    response = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "I can't go now please?",
+            "approved_pt": "Eu não posso ir agora, por favor?",
+            "approve": False,
+        },
+    )
+    assert response.status_code == 200, response.text
+    new_cue = response.json()
+    updated = repository.get_cue_words(cue.id)
+    assert len(updated) == len(before) + 2
+    assert [word.id for word in updated[:len(before)]] == [word.id for word in before]
+    assert updated[-1].end_ms == new_cue["speech_timing"]["end_ms"] or (
+        updated[-1].end_ms < new_cue["speech_timing"]["end_ms"]
+    )
+    assert new_cue["speech_timing"]["end_ms"] >= cue.speech_end_ms
+    assert all(a.end_ms <= b.start_ms for a, b in zip(updated, updated[1:]))
+    assert all(word.provenance.get("editorial_timing_estimated") for word in updated[-2:])
+    assert all(word.provenance.get("word_timing_reviewed") is not True for word in updated[-2:])
+    assert all(word.provenance.get("translation_review_required") for word in updated[-2:])
+    assert len(repository.list_revisions(scene_id)) == revisions + 1
+
+
+def test_new_words_can_be_retimed_in_the_same_atomic_text_save(
+    client: TestClient,
+) -> None:
+    repository, _, cue = _seed(client)
+    before = repository.get_cue_words(cue.id)
+    # Keep the original word IDs and move only what the operator has decided.
+    times = [
+        {"start_ms": word.start_ms, "end_ms": word.end_ms}
+        for word in before
+    ]
+    times.extend([
+        {"start_ms": before[-1].end_ms + 10, "end_ms": before[-1].end_ms + 155},
+        {"start_ms": before[-1].end_ms + 165, "end_ms": before[-1].end_ms + 320},
+    ])
+    new_end = max(cue.speech_end_ms, times[-1]["end_ms"] + 5)
     result = client.put(
         f"/api/editorial/cues/{cue.id}/text",
         json={
             "author": "editor",
-            "approved_en": "I really can't go?",
-            "approved_pt": "Eu realmente não posso ir?",
+            "approved_en": "I can't go now please?",
+            "approved_pt": "Eu não posso ir agora, por favor?",
             "approve": False,
+            "proposed_speech_timing": {
+                "start_ms": cue.speech_start_ms, "end_ms": new_end,
+            },
+            "proposed_word_timings": times,
         },
     )
-    assert result.status_code == 422
-    assert "explicit audio timings" in result.json()["detail"]
-    assert repository.get_cue_words(cue.id) == before
-    assert len(repository.list_revisions(scene_id)) == count
+    assert result.status_code == 200, result.text
+    words = repository.get_cue_words(cue.id)
+    assert len(words) == len(times)
+    assert [(word.start_ms, word.end_ms) for word in words] == [
+        (value["start_ms"], value["end_ms"]) for value in times
+    ]
+    assert [word.id for word in words[:len(before)]] == [word.id for word in before]
 
 
 def test_removing_word_from_semantic_unit_marks_survivor_for_translation_review(
