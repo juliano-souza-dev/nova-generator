@@ -211,6 +211,7 @@ class EditApprovedText:
         approve: bool = True,
         proposed_speech_timing: dict[str, int] | None = None,
         proposed_word_timings: list[dict[str, int]] | None = None,
+        proposed_word_translations: list[str | None] | None = None,
     ) -> Cue:
         cue, words = _cue_with_words(self._repository, cue_id)
         _literal(approved_en, "approved_en")
@@ -262,6 +263,26 @@ class EditApprovedText:
                     replace(word, start_ms=start, end_ms=end, provenance=provenance_word)
                 )
             updated_words = revised
+        if proposed_word_translations is not None:
+            if len(proposed_word_translations) != len(updated_words):
+                raise EditorialCommandError(
+                    "proposed_word_translations must match the edited word count"
+                )
+            revised_translations: list[WordTiming] = []
+            for word, pt in zip(updated_words, proposed_word_translations, strict=True):
+                if pt is not None and not isinstance(pt, str):
+                    raise EditorialCommandError("proposed translation must be a string")
+                provenance_word = dict(word.provenance)
+                if (
+                    pt is not None
+                    and pt.strip()
+                    and provenance_word.get("semantic_group_role") != "member"
+                    and pt != provenance_word.get("pt")
+                ):
+                    provenance_word["pt"] = pt
+                    provenance_word.pop("translation_review_required", None)
+                revised_translations.append(replace(word, provenance=provenance_word))
+            updated_words = revised_translations
         previous_end = new_start
         for word in updated_words:
             if (
