@@ -590,3 +590,101 @@ def test_word_timing_review_rejects_invalid_word_without_persisting(
     )
     assert response.status_code == 422
     assert len(repository.list_revisions(scene_id)) == before
+
+
+def test_cue_start_trim_remaps_all_words_inside_new_interval(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    original_words = repository.get_cue_words(cue.id)
+    revision_count = len(repository.list_revisions(scene_id))
+    result = client.put(
+        f"/api/editorial/cues/{cue.id}/timing",
+        json={
+            "author": "editor",
+            "speech_timing": {"start_ms": 1100, "end_ms": 2100},
+            "subtitle_timing": {"start_ms": 1090, "end_ms": 2150},
+        },
+    )
+    assert result.status_code == 200, result.text
+    assert result.json()["provenance"]["approval"] == "draft"
+    actual = repository.get_cue_words(cue.id)
+    assert [(word.start_ms, word.end_ms) for word in actual] == [
+        (1100, 1175),
+        (1200, 1400),
+        (1800, 2000),
+    ]
+    assert [word.id for word in actual] == [word.id for word in original_words]
+    assert [word.original_start_ms for word in actual] == [
+        word.original_start_ms for word in original_words
+    ]
+    assert [word.provenance["pt"] for word in actual] == [
+        word.provenance["pt"] for word in original_words
+    ]
+    assert len(repository.list_revisions(scene_id)) == revision_count + 1
+    revision = repository.list_revisions(scene_id)[-1]
+    undo = client.post(
+        f"/api/editorial/scenes/{scene_id}/undo",
+        json={"revision_id": str(revision.id), "author": "editor"},
+    )
+    assert undo.status_code == 200, undo.text
+    assert [
+        (word.start_ms, word.end_ms) for word in repository.get_cue_words(cue.id)
+    ] == [(word.start_ms, word.end_ms) for word in original_words]
+
+
+def test_moving_cue_preserves_word_durations_and_relative_pauses(
+    client: TestClient,
+) -> None:
+    repository, _, cue = _seed(client)
+    original_words = repository.get_cue_words(cue.id)
+    response = client.put(
+        f"/api/editorial/cues/{cue.id}/timing",
+        json={
+            "author": "editor",
+            "speech_timing": {"start_ms": 1100, "end_ms": 3100},
+            "subtitle_timing": {"start_ms": 1090, "end_ms": 3150},
+        },
+    )
+    assert response.status_code == 200, response.text
+    actual = repository.get_cue_words(cue.id)
+    assert [(word.start_ms, word.end_ms) for word in actual] == [
+        (word.start_ms + 1000, word.end_ms + 1000) for word in original_words
+    ]
+
+
+def test_cue_timing_change_rejects_insufficient_word_space_without_mutation(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    original_words = repository.get_cue_words(cue.id)
+    revisions = len(repository.list_revisions(scene_id))
+    result = client.put(
+        f"/api/editorial/cues/{cue.id}/timing",
+        json={
+            "author": "editor",
+            "speech_timing": {"start_ms": 100, "end_ms": 102},
+            "subtitle_timing": {"start_ms": 100, "end_ms": 102},
+        },
+    )
+    assert result.status_code == 422
+    assert repository.get_cue(cue.id).speech_end_ms == 2100
+    assert repository.get_cue_words(cue.id) == original_words
+    assert len(repository.list_revisions(scene_id)) == revisions
+
+
+def test_subtitle_only_boundary_change_does_not_move_word_audio(
+    client: TestClient,
+) -> None:
+    repository, _, cue = _seed(client)
+    original_words = repository.get_cue_words(cue.id)
+    result = client.put(
+        f"/api/editorial/cues/{cue.id}/timing",
+        json={
+            "author": "editor",
+            "speech_timing": {"start_ms": 100, "end_ms": 2100},
+            "subtitle_timing": {"start_ms": 150, "end_ms": 2050},
+        },
+    )
+    assert result.status_code == 200, result.text
+    assert repository.get_cue_words(cue.id) == original_words
