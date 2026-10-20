@@ -14,14 +14,25 @@ class EditorialCommandError(ValueError):
     """A command would violate a published editorial invariant."""
 
 
-def _reconcile_approved_words(
-    text: str, words: list[WordTiming]
-) -> tuple[list[WordTiming], str, list[str]]:
-    """Match edited English to original word identities, allowing deletions.
+def _estimated_speech_word_ms(surface: str, words: list[WordTiming]) -> int:
+    """Estimate provisional speech duration from the current cue's rhythm."""
+    def syllables(value: str) -> int:
+        return max(1, len(re.findall(r"[aeiouy]+", value.casefold())))
 
-    Retained words keep their original ASR timings. Newly inserted words are
-    rejected because there is no audio evidence for their start/end times.
-    """
+    samples = sorted(
+        (word.end_ms - word.start_ms) / syllables(word.surface)
+        for word in words
+        if word.end_ms > word.start_ms
+    )
+    pace = samples[len(samples) // 2] if samples else 220
+    pace = max(135, min(360, pace))
+    return max(130, min(950, round(pace * syllables(surface))))
+
+
+def _reconcile_approved_words(
+    text: str, words: list[WordTiming], cue_start_ms: int
+) -> tuple[list[WordTiming], str, list[str]]:
+    """Preserve ASR anchors; estimate new words for later manual alignment."""
     tokens = re.findall(r"\s*\S+", text)
     trailing = text[len("".join(tokens)) :]
     if not tokens or trailing.strip():
@@ -56,32 +67,51 @@ def _reconcile_approved_words(
         else:
             j += 1
 
-    matches: dict[int, WordTiming] = {}
+    matches: dict[int, WordTiming | None] = {}
     old_pos = new_pos = 0
     for old_end, new_end in [*anchors, (n, m)]:
         old_count, new_count = old_end - old_pos, new_end - new_pos
-        if new_count > old_count:
-            raise EditorialCommandError(
-                "new English words need explicit audio timings; correct or split a "
-                "word before saving the cue"
-            )
         for offset in range(new_count):
-            matches[new_pos + offset] = words[old_pos + offset]
+            matches[new_pos + offset] = (
+                words[old_pos + offset] if offset < old_count else None
+            )
         if old_end < n:
             matches[new_end] = words[old_end]
         old_pos, new_pos = old_end + 1, new_end + 1
 
     if len(matches) != m:
         raise EditorialCommandError("could not reconcile the edited words")
-    updated = [
-        replace(
-            matches[k],
-            order=k + 1,
-            surface=token,
-            provenance=_changed_word_provenance(matches[k], token),
-        )
-        for k, token in enumerate(tokens)
-    ]
+    updated: list[WordTiming] = []
+    cursor = cue_start_ms
+    for k, token in enumerate(tokens):
+        previous = matches[k]
+        if previous is None:
+            start = cursor + (15 if updated else 0)
+            end = start + _estimated_speech_word_ms(token, words)
+            updated.append(
+                WordTiming(
+                    uuid4(), words[0].cue_id, k + 1, token, start, end, start, end,
+                    {
+                        "pt": "",
+                        "editorial_word_inserted": True,
+                        "editorial_timing_estimated": True,
+                        "translation_review_required": True,
+                    },
+                )
+            )
+        else:
+            start = max(previous.start_ms, cursor)
+            end = start + previous.end_ms - previous.start_ms
+            provenance = _changed_word_provenance(previous, token)
+            if start != previous.start_ms:
+                provenance.pop("word_timing_reviewed", None)
+                provenance.pop("word_timing_reviewed_by", None)
+                provenance["editorial_timing_estimated"] = True
+            updated.append(
+                replace(previous, order=k + 1, surface=token, start_ms=start,
+                        end_ms=end, provenance=provenance)
+            )
+        cursor = updated[-1].end_ms
     kept_ids = {word.id for word in updated}
     removed = [word for word in words if word.id not in kept_ids]
     affected_groups = {
@@ -157,6 +187,8 @@ class EditApprovedText:
         approved_pt: str,
         author: str,
         approve: bool = True,
+        proposed_speech_timing: dict[str, int] | None = None,
+        proposed_word_timings: list[dict[str, int]] | None = None,
     ) -> Cue:
         cue, words = _cue_with_words(self._repository, cue_id)
         _literal(approved_en, "approved_en")
@@ -172,7 +204,7 @@ class EditApprovedText:
         provenance = dict(cue.provenance)
         if approved_en != current_text:
             updated_words, trailing, removed_ids = _reconcile_approved_words(
-                approved_en, words
+                approved_en, words, cue.speech_start_ms
             )
             provenance["editorial_preparation_trailing"] = trailing
             if removed_ids:
@@ -181,6 +213,41 @@ class EditApprovedText:
             provenance["editorial_text_ai_reference"] = cue.provenance.get(
                 "editorial_text_ai_reference", cue.approved_en
             )
+        new_start = cue.speech_start_ms
+        new_end = max(cue.speech_end_ms, updated_words[-1].end_ms)
+        if proposed_speech_timing is not None:
+            new_start, new_end = _range(
+                proposed_speech_timing.get("start_ms"),
+                proposed_speech_timing.get("end_ms"),
+                "proposed_speech_timing",
+            )
+        if proposed_word_timings is not None:
+            if len(proposed_word_timings) != len(updated_words):
+                raise EditorialCommandError("proposed_word_timings must match the edited word count")
+            revised: list[WordTiming] = []
+            for word, timing in zip(updated_words, proposed_word_timings, strict=True):
+                start, end = _range(timing.get("start_ms"), timing.get("end_ms"), "proposed_word_timing")
+                provenance_word = dict(word.provenance)
+                if (start, end) != (word.start_ms, word.end_ms):
+                    provenance_word.pop("word_timing_reviewed", None)
+                    provenance_word.pop("word_timing_reviewed_by", None)
+                    provenance_word["editorial_timing_estimated"] = True
+                revised.append(replace(word, start_ms=start, end_ms=end, provenance=provenance_word))
+            updated_words = revised
+        previous_end = new_start
+        for word in updated_words:
+            if word.start_ms < previous_end or word.end_ms > new_end or word.start_ms >= word.end_ms:
+                raise EditorialCommandError("word timing outside edited cue or overlapping; adjust IN/OUT")
+            previous_end = word.end_ms
+        project_id = self._repository.get_scene_project_id(cue.scene_id)
+        scenes = self._repository.get_project_scenes(project_id) if project_id else []
+        scene = next((scene for scene in scenes if scene.id == cue.scene_id), None)
+        if scene is None or new_start < 0 or new_end > scene.duration_ms:
+            raise EditorialCommandError("expanded cue exceeds scene duration; shorten it before saving")
+        if approve and any(word.provenance.get("editorial_timing_estimated") and
+                           not word.provenance.get("word_timing_reviewed")
+                           for word in updated_words):
+            raise EditorialCommandError("review the estimated timing for each new or shifted word before approval")
         if approve and any(
             word.provenance.get("translation_review_required") for word in updated_words
         ):
@@ -191,6 +258,10 @@ class EditApprovedText:
             cue,
             approved_en=approved_en,
             approved_pt=approved_pt,
+            speech_start_ms=new_start,
+            speech_end_ms=new_end,
+            subtitle_start_ms=min(cue.subtitle_start_ms, new_start),
+            subtitle_end_ms=max(cue.subtitle_end_ms, new_end),
             revision=cue.revision + 1,
             provenance={**provenance, "approval": "approved" if approve else "draft"},
         )
