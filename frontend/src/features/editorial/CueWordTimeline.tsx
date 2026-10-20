@@ -23,7 +23,7 @@ type Props = {
   onPlayheadChange: (timeMs: number) => void;
   onZoomChange: (zoom: number) => void;
   onSelectCue: (id: string) => void;
-  onSelectWord: (id: string) => void;
+  onSelectWord: (id: string, cueId?: string) => void;
   onSetEdge: (edge: "start" | "end") => void;
   onEdgeDragStart: () => void;
   onEdgeChange: (edge: "start" | "end", timeMs: number) => void;
@@ -116,11 +116,13 @@ export function CueWordTimeline(props: Props) {
         event.preventDefault();
         props.onSaveAndNext();
       }
-      if (event.key === "Escape") root.current?.focus();
+      if (event.key === "Escape") root.current?.focus({ preventScroll: true });
       if (event.key === "z" && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         props.onUndo();
       }
+      // Alt + left/right belongs to cue navigation, not playhead nudge.
+      if (event.altKey && ["ArrowLeft", "ArrowRight"].includes(event.key)) return;
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         props.onPlayheadChange(props.playheadMs - (event.altKey ? 1 : event.shiftKey ? 100 : 10));
@@ -401,8 +403,7 @@ export function CueWordTimeline(props: Props) {
                     }`}
                     onClick={(event) => {
                       event.stopPropagation();
-                      props.onSelectCue(cue.id);
-                      props.onSelectWord(word.id);
+                      props.onSelectWord(word.id, cue.id);
                     }}
                   >
                     <title>{word.surface}</title>
