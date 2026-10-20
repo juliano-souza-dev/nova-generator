@@ -508,6 +508,10 @@ export function EditorialPage() {
         const saved = await saveChanges(false, false);
         if (!saved) return;
       }
+      if (selectedWord && selectedCue) {
+        await studioApi.completeWordTimingReview(selectedCue.id, selectedWord.id, author);
+        await refreshCues();
+      }
       playbackEnd.current = null;
       mediaRef.current?.pause();
       setSelectedWordId(word.id);
@@ -517,8 +521,12 @@ export function EditorialPage() {
           [])
         : [word];
       setMessage(
-        `Palavra anterior concluída. Editando “${group.map((item) => item.surface).join(" ")}”.`,
+        selectedWord
+          ? `Palavra anterior concluída e salva. Editando “${group.map((item) => item.surface).join(" ")}”.`
+          : `Editando “${group.map((item) => item.surface).join(" ")}”.`,
       );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível concluir a palavra.");
     } finally {
       wordNavigationLock.current = false;
     }
@@ -882,6 +890,9 @@ export function EditorialPage() {
           : undefined;
       const nextCueForWord =
         advance && selectedWord && !approve && !nextWord ? cues[selectedCueIndex + 1] : undefined;
+      if (advance && selectedWord && !approve) {
+        await studioApi.completeWordTimingReview(selectedCue.id, selectedWord.id, author);
+      }
       const refreshed = await refreshCues();
       const currentIndex = refreshed.findIndex((cue) => cue.id === selectedCue.id);
       let nextCue = advance && (!selectedWord || approve) ? refreshed[currentIndex + 1] : undefined;
@@ -2003,6 +2014,11 @@ export function EditorialPage() {
                       aria-pressed={item.id === selectedWordId}
                     >
                       <strong>{item.surface}</strong>
+                      {item.provenance?.word_timing_reviewed === true && (
+                        <span className="word-reviewed-indicator" aria-label="Palavra concluída">
+                          <Check aria-hidden="true" />
+                        </span>
+                      )}
                       <span>
                         {item.semantic_group_role === "lead" && item.pt
                           ? `${item.pt} · `
