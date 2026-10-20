@@ -213,10 +213,9 @@ export function CueWordTimeline(props: Props) {
               <Play aria-hidden="true" /> Ouvir com contexto
             </button>
             <button type="button" className="secondary-button"
-              aria-label={props.playing ? "Pausar palavra" : "Reproduzir palavra"}
+              aria-label="Reproduzir palavra"
               onClick={props.onPlayToggle}>
-              {props.playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-              {props.playing ? "Pausar" : "Ouvir só a palavra"}
+              <Play aria-hidden="true" /> Ouvir só a palavra
             </button>
             <button type="button" className="word-edge-action word-edge-start"
               onClick={() => props.onSetEdge("start")}
