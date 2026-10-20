@@ -8,6 +8,7 @@ from nova_generator.application.use_cases.check_health import CheckHealth
 from nova_generator.application.use_cases.editorial_commands import (
     AdjustCueTiming,
     AdjustWordTiming,
+    CompleteWordTimingReview,
     EditApprovedText,
     EditWordSurface,
     EditWordTranslation,
@@ -128,6 +129,10 @@ def get_fit_cue_to_words() -> FitCueToWords:
 
 def get_adjust_cue_timing() -> AdjustCueTiming:
     return AdjustCueTiming(_editorial_repository())
+
+
+def get_complete_word_timing_review() -> CompleteWordTimingReview:
+    return CompleteWordTimingReview(_editorial_repository())
 
 
 def get_adjust_word_timing() -> AdjustWordTiming:
