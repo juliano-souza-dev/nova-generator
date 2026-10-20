@@ -602,6 +602,10 @@ export function EditorialPage() {
 
   async function finishCurrentWordForNavigation(): Promise<string | null> {
     if (!selectedCue || !selectedWord) return null;
+    if (hasInsertedWords) {
+      rememberCurrentWordDraft();
+      return "Palavras novas em rascunho. Salve a cue para confirmar a segmentação.";
+    }
     const hasWordEdits = wordDirty || wordTranslationDirty || wordSurfaceDirty;
     if (hasWordEdits) {
       // Keep access to earlier/later words even when the current edit cannot
@@ -1036,6 +1040,36 @@ export function EditorialPage() {
     }
     setSaving(true);
     try {
+      if (hasInsertedWords && textDirty) {
+        // Commit text, new word identities and timings in one atomic operation.
+        // Provisional UI IDs are never sent to the word-level API.
+        await studioApi.updateCueText(selectedCue.id, {
+          author,
+          approved_en: approvedEn,
+          approved_pt: approvedPt,
+          approve: false,
+          proposed_speech_timing: candidate.speech_timing,
+          proposed_word_timings: candidate.words.map((word) => ({
+            start_ms: word.start_ms,
+            end_ms: word.end_ms,
+          })),
+        });
+        const fresh = await refreshCues();
+        const freshCue = fresh.find((cue) => cue.id === selectedCue.id);
+        if (selectedWordId?.startsWith("editorial-new-")) {
+          setSelectedWordId(freshCue?.words[selectedWordIndex]?.id);
+        }
+        for (const wordId of pendingWordDrafts.current.keys()) {
+          if (wordId.startsWith("editorial-new-")) pendingWordDrafts.current.delete(wordId);
+        }
+        setPendingDraftVersion((value) => value + 1);
+        setDraftCueTiming(null);
+        setMessage(
+          "Novas palavras salvas com tempos provisórios. Ajuste os marcadores " +
+          "IN/OUT e confira as traduções antes da aprovação.",
+        );
+        return true;
+      }
       let correctedEnglish = approvedEn;
       if (wordSurfaceDirty && selectedWord) {
         const corrected = await studioApi.updateWordSurface(
