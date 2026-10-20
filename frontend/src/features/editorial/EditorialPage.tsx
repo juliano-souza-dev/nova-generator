@@ -547,14 +547,11 @@ export function EditorialPage() {
       mediaRef.current?.pause();
       setSelectedWordId(word.id);
       seek(word.start_ms);
-      const group = word.semantic_group_id
-        ? (selectedCue?.words.filter((item) => item.semantic_group_id === word.semantic_group_id) ??
-          [])
-        : [word];
+      // Semantic groups share translation, not time or the active word selection.
       setMessage(
         selectedWord
-          ? `Palavra anterior concluída e salva. Editando “${group.map((item) => item.surface).join(" ")}”.`
-          : `Editando “${group.map((item) => item.surface).join(" ")}”.`,
+          ? `Palavra anterior concluída e salva. Editando “${word.surface.trim()}”.`
+          : `Editando “${word.surface.trim()}”.`,
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível concluir a palavra.");
@@ -960,9 +957,10 @@ export function EditorialPage() {
           approved_pt: approvedPt,
           approve,
         });
+      // Review each audible word independently, even within a semantic group.
       const nextWord =
         advance && selectedWord && !approve
-          ? visibleWords[selectedGroupEndIndex + 1]
+          ? visibleWords[selectedWordIndex + 1]
           : undefined;
       const nextCueForWord =
         advance && selectedWord && !approve && !nextWord ? cues[selectedCueIndex + 1] : undefined;
@@ -2104,15 +2102,14 @@ export function EditorialPage() {
               <span className="eyebrow">Inspetor contextual</span>
               <h2 id="word-inspector-title">
                 {selectedWord
-                  ? selectedGroupWords.length > 1
-                    ? `Unidade “${selectedUnitLabel}”`
-                    : `Palavra “${selectedWord.surface}”`
+                  ? `Palavra “${selectedWord.surface.trim()}”`
                   : "Selecione uma palavra"}
               </h2>
               {selectedWord && (
                 <div className="word-mode-status">
                   <span>
-                    Palavra {selectedWordIndex + 1} de {visibleWords.length}
+                    Palavra {selectedWordIndex + 1} de {visibleWords.length} ·
+                    IN {formatTime(wordStart)} · OUT {formatTime(wordEnd)}
                   </span>
                   <button type="button" className="secondary-button" onClick={leaveWordMode}>
                     Voltar ao cue
