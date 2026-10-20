@@ -14,18 +14,122 @@ class EditorialCommandError(ValueError):
     """A command would violate a published editorial invariant."""
 
 
-def _tokens_for_existing_words(text: str, words: list[WordTiming]) -> tuple[list[str], str]:
-    """Reconcile corrected cue text with existing words without inventing timestamps."""
+def _reconcile_approved_words(
+    text: str, words: list[WordTiming]
+) -> tuple[list[WordTiming], str, list[str]]:
+    """Match edited English to original word identities, allowing deletions.
+
+    Retained words keep their original ASR timings. Newly inserted words are
+    rejected because there is no audio evidence for their start/end times.
+    """
     tokens = re.findall(r"\s*\S+", text)
-    if len(tokens) != len(words):
-        raise EditorialCommandError(
-            "approved English has a different number of words. "
-            "Review word segmentation before saving; timings cannot be guessed."
-        )
-    trailing = text[len("".join(tokens)):]
+    trailing = text[len("".join(tokens)) :]
     if not tokens or trailing.strip():
         raise EditorialCommandError("approved English has invalid word boundaries")
-    return tokens, trailing
+    if not words:
+        raise EditorialCommandError("cannot assign edited English without existing word timings")
+
+    def lexical(value: str) -> str:
+        return re.sub(r"[^\w]+", "", value).casefold()
+
+    old = [lexical(word.surface) for word in words]
+    new = [lexical(token) for token in tokens]
+    # LCS anchors keep the same word ID even when earlier words are deleted.
+    n, m = len(old), len(new)
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n - 1, -1, -1):
+        for j in range(m - 1, -1, -1):
+            dp[i][j] = (
+                1 + dp[i + 1][j + 1]
+                if old[i] == new[j]
+                else max(dp[i + 1][j], dp[i][j + 1])
+            )
+    anchors: list[tuple[int, int]] = []
+    i = j = 0
+    while i < n and j < m:
+        if old[i] == new[j]:
+            anchors.append((i, j))
+            i += 1
+            j += 1
+        elif dp[i + 1][j] >= dp[i][j + 1]:
+            i += 1
+        else:
+            j += 1
+
+    matches: dict[int, WordTiming] = {}
+    old_pos = new_pos = 0
+    for old_end, new_end in [*anchors, (n, m)]:
+        old_count, new_count = old_end - old_pos, new_end - new_pos
+        if new_count > old_count:
+            raise EditorialCommandError(
+                "new English words need explicit audio timings; correct or split a "
+                "word before saving the cue"
+            )
+        for offset in range(new_count):
+            matches[new_pos + offset] = words[old_pos + offset]
+        if old_end < n:
+            matches[new_end] = words[old_end]
+        old_pos, new_pos = old_end + 1, new_end + 1
+
+    if len(matches) != m:
+        raise EditorialCommandError("could not reconcile the edited words")
+    updated = [
+        replace(
+            matches[k],
+            order=k + 1,
+            surface=token,
+            provenance=_changed_word_provenance(matches[k], token),
+        )
+        for k, token in enumerate(tokens)
+    ]
+    kept_ids = {word.id for word in updated}
+    removed = [word for word in words if word.id not in kept_ids]
+    affected_groups = {
+        word.provenance.get("semantic_group_id")
+        for word in removed
+        if word.provenance.get("semantic_group_id")
+    }
+    if affected_groups:
+        for group_id in affected_groups:
+            original_group = [
+                word for word in words
+                if word.provenance.get("semantic_group_id") == group_id
+            ]
+            remaining = [
+                index for index, word in enumerate(updated)
+                if word.provenance.get("semantic_group_id") == group_id
+            ]
+            if not remaining:
+                continue
+            group_translation = next(
+                (
+                    word.provenance.get("pt")
+                    for word in original_group
+                    if isinstance(word.provenance.get("pt"), str)
+                    and str(word.provenance["pt"]).strip()
+                ),
+                "",
+            )
+            for rank, index in enumerate(remaining):
+                current = updated[index]
+                provenance = dict(current.provenance)
+                provenance["translation_review_required"] = True
+                if len(remaining) == 1:
+                    provenance.pop("semantic_group_id", None)
+                    provenance.pop("semantic_group_role", None)
+                else:
+                    provenance["semantic_group_role"] = "lead" if rank == 0 else "member"
+                if rank == 0:
+                    provenance["pt"] = (
+                        provenance.get("pt_original")
+                        or provenance.get("pt")
+                        or group_translation
+                    )
+                else:
+                    provenance["pt"] = None
+                updated[index] = replace(current, provenance=provenance)
+
+    return updated, trailing, [str(word.id) for word in removed]
 
 
 def _changed_word_provenance(word: WordTiming, surface: str) -> dict[str, Any]:
@@ -67,16 +171,12 @@ class EditApprovedText:
         updated_words = words
         provenance = dict(cue.provenance)
         if approved_en != current_text:
-            tokens, trailing = _tokens_for_existing_words(approved_en, words)
-            updated_words = [
-                replace(
-                    word,
-                    surface=token,
-                    provenance=_changed_word_provenance(word, token),
-                )
-                for word, token in zip(words, tokens, strict=True)
-            ]
+            updated_words, trailing, removed_ids = _reconcile_approved_words(
+                approved_en, words
+            )
             provenance["editorial_preparation_trailing"] = trailing
+            if removed_ids:
+                provenance["editorial_deleted_word_ids"] = removed_ids
             provenance["editorial_text_manually_corrected"] = True
             provenance["editorial_text_ai_reference"] = cue.provenance.get(
                 "editorial_text_ai_reference", cue.approved_en
@@ -94,14 +194,34 @@ class EditApprovedText:
             revision=cue.revision + 1,
             provenance={**provenance, "approval": "approved" if approve else "draft"},
         )
-        self._repository.save_cue(updated, updated_words)
-        _record(
-            self._repository,
-            updated,
-            "edit_approved_text" if approve else "edit_draft_text",
-            author,
-            before,
-        )
+        if len(updated_words) != len(words):
+            # Remove words and record the scene revision in one transaction.
+            entries = [
+                (
+                    updated if current.id == cue.id else current,
+                    updated_words
+                    if current.id == cue.id
+                    else self._repository.get_cue_words(current.id),
+                )
+                for current in self._repository.get_scene_cues(cue.scene_id)
+            ]
+            _replace_structure(
+                self._repository,
+                cue.scene_id,
+                before,
+                entries,
+                command="edit_approved_text" if approve else "edit_draft_text",
+                author=author,
+            )
+        else:
+            self._repository.save_cue(updated, updated_words)
+            _record(
+                self._repository,
+                updated,
+                "edit_approved_text" if approve else "edit_draft_text",
+                author,
+                before,
+            )
         return updated
 
 
