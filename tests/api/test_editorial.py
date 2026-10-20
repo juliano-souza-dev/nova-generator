@@ -87,6 +87,44 @@ def test_failed_editorial_assistance_job_can_be_retried_with_the_same_scene(
     assert retried.json() == {"job_id": str(claimed.id), "status": "queued"}
 
 
+def test_prepared_scene_remains_editable_when_manual_words_lack_pt(
+    client: TestClient,
+) -> None:
+    repository, _, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    pending = [
+        replace(
+            word,
+            provenance={
+                **word.provenance,
+                "pt": "" if index == 1 else word.provenance.get("pt"),
+                "translation_review_required": index == 1,
+                "editorial_timing_estimated": index == 1,
+            },
+        )
+        for index, word in enumerate(words)
+    ]
+    repository.save_cue(cue, pending)
+    # A translation gap after initial preparation must not cause 409 on all
+    # editorial endpoints. The editor can save text while reviews remain pending.
+    text_result = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": cue.approved_en,
+            "approved_pt": "Tradução corrigida.",
+            "approve": False,
+        },
+    )
+    assert text_result.status_code == 200, text_result.text
+    assert text_result.json()["approved_pt"] == "Tradução corrigida."
+    word_result = client.put(
+        f"/api/editorial/cues/{cue.id}/words/translation",
+        json={"author": "editor", "word_id": str(words[1].id), "pt": "palavra"},
+    )
+    assert word_result.status_code == 200, word_result.text
+
+
 def test_text_and_word_timing_commands_preserve_literals_and_reject_overlap(
     client: TestClient,
 ) -> None:
