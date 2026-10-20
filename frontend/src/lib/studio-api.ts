@@ -159,6 +159,11 @@ export const studioApi = {
     input: { author: string; speech_timing: Timing; subtitle_timing: Timing },
   ) =>
     apiRequest<Cue>(`/editorial/cues/${id}/timing`, { method: "PUT", body: JSON.stringify(input) }),
+  completeWordTimingReview: (cueId: string, wordId: string, author: string) =>
+    apiRequest<WordTiming>(`/editorial/cues/${cueId}/words/complete`, {
+      method: "POST",
+      body: JSON.stringify({ word_id: wordId, author }),
+    }),
   updateWordTiming: (
     id: string,
     input: { author: string; timings: Array<Timing & { id: string }> },
