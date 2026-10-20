@@ -595,6 +595,49 @@ describe("EditorialPage", () => {
     ])).toEqual({ text: "agora!", complete: false });
   });
 
+  it("expands a cue for inserted words and lets the operator adjust OUT before saving", async () => {
+    const original = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([{
+      ...original,
+      original_en: "What's...",
+      approved_en: "What's...",
+      approved_pt: "o que",
+      speech_timing: { start_ms: 100, end_ms: 300 },
+      subtitle_timing: { start_ms: 100, end_ms: 300 },
+      words: [
+        { id: "w1", order: 1, surface: "What's...", start_ms: 100, end_ms: 300, pt: "o que" },
+      ],
+    }]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const english = await screen.findByLabelText("Inglês aprovado");
+    fireEvent.change(english, { target: { value: "What's the point?" } });
+    const out = screen.getByLabelText("OUT provisório da cue");
+    expect(Number((out as HTMLInputElement).value)).toBeGreaterThan(300);
+    expect(screen.getByText(/palavra\(s\) nova\(s\)/)).toBeInTheDocument();
+    fireEvent.change(out, { target: { value: "800" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar texto" }));
+    await waitFor(() =>
+      expect(mocks.updateCueText).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({
+          approved_en: "What's the point?",
+          approve: false,
+          proposed_speech_timing: { start_ms: 100, end_ms: 800 },
+          proposed_word_timings: expect.arrayContaining([
+            expect.objectContaining({ start_ms: 100 }),
+          ]),
+        }),
+      ),
+    );
+    const payload = mocks.updateCueText.mock.calls.at(-1)?.[1];
+    expect(payload.proposed_word_timings).toHaveLength(3);
+    expect(mocks.updateWordTiming).not.toHaveBeenCalled();
+  });
+
   it("explains a validated source and starts processing from the empty state", async () => {
     mocks.projectMedia.mockResolvedValueOnce({ state: "source_validated", can_review: false });
     render(
