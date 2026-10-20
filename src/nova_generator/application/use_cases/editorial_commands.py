@@ -159,6 +159,28 @@ def _reconcile_approved_words(
                     provenance["pt"] = None
                 updated[index] = replace(current, provenance=provenance)
 
+    # Inserting a token inside a semantic unit breaks its contiguity. Keep the
+    # original translations as review drafts, but never publish a split group.
+    group_ids = {
+        word.provenance.get("semantic_group_id")
+        for word in updated
+        if word.provenance.get("semantic_group_id")
+    }
+    for group_id in group_ids:
+        positions = [
+            index for index, word in enumerate(updated)
+            if word.provenance.get("semantic_group_id") == group_id
+        ]
+        if positions == list(range(positions[0], positions[-1] + 1)):
+            continue
+        for index in positions:
+            word = updated[index]
+            provenance = dict(word.provenance)
+            provenance["pt"] = provenance.get("pt_original") or provenance.get("pt") or ""
+            provenance.pop("semantic_group_id", None)
+            provenance.pop("semantic_group_role", None)
+            provenance["translation_review_required"] = True
+            updated[index] = replace(word, provenance=provenance)
     return updated, trailing, [str(word.id) for word in removed]
 
 
@@ -272,6 +294,18 @@ class EditApprovedText:
             raise EditorialCommandError(
                 "review translations for the corrected words before approving the cue"
             )
+        if approve:
+            for neighbor in self._repository.get_scene_cues(cue.scene_id):
+                if neighbor.id == cue.id:
+                    continue
+                if (
+                    neighbor.order < cue.order and neighbor.speech_end_ms > new_start
+                ) or (
+                    neighbor.order > cue.order and neighbor.speech_start_ms < new_end
+                ):
+                    raise EditorialCommandError(
+                        "cue overlaps another cue; adjust the boundaries before approval"
+                    )
         updated = replace(
             cue,
             approved_en=approved_en,
