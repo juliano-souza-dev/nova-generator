@@ -745,6 +745,112 @@ describe("EditorialPage", () => {
     expect(play).not.toHaveBeenCalled();
   });
 
+
+  it("clicking another word automatically saves, completes and focuses the clicked word", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    const words = [
+      { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350, pt: "Posso" },
+      { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480, pt: "eu" },
+      { id: "w3", order: 3, surface: "help?", start_ms: 490, end_ms: 800, pt: "ajudar?" },
+    ];
+    const original = { ...cue, words };
+    const saved = {
+      ...cue,
+      words: [
+        { ...words[0], start_ms: 140, provenance: { word_timing_reviewed: true } },
+        ...words.slice(1),
+      ],
+    };
+    mocks.editorialCues.mockResolvedValueOnce([original]).mockResolvedValue([saved]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(list).getByRole("button", { name: /Can/ }));
+    const player = screen.getByLabelText("Player do corte da cena") as HTMLVideoElement;
+    Object.defineProperty(player, "currentTime", { configurable: true, value: 0.14, writable: true });
+    fireEvent.timeUpdate(player);
+    fireEvent.click(screen.getByRole("button", { name: /Marcar início/ }));
+    fireEvent.click(within(list).getByRole("button", { name: /^I/ }));
+    await waitFor(() => {
+      expect(mocks.updateWordTiming).toHaveBeenCalledWith("c1", {
+        author: "local-editor",
+        timings: [
+          { id: "w1", start_ms: 140, end_ms: 350 },
+          { id: "w2", start_ms: 360, end_ms: 480 },
+          { id: "w3", start_ms: 490, end_ms: 800 },
+        ],
+      });
+      expect(mocks.completeWordTimingReview).toHaveBeenCalledWith("c1", "w1", "local-editor");
+      expect(within(list).getByRole("button", { name: /^I/ })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
+    expect(within(list).getByLabelText("Palavra concluída")).toBeInTheDocument();
+  });
+
+  it("never switches words when autosave fails", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      {
+        ...cue,
+        words: [
+          { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350, pt: "Posso" },
+          { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480, pt: "eu" },
+        ],
+      },
+    ]);
+    mocks.updateWordTiming.mockRejectedValueOnce(new Error("Falha ao salvar"));
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    const first = within(list).getByRole("button", { name: /Can/ });
+    fireEvent.click(first);
+    const player = screen.getByLabelText("Player do corte da cena") as HTMLVideoElement;
+    Object.defineProperty(player, "currentTime", { configurable: true, value: 0.14, writable: true });
+    fireEvent.timeUpdate(player);
+    fireEvent.click(screen.getByRole("button", { name: /Marcar início/ }));
+    fireEvent.click(within(list).getByRole("button", { name: /^I/ }));
+    expect(await screen.findByText("Falha ao salvar")).toBeInTheDocument();
+    expect(first).toHaveAttribute("aria-pressed", "true");
+    expect(mocks.completeWordTimingReview).not.toHaveBeenCalled();
+  });
+
+  it("clicking the next word completes the previous even without edits", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      {
+        ...cue,
+        words: [
+          { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350, pt: "Posso" },
+          { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480, pt: "eu" },
+        ],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(list).getByRole("button", { name: /Can/ }));
+    fireEvent.click(within(list).getByRole("button", { name: /^I/ }));
+    await waitFor(() => {
+      expect(mocks.completeWordTimingReview).toHaveBeenCalledWith("c1", "w1", "local-editor");
+      expect(within(list).getByRole("button", { name: /^I/ })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
+    expect(mocks.updateWordTiming).not.toHaveBeenCalled();
+  });
+
   it("saves the selected word and opens the next word with Enter", async () => {
     const cue = (await mocks.editorialCues())[0];
     mocks.editorialCues.mockResolvedValue([
