@@ -771,6 +771,97 @@ describe("EditorialPage", () => {
     expect(mocks.groupWordTranslation).not.toHaveBeenCalled();
   });
 
+  it("can go backward or return to Cue even if a grouped word cannot be completed", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([{
+      ...cue, approved_en: "do you love me?", original_en: "do you love me?",
+      words: [
+        { id: "w1", order: 1, surface: "do", start_ms: 100, end_ms: 300,
+          pt: "você me ama?", semantic_group_id: "group", semantic_group_role: "lead" },
+        { id: "w2", order: 2, surface: " you", start_ms: 300, end_ms: 500,
+          pt: null, semantic_group_id: "group", semantic_group_role: "member" },
+        { id: "w3", order: 3, surface: " love", start_ms: 500, end_ms: 700,
+          pt: null, semantic_group_id: "group", semantic_group_role: "member" },
+        { id: "w4", order: 4, surface: " me?", start_ms: 700, end_ms: 700,
+          pt: null, semantic_group_id: "group", semantic_group_role: "member" },
+      ],
+    }]);
+    mocks.completeWordTimingReview.mockRejectedValueOnce(new Error("invalid word timing"));
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(list).getByRole("button", { name: /me\?/ }));
+    const guided = await screen.findByLabelText("Sincronização da palavra selecionada");
+    fireEvent.click(within(guided).getByRole("button", { name: "Palavra anterior" }));
+    await waitFor(() =>
+      expect(within(list).getByRole("button", { name: /love/ }))
+        .toHaveAttribute("aria-pressed", "true"),
+    );
+    expect(screen.getByRole("heading", { name: "Palavra “love”" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/permanece pendente/);
+    const dock = screen.getByRole("navigation", { name: "Controles da estação editorial" });
+    fireEvent.click(within(dock).getByRole("button", { name: "Cue" }));
+    await waitFor(() =>
+      expect(within(dock).getByRole("button", { name: "Cue" }))
+        .toHaveAttribute("aria-pressed", "true"),
+    );
+    expect(mocks.updateWordTiming).not.toHaveBeenCalled();
+  });
+
+  it("keeps conflicting grouped-word drafts navigable and saves both timing fixes together", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    const source = { ...cue, original_en: "Can I help?", approved_en: "Can I help?",
+      words: [
+        { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 400,
+          pt: "Posso ajudar?", semantic_group_id: "group", semantic_group_role: "lead" },
+        { id: "w2", order: 2, surface: " I", start_ms: 360, end_ms: 480,
+          pt: null, semantic_group_id: "group", semantic_group_role: "member" },
+        { id: "w3", order: 3, surface: " help?", start_ms: 490, end_ms: 800,
+          pt: null, semantic_group_id: "group", semantic_group_role: "member" },
+      ] };
+    mocks.editorialCues.mockResolvedValue([source]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(list).getByRole("button", { name: /^I / }));
+    const player = screen.getByLabelText("Player do corte da cena") as HTMLVideoElement;
+    Object.defineProperty(player, "currentTime", { configurable: true, writable: true, value: 0.385 });
+    fireEvent.timeUpdate(player);
+    fireEvent.click(screen.getByRole("button", { name: /Marcar início/ }));
+    expect(screen.getByLabelText("Sincronização da palavra selecionada"))
+      .toHaveTextContent("0.39 s");
+    fireEvent.click(screen.getByRole("button", { name: "Salvar palavra" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(/sobrepõe a anterior/);
+    fireEvent.click(within(list).getByRole("button", { name: /Can/ }));
+    await waitFor(() =>
+      expect(within(list).getByRole("button", { name: /Can/ }))
+        .toHaveAttribute("aria-pressed", "true"),
+    );
+    expect(within(list).getByLabelText("Rascunho não salvo")).toBeInTheDocument();
+    player.currentTime = 0.38;
+    fireEvent.timeUpdate(player);
+    fireEvent.click(screen.getByRole("button", { name: /Marcar fim/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar palavra" }));
+    await waitFor(() =>
+      expect(mocks.updateWordTiming).toHaveBeenCalledWith("c1", {
+        author: "local-editor",
+        timings: [
+          { id: "w1", start_ms: 100, end_ms: 380 },
+          { id: "w2", start_ms: 385, end_ms: 480 },
+          { id: "w3", start_ms: 490, end_ms: 800 },
+        ],
+      }),
+    );
+    expect(mocks.groupWordTranslation).not.toHaveBeenCalled();
+    expect(mocks.ungroupWordTranslation).not.toHaveBeenCalled();
+  });
+
   it("replays a selected word using its unsaved IN and OUT marks", async () => {
     const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
     const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
