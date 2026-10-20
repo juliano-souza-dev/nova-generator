@@ -145,4 +145,62 @@ describe("CueWordTimeline", () => {
   });
 
 
+  it("always shows all grouped words, including an invisible zero-duration 'you'", () => {
+    const onSelectWord = vi.fn();
+    const grouped = {
+      ...cue,
+      original_en: "do you love me?",
+      approved_en: "do you love me?",
+      speech_timing: { start_ms: 21750, end_ms: 22690 },
+      subtitle_timing: { start_ms: 21750, end_ms: 22690 },
+      words: [
+        { id: "w-do", order: 1, surface: "do", start_ms: 21750, end_ms: 22180,
+          semantic_group_id: "meaning-1", semantic_group_role: "lead" },
+        { id: "w-you", order: 2, surface: " you", start_ms: 22180, end_ms: 22180,
+          semantic_group_id: "meaning-1", semantic_group_role: "member" },
+        { id: "w-love", order: 3, surface: " love", start_ms: 22180, end_ms: 22360,
+          semantic_group_id: "meaning-1", semantic_group_role: "member" },
+        { id: "w-me", order: 4, surface: " me?", start_ms: 22360, end_ms: 22690,
+          semantic_group_id: "meaning-1", semantic_group_role: "member" },
+      ],
+    };
+    const { container } = render(
+      <CueWordTimeline
+        cues={[grouped]}
+        durationMs={146000}
+        playheadMs={22180}
+        playing={false}
+        zoom={30}
+        selectedCueId="cue-1"
+        selectedWordId="w-do"
+        onPlayToggle={vi.fn()}
+        onPlayContext={vi.fn()}
+        onPreviousWord={vi.fn()}
+        onContinuousPlayToggle={vi.fn()}
+        onSaveAndNext={vi.fn()}
+        onPlayheadChange={vi.fn()}
+        onZoomChange={vi.fn()}
+        onSelectCue={vi.fn()}
+        onSelectWord={onSelectWord}
+        onSetEdge={vi.fn()}
+        onEdgeDragStart={vi.fn()}
+        onEdgeChange={vi.fn()}
+        onNudge={vi.fn()}
+        onUndo={vi.fn()}
+      />,
+    );
+    const rail = screen.getByRole("navigation", { name: "Palavras da cue selecionada" });
+    expect(within(rail).getAllByRole("button")).toHaveLength(4);
+    const you = within(rail).getByRole("button", { name: /Palavra 2: you, IN 22180 ms, OUT 22180 ms/ });
+    expect(you).toBeVisible();
+    expect(you).toHaveTextContent("Revisar tempo");
+    fireEvent.click(you);
+    expect(onSelectWord).toHaveBeenCalledWith("w-you", "cue-1");
+    expect(you).toHaveAttribute("aria-pressed", "false");
+    expect(container.querySelectorAll(".timeline-short-word-marker").length).toBeGreaterThan(0);
+    expect(within(rail).getByRole("button", { name: /Palavra 3: love/ })).toBeVisible();
+    expect(within(rail).getByRole("button", { name: /Palavra 4: me\?/ })).toBeVisible();
+  });
+
+
 });
