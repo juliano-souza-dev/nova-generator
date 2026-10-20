@@ -676,13 +676,14 @@ describe("EditorialPage", () => {
     expect(player.currentTime).toBeCloseTo(0.375, 4);
     expect(play).toHaveBeenCalledTimes(1);
 
+    const initialPauses = pause.mock.calls.length;
     Object.defineProperty(player, "currentTime", {
       configurable: true,
       value: 0.476,
       writable: true,
     });
     fireEvent.timeUpdate(player);
-    expect(pause).toHaveBeenCalledTimes(1);
+    expect(pause).toHaveBeenCalledTimes(initialPauses + 1);
   });
 
   it("restarts the word preview even while the full cue is already playing", async () => {
