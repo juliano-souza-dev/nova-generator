@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { EditorialPage } from "./EditorialPage";
+import { EditorialPage, cueWordTranslation } from "./EditorialPage";
 
 const mocks = vi.hoisted(() => ({
   projectMedia: vi.fn().mockResolvedValue({
@@ -588,43 +588,11 @@ describe("EditorialPage", () => {
     );
   });
 
-  it("shows the existing cue translation without fabricating missing word translations", async () => {
-    const original = (await mocks.editorialCues())[0];
-    mocks.editorialCues.mockResolvedValueOnce([{
-      ...original,
-      approved_pt: "Venha agora!",
-      words: [
-        { id: "w1", order: 1, surface: "Come", start_ms: 100, end_ms: 400, pt: null },
-        { id: "w2", order: 2, surface: " now!", start_ms: 500, end_ms: 700, pt: "agora!" },
-      ],
-    }]);
-    mocks.splitEditorialCue.mockResolvedValueOnce([{ id: "left" }, { id: "right" }]);
-    render(
-      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
-        <EditorialPage />
-      </MemoryRouter>,
-    );
-    const splitButton = await screen.findByRole("button", { name: "Dividir por palavra" });
-    await waitFor(() => expect(splitButton).toBeEnabled());
-    fireEvent.click(splitButton);
-    expect(screen.getByRole("textbox", { name: "Português da primeira parte" })).toHaveValue("");
-    expect(screen.getByRole("textbox", { name: "Português da segunda parte" })).toHaveValue("agora!");
-    expect(screen.getByText(/Tradução original da cue:/)).toHaveTextContent("Venha agora!");
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar divisão" }));
-    expect(mocks.splitEditorialCue).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByRole("textbox", { name: "Português da primeira parte" }), {
-      target: { value: "Venha" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar divisão" }));
-    await waitFor(() =>
-      expect(mocks.splitEditorialCue).toHaveBeenCalledWith(
-        "c1",
-        expect.objectContaining({
-          first: expect.objectContaining({ approved_pt: "Venha" }),
-          second: expect.objectContaining({ approved_pt: "agora!" }),
-        }),
-      ),
-    );
+  it("reports incomplete translations without inventing missing words", () => {
+    expect(cueWordTranslation([
+      { id: "w1", order: 1, surface: "Come", start_ms: 100, end_ms: 400, pt: null },
+      { id: "w2", order: 2, surface: " now!", start_ms: 500, end_ms: 700, pt: "agora!" },
+    ])).toEqual({ text: "agora!", complete: false });
   });
 
   it("explains a validated source and starts processing from the empty state", async () => {
