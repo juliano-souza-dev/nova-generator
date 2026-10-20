@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from nova_generator.api.dependencies import (
     get_adjust_cue_timing,
     get_adjust_word_timing,
+    get_complete_word_timing_review,
     get_edit_approved_text,
     get_edit_word_surface,
     get_edit_word_translation,
@@ -39,6 +40,7 @@ from nova_generator.application.use_cases.editorial_assistance import (
 from nova_generator.application.use_cases.editorial_commands import (
     AdjustCueTiming,
     AdjustWordTiming,
+    CompleteWordTimingReview,
     EditApprovedText,
     EditorialCommandError,
     EditWordSurface,
@@ -112,6 +114,10 @@ class WordTranslationRequest(ActorRequest):
 class WordSurfaceRequest(ActorRequest):
     word_id: UUID
     surface: str = Field(min_length=1)
+
+
+class CompleteWordTimingReviewRequest(ActorRequest):
+    word_id: UUID
 
 
 class GroupWordRequest(WordTranslationRequest):
@@ -552,6 +558,18 @@ def edit_word_timing(
         )
     )
     return [_word_response(word) for word in words]
+
+
+@router.post("/cues/{cue_id}/words/complete", response_model=WordResponse)
+def complete_word_timing_review(
+    cue_id: UUID,
+    payload: CompleteWordTimingReviewRequest,
+    use_case: Annotated[CompleteWordTimingReview, Depends(get_complete_word_timing_review)],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+) -> dict[str, Any]:
+    _require_prepared_cue(repository, cue_id)
+    word = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
+    return _word_response(word)
 
 
 @router.post("/cues/{cue_id}/realign", response_model=CueResponse)
