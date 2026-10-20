@@ -190,6 +190,7 @@ export function EditorialPage() {
   const [approvedEn, setApprovedEn] = useState("");
   const [textDraftCueId, setTextDraftCueId] = useState("");
   const [approvedPt, setApprovedPt] = useState("");
+  const [wordDraftId, setWordDraftId] = useState<string | undefined>();
   const [wordStart, setWordStart] = useState(0);
   const [wordEnd, setWordEnd] = useState(0);
   const [wordPt, setWordPt] = useState("");
@@ -266,11 +267,18 @@ export function EditorialPage() {
   );
   const approvedCount = cues.filter((cue) => cue.provenance?.approval === "approved").length;
   const allCuesApproved = cues.length > 0 && approvedCount === cues.length;
+  // Word drafts are keyed by word ID. During navigation, never project the
+  // previous word's text/IN/OUT onto a different selected word.
+  const wordDraftIsCurrent = Boolean(selectedWord && wordDraftId === selectedWord.id);
+  const activeWordStart = wordDraftIsCurrent ? wordStart : (selectedWord?.start_ms ?? 0);
+  const activeWordEnd = wordDraftIsCurrent ? wordEnd : (selectedWord?.end_ms ?? 0);
+  const activeWordSurface = wordDraftIsCurrent ? wordSurface : (selectedWord?.surface.trim() ?? "");
+  const activeWordPt = wordDraftIsCurrent ? wordPt : storedWordPt;
   const wordDirty = Boolean(
-    selectedWord && (wordStart !== selectedWord.start_ms || wordEnd !== selectedWord.end_ms),
+    selectedWord && (activeWordStart !== selectedWord.start_ms || activeWordEnd !== selectedWord.end_ms),
   );
-  const wordTranslationDirty = Boolean(selectedWord && wordPt !== storedWordPt);
-  const wordSurfaceDirty = Boolean(selectedWord && wordSurface !== selectedWord.surface.trim());
+  const wordTranslationDirty = Boolean(selectedWord && activeWordPt !== storedWordPt);
+  const wordSurfaceDirty = Boolean(selectedWord && activeWordSurface !== selectedWord.surface.trim());
   const selectedWordIndex =
     visibleWords.findIndex((word) => word.id === selectedWordId);
   const previewCues = cues.map((cue) =>
@@ -281,10 +289,10 @@ export function EditorialPage() {
             ...word,
             surface:
               index === selectedWordIndex && wordSurfaceDirty
-                ? (word.surface.match(/^\\s*/)?.[0] ?? "") + wordSurface.trim()
+                ? (word.surface.match(/^\\s*/)?.[0] ?? "") + activeWordSurface.trim()
                 : word.surface,
-            start_ms: index === selectedWordIndex ? wordStart : word.start_ms,
-            end_ms: index === selectedWordIndex ? wordEnd : word.end_ms,
+            start_ms: index === selectedWordIndex ? activeWordStart : word.start_ms,
+            end_ms: index === selectedWordIndex ? activeWordEnd : word.end_ms,
           })),
         }
       : cue,
@@ -401,6 +409,7 @@ export function EditorialPage() {
     setStructureDraft(null);
   }, [selectedCue?.id, selectedCue?.revision, sceneId]);
   useEffect(() => {
+    setWordDraftId(selectedWord?.id);
     setWordStart(selectedWord?.start_ms ?? 0);
     setWordEnd(selectedWord?.end_ms ?? 0);
     setWordPt(storedWordPt);
@@ -814,7 +823,7 @@ export function EditorialPage() {
     if (selectedWord) {
       // Clicking "Listen to word" always (re)plays precisely the selected word,
       // even if the video is currently playing a cue or a context preview.
-      playRange(wordStart, wordEnd);
+      playRange(activeWordStart, activeWordEnd);
       return;
     }
     if (player.paused) {
@@ -917,7 +926,7 @@ export function EditorialPage() {
       let correctedEnglish = approvedEn;
       if (wordSurfaceDirty && selectedWord) {
         const corrected = await studioApi.updateWordSurface(
-          selectedCue.id, selectedWord.id, wordSurface, author,
+          selectedCue.id, selectedWord.id, activeWordSurface, author,
         );
         correctedEnglish = corrected.approved_en;
         setApprovedEn(correctedEnglish);
@@ -944,12 +953,12 @@ export function EditorialPage() {
           author,
           timings: selectedCue.words.map((item, index) => ({
             id: item.id,
-            start_ms: index === selectedWordIndex ? wordStart : item.start_ms,
-            end_ms: index === selectedWordIndex ? wordEnd : item.end_ms,
+            start_ms: index === selectedWordIndex ? activeWordStart : item.start_ms,
+            end_ms: index === selectedWordIndex ? activeWordEnd : item.end_ms,
           })),
         });
       if (wordTranslationDirty && selectedWord)
-        await studioApi.updateWordTranslation(selectedCue.id, selectedWord.id, wordPt, author);
+        await studioApi.updateWordTranslation(selectedCue.id, selectedWord.id, activeWordPt, author);
       if (textDirty || approve)
         await studioApi.updateCueText(selectedCue.id, {
           author,
@@ -1491,8 +1500,8 @@ export function EditorialPage() {
                 onPlayContext={() => {
                   if (!selectedCue || !selectedWord) return;
                   playRange(
-                    Math.max(selectedCue.speech_timing.start_ms, wordStart - 650),
-                    Math.min(selectedCue.speech_timing.end_ms, wordEnd + 850),
+                    Math.max(selectedCue.speech_timing.start_ms, activeWordStart - 650),
+                    Math.min(selectedCue.speech_timing.end_ms, activeWordEnd + 850),
                   );
                 }}
                 onPreviousWord={() => moveWord(-1)}
@@ -2109,7 +2118,7 @@ export function EditorialPage() {
                 <div className="word-mode-status">
                   <span>
                     Palavra {selectedWordIndex + 1} de {visibleWords.length} ·
-                    IN {formatTime(wordStart)} · OUT {formatTime(wordEnd)}
+                    IN {formatTime(activeWordStart)} · OUT {formatTime(activeWordEnd)}
                   </span>
                   <button type="button" className="secondary-button" onClick={leaveWordMode}>
                     Voltar ao cue
@@ -2163,7 +2172,7 @@ export function EditorialPage() {
                       <input
                         type="text"
                         aria-label="Corrigir palavra em inglês"
-                        value={wordSurface}
+                        value={activeWordSurface}
                         onChange={(event) => setWordSurface(event.target.value)}
                       />
                     </label>
@@ -2204,7 +2213,7 @@ export function EditorialPage() {
                       <span>Tradução natural da unidade</span>
                       <input
                         type="text"
-                        value={wordPt}
+                        value={activeWordPt}
                         onChange={(event) => setWordPt(event.target.value)}
                         placeholder="Ex.: Posso ajudar?"
                       />
