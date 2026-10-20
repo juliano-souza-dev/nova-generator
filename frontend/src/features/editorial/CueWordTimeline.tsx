@@ -208,6 +208,7 @@ export function CueWordTimeline(props: Props) {
               <Play aria-hidden="true" /> Ouvir com contexto
             </button>
             <button type="button" className="secondary-button"
+              aria-label={props.playing ? "Pausar palavra" : "Reproduzir palavra"}
               onClick={props.onPlayToggle}>
               {props.playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
               {props.playing ? "Pausar" : "Ouvir só a palavra"}
@@ -304,7 +305,9 @@ export function CueWordTimeline(props: Props) {
             <strong>OUT</strong>
             <button type="button" className="secondary-button" onClick={() => props.onNudge("end", -25)}>−25 ms</button>
             <button type="button" className="secondary-button cue-edge-button" onClick={() => props.onSetEdge("end")}><kbd>S</kbd> Marcar OUT</button>
-            <button type="button" className="secondary-button" onClick={() => props.onNudge("end", 25)}>+25 ms</button>
+            <button type="button" className="secondary-button"
+              aria-label="Aumentar cue atrasando o fim em 25 milissegundos"
+              onClick={() => props.onNudge("end", 25)}>+25 ms</button>
           </div>
           <div className="timeline-focus-controls">
             <button type="button" className="secondary-button" disabled={!props.selectedCueId}
