@@ -742,7 +742,9 @@ describe("EditorialPage", () => {
     expect(within(guide).getByText("0.10 s")).toBeInTheDocument();
     expect(within(guide).getByText("0.35 s")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Palavra “Can”" })).toBeInTheDocument();
-    expect(screen.getByText("Posso ajudar?", { selector: ".semantic-unit-heading strong" }))
+    expect(screen.getByRole("textbox", { name: "Tradução natural da unidade" }))
+      .toHaveValue("Posso ajudar?");
+    expect(screen.getByText(/Unidade semântica \(somente sentido\/tradução\)/))
       .toBeInTheDocument();
 
     fireEvent.click(within(guide).getByRole("button", { name: /Salvar e próxima/ }));
