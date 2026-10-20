@@ -756,6 +756,32 @@ def test_inserted_words_receive_provisional_timings_and_can_extend_cue(
     assert len(repository.list_revisions(scene_id)) == revisions + 1
 
 
+def test_existing_approved_text_repairs_stale_incomplete_word_rows(
+    client: TestClient,
+) -> None:
+    repository, _, cue = _seed(client)
+    original = repository.get_cue_words(cue.id)
+    repository.save_cue(
+        replace(cue, approved_en="I can't go now please?"),
+        original,
+    )
+    result = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "I can't go now please?",
+            "approved_pt": "Eu não posso ir agora, por favor?",
+            "approve": False,
+        },
+    )
+    assert result.status_code == 200, result.text
+    words = repository.get_cue_words(cue.id)
+    assert len(words) == len(original) + 2
+    assert [word.id for word in words[:len(original)]] == [
+        word.id for word in original
+    ]
+
+
 def test_new_words_can_be_retimed_in_the_same_atomic_text_save(
     client: TestClient,
 ) -> None:
