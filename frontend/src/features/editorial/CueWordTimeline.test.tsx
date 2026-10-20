@@ -29,6 +29,8 @@ describe("CueWordTimeline", () => {
         zoom={2}
         selectedCueId="cue-1"
         onPlayToggle={vi.fn()}
+        onPlayContext={vi.fn()}
+        onPreviousWord={vi.fn()}
         onContinuousPlayToggle={vi.fn()}
         onSaveAndNext={vi.fn()}
         onPlayheadChange={vi.fn()}
@@ -52,4 +54,52 @@ describe("CueWordTimeline", () => {
     expect(wheelWasNotAllowedToScroll).toBe(false);
     expect(within(ruler).getByText("0.50 s")).toBeInTheDocument();
   });
+  it("shows an uncluttered word-sync workflow while preserving cue and word timings", () => {
+    const mark = vi.fn();
+    const context = vi.fn();
+    const advance = vi.fn();
+    const word = { ...cue.words[0], start_ms: 1150, end_ms: 1550 };
+    render(
+      <CueWordTimeline
+        cues={[{ ...cue, words: [word] }]}
+        durationMs={10000}
+        playheadMs={1210}
+        playing={false}
+        zoom={4}
+        selectedCueId="cue-1"
+        selectedWordId="word-1"
+        onPlayToggle={vi.fn()}
+        onPlayContext={context}
+        onPreviousWord={vi.fn()}
+        onContinuousPlayToggle={vi.fn()}
+        onSaveAndNext={advance}
+        onPlayheadChange={vi.fn()}
+        onZoomChange={vi.fn()}
+        onSelectCue={vi.fn()}
+        onSelectWord={vi.fn()}
+        onSetEdge={mark}
+        onEdgeDragStart={vi.fn()}
+        onEdgeChange={vi.fn()}
+        onNudge={vi.fn()}
+        onUndo={vi.fn()}
+      />,
+    );
+    const guide = screen.getByLabelText("Sincronização da palavra selecionada");
+    expect(within(guide).getByText("Hello")).toBeInTheDocument();
+    expect(within(guide).getByText("1.15 s")).toBeInTheDocument();
+    expect(within(guide).getByText("1.55 s")).toBeInTheDocument();
+    fireEvent.click(within(guide).getByRole("button", { name: "Ouvir com contexto" }));
+    fireEvent.click(within(guide).getByRole("button", { name: /Marcar início/ }));
+    fireEvent.click(within(guide).getByRole("button", { name: /Marcar fim/ }));
+    fireEvent.click(within(guide).getByRole("button", { name: /Salvar e próxima/ }));
+    expect(context).toHaveBeenCalledOnce();
+    expect(mark).toHaveBeenNthCalledWith(1, "start");
+    expect(mark).toHaveBeenNthCalledWith(2, "end");
+    expect(advance).toHaveBeenCalledOnce();
+    expect(screen.getByText("Zoom, ajuste em milissegundos e outros controles"))
+      .toBeInTheDocument();
+    expect(screen.getByLabelText("Ajustes precisos da palavra").closest("details"))
+      .not.toHaveAttribute("open");
+  });
+
 });
