@@ -498,7 +498,7 @@ describe("EditorialPage", () => {
     );
   });
 
-  it("splits a cue after a chosen word and asks for both translations", async () => {
+  it("automatically reuses existing word translations when splitting a cue", async () => {
     const original = (await mocks.editorialCues())[0];
     mocks.editorialCues.mockResolvedValueOnce([
       {
@@ -526,12 +526,9 @@ describe("EditorialPage", () => {
     await waitFor(() => expect(splitButton).toBeEnabled());
     fireEvent.click(splitButton);
     expect(screen.getByRole("combobox", { name: "Palavra onde dividir" })).toHaveValue("w1");
-    fireEvent.change(screen.getByRole("textbox", { name: "Português da primeira parte" }), {
-      target: { value: "Eu" },
-    });
-    fireEvent.change(screen.getByRole("textbox", { name: "Português da segunda parte" }), {
-      target: { value: "não posso ir?" },
-    });
+    expect(screen.getByRole("textbox", { name: "Português da primeira parte" })).toHaveValue("Eu");
+    expect(screen.getByRole("textbox", { name: "Português da segunda parte" }))
+      .toHaveValue("não posso ir?");
     fireEvent.click(screen.getByRole("button", { name: "Confirmar divisão" }));
     await waitFor(() =>
       expect(mocks.splitEditorialCue).toHaveBeenCalledWith(
@@ -541,6 +538,90 @@ describe("EditorialPage", () => {
           after_word_id: "w1",
           first: expect.objectContaining({ approved_pt: "Eu" }),
           second: expect.objectContaining({ approved_pt: "não posso ir?" }),
+        }),
+      ),
+    );
+  });
+
+  it("uses one translation per semantic group and updates suggestions when the boundary changes", async () => {
+    const original = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([{
+      ...original,
+      approved_en: "Can you help now?",
+      approved_pt: "Você pode ajudar agora?",
+      words: [
+        { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 300,
+          pt: "Pode ajudar", semantic_group_id: "g1", semantic_group_role: "lead" },
+        { id: "w2", order: 2, surface: " you help", start_ms: 310, end_ms: 700,
+          pt: null, semantic_group_id: "g1", semantic_group_role: "member" },
+        { id: "w3", order: 3, surface: " now?", start_ms: 710, end_ms: 1000,
+          pt: "agora?" },
+      ],
+    }]);
+    mocks.splitEditorialCue.mockResolvedValueOnce([{ id: "left" }, { id: "right" }]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const splitButton = await screen.findByRole("button", { name: "Dividir por palavra" });
+    await waitFor(() => expect(splitButton).toBeEnabled());
+    fireEvent.click(splitButton);
+    fireEvent.change(screen.getByRole("combobox", { name: "Palavra onde dividir" }), {
+      target: { value: "w2" },
+    });
+    expect(screen.getByRole("textbox", { name: "Português da primeira parte" }))
+      .toHaveValue("Pode ajudar");
+    expect(screen.getByRole("textbox", { name: "Português da segunda parte" }))
+      .toHaveValue("agora?");
+    expect(screen.queryByText(/Algumas palavras ainda não possuem tradução/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar divisão" }));
+    await waitFor(() =>
+      expect(mocks.splitEditorialCue).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({
+          after_word_id: "w2",
+          first: expect.objectContaining({ approved_pt: "Pode ajudar" }),
+          second: expect.objectContaining({ approved_pt: "agora?" }),
+        }),
+      ),
+    );
+  });
+
+  it("shows the existing cue translation without fabricating missing word translations", async () => {
+    const original = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([{
+      ...original,
+      approved_pt: "Venha agora!",
+      words: [
+        { id: "w1", order: 1, surface: "Come", start_ms: 100, end_ms: 400, pt: null },
+        { id: "w2", order: 2, surface: " now!", start_ms: 500, end_ms: 700, pt: "agora!" },
+      ],
+    }]);
+    mocks.splitEditorialCue.mockResolvedValueOnce([{ id: "left" }, { id: "right" }]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const splitButton = await screen.findByRole("button", { name: "Dividir por palavra" });
+    await waitFor(() => expect(splitButton).toBeEnabled());
+    fireEvent.click(splitButton);
+    expect(screen.getByRole("textbox", { name: "Português da primeira parte" })).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Português da segunda parte" })).toHaveValue("agora!");
+    expect(screen.getByRole("status")).toHaveTextContent("Venha agora!");
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar divisão" }));
+    expect(mocks.splitEditorialCue).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Português da primeira parte" }), {
+      target: { value: "Venha" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar divisão" }));
+    await waitFor(() =>
+      expect(mocks.splitEditorialCue).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({
+          first: expect.objectContaining({ approved_pt: "Venha" }),
+          second: expect.objectContaining({ approved_pt: "agora!" }),
         }),
       ),
     );
