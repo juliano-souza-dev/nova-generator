@@ -835,6 +835,96 @@ def test_translation_draft_saves_even_when_stored_word_timing_needs_repair(
     assert result.json()["approved_pt"] == "Correção ainda não revisada."
 
 
+def test_approval_can_confirm_a_previously_saved_provisional_cue_atomically(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    pending = [
+        replace(
+            word,
+            provenance={
+                **word.provenance,
+                "pt": "" if index else "o que",
+                "editorial_timing_estimated": True,
+                "translation_review_required": index != 0,
+            },
+        )
+        for index, word in enumerate(words)
+    ]
+    repository.save_cue(
+        replace(cue, approved_en="What's the point?", approved_pt="Pra quê?"), pending
+    )
+    revisions_before = len(repository.list_revisions(scene_id))
+    first = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "What's the point?",
+            "approved_pt": "Pra quê?",
+            "approve": True,
+        },
+    )
+    assert first.status_code == 422
+    assert repository.get_cue_words(cue.id) == pending
+    assert len(repository.list_revisions(scene_id)) == revisions_before
+
+    approved = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "What's the point?",
+            "approved_pt": "Pra quê?",
+            "approve": True,
+            "confirm_word_timings": True,
+            "group_cue_translation": True,
+        },
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["provenance"]["approval"] == "approved"
+    after = repository.get_cue_words(cue.id)
+    assert [w.id for w in after] == [w.id for w in words]
+    assert [(w.start_ms, w.end_ms) for w in after] == [
+        (w.start_ms, w.end_ms) for w in words
+    ]
+    group_ids = {w.provenance.get("semantic_group_id") for w in after}
+    assert len(group_ids) == 1
+    assert None not in group_ids
+    assert after[0].provenance["pt"] == "Pra quê?"
+    assert all(w.provenance.get("pt") is None for w in after[1:])
+    assert all(w.provenance.get("word_timing_reviewed") is True for w in after)
+    assert all(not w.provenance.get("translation_review_required") for w in after)
+    assert len(repository.list_revisions(scene_id)) == revisions_before + 1
+
+
+def test_review_confirmations_cannot_approve_invalid_word_intervals(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    invalid = list(words)
+    invalid[-1] = replace(
+        invalid[-1],
+        end_ms=cue.speech_end_ms + 50,
+        provenance={**invalid[-1].provenance, "editorial_timing_estimated": True},
+    )
+    repository.save_cue(cue, invalid)
+    before = len(repository.list_revisions(scene_id))
+    result = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": cue.approved_en,
+            "approved_pt": cue.approved_pt,
+            "approve": True,
+            "confirm_word_timings": True,
+        },
+    )
+    assert result.status_code == 422
+    assert repository.get_cue_words(cue.id) == invalid
+    assert len(repository.list_revisions(scene_id)) == before
+
+
 def test_new_words_can_be_retimed_in_the_same_atomic_text_save(
     client: TestClient,
 ) -> None:
