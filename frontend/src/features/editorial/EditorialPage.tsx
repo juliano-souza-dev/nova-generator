@@ -62,7 +62,7 @@ function cueWordText(words: TimelineCue["words"]): string {
 
 // Reuse editorial translations instead of asking the editor to retranslate a split.
 // Group members share the lead's natural translation, but keep independent timings.
-function cueWordTranslation(words: TimelineCue["words"]): { text: string; complete: boolean } {
+export function cueWordTranslation(words: TimelineCue["words"]): { text: string; complete: boolean } {
   const fragments: string[] = [];
   const visitedGroups = new Set<string>();
   let complete = true;
