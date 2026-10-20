@@ -511,6 +511,10 @@ describe("EditorialPage", () => {
       ),
     );
     expect(screen.getByRole("heading", { name: "Palavra “can't…”" })).toBeInTheDocument();
+    expect(screen.queryByText("Ajuste fino da fala do cue")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Antecipar início do cue em 25 milissegundos"))
+      .not.toBeInTheDocument();
+    expect(screen.getByLabelText("Timeline de cues e palavras")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cue anterior" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Próximo cue" })).toBeDisabled();
     const player = screen.getByLabelText("Player do corte da cena") as HTMLVideoElement;
