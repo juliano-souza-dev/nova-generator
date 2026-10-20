@@ -275,6 +275,7 @@ export function EditorialPage() {
   // Repair the mismatch even when the text field itself was not edited today.
   const canonicalWordCountMismatch = Boolean(
     selectedCue &&
+    selectedCue.provenance?.editorial_text_manually_corrected === true &&
     (approvedEn.match(/\S+/g)?.length ?? 0) !== selectedCue.words.length,
   );
   const textDirty = Boolean(
