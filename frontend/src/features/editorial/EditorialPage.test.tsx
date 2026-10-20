@@ -962,6 +962,48 @@ describe("EditorialPage", () => {
     expect(mocks.updateWordTiming).not.toHaveBeenCalled();
   });
 
+  it("immediately remaps child-word times in the cue timeline and persists the new parent interval", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      {
+        ...cue,
+        speech_timing: { start_ms: 100, end_ms: 1800 },
+        subtitle_timing: { start_ms: 100, end_ms: 1800 },
+        words: [
+          { id: "w1", order: 1, surface: "First", start_ms: 100, end_ms: 600, pt: "Primeira" },
+          { id: "w2", order: 2, surface: "Last", start_ms: 1100, end_ms: 1800, pt: "Última" },
+        ],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    await screen.findByLabelText("Player do corte da cena");
+    const player = screen.getByLabelText("Player do corte da cena") as HTMLVideoElement;
+    Object.defineProperty(player, "currentTime", {
+      configurable: true,
+      writable: true,
+      value: 0.9,
+    });
+    fireEvent.timeUpdate(player);
+    fireEvent.click(screen.getByRole("button", { name: "Marcar IN" }));
+    const first = within(screen.getByRole("list", { name: "Palavras do cue selecionado" }))
+      .getByRole("button", { name: /First/ });
+    expect(first).toHaveTextContent("0.90");
+    expect(screen.queryByText(/Palavra.*fora do cue/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    await waitFor(() =>
+      expect(mocks.updateCueTiming).toHaveBeenCalledWith("c1", {
+        author: "local-editor",
+        speech_timing: { start_ms: 900, end_ms: 1800 },
+        subtitle_timing: { start_ms: 100, end_ms: 1800 },
+      }),
+    );
+    expect(mocks.updateWordTiming).not.toHaveBeenCalled();
+  });
+
   it("realigns the next cue to a 10 ms gap when G saves an expanded cue", async () => {
     const first = (await mocks.editorialCues())[0];
     const second = {
