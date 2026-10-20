@@ -85,7 +85,7 @@ function cueWordTranslation(words: TimelineCue["words"]): { text: string; comple
   return {
     text: fragments
       .join(" ")
-      .replace(/\s+([.,;:!?…%)\]\}»”])/g, "$1")
+      .replace(/\s+([.,;:!?…%)\]}»”])/g, "$1")
       .replace(/([([{«“])\s+/g, "$1")
       .trim(),
     complete,
