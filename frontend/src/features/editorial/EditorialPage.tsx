@@ -2008,7 +2008,7 @@ export function EditorialPage() {
                 <p className="field-error" role="alert">{textReconciliation.error}</p>
               )}
               <ol className="word-list" aria-label="Palavras do cue selecionado">
-                {selectedCue.words.map((item) => (
+                {visibleWords.map((item) => (
                   <li key={item.id}>
                     <button
                       type="button"
