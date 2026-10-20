@@ -293,7 +293,8 @@ export function EditorialPage() {
     : proposedCueTiming;
   // Preview the same word count and provisional audio intervals as the server.
   const reconciledWords = textReconciliation?.words ?? selectedCue?.words ?? [];
-  const visibleWords = hasInsertedWords && draftCueTiming && reconciledWords.length
+  const visibleWords = hasInsertedWords && draftCueTiming && reconciledWords.length &&
+      activeCueTiming.end_ms - activeCueTiming.start_ms >= reconciledWords.length
     ? remapWordsToCue(reconciledWords, proposedCueTiming, activeCueTiming)
     : reconciledWords;
   const selectedWord = visibleWords.find((item) => item.id === selectedWordId);
