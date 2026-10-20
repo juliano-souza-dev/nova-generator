@@ -988,7 +988,7 @@ describe("EditorialPage", () => {
       value: 0.9,
     });
     fireEvent.timeUpdate(player);
-    fireEvent.click(screen.getByRole("button", { name: "Marcar IN" }));
+    fireEvent.click(screen.getByRole("button", { name: /Marcar IN/ }));
     const first = within(screen.getByRole("list", { name: "Palavras do cue selecionado" }))
       .getByRole("button", { name: /First/ });
     expect(first).toHaveTextContent("0.90");
