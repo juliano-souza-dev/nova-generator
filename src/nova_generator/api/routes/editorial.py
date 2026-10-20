@@ -796,7 +796,8 @@ def _require_prepared_scene(
         raise HTTPException(
             409,
             detail=(
-                "initial editorial preparation is incomplete; finish Groq or external AI processing first"
+                "initial editorial preparation is incomplete; "
+                "finish Groq or external AI processing first"
             ),
         )
 
