@@ -126,6 +126,7 @@ test("editor can operate the cue and word timeline", async ({ page }) => {
 test("AI semantic grouping remains a draft until save", async ({ page }) => {
   await mockEditorialWorkstation(page);
   await page.goto("/editorial?project=p1");
+  await page.getByRole("button", { name: "Trocar fonte de preparação" }).click();
   await page.getByRole("button", { name: "Sugerir com Groq" }).click();
   await expect(page.getByLabel("Unidades sugeridas")).toContainText(
     "How are you? → Como você está?",
@@ -136,7 +137,7 @@ test("AI semantic grouping remains a draft until save", async ({ page }) => {
   await expect(page.locator(".review-message")).toContainText("Alterações salvas");
 });
 
-test("Ctrl+Enter opens the iHub preview with EN, PT and Dual modes", async ({ page }) => {
+test("Ctrl+Shift+Enter opens the iHub preview with EN, PT and Dual modes", async ({ page }) => {
   await mockEditorialWorkstation(page);
   await page.goto("/editorial?project=p1");
   await expect(page.getByRole("button", { name: "Prévia no iHub" })).toBeEnabled();
@@ -146,6 +147,7 @@ test("Ctrl+Enter opens the iHub preview with EN, PT and Dual modes", async ({ pa
         key: "Enter",
         code: "Enter",
         ctrlKey: true,
+        shiftKey: true,
         bubbles: true,
         cancelable: true,
       }),
