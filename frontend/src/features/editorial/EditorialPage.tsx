@@ -401,7 +401,13 @@ export function EditorialPage() {
     setWordEnd(selectedWord?.end_ms ?? 0);
     setWordPt(storedWordPt);
     setWordSurface(selectedWord?.surface.trim() ?? "");
-  }, [selectedWord, storedWordPt]);
+  }, [
+    selectedWord?.id,
+    selectedWord?.start_ms,
+    selectedWord?.end_ms,
+    selectedWord?.surface,
+    storedWordPt,
+  ]);
 
   const refreshCues = useCallback(async (): Promise<TimelineCue[]> => {
     if (!sceneId) return [];
