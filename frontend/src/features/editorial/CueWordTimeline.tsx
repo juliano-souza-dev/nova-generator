@@ -196,6 +196,11 @@ export function CueWordTimeline(props: Props) {
               </span>
               <strong>{selectedWord.surface.trim()}</strong>
               <small>O destaque no iHub ficará ativo apenas entre IN e OUT. As pausas ficam sem destaque.</small>
+              {selectedWord.end_ms <= selectedWord.start_ms && (
+                <small className="word-invalid-range" role="alert">
+                  Palavra sem duração: ajuste o início e o fim antes de reproduzir.
+                </small>
+              )}
             </div>
             <div className="word-guided-times" aria-live="polite">
               <span><b>IN</b> {timeLabel(selectedWord.start_ms)}</span>
