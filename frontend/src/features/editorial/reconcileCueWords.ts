@@ -94,7 +94,9 @@ export function reconcileCueWords(text: string, words: WordTiming[]): WordReconc
       original.find((word) => typeof word.pt === "string" && word.pt.trim())?.pt ?? "";
     indices.forEach((index, rank) => {
       const word = updated[index];
-      const provenance = { ...word.provenance, translation_review_required: true };
+      const provenance: Record<string, unknown> = {
+        ...word.provenance, translation_review_required: true,
+      };
       const pt = rank === 0
         ? String(provenance.pt_original || word.pt || groupTranslation)
         : null;
