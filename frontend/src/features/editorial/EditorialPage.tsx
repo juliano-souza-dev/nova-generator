@@ -1476,39 +1476,39 @@ export function EditorialPage() {
                    Ctrl + Shift + Enter: prévia iHub · Espaço: ouvir · A/S: IN/OUT · G: salvar e próxima</p>
               </details>
             </nav>
-            <section className="editorial-station-stage" aria-label="Área principal da waveform">
+            <section className={`editorial-station-stage${showCompactVideo ? "" : " is-video-hidden"}`} aria-label="Área principal da waveform">
               <div className="editorial-station-wave">
           <CueWordTimeline
-            cues={previewCues}
-            waveform={matchingMedia ? media?.waveform : null}
-            durationMs={durationMs}
-            playheadMs={playheadMs}
-            playing={playing}
-            zoom={zoom}
-            focusRequest={timelineFocusRequest}
-            selectedCueId={selectedCueId}
-            selectedWordId={selectedWordId}
-            onPlayToggle={togglePlayback}
-            onPlayContext={() => {
-              if (!selectedCue || !selectedWord) return;
-              playRange(
-                Math.max(selectedCue.speech_timing.start_ms, wordStart - 650),
-                Math.min(selectedCue.speech_timing.end_ms, wordEnd + 850),
-              );
-            }}
-            onPreviousWord={() => moveWord(-1)}
-            onContinuousPlayToggle={toggleContinuousPlayback}
-            onSaveAndNext={() => void saveChanges(false, true)}
-            onPlayheadChange={seek}
-            onZoomChange={setZoom}
-            onSelectCue={selectCue}
-            onSelectWord={(wordId, cueId) => void selectWord(wordId, cueId)}
-            onSetEdge={markActiveEdge}
-            onEdgeDragStart={beginEdgeDrag}
-            onEdgeChange={(edge, timeMs) => setActiveEdgeAt(edge, timeMs, false)}
-            onNudge={nudge}
-            onUndo={undo}
-          />
+                cues={previewCues}
+                waveform={matchingMedia ? media?.waveform : null}
+                durationMs={durationMs}
+                playheadMs={playheadMs}
+                playing={playing}
+                zoom={zoom}
+                focusRequest={timelineFocusRequest}
+                selectedCueId={selectedCueId}
+                selectedWordId={selectedWordId}
+                onPlayToggle={togglePlayback}
+                onPlayContext={() => {
+                  if (!selectedCue || !selectedWord) return;
+                  playRange(
+                    Math.max(selectedCue.speech_timing.start_ms, wordStart - 650),
+                    Math.min(selectedCue.speech_timing.end_ms, wordEnd + 850),
+                  );
+                }}
+                onPreviousWord={() => moveWord(-1)}
+                onContinuousPlayToggle={toggleContinuousPlayback}
+                onSaveAndNext={() => void saveChanges(false, true)}
+                onPlayheadChange={seek}
+                onZoomChange={setZoom}
+                onSelectCue={selectCue}
+                onSelectWord={(wordId, cueId) => void selectWord(wordId, cueId)}
+                onSetEdge={markActiveEdge}
+                onEdgeDragStart={beginEdgeDrag}
+                onEdgeChange={(edge, timeMs) => setActiveEdgeAt(edge, timeMs, false)}
+                onNudge={nudge}
+                onUndo={undo}
+              />
               </div>
               <div className="editorial-compact-video" hidden={!showCompactVideo}>
             <section className="review-player panel" aria-labelledby="cut-player-title">
