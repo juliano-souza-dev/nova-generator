@@ -225,7 +225,10 @@ class EditApprovedText:
         )
         updated_words = words
         provenance = dict(cue.provenance)
-        if approved_en != current_text:
+        if (
+            approved_en != current_text
+            or len(re.findall(r"\s*\S+", approved_en)) != len(words)
+        ):
             updated_words, trailing, removed_ids = _reconcile_approved_words(
                 approved_en, words, cue.speech_start_ms
             )
