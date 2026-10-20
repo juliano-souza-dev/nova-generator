@@ -1140,6 +1140,36 @@ describe("EditorialPage", () => {
       .toHaveClass("is-video-hidden");
   });
 
+  it("edits English and Portuguese next to the waveform with no panel navigation", async () => {
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const stage = await screen.findByRole("region", { name: "Área principal da waveform" });
+    await waitFor(() =>
+      expect(within(stage).getByText("“I can't… go?”")).toBeInTheDocument(),
+    );
+    fireEvent.click(within(stage).getByRole("button", { name: "Editar texto" }));
+    fireEvent.change(within(stage).getByRole("textbox", { name: "Português rápido" }), {
+      target: { value: "Eu não posso ir?" },
+    });
+    expect(within(stage).getByRole("textbox", { name: "Português rápido" }))
+      .toHaveValue("Eu não posso ir?");
+    const dock = screen.getByRole("navigation", { name: "Controles da estação editorial" });
+    fireEvent.click(within(dock).getByRole("button", { name: "Salvar alterações" }));
+    await waitFor(() =>
+      expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
+        author: "local-editor",
+        approved_en: "“I can't… go?”",
+        approved_pt: "Eu não posso ir?",
+        approve: false,
+      }),
+    );
+    fireEvent.click(within(stage).getByRole("button", { name: "Recolher edição" }));
+    expect(within(stage).getByText("Eu não posso ir?")).toBeInTheDocument();
+  });
+
   it("approves and advances directly from the sticky dock using Ctrl+Enter", async () => {
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1"]}>
