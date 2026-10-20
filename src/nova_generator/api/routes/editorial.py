@@ -84,6 +84,7 @@ class TextRequest(ActorRequest):
     approve: bool = True
     proposed_speech_timing: dict[str, int] | None = None
     proposed_word_timings: list[dict[str, int]] | None = None
+    proposed_word_translations: list[str | None] | None = None
 
 
 class Timing(BaseModel):
