@@ -1961,41 +1961,6 @@ export function EditorialPage() {
                   </button>
                 </div>
               )}
-              <details className="technical-details">
-                <summary>Ajuste fino da fala do cue</summary>
-                <div className="timing-controls">
-                  <span>Início {selectedCue.speech_timing.start_ms} ms</span>
-                  <button
-                    type="button"
-                    onClick={() => nudge("start", -25)}
-                    aria-label="Antecipar início do cue em 25 milissegundos"
-                  >
-                    −25
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => nudge("start", 25)}
-                    aria-label="Atrasar início do cue em 25 milissegundos"
-                  >
-                    +25
-                  </button>
-                  <span>Fim {selectedCue.speech_timing.end_ms} ms</span>
-                  <button
-                    type="button"
-                    onClick={() => nudge("end", -25)}
-                    aria-label="Antecipar fim do cue em 25 milissegundos"
-                  >
-                    −25
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => nudge("end", 25)}
-                    aria-label="Atrasar fim do cue em 25 milissegundos"
-                  >
-                    +25
-                  </button>
-                </div>
-              </details>
             </article>
             <aside className="panel word-inspector" aria-labelledby="word-inspector-title">
               <span className="eyebrow">Inspetor contextual</span>
