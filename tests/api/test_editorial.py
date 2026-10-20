@@ -688,3 +688,99 @@ def test_subtitle_only_boundary_change_does_not_move_word_audio(
     )
     assert result.status_code == 200, result.text
     assert repository.get_cue_words(cue.id) == original_words
+
+
+def test_deleting_intrusive_english_word_preserves_following_word_timestamps_and_undo(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    original = repository.get_cue_words(cue.id)
+    assert len(original) == 3
+    original_cue = repository.get_cue(cue.id)
+    revised = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "I go?",
+            "approved_pt": "Eu vou?",
+            "approve": False,
+        },
+    )
+    assert revised.status_code == 200, revised.text
+    updated = repository.get_cue_words(cue.id)
+    assert len(updated) == 2
+    assert "".join(word.surface for word in updated) == "I go?"
+    assert [word.id for word in updated] == [original[0].id, original[2].id]
+    assert updated[1].start_ms == original[2].start_ms
+    assert updated[1].end_ms == original[2].end_ms
+    assert [word.order for word in updated] == [1, 2]
+    assert repository.get_cue(cue.id).original_en == original_cue.original_en
+    revision = repository.list_revisions(scene_id)[-1]
+    assert revision.command == "edit_draft_text"
+    undone = client.post(
+        f"/api/editorial/scenes/{scene_id}/undo",
+        json={"author": "editor", "revision_id": str(revision.id)},
+    )
+    assert undone.status_code == 200, undone.text
+    assert [word.id for word in repository.get_cue_words(cue.id)] == [
+        word.id for word in original
+    ]
+
+
+def test_editing_approved_text_cannot_invent_timestamps_for_inserted_word(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    before = repository.get_cue_words(cue.id)
+    count = len(repository.list_revisions(scene_id))
+    result = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "I really can't go?",
+            "approved_pt": "Eu realmente não posso ir?",
+            "approve": False,
+        },
+    )
+    assert result.status_code == 422
+    assert "explicit audio timings" in result.json()["detail"]
+    assert repository.get_cue_words(cue.id) == before
+    assert len(repository.list_revisions(scene_id)) == count
+
+
+def test_removing_word_from_semantic_unit_marks_survivor_for_translation_review(
+    client: TestClient,
+) -> None:
+    repository, _, cue = _seed(client)
+    original = repository.get_cue_words(cue.id)
+    semantic_group = "group-original"
+    grouped = [
+        replace(
+            word,
+            provenance={
+                **word.provenance,
+                **(
+                    {"semantic_group_id": semantic_group,
+                     "semantic_group_role": "lead" if index == 1 else "member",
+                     "pt": "não consigo" if index == 1 else None}
+                    if index in (1, 2) else {}
+                ),
+            },
+        )
+        for index, word in enumerate(original)
+    ]
+    repository.save_cue(cue, grouped)
+    result = client.put(
+        f"/api/editorial/cues/{cue.id}/text",
+        json={
+            "author": "editor",
+            "approved_en": "I go?",
+            "approved_pt": "Eu vou?",
+            "approve": False,
+        },
+    )
+    assert result.status_code == 200, result.text
+    remaining = repository.get_cue_words(cue.id)
+    assert len(remaining) == 2
+    assert remaining[1].provenance.get("semantic_group_id") is None
+    assert remaining[1].provenance["translation_review_required"] is True
