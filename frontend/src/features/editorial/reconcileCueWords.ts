@@ -83,7 +83,7 @@ export function reconcileCueWords(
   if (matches.size !== m) return { words, error: "Não foi possível identificar as palavras." };
   let cursor = cueStartMs;
   let insertedCount = 0;
-  const updated = tokens.map((surface, index) => {
+  const updated: WordTiming[] = tokens.map((surface, index) => {
     const previous = matches.get(index);
     if (!previous) {
       insertedCount += 1;
@@ -164,6 +164,29 @@ export function reconcileCueWords(
         };
       }
     });
+  }
+  const semanticGroups = new Set(
+    updated.map((word) => word.semantic_group_id).filter((id): id is string => Boolean(id)),
+  );
+  for (const groupId of semanticGroups) {
+    const positions = updated.flatMap((word, index) =>
+      word.semantic_group_id === groupId ? [index] : [],
+    );
+    if (positions.every((position, rank) => position === positions[0] + rank)) continue;
+    for (const index of positions) {
+      const word = updated[index];
+      const provenance = { ...word.provenance, translation_review_required: true };
+      const pt = String(provenance.pt_original || word.pt || "");
+      delete provenance.semantic_group_id;
+      delete provenance.semantic_group_role;
+      updated[index] = {
+        ...word,
+        pt,
+        semantic_group_id: null,
+        semantic_group_role: null,
+        provenance: { ...provenance, pt },
+      };
+    }
   }
   return { words: updated, suggestedEndMs: cursor, insertedCount };
 }
