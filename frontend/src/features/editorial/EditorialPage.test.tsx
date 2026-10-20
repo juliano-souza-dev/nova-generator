@@ -670,6 +670,8 @@ describe("EditorialPage", () => {
       target: { value: "475" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Reproduzir palavra" }));
+    // Native onPlay must NOT replace the word's OUT with the cue's end.
+    fireEvent.play(player);
 
     expect(player.currentTime).toBeCloseTo(0.375, 4);
     expect(play).toHaveBeenCalledTimes(1);
@@ -681,6 +683,59 @@ describe("EditorialPage", () => {
     });
     fireEvent.timeUpdate(player);
     expect(pause).toHaveBeenCalledTimes(1);
+  });
+
+  it("restarts the word preview even while the full cue is already playing", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      {
+        ...cue,
+        words: [
+          { id: "w1", order: 1, surface: "Can", start_ms: 100, end_ms: 350, pt: "Posso" },
+          { id: "w2", order: 2, surface: "I", start_ms: 360, end_ms: 480, pt: "eu" },
+          { id: "w3", order: 3, surface: "help?", start_ms: 490, end_ms: 800, pt: "ajudar?" },
+        ],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const player = (await screen.findByLabelText("Player do corte da cena")) as HTMLVideoElement;
+    const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(list).getByRole("button", { name: /I/ }));
+    fireEvent.play(player);
+    fireEvent.click(screen.getByRole("button", { name: "Reproduzir palavra" }));
+    expect(player.currentTime).toBeCloseTo(0.36, 3);
+    expect(play).toHaveBeenCalled();
+    Object.defineProperty(player, "currentTime", { configurable: true, value: 0.481, writable: true });
+    fireEvent.timeUpdate(player);
+    expect(pause).toHaveBeenCalled();
+  });
+
+  it("does not play a zero-duration word and displays an explanation", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      {
+        ...cue,
+        words: [{ id: "w1", order: 1, surface: "It's", start_ms: 1580, end_ms: 1580, pt: "É" }],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(list).getByRole("button", { name: /It's/ }));
+    expect(await screen.findByText(/Palavra sem duração/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reproduzir palavra" }));
+    expect(await screen.findByText(/A palavra não tem intervalo válido/)).toBeInTheDocument();
+    expect(play).not.toHaveBeenCalled();
   });
 
   it("saves the selected word and opens the next word with Enter", async () => {
