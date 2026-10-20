@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   updateCueText: vi.fn().mockResolvedValue({}),
   updateCueTiming: vi.fn().mockResolvedValue({}),
   updateWordTiming: vi.fn().mockResolvedValue({}),
+  completeWordTimingReview: vi.fn().mockResolvedValue({
+    provenance: { word_timing_reviewed: true },
+  }),
   updateWordTranslation: vi.fn().mockResolvedValue({}),
   updateWordSurface: vi.fn().mockResolvedValue({ approved_en: "I stay." }),
   fitCueToWords: vi.fn().mockResolvedValue({}),
@@ -78,6 +81,7 @@ vi.mock("../../lib/studio-api", () => ({
     updateCueText: mocks.updateCueText,
     updateCueTiming: mocks.updateCueTiming,
     updateWordTiming: mocks.updateWordTiming,
+    completeWordTimingReview: mocks.completeWordTimingReview,
     updateWordTranslation: mocks.updateWordTranslation,
     updateWordSurface: mocks.updateWordSurface,
     fitCueToWords: mocks.fitCueToWords,
@@ -509,9 +513,10 @@ describe("EditorialPage", () => {
     expect(screen.getByRole("heading", { name: "Palavra “can't…”" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cue anterior" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Próximo cue" })).toBeDisabled();
-    fireEvent.change(screen.getByRole("spinbutton", { name: "IN (ms)" }), {
-      target: { value: "125" },
-    });
+    const player = screen.getByLabelText("Player do corte da cena") as HTMLVideoElement;
+    Object.defineProperty(player, "currentTime", { configurable: true, value: 0.125, writable: true });
+    fireEvent.timeUpdate(player);
+    fireEvent.click(screen.getByRole("button", { name: /Marcar início/ }));
     expect(screen.getByRole("button", { name: "Salvar palavra" })).toBeEnabled();
   });
 
@@ -622,9 +627,10 @@ describe("EditorialPage", () => {
 
     const wordList = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
     fireEvent.click(within(wordList).getByRole("button", { name: /I/ }));
-    fireEvent.change(screen.getByRole("spinbutton", { name: "IN (ms)" }), {
-      target: { value: "370" },
-    });
+    const player = screen.getByLabelText("Player do corte da cena") as HTMLVideoElement;
+    Object.defineProperty(player, "currentTime", { configurable: true, value: 0.37, writable: true });
+    fireEvent.timeUpdate(player);
+    fireEvent.click(screen.getByRole("button", { name: /Marcar início/ }));
     fireEvent.click(screen.getByRole("button", { name: "Salvar palavra" }));
 
     await waitFor(() =>
@@ -663,12 +669,12 @@ describe("EditorialPage", () => {
     const player = (await screen.findByLabelText("Player do corte da cena")) as HTMLVideoElement;
     const wordList = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
     fireEvent.click(within(wordList).getByRole("button", { name: /I/ }));
-    fireEvent.change(screen.getByRole("spinbutton", { name: "IN (ms)" }), {
-      target: { value: "375" },
-    });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "OUT (ms)" }), {
-      target: { value: "475" },
-    });
+    Object.defineProperty(player, "currentTime", { configurable: true, value: 0.375, writable: true });
+    fireEvent.timeUpdate(player);
+    fireEvent.click(screen.getByRole("button", { name: /Marcar início/ }));
+    player.currentTime = 0.475;
+    fireEvent.timeUpdate(player);
+    fireEvent.click(screen.getByRole("button", { name: /Marcar fim/ }));
     fireEvent.click(screen.getByRole("button", { name: "Reproduzir palavra" }));
     // Native onPlay must NOT replace the word's OUT with the cue's end.
     fireEvent.play(player);
@@ -760,9 +766,10 @@ describe("EditorialPage", () => {
 
     const wordList = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
     fireEvent.click(within(wordList).getByRole("button", { name: /I/ }));
-    fireEvent.change(screen.getByRole("spinbutton", { name: "IN (ms)" }), {
-      target: { value: "370" },
-    });
+    const player = screen.getByLabelText("Player do corte da cena") as HTMLVideoElement;
+    Object.defineProperty(player, "currentTime", { configurable: true, value: 0.37, writable: true });
+    fireEvent.timeUpdate(player);
+    fireEvent.click(screen.getByRole("button", { name: /Marcar início/ }));
     fireEvent.keyDown(window, { key: "Enter" });
 
     await waitFor(() =>
