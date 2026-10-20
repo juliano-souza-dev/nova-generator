@@ -28,6 +28,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { CueWordTimeline, type TimelineCue } from "./CueWordTimeline";
 import { EditorialHubPreview } from "./EditorialHubPreview";
+import { reconcileCueWords } from "./reconcileCueWords";
 import { nudgeTiming, remapWordsToCue, setTimingEdge, validateTimeline } from "./timeline";
 import "./timeline.css";
 import "./editorial-workspace.css";
@@ -219,20 +220,30 @@ export function EditorialPage() {
   );
   const selectedCueIndex = cues.findIndex((cue) => cue.id === selectedCueId);
   const selectedCue = cues[selectedCueIndex];
-  const selectedWord = selectedCue?.words.find((item) => item.id === selectedWordId);
+  const textDirty = Boolean(
+    selectedCue &&
+    (approvedEn !== selectedCue.approved_en || approvedPt !== selectedCue.approved_pt),
+  );
+  const textReconciliation =
+    selectedCue && approvedEn !== selectedCue.approved_en
+      ? reconcileCueWords(approvedEn, selectedCue.words)
+      : null;
+  // The inspector and timeline reflect the editor draft, not stale ASR words.
+  const visibleWords = textReconciliation?.words ?? selectedCue?.words ?? [];
+  const selectedWord = visibleWords.find((item) => item.id === selectedWordId);
   const selectedGroupWords = selectedWord?.semantic_group_id
-    ? (selectedCue?.words.filter(
+    ? visibleWords.filter(
         (item) => item.semantic_group_id === selectedWord.semantic_group_id,
-      ) ?? [])
+      )
     : selectedWord
       ? [selectedWord]
       : [];
   const selectedUnitLabel = selectedGroupWords.map((item) => item.surface).join(" ");
   const selectedGroupStartIndex = selectedCue
-    ? selectedCue.words.indexOf(selectedGroupWords[0] ?? selectedWord!)
+    ? visibleWords.indexOf(selectedGroupWords[0] ?? selectedWord!)
     : -1;
   const selectedGroupEndIndex = selectedCue
-    ? selectedCue.words.indexOf(selectedGroupWords.at(-1) ?? selectedWord!)
+    ? visibleWords.indexOf(selectedGroupWords.at(-1) ?? selectedWord!)
     : -1;
   const storedWordPt =
     selectedGroupWords.find((item) => item.semantic_group_role === "lead")?.pt ??
@@ -250,35 +261,29 @@ export function EditorialPage() {
   );
   const approvedCount = cues.filter((cue) => cue.provenance?.approval === "approved").length;
   const allCuesApproved = cues.length > 0 && approvedCount === cues.length;
-  const textDirty = Boolean(
-    selectedCue &&
-    (approvedEn !== selectedCue.approved_en || approvedPt !== selectedCue.approved_pt),
-  );
   const wordDirty = Boolean(
     selectedWord && (wordStart !== selectedWord.start_ms || wordEnd !== selectedWord.end_ms),
   );
   const wordTranslationDirty = Boolean(selectedWord && wordPt !== storedWordPt);
   const wordSurfaceDirty = Boolean(selectedWord && wordSurface !== selectedWord.surface.trim());
   const selectedWordIndex =
-    selectedCue?.words.findIndex((word) => word.id === selectedWordId) ?? -1;
-  const previewCues = selectedWord
-    ? cues.map((cue) =>
-        cue.id === selectedCue.id
-          ? {
-              ...cue,
-              words: cue.words.map((word, index) => ({
-                ...word,
-                surface:
-                  index === selectedWordIndex && wordSurfaceDirty
-                    ? (word.surface.match(/^\s*/)?.[0] ?? "") + wordSurface.trim()
-                    : word.surface,
-                start_ms: index === selectedWordIndex ? wordStart : word.start_ms,
-                end_ms: index === selectedWordIndex ? wordEnd : word.end_ms,
-              })),
-            }
-          : cue,
-      )
-    : cues;
+    visibleWords.findIndex((word) => word.id === selectedWordId);
+  const previewCues = cues.map((cue) =>
+    cue.id === selectedCue?.id
+      ? {
+          ...cue,
+          words: visibleWords.map((word, index) => ({
+            ...word,
+            surface:
+              index === selectedWordIndex && wordSurfaceDirty
+                ? (word.surface.match(/^\\s*/)?.[0] ?? "") + wordSurface.trim()
+                : word.surface,
+            start_ms: index === selectedWordIndex ? wordStart : word.start_ms,
+            end_ms: index === selectedWordIndex ? wordEnd : word.end_ms,
+          })),
+        }
+      : cue,
+  );
   const hubPreviewCues = previewCues.map((cue) =>
     cue.id === selectedCue?.id
       ? {
@@ -505,7 +510,7 @@ export function EditorialPage() {
     try {
       // Clicking another word automatically commits edits for the current one.
       // Never navigate after an unsuccessful save, to prevent silent data loss.
-      if (selectedWord && isDirty) {
+      if (isDirty) {
         const saved = await saveChanges(false, false);
         if (!saved) return;
       }
@@ -840,6 +845,10 @@ export function EditorialPage() {
 
   async function saveChanges(approve = false, advance = false): Promise<boolean> {
     if (!selectedCue || saving) return false;
+    if (textReconciliation?.error) {
+      setMessage(textReconciliation.error);
+      return false;
+    }
     if (wordSurfaceDirty && textDirty) {
       setMessage("Salve a correção da palavra e a edição do texto em etapas separadas.");
       return false;
@@ -1974,12 +1983,15 @@ export function EditorialPage() {
               {selectedWord && (
                 <div className="word-mode-status">
                   <span>
-                    Palavra {selectedWordIndex + 1} de {selectedCue.words.length}
+                    Palavra {selectedWordIndex + 1} de {visibleWords.length}
                   </span>
                   <button type="button" className="secondary-button" onClick={leaveWordMode}>
                     Voltar ao cue
                   </button>
                 </div>
+              )}
+              {textReconciliation?.error && (
+                <p className="field-error" role="alert">{textReconciliation.error}</p>
               )}
               <ol className="word-list" aria-label="Palavras do cue selecionado">
                 {selectedCue.words.map((item) => (
