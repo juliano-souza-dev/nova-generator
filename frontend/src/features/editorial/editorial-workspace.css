@@ -1217,3 +1217,18 @@
 .cue-timing-alert {
   margin-bottom: 0.75rem;
 }
+
+.word-reviewed-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #7ce6a6;
+}
+.word-reviewed-indicator svg {
+  width: 15px;
+  height: 15px;
+}
