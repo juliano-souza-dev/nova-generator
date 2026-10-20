@@ -195,6 +195,15 @@ export function EditorialPage() {
   const [wordEnd, setWordEnd] = useState(0);
   const [wordPt, setWordPt] = useState("");
   const [wordSurface, setWordSurface] = useState("");
+  // Keep invalid or temporarily unsavable word edits accessible while navigating.
+  // This cache is local to the current editorial session, never a server approval.
+  const pendingWordDrafts = useRef(new Map<string, {
+    start: number;
+    end: number;
+    pt: string;
+    surface: string;
+  }>());
+  const [pendingDraftVersion, setPendingDraftVersion] = useState(0);
   const [saving, setSaving] = useState(false);
   const wordNavigationLock = useRef(false);
   const cueNavigationLock = useRef(false);
@@ -409,11 +418,12 @@ export function EditorialPage() {
     setStructureDraft(null);
   }, [selectedCue?.id, selectedCue?.revision, sceneId]);
   useEffect(() => {
+    const pending = selectedWord ? pendingWordDrafts.current.get(selectedWord.id) : undefined;
     setWordDraftId(selectedWord?.id);
-    setWordStart(selectedWord?.start_ms ?? 0);
-    setWordEnd(selectedWord?.end_ms ?? 0);
-    setWordPt(storedWordPt);
-    setWordSurface(selectedWord?.surface.trim() ?? "");
+    setWordStart(pending?.start ?? selectedWord?.start_ms ?? 0);
+    setWordEnd(pending?.end ?? selectedWord?.end_ms ?? 0);
+    setWordPt(pending?.pt ?? storedWordPt);
+    setWordSurface(pending?.surface ?? selectedWord?.surface.trim() ?? "");
   }, [
     selectedWord?.id,
     selectedWord?.start_ms,
@@ -505,20 +515,51 @@ export function EditorialPage() {
     setPlayheadMs(bounded);
     if (mediaRef.current) mediaRef.current.currentTime = bounded / 1000;
   }
+  function rememberCurrentWordDraft() {
+    if (!selectedWord) return;
+    pendingWordDrafts.current.set(selectedWord.id, {
+      start: activeWordStart,
+      end: activeWordEnd,
+      pt: activeWordPt,
+      surface: activeWordSurface,
+    });
+    setPendingDraftVersion((value) => value + 1);
+  }
+
+  async function finishCurrentWordForNavigation(): Promise<string | null> {
+    if (!selectedCue || !selectedWord) return null;
+    const hasWordEdits = wordDirty || wordTranslationDirty || wordSurfaceDirty;
+    if (hasWordEdits) {
+      // Keep access to earlier/later words even when the current edit cannot
+      // be validated. The draft remains local and visibly pending.
+      rememberCurrentWordDraft();
+      const saved = await saveChanges(false, false);
+      if (!saved)
+        return `Ajustes de “${selectedWord.surface.trim()}” ainda não salvos. Rascunho preservado nesta sessão.`;
+      pendingWordDrafts.current.delete(selectedWord.id);
+      setPendingDraftVersion((value) => value + 1);
+    }
+    try {
+      await studioApi.completeWordTimingReview(selectedCue.id, selectedWord.id, author);
+      if (!hasWordEdits) await refreshCues();
+    } catch (error) {
+      return `“${selectedWord.surface.trim()}” permanece pendente: ${error instanceof Error ? error.message : "revise seus tempos"}.`;
+    }
+    return null;
+  }
+
   async function selectCue(id: string, focusWordId?: string) {
     if (saving || cueNavigationLock.current || wordNavigationLock.current) return;
     const destination = cues.find((item) => item.id === id);
     if (!destination) return;
     cueNavigationLock.current = true;
     try {
-      if (isDirty) {
+      // Cue-wide drafts cannot silently disappear when moving between cues.
+      if (textDirty || timingDirty || semanticUnitsDirty) {
         const saved = await saveChanges(false, false);
         if (!saved) return;
       }
-      if (selectedWord && selectedCue && id !== selectedCue.id) {
-        await studioApi.completeWordTimingReview(selectedCue.id, selectedWord.id, author);
-        await refreshCues();
-      }
+      const warning = await finishCurrentWordForNavigation();
       playbackEnd.current = null;
       mediaRef.current?.pause();
       setSelectedCueId(destination.id);
@@ -526,6 +567,7 @@ export function EditorialPage() {
       setTimelineFocusRequest((value) => value + 1);
       const focusWord = destination.words.find((word) => word.id === focusWordId);
       seek(focusWord?.start_ms ?? destination.speech_timing.start_ms);
+      if (warning) setMessage(warning);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível mudar de cue.");
     } finally {
@@ -542,28 +584,17 @@ export function EditorialPage() {
     if (!word) return;
     wordNavigationLock.current = true;
     try {
-      // Clicking another word automatically commits edits for the current one.
-      // Never navigate after an unsuccessful save, to prevent silent data loss.
-      if (isDirty) {
-        const saved = await saveChanges(false, false);
-        if (!saved) return;
-      }
-      if (selectedWord && selectedCue) {
-        await studioApi.completeWordTimingReview(selectedCue.id, selectedWord.id, author);
-        await refreshCues();
-      }
+      const warning = await finishCurrentWordForNavigation();
       playbackEnd.current = null;
       mediaRef.current?.pause();
       setSelectedWordId(word.id);
       seek(word.start_ms);
-      // Semantic groups share translation, not time or the active word selection.
       setMessage(
-        selectedWord
-          ? `Palavra anterior concluída e salva. Editando “${word.surface.trim()}”.`
-          : `Editando “${word.surface.trim()}”.`,
+        warning ??
+        `Editando “${word.surface.trim()}”. Cada palavra possui tempos próprios, inclusive dentro do grupo semântico.`,
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível concluir a palavra.");
+      setMessage(error instanceof Error ? error.message : "Não foi possível selecionar a palavra.");
     } finally {
       wordNavigationLock.current = false;
     }
@@ -577,25 +608,22 @@ export function EditorialPage() {
     if (!selectedWord || saving || wordNavigationLock.current) return;
     wordNavigationLock.current = true;
     try {
-      if (isDirty) {
-        const saved = await saveChanges(false, false);
-        if (!saved) return;
-      }
-      if (selectedCue) {
-        await studioApi.completeWordTimingReview(selectedCue.id, selectedWord.id, author);
-        await refreshCues();
-      }
+      const warning = await finishCurrentWordForNavigation();
       setSelectedWordId(undefined);
       if (selectedCue) seek(selectedCue.speech_timing.start_ms);
-      setMessage("");
+      setMessage(warning ?? "Modo Cue ativo.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível concluir a palavra.");
+      setMessage(error instanceof Error ? error.message : "Não foi possível voltar ao cue.");
     } finally {
       wordNavigationLock.current = false;
     }
   }
   function discardChanges() {
     if (saving) return;
+    if (selectedWordId) {
+      pendingWordDrafts.current.delete(selectedWordId);
+      setPendingDraftVersion((value) => value + 1);
+    }
     const original = history[0]?.find((cue) => cue.id === selectedCueId) ?? selectedCue;
     if (history[0]) setCues(history[0]);
     setHistory([]);
