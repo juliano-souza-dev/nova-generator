@@ -573,7 +573,7 @@ export function EditorialPage() {
         const saved = await saveChanges(false, false);
         if (!saved) return;
       }
-      const warning = await finishCurrentWordForNavigation();
+      const warning = selectedWord ? await finishCurrentWordForNavigation() : null;
       playbackEnd.current = null;
       mediaRef.current?.pause();
       setSelectedCueId(destination.id);
@@ -598,7 +598,7 @@ export function EditorialPage() {
     if (!word) return;
     wordNavigationLock.current = true;
     try {
-      const warning = await finishCurrentWordForNavigation();
+      const warning = selectedWord ? await finishCurrentWordForNavigation() : null;
       playbackEnd.current = null;
       mediaRef.current?.pause();
       setSelectedWordId(word.id);
