@@ -801,7 +801,7 @@ describe("EditorialPage", () => {
         .toHaveAttribute("aria-pressed", "true"),
     );
     expect(screen.getByRole("heading", { name: "Palavra “love”" })).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(/permanece pendente/);
+    expect(screen.getByText(/permanece pendente/, { selector: ".review-message" })).toBeInTheDocument();
     const dock = screen.getByRole("navigation", { name: "Controles da estação editorial" });
     fireEvent.click(within(dock).getByRole("button", { name: "Cue" }));
     await waitFor(() =>
@@ -837,7 +837,7 @@ describe("EditorialPage", () => {
     expect(screen.getByLabelText("Sincronização da palavra selecionada"))
       .toHaveTextContent("0.39 s");
     fireEvent.click(screen.getByRole("button", { name: "Salvar palavra" }));
-    expect(await screen.findByRole("status")).toHaveTextContent(/sobrepõe a anterior/);
+    expect(await screen.findByText(/sobrepõe a anterior/, { selector: ".review-message" })).toBeInTheDocument();
     fireEvent.click(within(list).getByRole("button", { name: /Can/ }));
     await waitFor(() =>
       expect(within(list).getByRole("button", { name: /Can/ }))
@@ -1009,7 +1009,7 @@ describe("EditorialPage", () => {
     expect(within(list).getByLabelText("Palavra concluída")).toBeInTheDocument();
   });
 
-  it("never switches words when autosave fails", async () => {
+  it("keeps an unsaved word draft accessible when autosave fails", async () => {
     const cue = (await mocks.editorialCues())[0];
     mocks.editorialCues.mockResolvedValue([
       {
@@ -1034,9 +1034,20 @@ describe("EditorialPage", () => {
     fireEvent.timeUpdate(player);
     fireEvent.click(screen.getByRole("button", { name: /Marcar início/ }));
     fireEvent.click(within(list).getByRole("button", { name: /^I/ }));
-    expect(await screen.findByText("Falha ao salvar")).toBeInTheDocument();
-    expect(first).toHaveAttribute("aria-pressed", "true");
-    expect(mocks.completeWordTimingReview).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(within(list).getByRole("button", { name: /^I/ }))
+        .toHaveAttribute("aria-pressed", "true"),
+    );
+    expect(screen.getByText(/Rascunho preservado nesta sessão/, {
+      selector: ".review-message",
+    })).toBeInTheDocument();
+    expect(within(list).getByLabelText("Rascunho não salvo")).toBeInTheDocument();
+    fireEvent.click(first);
+    await waitFor(() =>
+      expect(first).toHaveAttribute("aria-pressed", "true"),
+    );
+    expect(screen.getByLabelText("Sincronização da palavra selecionada"))
+      .toHaveTextContent("0.14 s");
   });
 
   it("clicking the next word completes the previous even without edits", async () => {
