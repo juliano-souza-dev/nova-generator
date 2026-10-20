@@ -188,6 +188,7 @@ export function EditorialPage() {
   const [playing, setPlaying] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [approvedEn, setApprovedEn] = useState("");
+  const [textDraftCueId, setTextDraftCueId] = useState("");
   const [approvedPt, setApprovedPt] = useState("");
   const [wordStart, setWordStart] = useState(0);
   const [wordEnd, setWordEnd] = useState(0);
@@ -221,11 +222,11 @@ export function EditorialPage() {
   const selectedCueIndex = cues.findIndex((cue) => cue.id === selectedCueId);
   const selectedCue = cues[selectedCueIndex];
   const textDirty = Boolean(
-    selectedCue &&
+    selectedCue && textDraftCueId === selectedCue.id &&
     (approvedEn !== selectedCue.approved_en || approvedPt !== selectedCue.approved_pt),
   );
   const textReconciliation =
-    selectedCue && approvedEn !== selectedCue.approved_en
+    selectedCue && textDraftCueId === selectedCue.id && approvedEn !== selectedCue.approved_en
       ? reconcileCueWords(approvedEn, selectedCue.words)
       : null;
   // The inspector and timeline reflect the editor draft, not stale ASR words.
@@ -380,6 +381,7 @@ export function EditorialPage() {
     };
   }, [sceneId]);
   useEffect(() => {
+    setTextDraftCueId(selectedCue?.id ?? "");
     setApprovedEn(selectedCue?.approved_en ?? "");
     setApprovedPt(selectedCue?.approved_pt ?? "");
   }, [selectedCue?.id, selectedCue?.approved_en, selectedCue?.approved_pt]);
