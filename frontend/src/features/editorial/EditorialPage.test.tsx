@@ -298,12 +298,16 @@ describe("EditorialPage", () => {
     );
   });
 
-  it("blocks the workstation while a mandatory word translation is missing", async () => {
+  it("keeps the workstation open for manual review when a prepared cue lacks a word translation", async () => {
     const cue = (await mocks.editorialCues())[0];
     mocks.editorialCues.mockResolvedValueOnce([
       {
         ...cue,
-        words: cue.words.map((word) => ({ ...word, pt: undefined })),
+        words: cue.words.map((word) => ({
+          ...word,
+          pt: undefined,
+          provenance: { translation_review_required: true },
+        })),
       },
     ]);
     render(
@@ -311,13 +315,54 @@ describe("EditorialPage", () => {
         <EditorialPage />
       </MemoryRouter>,
     );
-    expect(
-      await screen.findByRole("heading", { name: "A cena ainda possui lacunas" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByLabelText("Player do corte da cena")).not.toBeInTheDocument();
-    expect(
-      await screen.findByRole("link", { name: /Baixar blocos de texto para IA externa/ }),
-    ).toBeInTheDocument();
+    expect(await screen.findByLabelText("Player do corte da cena")).toBeInTheDocument();
+    expect(screen.getByText("Revisão manual pendente em 1 cue(s)")).toBeInTheDocument();
+    expect(screen.getByText(/A edição permanece liberada/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "A cena ainda possui lacunas" }))
+      .not.toBeInTheDocument();
+    const wordList = screen.getByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(wordList).getByRole("button", { name: /can't…/ }));
+    expect(screen.getByRole("textbox", { name: "Tradução natural da unidade" })).toBeEnabled();
+  });
+
+  it("never sends a previously prepared cue back to mandatory AI after inserting words", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([
+      {
+        ...cue,
+        approved_en: "What's the point?",
+        approved_pt: "Pra quê?",
+        provenance: {
+          ...cue.provenance,
+          editorial_text_manually_corrected: true,
+        },
+        words: [
+          { id: "what", order: 1, surface: "What's", start_ms: 100, end_ms: 400,
+            pt: "o que" },
+          { id: "the", order: 2, surface: " the", start_ms: 415, end_ms: 620,
+            pt: "", provenance: {
+              editorial_word_inserted: true,
+              editorial_timing_estimated: true,
+              translation_review_required: true,
+            } },
+          { id: "point", order: 3, surface: " point?", start_ms: 635, end_ms: 900,
+            pt: "", provenance: {
+              editorial_word_inserted: true,
+              editorial_timing_estimated: true,
+              translation_review_required: true,
+            } },
+        ],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByLabelText("Player do corte da cena")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Aprovar cue" })).toBeEnabled();
+    expect(screen.getByText("Revisão manual pendente em 1 cue(s)")).toBeInTheDocument();
+    expect(screen.queryByText("A cena ainda possui lacunas")).not.toBeInTheDocument();
   });
 
   it("offers the external fallback when Groq status cannot be loaded", async () => {
