@@ -560,3 +560,128 @@ button:disabled {
     padding: 0.65rem;
   }
 }
+
+/* The everyday word-alignment path has only one row of primary actions.
+   Leave timeline internals available under the optional advanced disclosure. */
+.timeline-word-guided {
+  padding: 0.65rem;
+}
+.word-guided-panel {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+.word-guided-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.word-guided-title > div:first-child {
+  display: grid;
+  gap: 0.15rem;
+}
+.word-guided-eyebrow {
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.02em;
+}
+.word-guided-title strong {
+  color: var(--text);
+  font-size: clamp(1.1rem, 1.8vw, 1.5rem);
+  line-height: 1.2;
+}
+.word-guided-title small {
+  color: var(--muted);
+  max-width: 56ch;
+}
+.word-guided-times {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-variant-numeric: tabular-nums;
+}
+.word-guided-times span {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-raised);
+  padding: 0.5rem 0.65rem;
+  font-size: 0.87rem;
+}
+.word-guided-times b { font-size: 0.74rem; color: var(--muted); }
+.word-guided-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+.word-guided-actions > button {
+  min-height: 42px;
+}
+.word-guided-actions .primary-button {
+  margin-left: auto;
+}
+.word-edge-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 42px;
+  padding: 0.5rem 0.7rem;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.word-edge-action kbd, .word-guided-actions kbd {
+  font: inherit;
+  font-weight: 800;
+}
+.word-edge-start { border-color: #4ade80; }
+.word-edge-end { border-color: #fb7185; }
+.word-advanced-controls {
+  margin-bottom: 0.6rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.35rem;
+}
+.word-advanced-controls > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.word-advanced-controls .timeline-toolbar {
+  margin: 0.65rem 0 0.45rem;
+  flex-wrap: wrap;
+}
+.word-advanced-shortcuts {
+  color: var(--muted);
+  font-size: 0.76rem;
+  margin: 0.35rem 0;
+}
+.timeline-word-guided .cue-block {
+  opacity: 0.20;
+}
+.timeline-word-guided .cue-selected {
+  opacity: 0.35;
+}
+.timeline-word-guided .word-block {
+  opacity: 0.72;
+}
+.timeline-word-guided .word-selected {
+  opacity: 1;
+}
+@media (max-width: 760px) {
+  .word-guided-actions > button {
+    flex: 1 1 auto;
+  }
+  .word-guided-actions .primary-button {
+    width: 100%;
+    margin-left: 0;
+  }
+}
