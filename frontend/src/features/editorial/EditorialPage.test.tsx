@@ -1138,8 +1138,10 @@ describe("EditorialPage", () => {
     await waitFor(() =>
       expect(first).toHaveAttribute("aria-pressed", "true"),
     );
-    expect(screen.getByLabelText("Sincronização da palavra selecionada"))
-      .toHaveTextContent("0.14 s");
+    await waitFor(() =>
+      expect(screen.getByLabelText("Sincronização da palavra selecionada"))
+        .toHaveTextContent("0.14 s"),
+    );
   });
 
   it("clicking the next word completes the previous even without edits", async () => {
