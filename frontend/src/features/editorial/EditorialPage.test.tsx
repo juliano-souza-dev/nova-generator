@@ -365,6 +365,97 @@ describe("EditorialPage", () => {
     expect(screen.queryByText("A cena ainda possui lacunas")).not.toBeInTheDocument();
   });
 
+  it("allows a prepared cue with an empty PT field to be saved without re-running AI", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([{
+      ...cue,
+      approved_pt: "",
+      provenance: { ...cue.provenance, editorial_preparation: "complete" },
+    }]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByLabelText("Player do corte da cena")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Português aprovado"), {
+      target: { value: "Pra quê?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar texto" }));
+    await waitFor(() =>
+      expect(mocks.updateCueText).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({
+          approved_pt: "Pra quê?",
+          approve: false,
+        }),
+      ),
+    );
+    expect(screen.queryByText("A cena ainda possui lacunas")).not.toBeInTheDocument();
+  });
+
+  it("does not manufacture an unsaved draft or resegment English when only PT changes", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([{
+      ...cue,
+      approved_en: "What's the point?",
+      approved_pt: "o que",
+      provenance: {
+        ...cue.provenance,
+        editorial_text_manually_corrected: true,
+      },
+      words: [{
+        id: "w1", order: 1, surface: "What's", start_ms: 100, end_ms: 400,
+        pt: "o que",
+      }],
+    }]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByLabelText("Player do corte da cena")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Salvar alterações" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Português aprovado"), {
+      target: { value: "Pra quê?" },
+    });
+    expect(screen.queryByLabelText("OUT provisório da cue")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar texto" }));
+    await waitFor(() =>
+      expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
+        author: "local-editor",
+        approved_en: "What's the point?",
+        approved_pt: "Pra quê?",
+        approve: false,
+      }),
+    );
+    expect(mocks.updateWordTiming).not.toHaveBeenCalled();
+  });
+
+  it("keeps translation drafts savable even if old word timing needs correction", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([{
+      ...cue,
+      words: cue.words.map((word) => ({ ...word, end_ms: 2000 })),
+    }]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByLabelText("Player do corte da cena")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Português aprovado"), {
+      target: { value: "Texto para revisar." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar texto" }));
+    await waitFor(() =>
+      expect(mocks.updateCueText).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({ approved_pt: "Texto para revisar.", approve: false }),
+      ),
+    );
+  });
+
   it("offers the external fallback when Groq status cannot be loaded", async () => {
     const cue = (await mocks.editorialCues())[0];
     mocks.editorialCues.mockResolvedValueOnce([
