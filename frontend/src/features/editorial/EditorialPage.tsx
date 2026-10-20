@@ -14,7 +14,7 @@ import {
   Undo2,
   Upload,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type {
   EditorialAssistance,
@@ -290,6 +290,14 @@ export function EditorialPage() {
   const wordSurfaceDirty = Boolean(selectedWord && activeWordSurface !== selectedWord.surface.trim());
   const selectedWordIndex =
     visibleWords.findIndex((word) => word.id === selectedWordId);
+  const pendingWordIds = useMemo(
+    () => new Set(pendingWordDrafts.current.keys()),
+    [pendingDraftVersion],
+  );
+  const pendingTimingChanges = visibleWords.some((word) => {
+    const draft = pendingWordDrafts.current.get(word.id);
+    return draft && (draft.start !== word.start_ms || draft.end !== word.end_ms);
+  });
   const previewCues = cues.map((cue) =>
     cue.id === selectedCue?.id
       ? {
@@ -300,8 +308,12 @@ export function EditorialPage() {
               index === selectedWordIndex && wordSurfaceDirty
                 ? (word.surface.match(/^\\s*/)?.[0] ?? "") + activeWordSurface.trim()
                 : word.surface,
-            start_ms: index === selectedWordIndex ? activeWordStart : word.start_ms,
-            end_ms: index === selectedWordIndex ? activeWordEnd : word.end_ms,
+            start_ms: index === selectedWordIndex
+              ? activeWordStart
+              : (pendingWordDrafts.current.get(word.id)?.start ?? word.start_ms),
+            end_ms: index === selectedWordIndex
+              ? activeWordEnd
+              : (pendingWordDrafts.current.get(word.id)?.end ?? word.end_ms),
           })),
         }
       : cue,
@@ -342,6 +354,8 @@ export function EditorialPage() {
       });
   }, []);
   useEffect(() => {
+    pendingWordDrafts.current.clear();
+    setPendingDraftVersion((value) => value + 1);
     setScenes([]);
     setSceneId("");
     setCues([]);
@@ -780,18 +794,23 @@ export function EditorialPage() {
       setMessage(error instanceof Error ? error.message : "Não foi possível ajustar as palavras.");
     }
   }
+  // Individual word boundaries are editable independently of semantic groups.
+  // Neighbor conflicts are validated at save time, not allowed to freeze a handle.
+  function changeSelectedWordEdge(edge: "start" | "end", targetMs: number) {
+    if (!selectedCue || !selectedWord || saving) return;
+    const cueStart = selectedCue.speech_timing.start_ms;
+    const cueEnd = selectedCue.speech_timing.end_ms;
+    const time = Math.round(targetMs);
+    if (edge === "start") {
+      setWordStart(Math.max(cueStart, Math.min(time, activeWordEnd - 1)));
+    } else {
+      setWordEnd(Math.min(cueEnd, Math.max(time, activeWordStart + 1)));
+    }
+  }
   function nudge(edge: "start" | "end", deltaMs: number) {
     if (!selectedCue || saving) return;
     if (selectedWord) {
-      const prior = visibleWords[selectedWordIndex - 1];
-      const next = visibleWords[selectedWordIndex + 1];
-      if (edge === "start") {
-        const minimum = Math.max(selectedCue.speech_timing.start_ms, prior?.end_ms ?? 0);
-        setWordStart(Math.max(minimum, Math.min(wordStart + deltaMs, wordEnd - 1)));
-      } else {
-        const maximum = Math.min(selectedCue.speech_timing.end_ms, next?.start_ms ?? durationMs);
-        setWordEnd(Math.min(maximum, Math.max(wordEnd + deltaMs, wordStart + 1)));
-      }
+      changeSelectedWordEdge(edge, (edge === "start" ? activeWordStart : activeWordEnd) + deltaMs);
       return;
     }
     cueDragBaseline.current = null;
@@ -804,15 +823,7 @@ export function EditorialPage() {
   function setActiveEdgeAt(edge: "start" | "end", timeMs: number, recordHistory: boolean) {
     if (!selectedCue || saving) return;
     if (selectedWord) {
-      const prior = visibleWords[selectedWordIndex - 1];
-      const next = visibleWords[selectedWordIndex + 1];
-      if (edge === "start") {
-        const minimum = Math.max(selectedCue.speech_timing.start_ms, prior?.end_ms ?? 0);
-        setWordStart(Math.max(minimum, Math.min(Math.round(timeMs), wordEnd - 1)));
-      } else {
-        const maximum = Math.min(selectedCue.speech_timing.end_ms, next?.start_ms ?? durationMs);
-        setWordEnd(Math.min(maximum, Math.max(Math.round(timeMs), wordStart + 1)));
-      }
+      changeSelectedWordEdge(edge, timeMs);
       setMessage(
         `${edge === "start" ? "IN" : "OUT"} da palavra “${selectedWord.surface}” marcado em ${formatTime(timeMs)}.`,
       );
@@ -976,15 +987,29 @@ export function EditorialPage() {
           speech_timing: selectedCue.speech_timing,
           subtitle_timing: selectedCue.subtitle_timing,
         });
-      if (wordDirty && selectedWord)
+      if (wordDirty || pendingTimingChanges) {
         await studioApi.updateWordTiming(selectedCue.id, {
           author,
-          timings: selectedCue.words.map((item, index) => ({
+          timings: candidate.words.map((item) => ({
             id: item.id,
-            start_ms: index === selectedWordIndex ? activeWordStart : item.start_ms,
-            end_ms: index === selectedWordIndex ? activeWordEnd : item.end_ms,
+            start_ms: item.start_ms,
+            end_ms: item.end_ms,
           })),
         });
+        // A multiword timing correction can be committed in one atomic request.
+        for (const word of selectedCue.words) {
+          const draft = pendingWordDrafts.current.get(word.id);
+          if (draft && draft.surface === word.surface.trim() &&
+              draft.pt === (word.semantic_group_id
+                ? (selectedCue.words.find((member) =>
+                    member.semantic_group_id === word.semantic_group_id &&
+                    member.semantic_group_role === "lead")?.pt ?? "")
+                : (word.pt ?? ""))) {
+            pendingWordDrafts.current.delete(word.id);
+          }
+        }
+        setPendingDraftVersion((value) => value + 1);
+      }
       if (wordTranslationDirty && selectedWord)
         await studioApi.updateWordTranslation(selectedCue.id, selectedWord.id, activeWordPt, author);
       if (textDirty || approve)
@@ -2175,6 +2200,11 @@ export function EditorialPage() {
                       aria-pressed={item.id === selectedWordId}
                     >
                       <strong>{item.surface}</strong>
+                      {pendingWordIds.has(item.id) && (
+                        <span className="word-pending-indicator" aria-label="Rascunho não salvo">
+                          Não salvo
+                        </span>
+                      )}
                       {item.provenance?.word_timing_reviewed === true && (
                         <span className="word-reviewed-indicator" aria-label="Palavra concluída">
                           <Check aria-hidden="true" />
