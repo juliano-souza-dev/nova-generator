@@ -52,11 +52,44 @@ type StructureDraft =
       rightPt: string;
       leftSpeaker: string;
       rightSpeaker: string;
+      translationIncomplete: boolean;
     };
 
 function cueWordText(words: TimelineCue["words"]): string {
   const literal = words.map((word) => word.surface).join("");
   return (literal.includes(" ") ? literal : words.map((word) => word.surface).join(" ")).trim();
+}
+
+// Reuse editorial translations instead of asking the editor to retranslate a split.
+// Group members share the lead's natural translation, but keep independent timings.
+function cueWordTranslation(words: TimelineCue["words"]): { text: string; complete: boolean } {
+  const fragments: string[] = [];
+  const visitedGroups = new Set<string>();
+  let complete = true;
+  for (const word of words) {
+    let translationWord = word;
+    if (word.semantic_group_id) {
+      if (visitedGroups.has(word.semantic_group_id)) continue;
+      visitedGroups.add(word.semantic_group_id);
+      translationWord =
+        words.find(
+          (candidate) =>
+            candidate.semantic_group_id === word.semantic_group_id &&
+            candidate.semantic_group_role === "lead",
+        ) ?? word;
+    }
+    const translation = translationWord.pt?.trim();
+    if (translation) fragments.push(translation);
+    else complete = false;
+  }
+  return {
+    text: fragments
+      .join(" ")
+      .replace(/\s+([.,;:!?…%)\]\}»”])/g, "$1")
+      .replace(/([([{«“])\s+/g, "$1")
+      .trim(),
+    complete,
+  };
 }
 
 type EditorialImportDropzoneProps = {
@@ -1186,15 +1219,18 @@ export function EditorialPage() {
     if (!selectedCue) return;
     const index = selectedCue.words.findIndex((word) => word.id === afterWordId);
     if (index < 0 || index >= selectedCue.words.length - 1) return;
+    const leftTranslation = cueWordTranslation(selectedCue.words.slice(0, index + 1));
+    const rightTranslation = cueWordTranslation(selectedCue.words.slice(index + 1));
     setStructureDraft({
       kind: "split",
       afterWordId,
       leftEn: cueWordText(selectedCue.words.slice(0, index + 1)),
       rightEn: cueWordText(selectedCue.words.slice(index + 1)),
-      leftPt: "",
-      rightPt: "",
+      leftPt: leftTranslation.text,
+      rightPt: rightTranslation.text,
       leftSpeaker: selectedCue.speaker,
       rightSpeaker: selectedCue.speaker,
+      translationIncomplete: !leftTranslation.complete || !rightTranslation.complete,
     });
   }
   async function applyStructure() {
@@ -1885,9 +1921,19 @@ export function EditorialPage() {
                       </select>
                     </label>
                     <p>
-                      Cada parte terá seus próprios textos, interlocutor e tempo de fala.
-                      Preencha as duas traduções antes de confirmar.
+                      As traduções já registradas nas palavras e unidades semânticas foram
+                      recuperadas automaticamente. Revise os textos somente se necessário.
+                      Os tempos de fala de cada palavra serão preservados.
                     </p>
+                    {structureDraft.translationIncomplete && (
+                      <p role="status">
+                        Algumas palavras ainda não possuem tradução individual ou de grupo.
+                        Confira os trechos abaixo antes de confirmar.
+                        {selectedCue.approved_pt.trim() && (
+                          <> Tradução original da cue: “{selectedCue.approved_pt}”.</>
+                        )}
+                      </p>
+                    )}
                     <div className="cue-structure-halves">
                       {(["left", "right"] as const).map((side) => (
                         <div key={side}>
