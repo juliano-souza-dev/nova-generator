@@ -51,7 +51,7 @@ describe("timeline helpers", () => {
   });
 
   it("translates every child timing when the cue moves without resizing", () => {
-    const words = [{ id: "1", start_ms: 20050, end_ms: 20300, provenance: { word_timing_reviewed: true } }];
+    const words = [{ id: "1", order: 1, surface: "Hi", start_ms: 20050, end_ms: 20300, provenance: { word_timing_reviewed: true } }];
     const moved = remapWordsToCue(
       words,
       { start_ms: 20000, end_ms: 40000 },
@@ -64,9 +64,9 @@ describe("timeline helpers", () => {
 
   it("refuses to squeeze more words into milliseconds than available", () => {
     const words = [
-      { start_ms: 20000, end_ms: 20300 },
-      { start_ms: 20400, end_ms: 20600 },
-      { start_ms: 20700, end_ms: 20900 },
+      { id: "1", order: 1, surface: "One", start_ms: 20000, end_ms: 20300 },
+      { id: "2", order: 2, surface: "Two", start_ms: 20400, end_ms: 20600 },
+      { id: "3", order: 3, surface: "Three", start_ms: 20700, end_ms: 20900 },
     ];
     expect(() =>
       remapWordsToCue(
