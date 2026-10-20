@@ -562,6 +562,27 @@ def persist_editorial_chunk_with_speaker_turns(
     return True
 
 
+def scene_has_completed_initial_preparation(
+    repository: EditorialProjectRepository, scene_id: UUID
+) -> bool:
+    """Unlock manual editing after the AI preparation has been completed once.
+
+    Missing word translations caused by later human edits are review tasks,
+    not a reason to lock every editing endpoint for the entire scene.
+    """
+    cues = repository.get_scene_cues(scene_id)
+    valid_contracts = {
+        "nova-generator-editorial-suggestions/1.3",
+        "nova-generator-editorial-suggestions/1.4",
+        "nova-generator-editorial-suggestions/1.5",
+    }
+    return bool(cues) and all(
+        cue.provenance.get("editorial_preparation") == "complete"
+        and cue.provenance.get("editorial_preparation_contract") in valid_contracts
+        for cue in cues
+    )
+
+
 def scene_is_editorially_prepared(repository: EditorialProjectRepository, scene_id: UUID) -> bool:
     cues = repository.get_scene_cues(scene_id)
     return bool(cues) and all(
