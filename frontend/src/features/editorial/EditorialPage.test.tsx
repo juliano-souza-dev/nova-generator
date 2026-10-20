@@ -141,6 +141,61 @@ describe("EditorialPage", () => {
     ]);
   });
 
+  it("synchronizes the inspector and the saved word list from any approved-text deletion", async () => {
+    const original = (await mocks.editorialCues())[0];
+    const surfaces = ["Not", " until", " I", " speak", " to", " you!", " Lizzie!"];
+    const words = surfaces.map((surface, index) => ({
+      id: "w" + index,
+      order: index + 1,
+      surface,
+      start_ms: 100 + index * 200,
+      end_ms: 250 + index * 200,
+      pt: surface.trim(),
+    }));
+    const before = {
+      ...original,
+      original_en: "Not until I speak to you! Lizzie!",
+      approved_en: "Not until I speak to you! Lizzie!",
+      approved_pt: "Só depois que eu falar com você, Lizzie!",
+      words,
+    };
+    const after = {
+      ...before,
+      approved_en: "Not until I speak to Lizzie!",
+      words: words.filter((word) => word.id !== "w5").map((word, index) => ({
+        ...word,
+        order: index + 1,
+      })),
+    };
+    mocks.editorialCues.mockResolvedValueOnce([before]).mockResolvedValue([after]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    expect(within(list).getByRole("button", { name: /you!/ })).toBeInTheDocument();
+    expect(within(list).getByRole("button", { name: /Lizzie!/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Inglês aprovado" }), {
+      target: { value: "Not until I speak to Lizzie!" },
+    });
+    expect(within(list).queryByRole("button", { name: /you!/ })).not.toBeInTheDocument();
+    expect(within(list).getByRole("button", { name: /Lizzie!/ })).toBeInTheDocument();
+    expect(within(list).getAllByRole("button")).toHaveLength(6);
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvar texto" }));
+    await waitFor(() =>
+      expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
+        author: "local-editor",
+        approved_en: "Not until I speak to Lizzie!",
+        approved_pt: "Só depois que eu falar com você, Lizzie!",
+        approve: false,
+      }),
+    );
+    expect(within(list).queryByRole("button", { name: /you!/ })).not.toBeInTheDocument();
+  });
+
   it("saves a corrected AI word and updates the canonical cue text", async () => {
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1"]}>
