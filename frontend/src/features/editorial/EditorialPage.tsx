@@ -1129,11 +1129,19 @@ export function EditorialPage() {
         }
         setPendingDraftVersion((value) => value + 1);
         setDraftCueTiming(null);
-        setMessage(
-          "Novas palavras salvas com tempos provisórios. Ajuste os marcadores " +
-          "IN/OUT e confira as traduções antes da aprovação.",
-        );
-        return true;
+        if (approve) {
+          setShowApprovalReview(true);
+          setMessage(
+            "A frase corrigida foi salva como rascunho. Confirme os tempos e a " +
+            "tradução contextual para aprovar esta cue.",
+          );
+        } else {
+          setMessage(
+            "Novas palavras salvas com tempos provisórios. Ajuste os marcadores " +
+            "IN/OUT e confira as traduções antes da aprovação.",
+          );
+        }
+        return !approve;
       }
       let correctedEnglish = approvedEn;
       if (wordSurfaceDirty && selectedWord) {
