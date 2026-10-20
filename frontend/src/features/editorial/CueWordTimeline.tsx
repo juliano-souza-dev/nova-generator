@@ -35,6 +35,7 @@ export function CueWordTimeline(props: Props) {
   const { durationMs, onZoomChange } = props;
   const root = useRef<HTMLDivElement>(null);
   const lastAutoFocusedWordId = useRef<string | null>(null);
+  const lastFocusRequest = useRef<number | undefined>(undefined);
   const viewport = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
   const draggingEdgeRef = useRef<"start" | "end" | null>(null);
@@ -81,17 +82,14 @@ export function CueWordTimeline(props: Props) {
       (start + end) / 2 - visibleWindow / 2)));
   }, [durationMs, onZoomChange, selectedCue, selectedWord]);
   useEffect(() => {
-    if (!focusActive) return;
-    focusSelectedRange();
-  }, [focusActive, props.selectedCueId, props.selectedWordId, focusSelectedRange]);
-  useEffect(() => {
     if (!selectedWord || lastAutoFocusedWordId.current === selectedWord.id) return;
     lastAutoFocusedWordId.current = selectedWord.id;
     setFocusActive(true);
     focusSelectedRange();
   }, [selectedWord, focusSelectedRange]);
   useEffect(() => {
-    if (!props.focusRequest) return;
+    if (!props.focusRequest || lastFocusRequest.current === props.focusRequest) return;
+    lastFocusRequest.current = props.focusRequest;
     root.current?.focus({ preventScroll: true });
     setFocusActive(true);
     focusSelectedRange();
