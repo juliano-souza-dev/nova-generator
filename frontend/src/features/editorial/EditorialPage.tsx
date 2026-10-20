@@ -249,6 +249,11 @@ export function EditorialPage() {
   }>());
   const [pendingDraftVersion, setPendingDraftVersion] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [showApprovalReview, setShowApprovalReview] = useState(false);
+  const [confirmTimingReview, setConfirmTimingReview] = useState(false);
+  const [confirmTranslationReview, setConfirmTranslationReview] = useState(false);
+  const [applyFullCueTranslation, setApplyFullCueTranslation] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState("");
   const wordNavigationLock = useRef(false);
   const cueNavigationLock = useRef(false);
   const [showSupportingPanels, setShowSupportingPanels] = useState(true);
@@ -410,6 +415,19 @@ export function EditorialPage() {
   const isDirty =
     textDirty || wordDirty || wordTranslationDirty || wordSurfaceDirty || semanticUnitsDirty || timingDirty ||
     Boolean(draftCueTiming);
+  const pendingTimingReview = visibleWords.some(
+    (word) => word.provenance?.editorial_timing_estimated === true &&
+      word.provenance?.word_timing_reviewed !== true,
+  );
+  const pendingTranslationReview = visibleWords.some(
+    (word) =>
+      word.provenance?.translation_review_required === true ||
+      (word.semantic_group_role !== "member" && !word.pt?.trim()),
+  );
+  const missingWordTranslations = visibleWords.some(
+    (word) => word.semantic_group_role !== "member" && !word.pt?.trim(),
+  );
+  const needsApprovalReview = pendingTimingReview || pendingTranslationReview;
   const cueStatus = selectedCue?.provenance?.approval === "approved" ? "Aprovado" : "Pendente";
 
   useEffect(() => {
@@ -492,6 +510,11 @@ export function EditorialPage() {
     };
   }, [sceneId]);
   useEffect(() => {
+    setShowApprovalReview(false);
+    setConfirmTimingReview(false);
+    setConfirmTranslationReview(false);
+    setApplyFullCueTranslation(false);
+    setSaveFeedback("");
     setDraftCueTiming(null);
     setTextDraftCueId(selectedCue?.id ?? "");
     setApprovedEn(selectedCue?.approved_en ?? "");
@@ -1029,8 +1052,18 @@ export function EditorialPage() {
     }
   }
 
-  async function saveChanges(approve = false, advance = false): Promise<boolean> {
+  async function saveChanges(
+    approve = false,
+    advance = false,
+    review?: { timings: boolean; translations: boolean; wholeCue: boolean },
+  ): Promise<boolean> {
     if (!selectedCue || saving) return false;
+    if (approve && needsApprovalReview && !review && !hasInsertedWords) {
+      setShowApprovalReview(true);
+      setSaveFeedback("");
+      return false;
+    }
+    setSaveFeedback("");
     if (textReconciliation?.error) {
       setMessage(textReconciliation.error);
       return false;
@@ -1058,6 +1091,7 @@ export function EditorialPage() {
       errors.push("Use milissegundos inteiros nos tempos da palavra.");
     if (errors.length) {
       setMessage(errors[0]);
+      setSaveFeedback(errors[0]);
       return false;
     }
     setSaving(true);
@@ -1153,6 +1187,11 @@ export function EditorialPage() {
           approved_en: correctedEnglish,
           approved_pt: approvedPt,
           approve,
+          ...(review ? {
+            confirm_word_timings: review.timings,
+            confirm_word_translations: review.translations,
+            group_cue_translation: review.wholeCue,
+          } : {}),
         });
       // Review each audible word independently, even within a semantic group.
       const nextWord =
@@ -1188,6 +1227,8 @@ export function EditorialPage() {
         setSelectedWordId(undefined);
         seek(nextCue.speech_timing.start_ms);
       }
+      if (approve) setShowApprovalReview(false);
+      setSaveFeedback("");
       setMessage(
         approve
           ? `Cue ${selectedCue.order} aprovado.`
@@ -1199,7 +1240,9 @@ export function EditorialPage() {
       );
       return true;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Falha ao salvar revisão.");
+      const feedback = error instanceof Error ? error.message : "Falha ao salvar revisão.";
+      setMessage(feedback);
+      setSaveFeedback(feedback);
       return false;
     } finally {
       setSaving(false);
@@ -1679,6 +1722,57 @@ export function EditorialPage() {
                   {showSupportingPanels ? "Ocultar painéis" : "Texto e ferramentas"}
                 </button>
               </div>
+              {saveFeedback && (
+                <p className="review-message" role="alert">{saveFeedback}</p>
+              )}
+              {showApprovalReview && selectedCue && (
+                <section className="editorial-approval-review" aria-label="Confirmar revisão antes de aprovar">
+                  <strong>Concluir revisão da cue {selectedCue.order}</strong>
+                  <p>O texto já está salvo. Confirme somente o que você conferiu no áudio.
+                    A aprovação não recalcula os tempos nem exige nova IA.</p>
+                  {pendingTimingReview && (
+                    <label>
+                      <input type="checkbox" checked={confirmTimingReview}
+                        onChange={(event) => setConfirmTimingReview(event.target.checked)} />
+                      Conferi no áudio os tempos IN/OUT das palavras provisórias.
+                    </label>
+                  )}
+                  {pendingTranslationReview && (
+                    <>
+                      <label>
+                        <input type="checkbox" checked={applyFullCueTranslation}
+                          onChange={(event) => setApplyFullCueTranslation(event.target.checked)} />
+                        Usar “{approvedPt}” como tradução contextual de toda a expressão
+                        (um grupo semântico, tempos individuais preservados).
+                      </label>
+                      {!missingWordTranslations && !applyFullCueTranslation && (
+                        <label>
+                          <input type="checkbox" checked={confirmTranslationReview}
+                            onChange={(event) => setConfirmTranslationReview(event.target.checked)} />
+                          Conferi as traduções já preenchidas das palavras.
+                        </label>
+                      )}
+                    </>
+                  )}
+                  <div className="editorial-dock-actions">
+                    <button type="button" className="primary-button"
+                      disabled={saving || (pendingTimingReview && !confirmTimingReview) ||
+                        (pendingTranslationReview && !applyFullCueTranslation &&
+                          (missingWordTranslations || !confirmTranslationReview))}
+                      onClick={() => void saveChanges(true, true, {
+                        timings: confirmTimingReview,
+                        translations: confirmTranslationReview,
+                        wholeCue: applyFullCueTranslation,
+                      })}>
+                      Confirmar revisão e aprovar
+                    </button>
+                    <button type="button" className="secondary-button"
+                      disabled={saving} onClick={() => setShowApprovalReview(false)}>
+                      Continuar editando
+                    </button>
+                  </div>
+                </section>
+              )}
               <details className="editorial-dock-shortcuts">
                 <summary>Atalhos</summary>
                 <p>Alt + ←/→: navegar entre cues · Esc: modo Cue · Ctrl + Enter: aprovar e avançar ·
