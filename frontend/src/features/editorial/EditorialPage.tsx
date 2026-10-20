@@ -2235,6 +2235,63 @@ export function EditorialPage() {
                   />
                 </label>
               </div>
+              {hasInsertedWords && (
+                <div className="cue-timing-alert" aria-label="Ajuste livre da duração provisória">
+                  <p>
+                    {textReconciliation?.insertedCount} palavra(s) nova(s). Duração calculada
+                    pelo ritmo da fala; os tempos ainda não foram conferidos no áudio.
+                    Arraste os limites na waveform ou ajuste os milissegundos abaixo.
+                  </p>
+                  <div className="cue-structure-buttons">
+                    <label>
+                      IN da cue (ms)
+                      <input
+                        type="number"
+                        aria-label="IN provisório da cue"
+                        min={0}
+                        max={durationMs}
+                        value={activeCueTiming.start_ms}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          if (Number.isFinite(value))
+                            setDraftCueTiming(setTimingEdge(activeCueTiming, "start", value, durationMs));
+                        }}
+                      />
+                    </label>
+                    <label>
+                      OUT da cue (ms)
+                      <input
+                        type="number"
+                        aria-label="OUT provisório da cue"
+                        min={0}
+                        max={durationMs}
+                        value={activeCueTiming.end_ms}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          if (Number.isFinite(value))
+                            setDraftCueTiming(setTimingEdge(activeCueTiming, "end", value, durationMs));
+                        }}
+                      />
+                    </label>
+                    <button type="button" className="secondary-button"
+                      onClick={() => setDraftCueTiming(null)}>
+                      Restaurar estimativa
+                    </button>
+                  </div>
+                  {activeCueTiming.end_ms > durationMs && (
+                    <p role="alert">
+                      O tempo sugerido ultrapassa o fim da cena. Ajuste o OUT antes de salvar.
+                    </p>
+                  )}
+                  {cues[selectedCueIndex + 1] &&
+                    activeCueTiming.end_ms > cues[selectedCueIndex + 1].speech_timing.start_ms && (
+                    <p role="status">
+                      A estimativa alcança a próxima cue. Salve como rascunho e ajuste os
+                      limites usando o áudio; nenhuma outra cue será deslocada silenciosamente.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="cue-text-actions" aria-label="Ações do texto do cue">
                 <button
                   type="button"
