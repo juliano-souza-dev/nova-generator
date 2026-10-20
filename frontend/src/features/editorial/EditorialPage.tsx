@@ -199,6 +199,7 @@ export function EditorialPage() {
   const cueNavigationLock = useRef(false);
   const [showSupportingPanels, setShowSupportingPanels] = useState(true);
   const [showCompactVideo, setShowCompactVideo] = useState(true);
+  const [inlineTextEditing, setInlineTextEditing] = useState(false);
   const cueDragBaseline = useRef<TimelineCue | null>(null);
   const [structureDraft, setStructureDraft] = useState<StructureDraft | null>(null);
   const [startingMedia, setStartingMedia] = useState(false);
@@ -1509,18 +1510,45 @@ export function EditorialPage() {
                 onNudge={nudge}
                 onUndo={undo}
               />
-                <div className="editorial-station-transcript" aria-label="Texto contextual da cue">
-                  <div>
-                    <span className="eyebrow">Inglês aprovado</span>
-                    <p>{approvedEn || selectedCue.original_en}</p>
-                  </div>
-                  <div>
-                    <span className="eyebrow">Português aprovado</span>
-                    <p>{approvedPt || "Tradução pendente"}</p>
-                  </div>
+                <div className={`editorial-station-transcript${inlineTextEditing ? " is-editing" : ""}`}
+                  aria-label="Texto contextual da cue">
+                  {inlineTextEditing ? (
+                    <>
+                      <label>
+                        <span className="eyebrow">Inglês aprovado</span>
+                        <textarea aria-label="Inglês rápido" value={approvedEn}
+                          onChange={(event) => {
+                            setTextDraftCueId(selectedCue.id);
+                            setApprovedEn(event.target.value);
+                          }} />
+                      </label>
+                      <label>
+                        <span className="eyebrow">Português aprovado</span>
+                        <textarea aria-label="Português rápido" value={approvedPt}
+                          onChange={(event) => {
+                            setTextDraftCueId(selectedCue.id);
+                            setApprovedPt(event.target.value);
+                          }} />
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <span className="eyebrow">Inglês aprovado</span>
+                        <p>{(textDraftCueId === selectedCue.id ? approvedEn : selectedCue.approved_en) ||
+                          selectedCue.original_en}</p>
+                      </div>
+                      <div>
+                        <span className="eyebrow">Português aprovado</span>
+                        <p>{(textDraftCueId === selectedCue.id ? approvedPt : selectedCue.approved_pt) ||
+                          "Tradução pendente"}</p>
+                      </div>
+                    </>
+                  )}
                   <button type="button" className="secondary-button"
-                    onClick={() => setShowSupportingPanels(true)}>
-                    Editar texto
+                    aria-expanded={inlineTextEditing}
+                    onClick={() => setInlineTextEditing((value) => !value)}>
+                    {inlineTextEditing ? "Recolher edição" : "Editar texto"}
                   </button>
                 </div>
               </div>
