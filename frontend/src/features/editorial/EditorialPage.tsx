@@ -28,7 +28,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { CueWordTimeline, type TimelineCue } from "./CueWordTimeline";
 import { EditorialHubPreview } from "./EditorialHubPreview";
-import { nudgeTiming, setTimingEdge, validateTimeline } from "./timeline";
+import { nudgeTiming, remapWordsToCue, setTimingEdge, validateTimeline } from "./timeline";
 import "./timeline.css";
 import "./editorial-workspace.css";
 
@@ -194,6 +194,7 @@ export function EditorialPage() {
   const [wordSurface, setWordSurface] = useState("");
   const [saving, setSaving] = useState(false);
   const wordNavigationLock = useRef(false);
+  const cueDragBaseline = useRef<TimelineCue | null>(null);
   const [structureDraft, setStructureDraft] = useState<StructureDraft | null>(null);
   const [startingMedia, setStartingMedia] = useState(false);
   const [mediaReload, setMediaReload] = useState(0);
@@ -671,7 +672,28 @@ export function EditorialPage() {
     setCues(next);
   }
   function beginEdgeDrag() {
-    if (!selectedWord && selectedCue && history.length === 0) setHistory([cues]);
+    if (!selectedWord && selectedCue) {
+      cueDragBaseline.current = selectedCue;
+      if (history.length === 0) setHistory([cues]);
+    }
+  }
+
+  function updateParentCueTiming(
+    baseCue: TimelineCue,
+    nextTiming: TimelineCue["speech_timing"],
+    recordHistory: boolean,
+  ) {
+    try {
+      const words = remapWordsToCue(baseCue.words, baseCue.speech_timing, nextTiming);
+      const next = cues.map((cue) =>
+        cue.id === baseCue.id ? { ...cue, speech_timing: nextTiming, words } : cue,
+      );
+      if (recordHistory) replaceCues(next);
+      else setCues(next);
+      setMessage("Cue e palavras sincronizadas. Confira os destaques no áudio antes de aprovar.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível ajustar as palavras.");
+    }
   }
   function nudge(edge: "start" | "end", deltaMs: number) {
     if (!selectedCue || saving) return;
@@ -687,12 +709,11 @@ export function EditorialPage() {
       }
       return;
     }
-    replaceCues(
-      cues.map((cue) =>
-        cue.id !== selectedCue.id
-          ? cue
-          : { ...cue, speech_timing: nudgeTiming(cue.speech_timing, edge, deltaMs, durationMs) },
-      ),
+    cueDragBaseline.current = null;
+    updateParentCueTiming(
+      selectedCue,
+      nudgeTiming(selectedCue.speech_timing, edge, deltaMs, durationMs),
+      true,
     );
   }
   function setActiveEdgeAt(edge: "start" | "end", timeMs: number, recordHistory: boolean) {
@@ -712,22 +733,22 @@ export function EditorialPage() {
       );
       return;
     }
-    const next = cues.map((cue) =>
-      cue.id !== selectedCue.id
-        ? cue
-        : {
-            ...cue,
-            speech_timing: setTimingEdge(cue.speech_timing, edge, timeMs, durationMs),
-          },
+    const baseCue =
+      !recordHistory && cueDragBaseline.current?.id === selectedCue.id
+        ? cueDragBaseline.current
+        : selectedCue;
+    if (recordHistory) cueDragBaseline.current = null;
+    updateParentCueTiming(
+      baseCue,
+      setTimingEdge(baseCue.speech_timing, edge, timeMs, durationMs),
+      recordHistory,
     );
-    if (recordHistory) replaceCues(next);
-    else setCues(next);
-    setMessage(`${edge === "start" ? "Início" : "Fim"} do cue marcado em ${formatTime(timeMs)}.`);
   }
   function markActiveEdge(edge: "start" | "end") {
     setActiveEdgeAt(edge, playheadMs, true);
   }
   function undo() {
+    cueDragBaseline.current = null;
     if (wordDirty && selectedWord) {
       setWordStart(selectedWord.start_ms);
       setWordEnd(selectedWord.end_ms);
