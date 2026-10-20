@@ -1447,3 +1447,36 @@
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 }
+
+.editorial-station-transcript {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+  margin-top: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.editorial-station-transcript > div {
+  min-width: 0;
+}
+.editorial-station-transcript p {
+  margin: 0.18rem 0 0;
+  color: var(--text);
+  line-height: 1.35;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+.editorial-station-transcript .eyebrow {
+  font-size: 0.69rem;
+}
+@media (max-width: 740px) {
+  .editorial-station-transcript {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .editorial-station-transcript button {
+    justify-self: start;
+  }
+}
