@@ -822,6 +822,31 @@ describe("EditorialPage", () => {
     expect(mocks.updateWordTiming).not.toHaveBeenCalled();
   });
 
+  it("does not claim approval when an inserted-word cue is first saved as a draft", async () => {
+    const original = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([{
+      ...original,
+      approved_en: "What's",
+      approved_pt: "Pra quê?",
+      words: [{ id: "w1", order: 1, surface: "What's", start_ms: 100, end_ms: 300, pt: "o que" }],
+      speech_timing: { start_ms: 100, end_ms: 300 },
+      subtitle_timing: { start_ms: 100, end_ms: 300 },
+    }]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const english = await screen.findByLabelText("Inglês aprovado");
+    fireEvent.change(english, { target: { value: "What's the point?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Aprovar cue" }));
+    await waitFor(() => expect(mocks.updateCueText).toHaveBeenCalledWith(
+      "c1", expect.objectContaining({ approve: false, approved_en: "What's the point?" }),
+    ));
+    expect(screen.getByText(/A frase corrigida foi salva como rascunho/)).toBeInTheDocument();
+    expect(screen.queryByText("Cue 1 aprovado.")).not.toBeInTheDocument();
+  });
+
   it("explains a validated source and starts processing from the empty state", async () => {
     mocks.projectMedia.mockResolvedValueOnce({ state: "source_validated", can_review: false });
     render(
