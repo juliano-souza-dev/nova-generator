@@ -196,6 +196,9 @@ export function EditorialPage() {
   const [wordSurface, setWordSurface] = useState("");
   const [saving, setSaving] = useState(false);
   const wordNavigationLock = useRef(false);
+  const cueNavigationLock = useRef(false);
+  const [showSupportingPanels, setShowSupportingPanels] = useState(true);
+  const [showCompactVideo, setShowCompactVideo] = useState(true);
   const cueDragBaseline = useRef<TimelineCue | null>(null);
   const [structureDraft, setStructureDraft] = useState<StructureDraft | null>(null);
   const [startingMedia, setStartingMedia] = useState(false);
@@ -492,27 +495,40 @@ export function EditorialPage() {
     setPlayheadMs(bounded);
     if (mediaRef.current) mediaRef.current.currentTime = bounded / 1000;
   }
-  function selectCue(id: string) {
-    if (saving) return;
-    if (id === selectedCueId) {
+  async function selectCue(id: string, focusWordId?: string) {
+    if (saving || cueNavigationLock.current || wordNavigationLock.current) return;
+    const destination = cues.find((item) => item.id === id);
+    if (!destination) return;
+    cueNavigationLock.current = true;
+    try {
+      if (isDirty) {
+        const saved = await saveChanges(false, false);
+        if (!saved) return;
+      }
+      if (selectedWord && selectedCue && id !== selectedCue.id) {
+        await studioApi.completeWordTimingReview(selectedCue.id, selectedWord.id, author);
+        await refreshCues();
+      }
+      playbackEnd.current = null;
+      mediaRef.current?.pause();
+      setSelectedCueId(destination.id);
+      setSelectedWordId(focusWordId);
       setTimelineFocusRequest((value) => value + 1);
-      return;
+      const focusWord = destination.words.find((word) => word.id === focusWordId);
+      seek(focusWord?.start_ms ?? destination.speech_timing.start_ms);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível mudar de cue.");
+    } finally {
+      cueNavigationLock.current = false;
     }
-    if (id !== selectedCueId && isDirty) {
-      setMessage("Salve ou desfaça as alterações antes de trocar de cue.");
-      return;
-    }
-    mediaRef.current?.pause();
-    playbackEnd.current = null;
-    setSelectedCueId(id);
-    setSelectedWordId(undefined);
-    setTimelineFocusRequest((value) => value + 1);
-    const cue = cues.find((item) => item.id === id);
-    if (cue) seek(cue.speech_timing.start_ms);
   }
-  async function selectWord(id: string) {
+  async function selectWord(id: string, targetCueId?: string) {
+    if (targetCueId && targetCueId !== selectedCueId) {
+      await selectCue(targetCueId, id);
+      return;
+    }
     if (saving || wordNavigationLock.current || id === selectedWordId) return;
-    const word = selectedCue?.words.find((item) => item.id === id);
+    const word = visibleWords.find((item) => item.id === id);
     if (!word) return;
     wordNavigationLock.current = true;
     try {
@@ -550,14 +566,26 @@ export function EditorialPage() {
     const next = visibleWords[selectedWordIndex + offset];
     if (next) void selectWord(next.id);
   }
-  function leaveWordMode() {
-    if (wordDirty || wordTranslationDirty) {
-      setMessage("Salve ou descarte o ajuste da palavra antes de voltar ao cue.");
-      return;
+  async function leaveWordMode() {
+    if (!selectedWord || saving || wordNavigationLock.current) return;
+    wordNavigationLock.current = true;
+    try {
+      if (isDirty) {
+        const saved = await saveChanges(false, false);
+        if (!saved) return;
+      }
+      if (selectedCue) {
+        await studioApi.completeWordTimingReview(selectedCue.id, selectedWord.id, author);
+        await refreshCues();
+      }
+      setSelectedWordId(undefined);
+      if (selectedCue) seek(selectedCue.speech_timing.start_ms);
+      setMessage("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível concluir a palavra.");
+    } finally {
+      wordNavigationLock.current = false;
     }
-    setSelectedWordId(undefined);
-    if (selectedCue) seek(selectedCue.speech_timing.start_ms);
-    setMessage("");
   }
   function discardChanges() {
     if (saving) return;
@@ -635,8 +663,17 @@ export function EditorialPage() {
       ) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        openHubPreview(event.shiftKey);
+        if (event.shiftKey) openHubPreview(true);
+        else if (selectedCue && !saving) void saveChanges(true, true);
         return;
+      }
+      if (event.key === "Escape" && selectedWord) {
+        const target = event.target;
+        if (!(target instanceof HTMLElement && target.closest("input, textarea, select"))) {
+          event.preventDefault();
+          void leaveWordMode();
+          return;
+        }
       }
       if (event.key.toLowerCase() === "s" && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
@@ -663,9 +700,9 @@ export function EditorialPage() {
         target.closest("input, textarea, select, [contenteditable=true]")
       )
         return;
-      if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      if (event.altKey && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
         event.preventDefault();
-        moveCue(event.key === "ArrowUp" ? -1 : 1);
+        moveCue(event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1181,7 +1218,7 @@ export function EditorialPage() {
 
   function moveCue(offset: number) {
     const next = cues[selectedCueIndex + offset];
-    if (next) selectCue(next.id);
+    if (next) void selectCue(next.id);
   }
   async function startMediaProcessing() {
     if (!projectId || startingMedia) return;
