@@ -2,15 +2,35 @@ import type { WordTiming } from "../../lib/api.types";
 
 export type WordReconciliation = {
   words: WordTiming[];
+  suggestedEndMs?: number;
+  insertedCount?: number;
   error?: string;
 };
 
 /**
  * Preview human text edits against ASR words. Deleted tokens disappear
  * immediately; surviving tokens keep their ID, timestamps and translations.
- * New words require explicit timing, never made-up timestamps.
+ * New words get provisional, mathematically estimated timings. They are
+ * never treated as observed speech until the editor reviews them.
  */
-export function reconcileCueWords(text: string, words: WordTiming[]): WordReconciliation {
+function syllables(surface: string): number {
+  return Math.max(1, surface.toLowerCase().match(/[aeiouy]+/g)?.length ?? 0);
+}
+
+function estimatedWordDuration(surface: string, words: WordTiming[]): number {
+  const samples = words
+    .filter((word) => word.end_ms > word.start_ms)
+    .map((word) => (word.end_ms - word.start_ms) / syllables(word.surface))
+    .sort((a, b) => a - b);
+  const pace = Math.max(135, Math.min(360, samples[Math.floor(samples.length / 2)] ?? 220));
+  return Math.max(130, Math.min(950, Math.round(pace * syllables(surface))));
+}
+
+export function reconcileCueWords(
+  text: string,
+  words: WordTiming[],
+  cueStartMs = words[0]?.start_ms ?? 0,
+): WordReconciliation {
   const tokens = text.match(/\s*\S+/g) ?? [];
   if (!tokens.length) return { words: [], error: "A cue precisa conter palavras." };
   if (text.slice(tokens.join("").length).trim())
@@ -46,20 +66,14 @@ export function reconcileCueWords(text: string, words: WordTiming[]): WordReconc
     }
   }
 
-  const matches = new Map<number, WordTiming>();
+  const matches = new Map<number, WordTiming | null>();
   let oldPosition = 0;
   let newPosition = 0;
   for (const [oldEnd, newEnd] of [...anchors, [n, m] as [number, number]]) {
     const oldCount = oldEnd - oldPosition;
     const newCount = newEnd - newPosition;
-    if (newCount > oldCount) {
-      return {
-        words,
-        error: "Uma palavra nova precisa de tempos IN/OUT próprios. Corrija a segmentação antes de salvar.",
-      };
-    }
     for (let offset = 0; offset < newCount; offset += 1) {
-      matches.set(newPosition + offset, words[oldPosition + offset]);
+      matches.set(newPosition + offset, offset < oldCount ? words[oldPosition + offset] : null);
     }
     if (oldEnd < n) matches.set(newEnd, words[oldEnd]);
     oldPosition = oldEnd + 1;
@@ -67,8 +81,30 @@ export function reconcileCueWords(text: string, words: WordTiming[]): WordReconc
   }
 
   if (matches.size !== m) return { words, error: "Não foi possível identificar as palavras." };
+  let cursor = cueStartMs;
+  let insertedCount = 0;
   const updated = tokens.map((surface, index) => {
-    const previous = matches.get(index)!;
+    const previous = matches.get(index);
+    if (!previous) {
+      insertedCount += 1;
+      const start_ms = cursor + (index > 0 ? 15 : 0);
+      const end_ms = start_ms + estimatedWordDuration(surface, words);
+      cursor = end_ms;
+      return {
+        id: `editorial-new-${index}`,
+        order: index + 1,
+        surface,
+        start_ms,
+        end_ms,
+        pt: "",
+        provenance: {
+          pt: "",
+          editorial_word_inserted: true,
+          editorial_timing_estimated: true,
+          translation_review_required: true,
+        },
+      };
+    }
     const provenance = { ...previous.provenance };
     if (previous.surface !== surface) {
       provenance.editorial_word_edited = true;
@@ -76,7 +112,15 @@ export function reconcileCueWords(text: string, words: WordTiming[]): WordReconc
         provenance.translation_review_required = true;
       }
     }
-    return { ...previous, order: index + 1, surface, provenance };
+    const start_ms = Math.max(previous.start_ms, cursor);
+    const end_ms = start_ms + previous.end_ms - previous.start_ms;
+    if (start_ms !== previous.start_ms) {
+      delete provenance.word_timing_reviewed;
+      delete provenance.word_timing_reviewed_by;
+      provenance.editorial_timing_estimated = true;
+    }
+    cursor = end_ms;
+    return { ...previous, order: index + 1, surface, start_ms, end_ms, provenance };
   });
 
   const retained = new Set(updated.map((word) => word.id));
@@ -121,5 +165,5 @@ export function reconcileCueWords(text: string, words: WordTiming[]): WordReconc
       }
     });
   }
-  return { words: updated };
+  return { words: updated, suggestedEndMs: cursor, insertedCount };
 }
