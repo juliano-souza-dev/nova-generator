@@ -1100,7 +1100,65 @@ describe("EditorialPage", () => {
     await waitFor(() => expect(mocks.realignCue).toHaveBeenCalledWith("c2", 1835, "local-editor"));
   });
 
-  it("opens the synchronized iHub preview from the current cue with Ctrl+Enter", async () => {
+  it("keeps navigation, approval and Cue/Word editing beside the waveform", async () => {
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const dock = await screen.findByRole("navigation", {
+      name: "Controles da estação editorial",
+    });
+    expect(screen.getByRole("region", { name: "Área principal da waveform" }))
+      .toBeInTheDocument();
+    expect(within(dock).getByRole("button", { name: "Cue anterior" })).toBeDisabled();
+    expect(within(dock).getByRole("button", { name: "Próximo cue" })).toBeDisabled();
+    expect(within(dock).getByRole("button", { name: "Aprovar cue" })).toBeEnabled();
+    const mode = within(dock).getByRole("group", { name: "Modo de edição" });
+    expect(within(mode).getByRole("button", { name: "Cue" })).toHaveAttribute(
+      "aria-pressed", "true",
+    );
+    fireEvent.click(within(mode).getByRole("button", { name: "Word" }));
+    await waitFor(() =>
+      expect(within(mode).getByRole("button", { name: "Word" }))
+        .toHaveAttribute("aria-pressed", "true"),
+    );
+    fireEvent.click(within(mode).getByRole("button", { name: "Cue" }));
+    await waitFor(() =>
+      expect(within(mode).getByRole("button", { name: "Cue" }))
+        .toHaveAttribute("aria-pressed", "true"),
+    );
+    const support = screen.getByRole("button", { name: "Ocultar painéis" });
+    fireEvent.click(support);
+    expect(screen.getByRole("button", { name: "Texto e ferramentas" }))
+      .toHaveAttribute("aria-expanded", "false");
+    expect(document.getElementById("editorial-support-panels")).toHaveAttribute("hidden");
+    fireEvent.click(screen.getByRole("button", { name: "Texto e ferramentas" }));
+    expect(document.getElementById("editorial-support-panels")).not.toHaveAttribute("hidden");
+    fireEvent.click(screen.getByRole("button", { name: "Vídeo" }));
+    expect(screen.getByRole("region", { name: "Área principal da waveform" }))
+      .toHaveClass("is-video-hidden");
+  });
+
+  it("approves and advances directly from the sticky dock using Ctrl+Enter", async () => {
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    await screen.findByRole("navigation", { name: "Controles da estação editorial" });
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    await waitFor(() =>
+      expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
+        author: "local-editor",
+        approved_en: "“I can't… go?”",
+        approved_pt: "“Eu não consigo… ir?”",
+        approve: true,
+      }),
+    );
+  });
+
+  it("opens the synchronized iHub preview from the current cue with Ctrl+Shift+Enter", async () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     render(
@@ -1112,7 +1170,7 @@ describe("EditorialPage", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Prévia no iHub" })).toBeEnabled(),
     );
-    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true, shiftKey: true });
     const preview = await screen.findByRole("dialog", { name: "Vídeo e legendas sincronizadas" });
     expect(preview).toBeInTheDocument();
     expect(screen.getByLabelText("Prévia do vídeo no iHub")).toHaveAttribute("src", "/api/cut.wav");
