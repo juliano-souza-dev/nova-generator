@@ -547,7 +547,7 @@ export function EditorialPage() {
   }
   function moveWord(offset: number) {
     if (!selectedCue || saving || wordNavigationLock.current) return;
-    const next = selectedCue.words[selectedWordIndex + offset];
+    const next = visibleWords[selectedWordIndex + offset];
     if (next) void selectWord(next.id);
   }
   function leaveWordMode() {
@@ -711,8 +711,8 @@ export function EditorialPage() {
   function nudge(edge: "start" | "end", deltaMs: number) {
     if (!selectedCue || saving) return;
     if (selectedWord) {
-      const prior = selectedCue.words[selectedWordIndex - 1];
-      const next = selectedCue.words[selectedWordIndex + 1];
+      const prior = visibleWords[selectedWordIndex - 1];
+      const next = visibleWords[selectedWordIndex + 1];
       if (edge === "start") {
         const minimum = Math.max(selectedCue.speech_timing.start_ms, prior?.end_ms ?? 0);
         setWordStart(Math.max(minimum, Math.min(wordStart + deltaMs, wordEnd - 1)));
@@ -732,8 +732,8 @@ export function EditorialPage() {
   function setActiveEdgeAt(edge: "start" | "end", timeMs: number, recordHistory: boolean) {
     if (!selectedCue || saving) return;
     if (selectedWord) {
-      const prior = selectedCue.words[selectedWordIndex - 1];
-      const next = selectedCue.words[selectedWordIndex + 1];
+      const prior = visibleWords[selectedWordIndex - 1];
+      const next = visibleWords[selectedWordIndex + 1];
       if (edge === "start") {
         const minimum = Math.max(selectedCue.speech_timing.start_ms, prior?.end_ms ?? 0);
         setWordStart(Math.max(minimum, Math.min(Math.round(timeMs), wordEnd - 1)));
@@ -924,7 +924,7 @@ export function EditorialPage() {
         });
       const nextWord =
         advance && selectedWord && !approve
-          ? selectedCue.words[selectedGroupEndIndex + 1]
+          ? visibleWords[selectedGroupEndIndex + 1]
           : undefined;
       const nextCueForWord =
         advance && selectedWord && !approve && !nextWord ? cues[selectedCueIndex + 1] : undefined;
@@ -2126,7 +2126,7 @@ export function EditorialPage() {
                         disabled={
                           saving ||
                           semanticUnitsDirty ||
-                          selectedGroupEndIndex === selectedCue.words.length - 1
+                          selectedGroupEndIndex === visibleWords.length - 1
                         }
                         onClick={() => void groupSelectedWord("next")}
                       >
@@ -2142,7 +2142,7 @@ export function EditorialPage() {
             <div>
               <strong>
                 {selectedWord
-                  ? `Palavra ${selectedWordIndex + 1} de ${selectedCue.words.length} · Cue ${selectedCue.order}`
+                  ? `Palavra ${selectedWordIndex + 1} de ${visibleWords.length} · Cue ${selectedCue.order}`
                   : `Cue ${selectedCue.order} de ${cues.length}`}
               </strong>
               <span>{isDirty ? "Há alterações não salvas" : cueStatus}</span>
