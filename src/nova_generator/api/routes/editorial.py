@@ -35,7 +35,7 @@ from nova_generator.application.use_cases.editorial_assistance import (
     EditorialAssistanceError,
     build_editorial_prompt,
     persist_editorial_preparation,
-    scene_is_editorially_prepared,
+    scene_has_completed_initial_preparation,
 )
 from nova_generator.application.use_cases.editorial_commands import (
     AdjustCueTiming,
@@ -792,11 +792,11 @@ def _require_prepared_cue(repository: SqlAlchemyEditorialProjectRepository, cue_
 def _require_prepared_scene(
     repository: SqlAlchemyEditorialProjectRepository, scene_id: UUID
 ) -> None:
-    if not scene_is_editorially_prepared(repository, scene_id):
+    if not scene_has_completed_initial_preparation(repository, scene_id):
         raise HTTPException(
             409,
             detail=(
-                "editorial preparation is incomplete; finish Groq or external AI processing first"
+                "initial editorial preparation is incomplete; finish Groq or external AI processing first"
             ),
         )
 
