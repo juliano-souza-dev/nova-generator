@@ -1920,7 +1920,10 @@ export function EditorialPage() {
                   <span>Inglês aprovado</span>
                   <textarea
                     value={approvedEn}
-                    onChange={(event) => setApprovedEn(event.target.value)}
+                    onChange={(event) => {
+                      setTextDraftCueId(selectedCue.id);
+                      setApprovedEn(event.target.value);
+                    }}
                     rows={3}
                   />
                 </label>
@@ -1928,7 +1931,10 @@ export function EditorialPage() {
                   <span>Português aprovado</span>
                   <textarea
                     value={approvedPt}
-                    onChange={(event) => setApprovedPt(event.target.value)}
+                    onChange={(event) => {
+                      setTextDraftCueId(selectedCue.id);
+                      setApprovedPt(event.target.value);
+                    }}
                     rows={3}
                   />
                 </label>
