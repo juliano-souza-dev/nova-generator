@@ -175,15 +175,13 @@ function semanticUnitsFromCue(cue: TimelineCue | undefined): EditorialSemanticUn
 // Only missing initial AI preparation can keep the workstation closed.
 // An operator's subsequent edits create review tasks, never a new AI gate.
 function cueNeedsEditorialTreatment(cue: TimelineCue): boolean {
-  return (
-    !cue.approved_en.trim() ||
-    !cue.approved_pt.trim() ||
-    cue.provenance?.editorial_preparation !== "complete"
-  );
+  // Once a cue has been prepared, missing or edited text is a manual task.
+  // Do not send a prepared scene back to the initial AI preparation gate.
+  return cue.provenance?.editorial_preparation !== "complete";
 }
 
 function cueNeedsManualReview(cue: TimelineCue): boolean {
-  return cue.words.some(
+  return !cue.approved_en.trim() || !cue.approved_pt.trim() || cue.words.some(
     (word) =>
       (word.semantic_group_role !== "member" && !word.pt?.trim()) ||
       word.provenance?.translation_review_required === true ||
@@ -281,23 +279,16 @@ export function EditorialPage() {
   );
   const selectedCueIndex = cues.findIndex((cue) => cue.id === selectedCueId);
   const selectedCue = cues[selectedCueIndex];
-  // Some previously imported projects already have corrected cue text while
-  // their canonical word rows still represent an incomplete ASR transcript.
-  // Repair the mismatch even when the text field itself was not edited today.
-  const canonicalWordCountMismatch = Boolean(
-    selectedCue &&
-    selectedCue.provenance?.editorial_text_manually_corrected === true &&
-    (approvedEn.match(/\S+/g)?.length ?? 0) !== selectedCue.words.length,
-  );
+  // Stored text and ASR word rows can legitimately differ in old imports.
+  // Never turn that historical mismatch into an unsaved draft or alter timings
+  // unless the editor actually changes the English transcript.
   const textDirty = Boolean(
     selectedCue && textDraftCueId === selectedCue.id &&
-    (approvedEn !== selectedCue.approved_en ||
-      approvedPt !== selectedCue.approved_pt ||
-      canonicalWordCountMismatch),
+      (approvedEn !== selectedCue.approved_en || approvedPt !== selectedCue.approved_pt),
   );
   const textReconciliation =
     selectedCue && textDraftCueId === selectedCue.id &&
-      (approvedEn !== selectedCue.approved_en || canonicalWordCountMismatch)
+      approvedEn !== selectedCue.approved_en
       ? reconcileCueWords(approvedEn, selectedCue.words, selectedCue.speech_timing.start_ms)
       : null;
   const hasInsertedWords = Boolean(textReconciliation?.insertedCount);
