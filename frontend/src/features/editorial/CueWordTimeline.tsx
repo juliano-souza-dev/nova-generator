@@ -45,7 +45,6 @@ export function CueWordTimeline(props: Props) {
   const [draggingEdge, setDraggingEdge] = useState<"start" | "end" | null>(null);
   const selectedCue = props.cues.find((cue) => cue.id === props.selectedCueId);
   const selectedWord = selectedCue?.words.find((word) => word.id === props.selectedWordId);
-  const activeLabel = selectedWord ? "palavra" : "cue";
   const selectedWordIndex = selectedCue?.words.findIndex((word) => word.id === selectedWord?.id) ?? -1;
   const visibleDuration = Math.max(1, durationMs) / Math.max(1, props.zoom);
   const windowStart = Math.max(0, Math.min(viewStart, durationMs - visibleDuration));
