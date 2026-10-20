@@ -2106,47 +2106,11 @@ export function EditorialPage() {
                   <p className="word-duration">
                     Duração <strong>{Math.max(0, wordEnd - wordStart)} ms</strong>
                   </p>
-                  <div className="word-editor-actions">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => playRange(selectedGroupStart, selectedGroupEnd)}
-                    >
-                      <Play aria-hidden="true" /> Ouvir unidade
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => markActiveEdge("start")}
-                    >
-                      <kbd>A</kbd> Marcar IN
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => markActiveEdge("end")}
-                    >
-                      <kbd>S</kbd> Marcar OUT
-                    </button>
-                  </div>
-                  <div className="word-step-actions">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={selectedWordIndex <= 0 || wordDirty || saving}
-                      onClick={() => moveWord(-1)}
-                    >
-                      <ChevronLeft aria-hidden="true" /> Palavra anterior
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-button"
-                      disabled={saving}
-                      onClick={() => void saveChanges(false, true)}
-                    >
-                      <Save aria-hidden="true" /> Salvar palavra e próxima
-                    </button>
-                  </div>
+                  <p className="word-timing-guidance">
+                    Para sincronizar a legenda, use a timeline abaixo: ouça com contexto,
+                    marque o início e o fim da palavra e clique em “Salvar e próxima”.
+                    O tempo da cue não será alterado.
+                  </p>
                 </div>
               )}
             </aside>
@@ -2196,6 +2160,14 @@ export function EditorialPage() {
             selectedCueId={selectedCueId}
             selectedWordId={selectedWordId}
             onPlayToggle={togglePlayback}
+            onPlayContext={() => {
+              if (!selectedCue || !selectedWord) return;
+              playRange(
+                Math.max(selectedCue.speech_timing.start_ms, wordStart - 650),
+                Math.min(selectedCue.speech_timing.end_ms, wordEnd + 850),
+              );
+            }}
+            onPreviousWord={() => moveWord(-1)}
             onContinuousPlayToggle={toggleContinuousPlayback}
             onSaveAndNext={() => void saveChanges(false, true)}
             onPlayheadChange={seek}
