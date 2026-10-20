@@ -1480,3 +1480,25 @@
     justify-self: start;
   }
 }
+
+.editorial-station-transcript.is-editing {
+  align-items: start;
+}
+.editorial-station-transcript label {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
+}
+.editorial-station-transcript textarea {
+  min-width: 0;
+  width: 100%;
+  min-height: 68px;
+  padding: 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgb(7 15 29 / 55%);
+  color: var(--text);
+  resize: vertical;
+  font: inherit;
+  font-size: 0.88rem;
+}
