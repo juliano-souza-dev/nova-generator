@@ -530,3 +530,63 @@ def test_word_timing_fit_respects_words_without_shifting_neighbors(
     assert [word.id for word in repository.get_cue_words(cue.id)] == [
         word.id for word in words
     ]
+
+def test_word_timing_review_persists_and_is_invalidated_on_reedit(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    word = words[0]
+    revisions_before = len(repository.list_revisions(scene_id))
+    completed = client.post(
+        f"/api/editorial/cues/{cue.id}/words/complete",
+        json={"author": "editor", "word_id": str(word.id)},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["provenance"]["word_timing_reviewed"] is True
+    saved = repository.get_cue_words(cue.id)[0]
+    assert (saved.id, saved.start_ms, saved.end_ms) == (
+        word.id,
+        word.start_ms,
+        word.end_ms,
+    )
+    assert len(repository.list_revisions(scene_id)) == revisions_before + 1
+    again = client.post(
+        f"/api/editorial/cues/{cue.id}/words/complete",
+        json={"author": "editor", "word_id": str(word.id)},
+    )
+    assert again.status_code == 200
+    assert len(repository.list_revisions(scene_id)) == revisions_before + 1
+    updated = client.put(
+        f"/api/editorial/cues/{cue.id}/words/timing",
+        json={
+            "author": "editor",
+            "timings": [
+                {
+                    "id": str(item.id),
+                    "start_ms": item.start_ms + (10 if item.id == word.id else 0),
+                    "end_ms": item.end_ms,
+                }
+                for item in words
+            ],
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert repository.get_cue_words(cue.id)[0].provenance.get("word_timing_reviewed") is not True
+    assert repository.list_revisions(scene_id)[-2].command == "complete_word_timing_review"
+
+
+def test_word_timing_review_rejects_invalid_word_without_persisting(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    invalid = replace(words[0], start_ms=words[0].end_ms)
+    repository.save_cue(cue, [invalid, *words[1:]])
+    before = len(repository.list_revisions(scene_id))
+    response = client.post(
+        f"/api/editorial/cues/{cue.id}/words/complete",
+        json={"author": "editor", "word_id": str(invalid.id)},
+    )
+    assert response.status_code == 422
+    assert len(repository.list_revisions(scene_id)) == before
