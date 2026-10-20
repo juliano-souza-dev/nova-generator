@@ -503,6 +503,9 @@ export function EditorialPage() {
     }
     const word = selectedCue?.words.find((item) => item.id === id);
     if (word) {
+      // Stop any pending bounded preview before moving its selection.
+      playbackEnd.current = null;
+      mediaRef.current?.pause();
       setSelectedWordId(id);
       seek(word.start_ms);
       const group = word.semantic_group_id
@@ -556,11 +559,28 @@ export function EditorialPage() {
   }
   function playRange(start: number, end: number) {
     const player = mediaRef.current;
-    if (!player || end <= start) return;
+    if (!player) return;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      playbackEnd.current = null;
+      player.pause();
+      setMessage(
+        "A palavra não tem intervalo válido (IN deve ser anterior ao OUT). Ajuste os marcadores para ouvi-la.",
+      );
+      return;
+    }
+    // Record this bounded playback before play() dispatches its onPlay event.
+    // The onPlay handler must not expand a word preview into an entire cue.
     continuousPlayback.current = false;
-    seek(start);
     playbackEnd.current = end;
-    void player.play().catch(() => setMessage("Não foi possível reproduzir o corte."));
+    seek(start);
+    if (!player.paused) {
+      // An already playing cue must also become a bounded word preview.
+      syncPlayback(player);
+    }
+    void player.play().catch(() => {
+      playbackEnd.current = null;
+      setMessage("Não foi possível reproduzir o trecho selecionado.");
+    });
   }
   function syncPlayback(player: HTMLVideoElement) {
     if (playbackEnd.current !== null && player.currentTime * 1000 >= playbackEnd.current) {
@@ -712,12 +732,15 @@ export function EditorialPage() {
   function togglePlayback() {
     const player = mediaRef.current;
     if (!player || !selectedCue) return;
-    if (player.paused)
-      playRange(
-        selectedWord ? wordStart : selectedCue.speech_timing.start_ms,
-        selectedWord ? wordEnd : selectedCue.speech_timing.end_ms,
-      );
-    else {
+    if (selectedWord) {
+      // Clicking "Listen to word" always (re)plays precisely the selected word,
+      // even if the video is currently playing a cue or a context preview.
+      playRange(wordStart, wordEnd);
+      return;
+    }
+    if (player.paused) {
+      playRange(selectedCue.speech_timing.start_ms, selectedCue.speech_timing.end_ms);
+    } else {
       playbackEnd.current = null;
       player.pause();
     }
@@ -736,7 +759,9 @@ export function EditorialPage() {
   }
 
   function playSelectedCueFromPlayer(player: HTMLVideoElement) {
-    if (continuousPlayback.current || !selectedCue) return;
+    // Bounded previews (word or context) already set playbackEnd in playRange.
+    // Only direct playback from the native video controls defaults to a cue.
+    if (continuousPlayback.current || playbackEnd.current !== null || !selectedCue) return;
     const start = selectedCue.speech_timing.start_ms;
     const end = selectedCue.speech_timing.end_ms;
     if (player.currentTime * 1000 < start || player.currentTime * 1000 >= end)
