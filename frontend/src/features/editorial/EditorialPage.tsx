@@ -1509,6 +1509,20 @@ export function EditorialPage() {
                 onNudge={nudge}
                 onUndo={undo}
               />
+                <div className="editorial-station-transcript" aria-label="Texto contextual da cue">
+                  <div>
+                    <span className="eyebrow">Inglês aprovado</span>
+                    <p>{approvedEn || selectedCue.original_en}</p>
+                  </div>
+                  <div>
+                    <span className="eyebrow">Português aprovado</span>
+                    <p>{approvedPt || "Tradução pendente"}</p>
+                  </div>
+                  <button type="button" className="secondary-button"
+                    onClick={() => setShowSupportingPanels(true)}>
+                    Editar texto
+                  </button>
+                </div>
               </div>
               <div className="editorial-compact-video" hidden={!showCompactVideo}>
             <section className="review-player panel" aria-labelledby="cut-player-title">
