@@ -172,12 +172,23 @@ function semanticUnitsFromCue(cue: TimelineCue | undefined): EditorialSemanticUn
   return [...groups.values()];
 }
 
+// Only missing initial AI preparation can keep the workstation closed.
+// An operator's subsequent edits create review tasks, never a new AI gate.
 function cueNeedsEditorialTreatment(cue: TimelineCue): boolean {
   return (
     !cue.approved_en.trim() ||
     !cue.approved_pt.trim() ||
-    cue.provenance?.editorial_preparation !== "complete" ||
-    cue.words.some((word) => word.semantic_group_role !== "member" && !word.pt?.trim())
+    cue.provenance?.editorial_preparation !== "complete"
+  );
+}
+
+function cueNeedsManualReview(cue: TimelineCue): boolean {
+  return cue.words.some(
+    (word) =>
+      (word.semantic_group_role !== "member" && !word.pt?.trim()) ||
+      word.provenance?.translation_review_required === true ||
+      (word.provenance?.editorial_timing_estimated === true &&
+        word.provenance?.word_timing_reviewed !== true),
   );
 }
 
@@ -329,6 +340,9 @@ export function EditorialPage() {
     "";
   const selectedSuggestion = assistance?.suggestions.find((item) => item.cue_id === selectedCueId);
   const pendingTreatmentCount = cues.filter(cueNeedsEditorialTreatment).length;
+  const pendingManualReviewCount = cues.filter(
+    (cue) => !cueNeedsEditorialTreatment(cue) && cueNeedsManualReview(cue),
+  ).length;
   const assistanceComplete = assistanceCoversPendingCues(assistance, cues);
   const editorialGateReady = pendingTreatmentCount === 0 || assistanceComplete;
   const storedSemanticUnits = semanticUnitsFromCue(selectedCue);
@@ -1475,7 +1489,11 @@ export function EditorialPage() {
           <progress max={Math.max(cues.length, 1)} value={approvedCount} />
           {cues.length > 0 && (
             <span className={`review-preparation ${editorialGateReady ? "ready" : "pending"}`}>
-              {editorialGateReady ? "Preparação de IA completa" : "Preparação de IA pendente"}
+              {!editorialGateReady
+                ? "Preparação de IA pendente"
+                : pendingManualReviewCount > 0
+                  ? `Revisão manual pendente em ${pendingManualReviewCount} cue(s)`
+                  : "Preparação de IA completa"}
             </span>
           )}
         </div>
@@ -1600,6 +1618,12 @@ export function EditorialPage() {
       )}
       {selectedCue && editorialGateReady && (
         <>
+          {cueNeedsManualReview(selectedCue) && (
+            <p className="review-message" role="status">
+              Este cue possui palavras com tradução ou tempo provisório a revisar.
+              A edição permanece liberada. Confira cada palavra e aprove quando concluir.
+            </p>
+          )}
           <div className="editorial-review-shell">
             <nav className="editorial-station-dock" aria-label="Controles da estação editorial">
               <div className="editorial-dock-navigation">
