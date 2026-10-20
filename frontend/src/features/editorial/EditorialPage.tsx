@@ -652,8 +652,12 @@ export function EditorialPage() {
       // be validated. The draft remains local and visibly pending.
       rememberCurrentWordDraft();
       const saved = await saveChanges(false, false);
-      if (!saved)
-        return `Ajustes de “${selectedWord.surface.trim()}” ainda não salvos. Rascunho preservado nesta sessão.`;
+      if (!saved) {
+        const warning =
+          `Ajustes de “${selectedWord.surface.trim()}” ainda não salvos. Rascunho preservado nesta sessão.`;
+        setSaveFeedback(warning);
+        return warning;
+      }
       pendingWordDrafts.current.delete(selectedWord.id);
       setPendingDraftVersion((value) => value + 1);
     }
