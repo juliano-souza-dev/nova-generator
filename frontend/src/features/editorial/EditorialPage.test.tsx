@@ -184,7 +184,11 @@ describe("EditorialPage", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Inglês aprovado" }), {
       target: { value: "Not until I speak to Lizzie!" },
     });
-    expect(within(list).queryByRole("button", { name: /you!/ })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Inglês aprovado" }))
+        .toHaveValue("Not until I speak to Lizzie!");
+      expect(within(list).queryByRole("button", { name: /you!/ })).not.toBeInTheDocument();
+    });
     expect(within(list).getByRole("button", { name: /Lizzie!/ })).toBeInTheDocument();
     expect(within(list).getAllByRole("button")).toHaveLength(6);
 
