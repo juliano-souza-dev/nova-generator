@@ -747,11 +747,9 @@ def test_inserted_words_receive_provisional_timings_and_can_extend_cue(
     updated = repository.get_cue_words(cue.id)
     assert len(updated) == len(before) + 2
     assert [word.id for word in updated[:len(before)]] == [word.id for word in before]
-    assert updated[-1].end_ms == new_cue["speech_timing"]["end_ms"] or (
-        updated[-1].end_ms < new_cue["speech_timing"]["end_ms"]
-    )
+    assert updated[-1].end_ms <= new_cue["speech_timing"]["end_ms"]
     assert new_cue["speech_timing"]["end_ms"] >= cue.speech_end_ms
-    assert all(a.end_ms <= b.start_ms for a, b in zip(updated, updated[1:]))
+    assert all(a.end_ms <= b.start_ms for a, b in zip(updated, updated[1:], strict=False))
     assert all(word.provenance.get("editorial_timing_estimated") for word in updated[-2:])
     assert all(word.provenance.get("word_timing_reviewed") is not True for word in updated[-2:])
     assert all(word.provenance.get("translation_review_required") for word in updated[-2:])
