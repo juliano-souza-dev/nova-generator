@@ -1598,27 +1598,9 @@ export function EditorialPage() {
                   type="button"
                   className="secondary-button"
                   disabled={!matchingMedia || !media?.cut_url}
-                  onClick={() =>
-                    playRange(selectedCue.speech_timing.start_ms, selectedCue.speech_timing.end_ms)
-                  }
-                >
-                  <Play aria-hidden="true" /> Ouvir cue
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!matchingMedia || !media?.cut_url}
                   onClick={toggleContinuousPlayback}
                 >
                   <Play aria-hidden="true" /> Ouvir cena inteira
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!selectedWord || !matchingMedia || !media?.cut_url}
-                  onClick={() => playRange(wordStart, wordEnd)}
-                >
-                  <Play aria-hidden="true" /> Ouvir palavra
                 </button>
               </div>
             </section>
