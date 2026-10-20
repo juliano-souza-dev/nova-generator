@@ -456,6 +456,54 @@ describe("EditorialPage", () => {
     );
   });
 
+  it("guides approval of a saved expanded cue without treating Save as a pending action", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValueOnce([{
+      ...cue,
+      approved_en: "What's the point?",
+      approved_pt: "Pra quê?",
+      words: [
+        { id: "w1", order: 1, surface: "What's", start_ms: 100, end_ms: 500,
+          pt: "o que" },
+        { id: "w2", order: 2, surface: " the", start_ms: 510, end_ms: 700,
+          pt: "", provenance: {
+            editorial_timing_estimated: true, translation_review_required: true,
+          } },
+        { id: "w3", order: 3, surface: " point?", start_ms: 710, end_ms: 900,
+          pt: "", provenance: {
+            editorial_timing_estimated: true, translation_review_required: true,
+          } },
+      ],
+    }]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByLabelText("Player do corte da cena")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Salvar alterações" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Aprovar cue" }));
+    const review = screen.getByRole("region", { name: "Confirmar revisão antes de aprovar" });
+    expect(review).toHaveTextContent("O texto já está salvo.");
+    expect(mocks.updateCueText).not.toHaveBeenCalled();
+    const confirm = within(review).getByRole("button", { name: "Confirmar revisão e aprovar" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(within(review).getByRole("checkbox", { name: /Conferi no áudio/ }));
+    fireEvent.click(within(review).getByRole("checkbox", { name: /Usar “Pra quê\?” como tradução contextual/ }));
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(mocks.updateCueText).toHaveBeenCalledWith(
+      "c1",
+      expect.objectContaining({
+        approve: true,
+        approved_pt: "Pra quê?",
+        confirm_word_timings: true,
+        confirm_word_translations: false,
+        group_cue_translation: true,
+      }),
+    ));
+  });
+
   it("offers the external fallback when Groq status cannot be loaded", async () => {
     const cue = (await mocks.editorialCues())[0];
     mocks.editorialCues.mockResolvedValueOnce([
