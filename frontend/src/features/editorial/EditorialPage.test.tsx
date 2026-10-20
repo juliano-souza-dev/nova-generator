@@ -609,7 +609,7 @@ describe("EditorialPage", () => {
     fireEvent.click(splitButton);
     expect(screen.getByRole("textbox", { name: "Português da primeira parte" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Português da segunda parte" })).toHaveValue("agora!");
-    expect(screen.getByRole("status")).toHaveTextContent("Venha agora!");
+    expect(screen.getByText(/Tradução original da cue:/)).toHaveTextContent("Venha agora!");
     fireEvent.click(screen.getByRole("button", { name: "Confirmar divisão" }));
     expect(mocks.splitEditorialCue).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole("textbox", { name: "Português da primeira parte" }), {
