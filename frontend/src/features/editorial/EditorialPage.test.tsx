@@ -1147,6 +1147,10 @@ describe("EditorialPage", () => {
       </MemoryRouter>,
     );
     await screen.findByRole("navigation", { name: "Controles da estação editorial" });
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "Inglês aprovado" }))
+        .toHaveValue("“I can't… go?”"),
+    );
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     await waitFor(() =>
       expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
