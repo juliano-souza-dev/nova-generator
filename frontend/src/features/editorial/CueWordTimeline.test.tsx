@@ -102,4 +102,47 @@ describe("CueWordTimeline", () => {
       .not.toHaveAttribute("open");
   });
 
+  it("selects a word together with its owning cue in one timeline action", () => {
+    const onSelectCue = vi.fn();
+    const onSelectWord = vi.fn();
+    const second = {
+      ...cue,
+      id: "cue-2",
+      order: 2,
+      speech_timing: { start_ms: 3200, end_ms: 4800 },
+      subtitle_timing: { start_ms: 3200, end_ms: 4800 },
+      words: [{ ...cue.words[0], id: "word-2", start_ms: 3200, end_ms: 4800 }],
+    };
+    const { container } = render(
+      <CueWordTimeline
+        cues={[cue, second]}
+        durationMs={10000}
+        playheadMs={1100}
+        playing={false}
+        zoom={1}
+        selectedCueId="cue-1"
+        onPlayToggle={vi.fn()}
+        onPlayContext={vi.fn()}
+        onPreviousWord={vi.fn()}
+        onContinuousPlayToggle={vi.fn()}
+        onSaveAndNext={vi.fn()}
+        onPlayheadChange={vi.fn()}
+        onZoomChange={vi.fn()}
+        onSelectCue={onSelectCue}
+        onSelectWord={onSelectWord}
+        onSetEdge={vi.fn()}
+        onEdgeDragStart={vi.fn()}
+        onEdgeChange={vi.fn()}
+        onNudge={vi.fn()}
+        onUndo={vi.fn()}
+      />,
+    );
+    const wordBlocks = container.querySelectorAll(".word-block");
+    expect(wordBlocks).toHaveLength(2);
+    fireEvent.click(wordBlocks[1]);
+    expect(onSelectWord).toHaveBeenCalledWith("word-2", "cue-2");
+    expect(onSelectCue).not.toHaveBeenCalled();
+  });
+
+
 });
