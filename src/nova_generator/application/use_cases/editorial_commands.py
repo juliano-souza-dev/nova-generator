@@ -136,10 +136,13 @@ class EditWordSurface:
         if updated_surface == target.surface:
             return cue
         updated_words = list(words)
+        corrected_provenance = _changed_word_provenance(target, updated_surface)
+        corrected_provenance.pop("word_timing_reviewed", None)
+        corrected_provenance.pop("word_timing_reviewed_by", None)
         updated_words[index] = replace(
             target,
             surface=updated_surface,
-            provenance=_changed_word_provenance(target, updated_surface),
+            provenance=corrected_provenance,
         )
         before = _scene_snapshot(self._repository, cue.scene_id)
         new_text = (
@@ -253,6 +256,42 @@ class FitCueToWords:
         return updated
 
 
+class CompleteWordTimingReview:
+    """Persist a word's manual timing review without approving the entire cue."""
+
+    def __init__(self, repository: EditorialProjectRepository) -> None:
+        self._repository = repository
+
+    def execute(self, cue_id: UUID, *, word_id: UUID, author: str) -> WordTiming:
+        cue, words = _cue_with_words(self._repository, cue_id)
+        index = next((i for i, word in enumerate(words) if word.id == word_id), None)
+        if index is None:
+            raise EditorialCommandError("word not found in cue")
+        word = words[index]
+        if (
+            word.start_ms >= word.end_ms
+            or word.start_ms < cue.speech_start_ms
+            or word.end_ms > cue.speech_end_ms
+        ):
+            raise EditorialCommandError(
+                "cannot finish a word with invalid timing or timing outside the cue"
+            )
+        if word.provenance.get("word_timing_reviewed") is True:
+            return word
+        before = _scene_snapshot(self._repository, cue.scene_id)
+        provenance = {
+            **word.provenance,
+            "word_timing_reviewed": True,
+            "word_timing_reviewed_by": author,
+        }
+        updated_word = replace(word, provenance=provenance)
+        updated_words = list(words)
+        updated_words[index] = updated_word
+        self._repository.save_cue(cue, updated_words)
+        _record(self._repository, cue, "complete_word_timing_review", author, before)
+        return updated_word
+
+
 class AdjustWordTiming:
     def __init__(self, repository: EditorialProjectRepository) -> None:
         self._repository = repository
@@ -274,7 +313,11 @@ class AdjustWordTiming:
                 raise EditorialCommandError(
                     f"word[{word.id}] timing must be ordered and inside speech_timing"
                 )
-            updated.append(replace(word, start_ms=start, end_ms=end))
+            provenance = dict(word.provenance)
+            if start != word.start_ms or end != word.end_ms:
+                provenance.pop("word_timing_reviewed", None)
+                provenance.pop("word_timing_reviewed_by", None)
+            updated.append(replace(word, start_ms=start, end_ms=end, provenance=provenance))
             previous_end = end
         before = _scene_snapshot(self._repository, cue.scene_id)
         self._repository.save_cue(cue, updated)
