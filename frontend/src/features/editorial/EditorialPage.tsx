@@ -1044,7 +1044,12 @@ export function EditorialPage() {
       return false;
     }
     const candidate = previewCues.find((cue) => cue.id === selectedCue.id) ?? selectedCue;
-    const errors = validateTimeline([candidate]);
+    // A translation-only draft must remain savable even when historical
+    // audio timing needs review. Validate timing whenever we edit it or approve.
+    const errors =
+      approve || timingDirty || wordDirty || pendingTimingChanges || hasInsertedWords
+        ? validateTimeline([candidate])
+        : [];
     if (
       candidate.words.some(
         (word) => !Number.isInteger(word.start_ms) || !Number.isInteger(word.end_ms),
