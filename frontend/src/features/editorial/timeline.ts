@@ -32,6 +32,44 @@ export function setTimingEdge(
   return { ...timing, end_ms: Math.max(next, timing.start_ms + SNAP_MS) };
 }
 
+/**
+ * Recalculate each child's highlight interval when the parent speech interval
+ * changes. Equal duration translates the words; a resized cue scales them
+ * proportionally, preserving order and gaps where there is enough room.
+ * This is a timing preview, not speech re-alignment from audio.
+ */
+export function remapWordsToCue(
+  words: WordTiming[],
+  from: Timing,
+  to: Timing,
+): WordTiming[] {
+  if (from.start_ms === to.start_ms && from.end_ms === to.end_ms) return words;
+  const oldSpan = from.end_ms - from.start_ms;
+  const newSpan = to.end_ms - to.start_ms;
+  if (oldSpan <= 0 || newSpan < words.length)
+    throw new Error("Cue muito curta para acomodar todas as palavras.");
+
+  const project = (timeMs: number) => {
+    const offset = Math.max(0, Math.min(oldSpan, timeMs - from.start_ms));
+    return to.start_ms + Math.round((offset * newSpan) / oldSpan);
+  };
+  let previousEnd = to.start_ms;
+  return words.map((word, index) => {
+    const remaining = words.length - index - 1;
+    const start = Math.max(previousEnd, Math.min(project(word.start_ms), to.end_ms - remaining - 1));
+    const end = Math.max(start + 1, Math.min(project(word.end_ms), to.end_ms - remaining));
+    previousEnd = end;
+    const changed = start !== word.start_ms || end !== word.end_ms;
+    const provenance = { ...word.provenance };
+    if (changed) {
+      delete provenance.word_timing_reviewed;
+      delete provenance.word_timing_reviewed_by;
+      provenance.timing_remapped_with_cue = true;
+    }
+    return { ...word, start_ms: start, end_ms: end, provenance };
+  });
+}
+
 export function validateTimeline(cues: Array<Cue & { words: WordTiming[] }>): string[] {
   return cues.flatMap((cue) => {
     const errors: string[] = [];
