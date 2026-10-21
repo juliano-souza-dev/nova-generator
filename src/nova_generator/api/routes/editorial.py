@@ -329,7 +329,12 @@ def download_external_editorial_package(
         raise HTTPException(
             404 if str(error).endswith("not found") else 422, detail=str(error)
         ) from error
-    return FileResponse(package, media_type="application/zip", filename=package.name)
+    return FileResponse(
+        package,
+        media_type="application/zip",
+        filename=package.name,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 @router.post("/scenes/{scene_id}/external-result", response_model=EditorialAssistanceResponse)
