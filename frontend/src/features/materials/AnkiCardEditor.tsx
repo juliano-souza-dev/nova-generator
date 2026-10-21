@@ -40,6 +40,11 @@ export function AnkiCardEditor({
   saving,
   saveError,
   revision,
+  audioReady,
+  audioUrl,
+  audioBusy,
+  audioError,
+  onAudio,
   onSave,
 }: {
   card: AnkiDidacticCard;
@@ -47,6 +52,11 @@ export function AnkiCardEditor({
   saving: boolean;
   saveError?: string;
   revision: string;
+  audioReady?: boolean;
+  audioUrl?: string | null;
+  audioBusy?: boolean;
+  audioError?: string;
+  onAudio?: () => void;
   onSave: (card: AnkiDidacticCard) => void;
 }) {
   const [draft, setDraft] = useState(card);
@@ -104,7 +114,22 @@ export function AnkiCardEditor({
           <small>Card {position} · {draft.card_type}</small>
           <h4>{draft.focus_text}</h4>
         </div>
-        <span>{dirty ? "Alterações não salvas" : "Salvo"}</span>
+        <div className="anki-editor-audio">
+          <span>{dirty ? "Alterações não salvas" : "Salvo"}</span>
+          {audioUrl && audioReady ? (
+            <audio controls preload="none" src={audioUrl} aria-label={`Áudio didático do card ${position}`} />
+          ) : (
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!onAudio || audioBusy || saving || dirty}
+              onClick={onAudio}
+            >
+              {audioBusy ? "Áudio na fila…" : "Gerar WAV do card"}
+            </button>
+          )}
+          {audioError && <small role="alert">{audioError}</small>}
+        </div>
       </header>
       <div className="anki-editor-main">
         <div className="anki-editor-faces" aria-label="Frente e verso no formato iHub">
