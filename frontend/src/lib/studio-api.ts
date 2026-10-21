@@ -77,6 +77,11 @@ export const studioApi = {
     }),
   createProject: (input: { title?: string; content_type: string; youtube_url?: string }) =>
     apiRequest<Project>("/projects", { method: "POST", body: JSON.stringify(input) }),
+  createProjectFromIhub: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return apiRequest<Project>("/projects/from-ihub", { method: "POST", body });
+  },
   duplicateProject: (id: string) =>
     apiRequest<Project>(`/projects/${id}/duplicate`, { method: "POST" }),
   archiveProject: (id: string) =>
