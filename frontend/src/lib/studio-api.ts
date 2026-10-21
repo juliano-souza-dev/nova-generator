@@ -311,7 +311,9 @@ export const studioApi = {
         method: "PUT",
         body: JSON.stringify({
           expected_sha256,
-          card: (({ scene_id: _sceneId, ...fields }) => fields)(card),
+          card: Object.fromEntries(
+            Object.entries(card).filter(([field]) => field !== "scene_id"),
+          ),
         }),
       },
     ),
