@@ -106,7 +106,7 @@ def test_didactic_apkg_has_same_face_back_and_mini_lesson_as_ihub(tmp_path):
         assert html.unescape(field[10]) == lesson["source_context_en"]
         assert html.unescape(field[11]) == lesson["source_context_pt"]
     template = next(iter(model.values()))
-    assert template["id"] == DIDACTIC_MODEL_ID
+    assert int(template["id"]) == DIDACTIC_MODEL_ID
     assert template["name"] == DIDACTIC_MODEL_NAME
     assert "EN → PT" in template["tmpls"][0]["qfmt"]
     assert "{{Front}}" in template["tmpls"][0]["qfmt"]
@@ -312,7 +312,7 @@ def test_rebuild_existing_anki_v2_package_to_v3_without_new_media(tmp_path, monk
         with sqlite3.connect(dbfile) as connection:
             model = json.loads(connection.execute("SELECT models FROM col").fetchone()[0])
             fields = connection.execute("SELECT flds FROM notes").fetchone()[0].split("\x1f")
-    assert next(iter(model.values()))["id"] == DIDACTIC_MODEL_ID
+    assert int(next(iter(model.values()))["id"]) == DIDACTIC_MODEL_ID
     assert fields[3] == card["focus_text"]
     assert fields[5] == card["explanation_pt"]
 
