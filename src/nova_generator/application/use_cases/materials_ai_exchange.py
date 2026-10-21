@@ -247,10 +247,10 @@ class MaterialsAiExchange:
                 "approve the current editorial cues before importing Anki content"
             )
         try:
-            proposal = (
-                reconcile_didactic_proposal(proposal, cues)
-                if is_didactic else reconcile_anki_proposal(proposal, cues)
-            )
+            if isinstance(proposal, DidacticAnkiProposal):
+                proposal = reconcile_didactic_proposal(proposal, cues)
+            else:
+                proposal = reconcile_anki_proposal(proposal, cues)
         except ValueError as error:
             raise MaterialsAiError(str(error)) from error
 
