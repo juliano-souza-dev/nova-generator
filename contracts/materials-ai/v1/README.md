@@ -75,3 +75,12 @@ na prévia são simulados, sem atualizar a revisão real do aluno.
 os campos adicionais estejam sendo publicados no `hub_final.json`. A conexão
 da mini lesson enriquecida com o contrato final Hub ainda deve ser validada
 como etapa de integração antes de liberar o produto.
+
+## Compatibilidade com a preparação Anki anterior
+
+O mesmo endpoint de importação aceita **dois documentos diferentes** e não os confunde:
+
+- `nova-generator-anki-proposal/1.0`: apenas o preparo dos cards e mini-aulas, por cena. Valida e persiste `anki-prepared-<scene_id>.json`, retornando `anki_prepared` e `anki_needs_review`. Não exige seções e não aprova automaticamente o workbook.
+- `nova-generator-materials-output/1.0`: material didático completo com sete seções e cards, conforme o schema desta pasta. Continua exigindo `project_id`, `source_sha256`, `title`, `sections` e `anki_cards`.
+
+A interface deve permitir a visualização do Anki preparado sem exigir um workbook artificial; o Anki preparado pode ser reutilizado mais tarde pelo fluxo de Materiais.
