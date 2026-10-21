@@ -84,3 +84,7 @@ O mesmo endpoint de importação aceita **dois documentos diferentes** e não os
 - `nova-generator-materials-output/1.0`: material didático completo com sete seções e cards, conforme o schema desta pasta. Continua exigindo `project_id`, `source_sha256`, `title`, `sections` e `anki_cards`.
 
 A interface deve permitir a visualização do Anki preparado sem exigir um workbook artificial; o Anki preparado pode ser reutilizado mais tarde pelo fluxo de Materiais.
+
+## Uniões editoriais e cards relacionados
+
+Após a fusão de cues, mais de uma mini-aula pode apontar para a mesma cue **desde que o foco pedagógico (`focus_text`) seja diferente**. O backend valida a combinação `(cue_id, focus_text)`, não apenas `cue_id`. A renderização deve exibir cada card individualmente e preservar o foco selecionado ao abrir a prévia. Isso não altera o contrato de áudio/APKG, que depende da validação e da seleção de conteúdo na etapa final.
