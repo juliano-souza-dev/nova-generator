@@ -184,6 +184,19 @@
               }
             }
           }
+        },
+        "anki_prepared": {
+          "type": "array",
+          "description": "Optional prevalidated Anki mini-lessons from initial editorial export; unchanged literal approved cue identity.",
+          "items": {
+            "type": "object",
+            "description": "A card according to Anki proposal; full card fields validated at import."
+          }
+        },
+        "anki_prepared_needs_review": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of Anki draft cards invalidated by later editorial changes."
         }
       }
     },
