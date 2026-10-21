@@ -99,8 +99,10 @@ export function MaterialsPage() {
         card,
         materialReview.data?.anki_revisions?.[card.scene_id] ?? "",
       ),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["materials-ai-review", projectId] }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["materials-ai-review", projectId] });
+      void client.invalidateQueries({ queryKey: ["didactic-anki-audio", projectId] });
+    },
   });
   const approveMaterial = useMutation({
     mutationFn: (sourceSha256: string) =>
