@@ -39,6 +39,7 @@ export function MaterialsPage() {
   const [youtube, setYoutube] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [finalRevision, setFinalRevision] = useState(0);
+  const [apkgRevision, setApkgRevision] = useState(0);
   const [previewCueId, setPreviewCueId] = useState<string | null>(null);
   const [previewFocusText, setPreviewFocusText] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -184,6 +185,15 @@ export function MaterialsPage() {
   const publication = useMutation({
     mutationFn: () => studioApi.publishMaterialExport(projectId, activeExportId!, youtube.trim()),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["material-export", projectId] }),
+  });
+  const rebuildAnkiPackage = useMutation({
+    mutationFn: () => studioApi.rebuildAnkiPackage(projectId, activeExportId!),
+    onSuccess: () => {
+      setApkgRevision((revision) => revision + 1);
+      setFinalRevision((revision) => revision + 1);
+      void client.invalidateQueries({ queryKey: ["material-export", projectId] });
+      void client.invalidateQueries({ queryKey: ["material-latest-export", projectId] });
+    },
   });
   const regenerateFinal = useMutation({
     mutationFn: () => studioApi.regenerateFinalMaterials(projectId, activeExportId!),
@@ -830,15 +840,64 @@ export function MaterialsPage() {
       {exportStatus.data && (
         <section className="materials-result panel" aria-live="polite">
           <h2>Exportação {exportStatus.data.status}</h2>
+          {exportStatus.data.can_rebuild_anki && exportStatus.data.status === "succeeded" && (
+            <div className="materials-anki-layout-upgrade">
+              <div>
+                <strong>
+                  {exportStatus.data.anki_layout === "ihub-didactic-v3"
+                    ? "Anki didático v3: frente, verso e mini-aula completa"
+                    : "Este APKG foi gerado com um modelo anterior do Anki"}
+                </strong>
+                <p>
+                  Reconstrua apenas o APKG no modelo iHub didático v3.
+                  A síntese WAV, o reel e o vídeo do YouTube serão preservados.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={rebuildAnkiPackage.isPending}
+                onClick={() => rebuildAnkiPackage.mutate()}
+              >
+                {rebuildAnkiPackage.isPending
+                  ? "Reconstruindo APKG…"
+                  : "Atualizar modelo do Anki"}
+              </button>
+              {rebuildAnkiPackage.isSuccess && (
+                <p role="status">
+                  APKG didático atualizado. Importe o novo arquivo no Anki.
+                </p>
+              )}
+              {rebuildAnkiPackage.isError && (
+                <p role="alert">
+                  Não foi possível atualizar o APKG: {rebuildAnkiPackage.error.message}
+                </p>
+              )}
+            </div>
+          )}
+          {exportStatus.data.status === "succeeded" &&
+            !exportStatus.data.can_rebuild_anki &&
+            didacticCards.length > 0 && (
+              <p className="material-audio-feedback" role="status">
+                Esta exportação usa cards simples. Use “Exportar Anki didático”
+                na área dos cards preparados para obter a mini-aula completa.
+              </p>
+            )}
           {exportStatus.data.status === "failed" && (
             <p role="alert">
               {exportStatus.data.error_message ?? "A exportação falhou."} Reprocesse o card afetado
               e tente novamente.
             </p>
           )}
-          {exportStatus.data.apkg_url && <a href={exportStatus.data.apkg_url}>Baixar APKG</a>}
+          {exportStatus.data.apkg_url && (
+            <a href={`${exportStatus.data.apkg_url}${apkgRevision ? `?revision=${apkgRevision}` : ""}`}>
+              Baixar APKG
+            </a>
+          )}
           {exportStatus.data.manifest_url && (
-            <a href={exportStatus.data.manifest_url}>Baixar manifesto</a>
+            <a href={`${exportStatus.data.manifest_url}${apkgRevision ? `?revision=${apkgRevision}` : ""}`}>
+              Baixar manifesto
+            </a>
           )}
           {exportStatus.data.reel_url && <a href={exportStatus.data.reel_url}>Baixar reel</a>}
           {exportStatus.data.hub_final_url ? (
