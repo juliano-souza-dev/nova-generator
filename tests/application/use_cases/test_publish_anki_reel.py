@@ -198,6 +198,7 @@ def test_didactic_publication_keeps_original_scene_and_separate_audio_per_card(
     source = Mock()
     source.get_project.return_value = project
     source.get_project_scenes.return_value = [scene]
+    source.get_scene_cues.return_value = [cue]
     source.get_cue.return_value = cue
     source.get_scene_project_id.return_value = project_id
     source.get_cue_words.return_value = [word]
