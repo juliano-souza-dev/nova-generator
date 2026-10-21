@@ -6,7 +6,7 @@ O ZIP de exportação editorial inclui obrigatoriamente `anki/anki-ai-input.json
 
 Cada card requer `cue_id`, `front_en`, `back_pt`, `card_type`, `focus_text`, `meaning`, `marked_en`, `marked_pt`, `explanation_pt`, `example_en`, `example_pt`, `tags`. Selecionar apenas falas úteis (phrasal verbs, expressões, construções e vocabulário contextual), não transformar cada palavra em card. A mini-aula em PT deve explicar o uso *na cena*, não apenas traduzir. Adicionar um exemplo novo EN/PT natural.
 
-- `cue_id` deve apontar para a **cue existente na exportação inicial**, nunca inventada. Uma cue pode gerar no máximo um card nesta versão.
+- `cue_id` deve apontar para a **cue existente na exportação inicial**, nunca inventada. Na exportação inicial, prefira um card por cue original. Após uma união de cues, diferentes mini-aulas podem compartilhar a cue resultante quando possuem `focus_text` distintos; não duplique a mesma expressão.
 - `front_en` e `back_pt` precisam ser **literalmente iguais** a `approved_en` e `approved_pt` devolvidos no resultado editorial daquela mesma cue, incluindo espaços e pontuação. Sem recortar ou parafrasear a frente/verso.
 - `focus_text` e `meaning` explicitam o foco da mini-aula. `marked_en` e `marked_pt` devem aparecer como substrings literais em `front_en` e `back_pt`, respectivamente. Destaques não são texto novo.
 - `example_en` e `example_pt` formam um par e devem ilustrar o sentido da expressão em contexto diferente da cena.
@@ -21,3 +21,7 @@ Esse é um contrato específico para Anki e **não substitui** o contrato de wor
 ## Importação separada na aba Materiais
 
 O arquivo `anki-ai-result.json` com contrato `nova-generator-anki-proposal/1.0` pode ser importado diretamente na aba Materiais por `POST /api/projects/{project_id}/materials-ai/import`. O servidor valida o SHA da exportação editorial e a correspondência literal com as cues editoriais aprovadas, salva o rascunho por cena e expõe `anki_prepared` em `GET .../materials-ai/review`. Não exige `sections`, `project_id` nem `source_sha256`, pois esses campos pertencem ao contrato do workbook. A importação não aprova os cards e não cria workbook artificial.
+
+## Reconciliação de IDs após o Editorial
+
+O Editorial pode unir cues e criar novos UUIDs determinísticos. Ao importar `anki-ai-result.json`, o Generator deve procurar a cue sucessora, usando a relação `ai_merged_from` quando disponível e conferindo **simultaneamente o texto em inglês e a tradução portuguesa**. O ID e a frente/verso dos cards podem ser atualizados para o texto integral da cue resultante, preservando o foco, as explicações e os exemplos. Uma correspondência ambígua ou texto alterado não deve ser resolvido por aproximação: retornar erro objetivo para revisão humana. Várias mini-aulas com foco distinto podem referenciar a mesma cue resultante.
