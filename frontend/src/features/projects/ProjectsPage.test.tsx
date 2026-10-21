@@ -44,7 +44,10 @@ describe("ProjectsPage", () => {
     });
     fireEvent.click(submit);
     await waitFor(() => {
-      expect(studioApi.createProjectFromIhub).toHaveBeenCalledWith(file);
+      expect(studioApi.createProjectFromIhub).toHaveBeenCalledWith(
+        file,
+        expect.any(Object),
+      );
     });
   });
 
