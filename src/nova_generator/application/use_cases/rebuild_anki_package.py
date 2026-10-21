@@ -18,14 +18,11 @@ from nova_generator.application.use_cases.materials_ai_exchange import (
     MaterialsAiError,
     MaterialsAiExchange,
 )
-from nova_generator.domain.exports import ExportCue
+from nova_generator.domain.exports import DIDACTIC_LAYOUT, ExportCue
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.projects.entities import utf8_sha256
 from nova_generator.domain.voices import VoiceProfileSnapshot
-from nova_generator.infrastructure.exports.genanki_package_writer import (
-    DIDACTIC_LAYOUT,
-    GenankiPackageWriter,
-)
+from nova_generator.infrastructure.exports.genanki_package_writer import GenankiPackageWriter
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 
 
