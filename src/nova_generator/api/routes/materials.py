@@ -529,11 +529,21 @@ def export_didactic_anki(
     cards = prepared.get("anki_prepared", [])
     if not cards:
         raise HTTPException(422, detail="No prepared didactic Anki cards found")
+    # The reel must respect the chronology of the original scene, even when
+    # the AI proposed cards in a different pedagogical order.
+    repo = _repository()
+    scenes = {str(scene.id): scene.order for scene in repo.get_project_scenes(project_id)}
+    cards = sorted(
+        cards,
+        key=lambda card: (
+            scenes.get(card["scene_id"], 0),
+            repo.get_cue(UUID(card["cue_id"])).order,
+        ),
+    )
     if prepared.get("anki_prepared_needs_review"):
         raise HTTPException(409, detail="Review outdated Anki cards before export")
     voice = _voice(voices, payload.voice_id)
     cache = FileSpeechCache(get_settings().media_cache_root)
-    repo = _repository()
     source_cues = {}
     audio_hashes = {}
     for card in cards:
