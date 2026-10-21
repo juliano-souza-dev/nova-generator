@@ -471,6 +471,27 @@ class ExternalEditorialExchange:
                 item.cue_id: [turn.model_dump() for turn in item.speaker_turns]
                 for item in document.suggestions
             })
+        # The external AI owns the pedagogical English-in-Context selection.
+        # Validate against the same revised word IDs as the editorial text,
+        # independently from the Anki proposal and before mutating the scene.
+        all_suggestions = [
+            item.model_dump()
+            for chunk in manifest_chunks
+            for item in documents[chunk["id"]][0].suggestions
+        ]
+        if manifest.get("english_in_context", {}).get("required") and any(
+            "context_practices" not in item.model_fields_set
+            for chunk in manifest_chunks
+            for item in documents[chunk["id"]][0].suggestions
+        ):
+            raise EditorialAssistanceError(
+                "English in Context is missing: include context_practices "
+                "(possibly []) in every editorial suggestion"
+            )
+        try:
+            prepare_external_structures(all_suggestions)
+        except StructuresInContextError as error:
+            raise EditorialAssistanceError(str(error)) from error
         prepared_anki: _ExternalAnkiProposal | DidacticAnkiProposal | None = None
         if anki_result is not None:
             if len(anki_result) > self._maximum_result_bytes:
@@ -562,6 +583,9 @@ class ExternalEditorialExchange:
                 os.replace(temporary, destination)
             finally:
                 temporary.unlink(missing_ok=True)
+        write_external_structures(
+            self._project_root, project_id, scene_id, source_hash, all_suggestions
+        )
         return combined
 
     def _import_chunk(
