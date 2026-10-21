@@ -121,6 +121,27 @@ class MaterialsAiExchange:
             "content_type": project.content_type,
             "scenes": scenes,
         }
+        # Reuse the Anki mini-lessons prepared in the initial external AI round trip.
+        # Only preserve cards whose identity and literal EN/PT still match the
+        # editorial snapshot; do not silently rewrite cards after a split/merge.
+        prepared = self._read(project_id, "anki-prepared.json")
+        if prepared and prepared.get("contract") == "nova-generator-anki-proposal/1.0":
+            available = {
+                cue["id"]: cue
+                for scene in scenes for cue in scene["cues"]
+            }
+            candidates = prepared.get("anki_cards", [])
+            if isinstance(candidates, list):
+                source["anki_prepared"] = [
+                    card for card in candidates
+                    if isinstance(card, dict)
+                    and (approved := available.get(card.get("cue_id"))) is not None
+                    and card.get("front_en") == approved["approved_en"]
+                    and card.get("back_pt") == approved["approved_pt"]
+                ]
+                source["anki_prepared_needs_review"] = len(candidates) - len(
+                    source["anki_prepared"]
+                )
         fingerprint = sha256(json.dumps(
             source, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         ).encode("utf-8")).hexdigest()
@@ -136,7 +157,10 @@ class MaterialsAiExchange:
                     "Gere texto pedagógico real para cada seção, incluindo "
                     "exercícios com respostas. "
                     "Os cards Anki devem usar cue_id existentes, e front_en/back_pt precisam "
-                    "ser idênticos ao texto EN/PT aprovado. Inclua card_type, focus_text, "
+                    "ser idênticos ao texto EN/PT aprovado. Se source.anki_prepared estiver "
+                    "presente, reutilize essas mini-aulas já preparadas no primeiro pacote "
+                    "e não as gere novamente. Cards com cue alterada exigem revisão. "
+                    "Inclua card_type, focus_text, "
                     "meaning, marked_en, marked_pt, explanation_pt, example_en e example_pt "
                     "para reproduzir a mini lesson do iHub. O marked_en/marked_pt deve existir "
                     "literalmente na frase aprovada; os exemplos devem ter EN e PT. "
