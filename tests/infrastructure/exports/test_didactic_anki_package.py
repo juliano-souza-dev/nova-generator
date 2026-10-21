@@ -6,34 +6,34 @@ import re
 import sqlite3
 from hashlib import sha256
 from pathlib import Path
-from unittest.mock import Mock
 from tempfile import TemporaryDirectory
+from unittest.mock import Mock
 from uuid import uuid4
 from zipfile import ZipFile
 
 import pytest
 
-from nova_generator.application.use_cases.rebuild_anki_package import (
-    AnkiPackageRebuildError,
-    rebuild_didactic_apkg,
-)
-from nova_generator.domain.jobs import Job
-from nova_generator.domain.projects.entities import Cue, Project, utf8_sha256
-from nova_generator.domain.voices import SynthesizedSpeech, VoiceProfile
-from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 from nova_generator.application.use_cases.build_delivery_zip import (
     DeliveryAsset,
     DeliveryError,
     build_delivery_zip,
     verify_didactic_publication,
 )
+from nova_generator.application.use_cases.rebuild_anki_package import (
+    AnkiPackageRebuildError,
+    rebuild_didactic_apkg,
+)
 from nova_generator.domain.exports import ExportCue
+from nova_generator.domain.jobs import Job
+from nova_generator.domain.projects.entities import Cue, Project, utf8_sha256
+from nova_generator.domain.voices import SynthesizedSpeech, VoiceProfile
 from nova_generator.infrastructure.exports.genanki_package_writer import (
     DIDACTIC_DECK_ID,
     DIDACTIC_MODEL_ID,
     DIDACTIC_MODEL_NAME,
     GenankiPackageWriter,
 )
+from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 
 
 def _lesson(index: int) -> dict:
@@ -84,6 +84,10 @@ def test_didactic_apkg_has_same_face_back_and_mini_lesson_as_ihub(tmp_path):
             model = json.loads(
                 connection.execute("SELECT models FROM col").fetchone()[0]
             )
+            decks = json.loads(
+                connection.execute("SELECT decks FROM col").fetchone()[0]
+            )
+    assert str(DIDACTIC_DECK_ID) in decks
     assert len(notes) == 2
     fields = [note[0].split("\x1f") for note in notes]
     assert all(len(item) == 12 for item in fields)
