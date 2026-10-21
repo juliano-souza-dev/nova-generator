@@ -110,7 +110,10 @@ def write_external_structures(
     }
     temporary = path.with_suffix(".tmp")
     try:
-        temporary.write_text(json.dumps(body, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+        temporary.write_text(
+            json.dumps(body, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
