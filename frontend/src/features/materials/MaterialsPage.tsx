@@ -15,7 +15,8 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncStat
 import { PageHeader } from "../../components/PageHeader";
 import { ApiError } from "../../lib/api";
 import { IHubCardPreview } from "./IHubCardPreview";
-import type { JobDetail, MaterialCard } from "../../lib/api.types";
+import { AnkiCardEditor } from "./AnkiCardEditor";
+import type { AnkiDidacticCard, JobDetail, MaterialCard } from "../../lib/api.types";
 import { studioApi } from "../../lib/studio-api";
 import "./materials.css";
 
@@ -52,6 +53,18 @@ export function MaterialsPage() {
   const importMaterial = useMutation({
     mutationFn: (file: File) => studioApi.importExternalMaterials(projectId, file),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["materials-ai-review"] }),
+  });
+  const saveAnkiCard = useMutation({
+    mutationFn: (card: AnkiDidacticCard) =>
+      studioApi.updateAnkiCard(
+        projectId,
+        card.scene_id,
+        card.card_id,
+        card,
+        materialReview.data?.anki_revisions?.[card.scene_id] ?? "",
+      ),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["materials-ai-review", projectId] }),
   });
   const approveMaterial = useMutation({
     mutationFn: (sourceSha256: string) =>
@@ -378,27 +391,28 @@ export function MaterialsPage() {
                       Cards Anki preparados ({materialReview.data?.anki_prepared?.length ?? 0})
                     </h3>
                     <p>
-                      O Anki foi importado como rascunho pedagógico. As sete seções do material
-                      didático continuam independentes e não foram aprovadas automaticamente.
+                      Edite a frente, o verso e a mini-aula diretamente. O contexto original
+                      permanece separado e intacto. Salve cada card antes de gerar os áudios.
                     </p>
-                    <div className="materials-ai-cards">
-                      {materialReview.data?.anki_prepared?.map((card) => (
-                        <article key={`${card.cue_id}:${card.focus_text ?? ""}`}>
-                          <button
-                            type="button"
-                            className="material-card-preview-button"
-                            disabled={!cards.some((item) => item.cue_id === card.cue_id)}
-                            onClick={() => {
-                              setPreviewCueId(card.cue_id);
-                              setPreviewFocusText(card.focus_text ?? null);
-                            }}
-                          >
-                            Ver como no iHub
-                          </button>
-                          <strong>{card.front_en}</strong>
-                          <span>{card.back_pt}</span>
-                          <small>{card.explanation_pt}</small>
-                        </article>
+                    <div className="anki-editor-list">
+                      {materialReview.data?.anki_prepared?.map((card, index) => (
+                        <AnkiCardEditor
+                          key={card.card_id}
+                          card={card}
+                          position={index + 1}
+                          revision={materialReview.data?.anki_revisions?.[card.scene_id] ?? ""}
+                          saving={
+                            saveAnkiCard.isPending &&
+                            saveAnkiCard.variables?.card_id === card.card_id
+                          }
+                          saveError={
+                            saveAnkiCard.isError &&
+                            saveAnkiCard.variables?.card_id === card.card_id
+                              ? saveAnkiCard.error.message
+                              : undefined
+                          }
+                          onSave={(value) => saveAnkiCard.mutate(value)}
+                        />
                       ))}
                     </div>
                   </div>
