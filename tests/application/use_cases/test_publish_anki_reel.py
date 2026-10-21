@@ -224,8 +224,14 @@ def test_didactic_publication_keeps_original_scene_and_separate_audio_per_card(
         }
 
     cards = [
-        card(card_ids[0], "Hello, welcome to the office.", "Olá, bem-vindo ao escritório.", "Hello"),
-        card(card_ids[1], "Hello, meet the partners.", "Olá, conheça os sócios.", "Hello"),
+        card(
+            card_ids[0], "Hello, welcome to the office.",
+            "Olá, bem-vindo ao escritório.", "Hello",
+        ),
+        card(
+            card_ids[1], "Hello, meet the partners.",
+            "Olá, conheça os sócios.", "Hello.",
+        ),
     ]
     # Two lessons can share one source cue while retaining distinct audio.
     current = {item["card_id"]: item for item in cards}
