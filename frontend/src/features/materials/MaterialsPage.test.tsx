@@ -26,6 +26,7 @@ vi.mock("../../lib/studio-api", () => ({
     latestMaterialExport: vi.fn(),
     publishMaterialExport: vi.fn(),
     regenerateFinalMaterials: vi.fn(),
+    rebuildAnkiPackage: vi.fn(),
   },
 }));
 
@@ -489,6 +490,57 @@ describe("MaterialsPage", () => {
     expect(studioApi.exportMaterials).not.toHaveBeenCalled();
     expect(studioApi.exportDidacticAnki).not.toHaveBeenCalled();
     expect(studioApi.prepareMaterialAudio).not.toHaveBeenCalled();
+  });
+
+  it("rebuilds existing didactic APKG with v3 layout without requesting WAVs or reel", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [card], voice_id: null, voice_version: null,
+    });
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "pending", source_sha256: "a".repeat(64), document: null,
+    });
+    const exportData = {
+      job_id: "job-published",
+      status: "succeeded",
+      apkg_url: "/anki.apkg",
+      manifest_url: "/manifest.json",
+      reel_url: "/reel.mp4",
+      hub_final_url: "/hub_final.json",
+      bundle_url: "/kit-completo.zip",
+      youtube_video_id: "bbbbbbbbbbb",
+      anki_layout: "ihub-didactic-v2",
+      can_rebuild_anki: true,
+    };
+    vi.mocked(studioApi.latestMaterialExport).mockResolvedValue(exportData);
+    vi.mocked(studioApi.materialExport).mockResolvedValue(exportData);
+    vi.mocked(studioApi.rebuildAnkiPackage).mockResolvedValue({
+      ...exportData, anki_layout: "ihub-didactic-v3",
+    });
+    mount();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Atualizar modelo do Anki" }),
+    );
+    await waitFor(() => {
+      expect(studioApi.rebuildAnkiPackage).toHaveBeenCalledWith(
+        "project-1", "job-published",
+      );
+    });
+    expect(
+      await screen.findByText("APKG didático atualizado. Importe o novo arquivo no Anki."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Baixar APKG" })).toHaveAttribute(
+      "href", "/anki.apkg?revision=1",
+    );
+    expect(screen.getByRole("link", { name: "Baixar kit completo (ZIP)" })).toHaveAttribute(
+      "href", "/kit-completo.zip?revision=1",
+    );
+    expect(studioApi.exportDidacticAnki).not.toHaveBeenCalled();
+    expect(studioApi.prepareDidacticAnkiAudio).not.toHaveBeenCalled();
+    expect(studioApi.publishMaterialExport).not.toHaveBeenCalled();
   });
 
   it("shows literal approved text, canonical preview, reel interval and submits selection", async () => {
