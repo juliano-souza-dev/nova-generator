@@ -265,14 +265,13 @@ def legacy_to_didactic(
 
     upgraded = []
     for card in proposal.anki_cards:
-        cue = approved_cues.get(str(card.cue_id))
-        if cue is None or (card.front_en, card.back_pt) != cue:
-            continue
+        # Preserve stale source text so the Materials review can flag it.
+        # Never silently drop an imported legacy lesson after editorial edits.
         updated = DidacticAnkiCard(
             card_id=uuid5(proposal.scene_id, f"{card.cue_id}:{card.focus_text}"),
             cue_id=card.cue_id,
-            source_context_en=cue[0],
-            source_context_pt=cue[1],
+            source_context_en=card.front_en,
+            source_context_pt=card.back_pt,
             front_en=card.front_en,
             back_pt=card.back_pt,
             uses_literal_scene_line=True,
