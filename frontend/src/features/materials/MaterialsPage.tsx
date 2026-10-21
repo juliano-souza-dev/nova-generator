@@ -30,6 +30,11 @@ export function MaterialsPage() {
   const [submittingCueIds, setSubmittingCueIds] = useState<string[]>([]);
   const [audioRequestErrors, setAudioRequestErrors] = useState<Record<string, string>>({});
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
+  const [didacticJobIds, setDidacticJobIds] = useState<Record<string, string>>({});
+  const [didacticSubmitting, setDidacticSubmitting] = useState<string[]>([]);
+  const [didacticErrors, setDidacticErrors] = useState<Record<string, string>>({});
+  const [didacticBatchBusy, setDidacticBatchBusy] = useState(false);
+  const didacticInFlight = useRef(new Set<string>());
   const audioRequestsInFlight = useRef(new Set<string>());
   const [youtube, setYoutube] = useState("");
   const [confirmed, setConfirmed] = useState(false);
@@ -50,6 +55,37 @@ export function MaterialsPage() {
     enabled: Boolean(projectId),
     retry: false,
   });
+  const didacticAudio = useQuery({
+    queryKey: ["didactic-anki-audio", projectId, voiceId],
+    queryFn: () => studioApi.didacticAnkiAudioStatus(projectId, voiceId),
+    enabled: Boolean(projectId && voiceId && materialReview.data?.anki_prepared?.length),
+    refetchInterval: (query) =>
+      query.state.data?.cards.some((card) => !card.audio_ready) ? 5000 : false,
+  });
+  const didacticJobEntries = Object.entries(didacticJobIds);
+  const didacticJobQueries = useQueries({
+    queries: didacticJobEntries.map(([, id]) => ({
+      queryKey: ["didactic-anki-job", id],
+      queryFn: () => studioApi.job(id),
+      refetchInterval: (query: { state: { data?: JobDetail } }) =>
+        ACTIVE_AUDIO_JOB_STATES.has(query.state.data?.status ?? "") ? 3000 : false,
+    })),
+  });
+  const didacticJobsByCard = Object.fromEntries(
+    didacticJobEntries.map(([cardId], index) => [
+      cardId,
+      didacticJobQueries[index]?.data,
+    ]),
+  );
+  const didacticCompletedJobs = Object.values(didacticJobsByCard)
+    .filter((job) => job?.status === "succeeded")
+    .map((job) => job!.id)
+    .join("|");
+  useEffect(() => {
+    if (didacticCompletedJobs) {
+      void client.invalidateQueries({ queryKey: ["didactic-anki-audio", projectId] });
+    }
+  }, [client, didacticCompletedJobs, projectId]);
   const importMaterial = useMutation({
     mutationFn: (file: File) => studioApi.importExternalMaterials(projectId, file),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["materials-ai-review"] }),
@@ -134,6 +170,14 @@ export function MaterialsPage() {
       setConfirmed(false);
     },
   });
+  const exportDidactic = useMutation({
+    mutationFn: () => studioApi.exportDidacticAnki(projectId, voiceId),
+    onSuccess: (result) => {
+      setExportJobId(result.job_id);
+      setYoutube("");
+      setConfirmed(false);
+    },
+  });
   const publication = useMutation({
     mutationFn: () => studioApi.publishMaterialExport(projectId, activeExportId!, youtube.trim()),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["material-export", projectId] }),
@@ -166,6 +210,11 @@ export function MaterialsPage() {
   const sceneGroups = [...cardsByScene.entries()];
   const previewIndex = cards.findIndex((card) => card.cue_id === previewCueId);
   const previewCard = previewIndex >= 0 ? cards[previewIndex] : null;
+  const didacticCards = materialReview.data?.anki_prepared ?? [];
+  const didacticAudioReady =
+    didacticCards.length > 0 &&
+    didacticAudio.data?.cards.length === didacticCards.length &&
+    didacticAudio.data.cards.every((item) => item.audio_ready);
   const pedagogicalCards =
     materialReview.data?.document?.anki_cards ?? materialReview.data?.anki_prepared ?? [];
   const previewPedagogical =
@@ -183,6 +232,45 @@ export function MaterialsPage() {
   const contextKey = `${projectId}:${voiceId}`;
   const audioContext = useRef(contextKey);
   audioContext.current = contextKey;
+
+  async function prepareDidactic(cardId: string): Promise<void> {
+    if (!voiceId || didacticInFlight.current.has(cardId)) return;
+    const existing = didacticJobsByCard[cardId];
+    if (existing && ACTIVE_AUDIO_JOB_STATES.has(existing.status)) return;
+    didacticInFlight.current.add(cardId);
+    setDidacticSubmitting((all) => [...all, cardId]);
+    setDidacticErrors((errors) => ({ ...errors, [cardId]: "" }));
+    try {
+      const job = await studioApi.prepareDidacticAnkiAudio(projectId, cardId, voiceId);
+      setDidacticJobIds((jobs) => ({ ...jobs, [cardId]: job.id }));
+    } catch (error) {
+      setDidacticErrors((errors) => ({
+        ...errors,
+        [cardId]: error instanceof Error ? error.message : "Falha ao preparar WAV",
+      }));
+    } finally {
+      didacticInFlight.current.delete(cardId);
+      setDidacticSubmitting((all) => all.filter((id) => id !== cardId));
+    }
+  }
+
+  async function prepareAllDidactic(): Promise<void> {
+    if (!voiceId || didacticBatchBusy) return;
+    setDidacticBatchBusy(true);
+    try {
+      for (const card of didacticCards) {
+        if (
+          !didacticAudio.data?.cards.some(
+            (item) => item.card_id === card.card_id && item.audio_ready,
+          )
+        ) {
+          await prepareDidactic(card.card_id);
+        }
+      }
+    } finally {
+      setDidacticBatchBusy(false);
+    }
+  }
 
   function canPrepareAudio(card: MaterialCard): boolean {
     const jobId = audioJobIds[card.cue_id];
@@ -394,6 +482,32 @@ export function MaterialsPage() {
                       Edite a frente, o verso e a mini-aula diretamente. O contexto original
                       permanece separado e intacto. Salve cada card antes de gerar os áudios.
                     </p>
+                    <div className="materials-didactic-audio panel">
+                      <strong>Áudio exclusivo dos cards didáticos</strong>
+                      <span>
+                        {didacticAudio.data?.cards.filter((item) => item.audio_ready).length ?? 0}
+                        /{didacticCards.length} WAVs prontos
+                      </span>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={!voiceId || !!voiceReferenceError || didacticBatchBusy}
+                        onClick={() => void prepareAllDidactic()}
+                      >
+                        {didacticBatchBusy ? "Enfileirando…" : "Preparar áudios dos cards"}
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={
+                          !voiceId || !didacticAudioReady || exportDidactic.isPending
+                        }
+                        onClick={() => exportDidactic.mutate()}
+                      >
+                        <Download aria-hidden="true" /> Exportar Anki didático
+                      </button>
+                      {exportDidactic.error && <span role="alert">{exportDidactic.error.message}</span>}
+                    </div>
                     <div className="anki-editor-list">
                       {materialReview.data?.anki_prepared?.map((card, index) => (
                         <AnkiCardEditor
@@ -409,6 +523,29 @@ export function MaterialsPage() {
                             saveAnkiCard.isError &&
                             saveAnkiCard.variables?.card_id === card.card_id
                               ? saveAnkiCard.error.message
+                              : undefined
+                          }
+                          audioReady={didacticAudio.data?.cards.some(
+                            (item) => item.card_id === card.card_id && item.audio_ready,
+                          )}
+                          audioUrl={didacticAudio.data?.cards.find(
+                            (item) => item.card_id === card.card_id,
+                          )?.audio_url}
+                          audioBusy={
+                            didacticSubmitting.includes(card.card_id) ||
+                            ACTIVE_AUDIO_JOB_STATES.has(
+                              didacticJobsByCard[card.card_id]?.status ?? "",
+                            )
+                          }
+                          audioError={
+                            didacticErrors[card.card_id] ||
+                            (didacticJobsByCard[card.card_id]?.status === "failed"
+                              ? didacticJobsByCard[card.card_id]?.error_message ?? "Falha no WAV"
+                              : undefined)
+                          }
+                          onAudio={
+                            voiceId && !voiceReferenceError
+                              ? () => void prepareDidactic(card.card_id)
                               : undefined
                           }
                           onSave={(value) => saveAnkiCard.mutate(value)}
@@ -506,7 +643,7 @@ export function MaterialsPage() {
           </Link>
         </section>
       )}
-      {cards.length > 0 && unprepared.length === 0 && (
+      {cards.length > 0 && unprepared.length === 0 && didacticCards.length === 0 && (
         <>
           <section className="materials-workbench panel" aria-label="Filtrar cards">
             <label className="materials-search">
@@ -640,7 +777,7 @@ export function MaterialsPage() {
             retry={() => void latestExport.refetch()}
           />
         )}
-      {cards.length > 0 && unprepared.length === 0 && (
+      {cards.length > 0 && unprepared.length === 0 && didacticCards.length === 0 && (
         <section className="materials-export panel" aria-label="Exportação Anki">
           <div>
             <h2>Exportar Anki</h2>
