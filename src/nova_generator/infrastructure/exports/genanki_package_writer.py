@@ -9,14 +9,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from nova_generator.domain.exports import ExportCue
+from nova_generator.domain.exports import DIDACTIC_LAYOUT, ExportCue
 
 # A new Anki model ID is essential. Anki keeps the template of previously
 # imported model IDs, even if a future APKG includes changed HTML/CSS.
 DIDACTIC_MODEL_ID = 1607392323
 DIDACTIC_MODEL_NAME = "iHub English · Didactic v3"
 DIDACTIC_DECK_ID = 2059400111
-DIDACTIC_LAYOUT = "ihub-didactic-v3"
 
 _DIDACTIC_CSS = """
 /* Offline iHub card. No remote fonts, scripts, or network resources. */
