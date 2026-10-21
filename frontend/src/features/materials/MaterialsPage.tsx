@@ -152,9 +152,9 @@ export function MaterialsPage() {
   const sceneGroups = [...cardsByScene.entries()];
   const previewIndex = cards.findIndex((card) => card.cue_id === previewCueId);
   const previewCard = previewIndex >= 0 ? cards[previewIndex] : null;
-  const previewPedagogical = materialReview.data?.document?.anki_cards.find(
-    (card) => card.cue_id === previewCueId,
-  );
+  const previewPedagogical =
+    materialReview.data?.document?.anki_cards.find((card) => card.cue_id === previewCueId) ??
+    materialReview.data?.anki_prepared?.find((card) => card.cue_id === previewCueId);
   const ready =
     selected.length > 0 && selected.every((card) => card.audio_ready && card.editorial_ready);
   const selectedVisible = visibleCards.filter((card) => card.included);
@@ -321,8 +321,8 @@ export function MaterialsPage() {
               <span className="eyebrow">Preparação pedagógica</span>
               <h2>Conteúdo pedagógico da IA externa</h2>
               <p>
-                O contrato inclui sete seções didáticas, exercícios com respostas e cards Anki. Essa
-                etapa complementar é independente da síntese de voz e da exportação Anki.
+                Importe o JSON Anki preparado na primeira etapa ou o material didático completo
+                com sete seções e exercícios. O Anki não precisa ser gerado novamente.
               </p>
             </div>
           </div>
@@ -343,7 +343,7 @@ export function MaterialsPage() {
                   <Download aria-hidden="true" /> Baixar contrato para IA externa
                 </a>
                 <label className="materials-ai-import">
-                  Importar conteúdo produzido (.json)
+                  Importar Anki ou material pedagógico (.json)
                   <input
                     type="file"
                     accept=".json,application/json"
@@ -360,9 +360,46 @@ export function MaterialsPage() {
                     ? "Material aprovado"
                     : materialReview.data?.status === "draft"
                       ? "Aguardando revisão"
-                      : "Aguardando conteúdo"}
+                      : materialReview.data?.anki_prepared?.length
+                        ? "Anki preparado; material didático pendente"
+                        : "Aguardando conteúdo"}
                 </strong>
               </div>
+              {Boolean(materialReview.data?.anki_prepared?.length) &&
+                !materialReview.data?.document && (
+                  <div className="materials-ai-review" aria-label="Anki preparado">
+                    <h3>
+                      Cards Anki preparados ({materialReview.data?.anki_prepared?.length ?? 0})
+                    </h3>
+                    <p>
+                      O Anki foi importado como rascunho pedagógico. As sete seções do material
+                      didático continuam independentes e não foram aprovadas automaticamente.
+                    </p>
+                    <div className="materials-ai-cards">
+                      {materialReview.data?.anki_prepared?.map((card) => (
+                        <article key={card.cue_id}>
+                          <button
+                            type="button"
+                            className="material-card-preview-button"
+                            disabled={!cards.some((item) => item.cue_id === card.cue_id)}
+                            onClick={() => setPreviewCueId(card.cue_id)}
+                          >
+                            Ver como no iHub
+                          </button>
+                          <strong>{card.front_en}</strong>
+                          <span>{card.back_pt}</span>
+                          <small>{card.explanation_pt}</small>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              {Boolean(materialReview.data?.anki_needs_review) && (
+                <p role="alert">
+                  {materialReview.data?.anki_needs_review} cards Anki precisam de revisão,
+                  pois a frase ou o identificador foi alterado no Editorial.
+                </p>
+              )}
               {materialReview.data?.document && (
                 <div className="materials-ai-review">
                   <h3>{materialReview.data.document.title}</h3>
