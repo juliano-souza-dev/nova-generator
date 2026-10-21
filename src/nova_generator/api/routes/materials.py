@@ -220,6 +220,7 @@ def _cue_is_editorially_prepared(cue: Cue, words: list[WordTiming]) -> bool:
         in {
             "nova-generator-editorial-suggestions/1.3",
             "nova-generator-editorial-suggestions/1.4",
+            "nova-generator-editorial-suggestions/1.5",
         }
         and all(
             (
