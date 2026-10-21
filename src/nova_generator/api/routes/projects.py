@@ -3,12 +3,16 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, Field
 
 from nova_generator.api.dependencies import get_inspect_youtube_source, get_manage_projects
 from nova_generator.application.ports.youtube_metadata_inspector import YoutubeSourceUnavailable
 from nova_generator.application.use_cases.inspect_youtube_source import InspectYoutubeSource
+from nova_generator.application.use_cases.import_ihub_cut import (
+    MAX_EXPORT_BYTES,
+    extract_ihub_video_cut,
+)
 from nova_generator.application.use_cases.manage_projects import (
     ManagedProject,
     ManageProjects,
@@ -79,6 +83,31 @@ def create_project(
     use_case: Annotated[ManageProjects, Depends(get_manage_projects)],
 ) -> ProjectResponse:
     return _execute(lambda: _response(use_case.create(**payload.model_dump())))
+
+
+@router.post(
+    "/from-ihub", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_project_from_ihub(
+    file: Annotated[UploadFile, File(description="JSON exportado pelo iHub")],
+    use_case: Annotated[ManageProjects, Depends(get_manage_projects)],
+) -> ProjectResponse:
+    """Make a completely fresh project, copying only the YouTube source and scene window."""
+    raw = await file.read(MAX_EXPORT_BYTES + 1)
+    try:
+        cut = extract_ihub_video_cut(raw)
+    except ProjectCommandError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return _execute(
+        lambda: _response(
+            use_case.create(
+                title=None,
+                content_type="dialogue",
+                youtube_url=cut.youtube_url,
+                initial_cut=(cut.start_ms, cut.end_ms),
+            )
+        )
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
