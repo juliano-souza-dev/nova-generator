@@ -19,6 +19,10 @@ from nova_generator.application.ports.editorial_assistant import (
     EditorialWordTranslation,
 )
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
+from nova_generator.application.use_cases.anki_proposal import (
+    AnkiProposal as _ExternalAnkiProposal,
+    validate_anki_cards,
+)
 from nova_generator.application.use_cases.editorial_assistance import (
     EditorialAssistanceError,
     build_editorial_prompt,
@@ -94,32 +98,6 @@ ANKI_FIELDS = (
     "cue_id", "front_en", "back_pt", "card_type", "focus_text", "meaning",
     "marked_en", "marked_pt", "explanation_pt", "example_en", "example_pt", "tags",
 )
-
-
-class _ExternalAnkiCard(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    cue_id: UUID
-    front_en: str = Field(min_length=1)
-    back_pt: str = Field(min_length=1)
-    card_type: str = Field(min_length=1, max_length=80)
-    focus_text: str = Field(min_length=1, max_length=255)
-    meaning: str = Field(min_length=1, max_length=500)
-    marked_en: str = Field(min_length=1, max_length=255)
-    marked_pt: str = Field(min_length=1, max_length=255)
-    explanation_pt: str = Field(min_length=1, max_length=3000)
-    example_en: str = Field(min_length=1, max_length=1500)
-    example_pt: str = Field(min_length=1, max_length=1500)
-    tags: list[str] = Field(max_length=12)
-
-
-class _ExternalAnkiProposal(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    contract: Literal["nova-generator-anki-proposal/1.0"]
-    scene_id: UUID
-    input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    anki_cards: list[_ExternalAnkiCard] = Field(min_length=1, max_length=50)
 
 
 class ExternalEditorialExchange:
@@ -443,25 +421,14 @@ class ExternalEditorialExchange:
             if prepared_anki.scene_id != scene_id or prepared_anki.input_sha256 != source_hash:
                 raise EditorialAssistanceError("Anki result belongs to another or stale scene")
             editorial_by_id = {
-                item.cue_id: item
+                item.cue_id: (item.approved_en, item.approved_pt)
                 for document, _payload in documents.values()
                 for item in document.suggestions
             }
-            seen_cards: set[str] = set()
-            for card in prepared_anki.anki_cards:
-                card_id = str(card.cue_id)
-                if card_id not in originals or card_id in seen_cards:
-                    raise EditorialAssistanceError(f"Anki cue_id missing or repeated: {card_id}")
-                seen_cards.add(card_id)
-                approved = editorial_by_id[card_id]
-                if card.front_en != approved.approved_en or card.back_pt != approved.approved_pt:
-                    raise EditorialAssistanceError(
-                        f"Anki card {card_id} must match the same batch's approved EN/PT literally"
-                    )
-                if card.marked_en.casefold() not in card.front_en.casefold():
-                    raise EditorialAssistanceError(f"Anki card {card_id} has invalid marked_en")
-                if card.marked_pt.casefold() not in card.back_pt.casefold():
-                    raise EditorialAssistanceError(f"Anki card {card_id} has invalid marked_pt")
+            try:
+                validate_anki_cards(prepared_anki, editorial_by_id)
+            except ValueError as error:
+                raise EditorialAssistanceError(str(error)) from error
         first = validated_chunks[0]
         combined = EditorialAssistanceResult(
             scene_id=str(scene_id),
