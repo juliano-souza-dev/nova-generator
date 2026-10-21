@@ -497,7 +497,10 @@ class ExternalEditorialExchange:
             (manifest_path.parent / f"scene-{scene_id}-{chunk['id']}-external-result.json"
             ).write_bytes(content)
         if prepared_anki is not None:
-            destination = self._project_root / str(project_id) / "materials" / "anki-prepared.json"
+            destination = (
+                self._project_root / str(project_id) / "materials"
+                / f"anki-prepared-{scene_id}.json"
+            )
             destination.parent.mkdir(parents=True, exist_ok=True)
             content = prepared_anki.model_dump_json(indent=2)
             temporary = destination.with_suffix(".tmp")
