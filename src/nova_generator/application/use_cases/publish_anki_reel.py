@@ -294,52 +294,6 @@ class PublishAnkiReel:
                 str(card["card_id"]) for card in snapshots
             ]
 
-        # The external AI selected English in Context independently from Anki.
-        # Include its original source cues even when they are not Anki cards.
-        if external_context:
-            try:
-                context_rows = (
-                    [(editorial_by_id[cue_id][0], row)
-                     for cue_id, row in by_source.items()]
-                    if didactic
-                    else [
-                        (cue, row)
-                        for (cue, _words), row in zip(
-                            publication_rows, base["cues"], strict=True
-                        )
-                    ]
-                )
-                included = {cue.id for cue, _row in context_rows}
-                for cue in context_cues:
-                    if cue.id in included:
-                        continue
-                    context_rows.append((
-                        cue,
-                        _context_only_cue_row(
-                            cue, self._repository.get_cue_words(cue.id),
-                            source_times[str(cue.id)], timeline_origin,
-                        ),
-                    ))
-                # Cue IDs can change on split/merge, but original word IDs
-                # ensure each pedagogical focus remains on its source passage.
-                context_rows.sort(key=lambda pair: (
-                    pair[1]["start"], pair[1]["end"]
-                ))
-                source_order = {}
-                for order, (cue, row) in enumerate(context_rows, 1):
-                    row["order"] = order
-                    source_order[str(cue.id)] = order
-                base["cues"] = [row for _cue, row in context_rows]
-                base["wbw_practices"] = publish_external_structures(
-                    practices=external_context,
-                    source_rows=context_rows,
-                    repository=self._repository,
-                )
-            except (StructuresInContextError, OSError, ValueError) as error:
-                raise AnkiPublicationError(
-                    f"English in Context: {error}"
-                ) from error
-
         document = add_manual_youtube_anki_audio(
             base, youtube_video_id=video.video_id, export=export
         )
@@ -349,10 +303,6 @@ class PublishAnkiReel:
             ):
                 timeline["card_key"] = f"anki-{card['card_id']}"
                 timeline["source_cue_order"] = source_order[str(card["cue_id"])]
-        elif external_context:
-            # Legacy reels use cue_order directly rather than card_key.
-            for timeline, cue in zip(document["ankiAudio"]["cues"], cues, strict=True):
-                timeline["cue_order"] = source_order[str(cue.id)]
         if shadowing_transport.plans:
             try:
                 attach_approved_shadowing(
@@ -377,6 +327,65 @@ class PublishAnkiReel:
                 )
             except ShadowingPublicationError as error:
                 raise AnkiPublicationError(str(error)) from error
+        if external_context:
+            # Publish all AI-selected Context cues AFTER Shadowing has synchronized
+            # its own source cues. Neither stage is allowed to discard the other.
+            try:
+                if shadowing_transport.plans:
+                    published_ids = document["generator"]["source_cue_ids"]
+                elif didactic:
+                    published_ids = list(by_source)
+                else:
+                    published_ids = [str(cue.id) for cue in cues]
+                cue_by_id = {str(cue.id): cue for cue in all_cues}
+                context_rows = [
+                    (cue_by_id[cue_id], row)
+                    for cue_id, row in zip(
+                        published_ids, document["cues"], strict=True
+                    )
+                ]
+                included = {cue.id for cue, _row in context_rows}
+                for cue in context_cues:
+                    if cue.id not in included:
+                        context_rows.append((
+                            cue,
+                            _context_only_cue_row(
+                                cue, self._repository.get_cue_words(cue.id),
+                                source_times[str(cue.id)], timeline_origin,
+                            ),
+                        ))
+                context_rows.sort(key=lambda pair: (
+                    pair[1]["start"], pair[1]["end"]
+                ))
+                final_order = {}
+                for order, (cue, row) in enumerate(context_rows, 1):
+                    row["order"] = order
+                    final_order[str(cue.id)] = order
+                document["cues"] = [row for _cue, row in context_rows]
+                document["generator"]["source_cue_ids"] = [
+                    str(cue.id) for cue, _row in context_rows
+                ]
+                if didactic:
+                    for timeline, card in zip(
+                        document["ankiAudio"]["cues"],
+                        job.input["anki_cards"], strict=True,
+                    ):
+                        timeline["source_cue_order"] = final_order[str(card["cue_id"])]
+                else:
+                    for timeline, cue in zip(
+                        document["ankiAudio"]["cues"], cues, strict=True
+                    ):
+                        timeline["cue_order"] = final_order[str(cue.id)]
+                document["wbw_practices"] = publish_external_structures(
+                    practices=external_context,
+                    source_rows=context_rows,
+                    repository=self._repository,
+                )
+            except (StructuresInContextError, OSError, ValueError) as error:
+                raise AnkiPublicationError(
+                    f"English in Context: {error}"
+                ) from error
+
         validate_anki_audio(document)
         path = self.publication_path(project_id, job.id)
         if path.is_file():
