@@ -28,6 +28,7 @@ def _suggestion(word_ids=None, expression="What's the point?"):
             "type": "expression",
             "word_ids": ids,
             "expression_en": expression,
+            "highlight": expression,
             "meaning_pt": "Qual é o sentido?",
             "explanation_pt": "Pergunta pelo propósito de uma ação.",
             "example_en": "What's the point of arguing?",
@@ -42,6 +43,7 @@ def test_preparation_preserves_external_ai_mini_lesson_and_stable_ids():
     assert len(prepared) == 1
     assert prepared[0]["word_ids"] == ["word-1", "word-2", "word-3"]
     assert prepared[0]["expression_en"] == "What's the point?"
+    assert prepared[0]["highlight"] == "What's the point?"
     assert prepared[0]["meaning_pt"] == "Qual é o sentido?"
     assert prepared[0]["explanation_pt"] == "Pergunta pelo propósito de uma ação."
     assert prepared[0]["example_en"] == "What's the point of arguing?"
@@ -87,3 +89,17 @@ def test_context_snapshot_survives_a_save_and_reload(tmp_path):
     document = json.loads(path.read_text(encoding="utf-8"))
     assert document["contract"] == "nova-generator-english-in-context/1.0"
     assert document["input_sha256"] == "a" * 64
+
+
+def test_rejects_highlight_that_is_not_the_exact_selected_expression():
+    suggestion = _suggestion()
+    suggestion["context_practices"][0]["highlight"] = "the point"
+    with pytest.raises(StructuresInContextError, match="highlight"):
+        prepare_external_structures([suggestion])
+
+
+def test_legacy_context_without_highlight_still_uses_expression():
+    suggestion = _suggestion()
+    suggestion["context_practices"][0].pop("highlight")
+    result = prepare_external_structures([suggestion])
+    assert result[0]["highlight"] == "What's the point?"
