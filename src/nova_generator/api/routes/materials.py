@@ -155,6 +155,20 @@ def _export_job(project_id: UUID, job_id: UUID, jobs: GetJob):
     return job
 
 
+def _has_complete_anki_layout(job_id: UUID, *, didactic: bool) -> bool:
+    if not didactic:
+        return True
+    manifest_path = (
+        get_settings().media_cache_root / "exports" / str(job_id)
+        / "anki-audio-manifest.json"
+    )
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return payload.get("card_layout") == "ihub-didactic-v2"
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 def _publication_document(project_id: UUID, job_id: UUID) -> dict | None:
     path = _publisher().publication_path(project_id, job_id)
     if not path.is_file():
@@ -620,7 +634,13 @@ def get_material_export(
         manifest_url=f"{base}/anki-audio-manifest.json" if job.status == "succeeded" else None,
         reel_url=f"{base}/anki-reel.mp4" if job.status == "succeeded" else None,
         hub_final_url=f"{base}/hub_final.json" if publication else None,
-        bundle_url=f"{base}/kit-completo.zip" if publication else None,
+        bundle_url=(
+            f"{base}/kit-completo.zip"
+            if publication and _has_complete_anki_layout(
+                job_id, didactic=job.input.get("mode") == "didactic"
+            )
+            else None
+        ),
         youtube_video_id=publication["ankiAudio"]["youtube"]["video_id"] if publication else None,
     )
 
@@ -698,6 +718,14 @@ def download_complete_delivery(
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if manifest.get("schema") != "nova-generator-anki-audio":
             raise DeliveryError("Manifesto do reel incompatível com a entrega.")
+        if (
+            job.input.get("mode") == "didactic"
+            and manifest.get("card_layout") != "ihub-didactic-v2"
+        ):
+            raise DeliveryError(
+                "APKG gerado no formato antigo: exporte novamente o Anki didático "
+                "para incluir frente, verso e mini-aula iguais ao iHub."
+            )
         apkg_sha = manifest["apkg_sha256"]
         reel_sha = manifest["reel_sha256"]
         if not all(isinstance(value, str) and len(value) == 64
@@ -744,10 +772,13 @@ def download_complete_delivery(
         [(str(card["card_id"]), str(card["front_en"])) for card in cards]
         if cards is not None
         else [
-            (str(cue_id), repository.get_cue(UUID(str(cue_id))).approved_en)
-            for cue_id in job.input["cue_ids"]
+            (str(cue.id), cue.approved_en)
+            for raw_id in job.input["cue_ids"]
+            if (cue := repository.get_cue(UUID(str(raw_id)))) is not None
         ]
     )
+    if len(records) != len(job.input["cue_ids"]):
+        raise HTTPException(409, detail="Uma das cues originais não está disponível.")
     for card_id, sentence in records:
         speech = cache.find(cache.cache_key(
             text=sentence, profile=snapshot, parameters={}
