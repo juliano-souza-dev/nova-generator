@@ -20,7 +20,10 @@ from nova_generator.application.ports.editorial_assistant import (
 )
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.use_cases.anki_proposal import AnkiProposal as _ExternalAnkiProposal
-from nova_generator.application.use_cases.anki_proposal import validate_anki_cards
+from nova_generator.application.use_cases.anki_proposal import (
+    reconcile_anki_proposal,
+    validate_anki_cards,
+)
 from nova_generator.application.use_cases.editorial_assistance import (
     EditorialAssistanceError,
     build_editorial_prompt,
@@ -462,6 +465,16 @@ class ExternalEditorialExchange:
             (manifest_path.parent / f"scene-{scene_id}-{chunk['id']}-external-result.json"
             ).write_bytes(content)
         if prepared_anki is not None:
+            # The 1.5 editorial import may replace original cue IDs during merges.
+            # Rebind its pedagogical drafts against the new persisted scene.
+            # If reconciliation is ambiguous, retain the original proposal for
+            # manual review rather than deleting it or fabricating a cue match.
+            try:
+                prepared_anki = reconcile_anki_proposal(
+                    prepared_anki, self._repository.get_scene_cues(scene_id)
+                )
+            except ValueError:
+                pass
             destination = (
                 self._project_root / str(project_id) / "materials"
                 / f"anki-prepared-{scene_id}.json"

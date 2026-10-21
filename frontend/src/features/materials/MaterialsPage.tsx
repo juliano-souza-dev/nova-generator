@@ -33,6 +33,7 @@ export function MaterialsPage() {
   const [youtube, setYoutube] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [previewCueId, setPreviewCueId] = useState<string | null>(null);
+  const [previewFocusText, setPreviewFocusText] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<MaterialStatus | "all">("all");
   const client = useQueryClient();
@@ -152,9 +153,14 @@ export function MaterialsPage() {
   const sceneGroups = [...cardsByScene.entries()];
   const previewIndex = cards.findIndex((card) => card.cue_id === previewCueId);
   const previewCard = previewIndex >= 0 ? cards[previewIndex] : null;
+  const pedagogicalCards =
+    materialReview.data?.document?.anki_cards ?? materialReview.data?.anki_prepared ?? [];
   const previewPedagogical =
-    materialReview.data?.document?.anki_cards.find((card) => card.cue_id === previewCueId) ??
-    materialReview.data?.anki_prepared?.find((card) => card.cue_id === previewCueId);
+    pedagogicalCards.find(
+      (card) =>
+        card.cue_id === previewCueId &&
+        (!previewFocusText || card.focus_text === previewFocusText),
+    ) ?? pedagogicalCards.find((card) => card.cue_id === previewCueId);
   const ready =
     selected.length > 0 && selected.every((card) => card.audio_ready && card.editorial_ready);
   const selectedVisible = visibleCards.filter((card) => card.included);
@@ -377,12 +383,15 @@ export function MaterialsPage() {
                     </p>
                     <div className="materials-ai-cards">
                       {materialReview.data?.anki_prepared?.map((card) => (
-                        <article key={card.cue_id}>
+                        <article key={`${card.cue_id}:${card.focus_text ?? ""}`}>
                           <button
                             type="button"
                             className="material-card-preview-button"
                             disabled={!cards.some((item) => item.cue_id === card.cue_id)}
-                            onClick={() => setPreviewCueId(card.cue_id)}
+                            onClick={() => {
+                              setPreviewCueId(card.cue_id);
+                              setPreviewFocusText(card.focus_text ?? null);
+                            }}
                           >
                             Ver como no iHub
                           </button>
@@ -420,12 +429,15 @@ export function MaterialsPage() {
                   <h4>Cards Anki gerados ({materialReview.data.document.anki_cards.length})</h4>
                   <div className="materials-ai-cards">
                     {materialReview.data.document.anki_cards.map((card) => (
-                      <article key={card.cue_id}>
+                      <article key={`${card.cue_id}:${card.focus_text ?? ""}`}>
                         <button
                           type="button"
                           className="material-card-preview-button"
                           disabled={!cards.some((item) => item.cue_id === card.cue_id)}
-                          onClick={() => setPreviewCueId(card.cue_id)}
+                          onClick={() => {
+                              setPreviewCueId(card.cue_id);
+                              setPreviewFocusText(card.focus_text ?? null);
+                            }}
                         >
                           Ver como no iHub
                         </button>
@@ -635,11 +647,14 @@ export function MaterialsPage() {
       )}
       {previewCard && (
         <IHubCardPreview
-          key={previewCard.cue_id}
+          key={`${previewCard.cue_id}:${previewFocusText ?? ""}`}
           card={{ ...previewCard, pedagogical: previewPedagogical }}
           position={previewIndex + 1}
           total={cards.length}
-          onClose={() => setPreviewCueId(null)}
+          onClose={() => {
+            setPreviewCueId(null);
+            setPreviewFocusText(null);
+          }}
           onPrevious={
             previewIndex > 0 ? () => setPreviewCueId(cards[previewIndex - 1].cue_id) : undefined
           }
