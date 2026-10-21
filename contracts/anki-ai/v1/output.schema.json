@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://immersionhub.local/contracts/anki-ai/v1/output.schema.json",
+  "title": "Nova Generator Anki draft from initial external AI package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "scene_id",
+    "input_sha256",
+    "anki_cards"
+  ],
+  "properties": {
+    "contract": {
+      "const": "nova-generator-anki-proposal/1.0"
+    },
+    "scene_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "anki_cards": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cue_id",
+          "front_en",
+          "back_pt",
+          "card_type",
+          "focus_text",
+          "meaning",
+          "marked_en",
+          "marked_pt",
+          "explanation_pt",
+          "example_en",
+          "example_pt",
+          "tags"
+        ],
+        "properties": {
+          "cue_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "front_en": {
+            "type": "string",
+            "minLength": 1
+          },
+          "back_pt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "card_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "focus_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "meaning": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "marked_en": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "marked_pt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "explanation_pt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3000
+          },
+          "example_en": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1500
+          },
+          "example_pt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1500
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}
