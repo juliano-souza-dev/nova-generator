@@ -39,12 +39,14 @@ export function AnkiCardEditor({
   position,
   saving,
   saveError,
+  revision,
   onSave,
 }: {
   card: AnkiDidacticCard;
   position: number;
   saving: boolean;
   saveError?: string;
+  revision: string;
   onSave: (card: AnkiDidacticCard) => void;
 }) {
   const [draft, setDraft] = useState(card);
@@ -52,8 +54,12 @@ export function AnkiCardEditor({
   const [validation, setValidation] = useState("");
 
   useEffect(() => {
-    if (!dirty) setDraft(card);
-  }, [card, dirty]);
+    setDraft(card);
+    setDirty(false);
+    setValidation("");
+    // A new revision is received only when the server has saved the card.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card.card_id, revision]);
 
   function update<K extends keyof AnkiDidacticCard>(field: K, value: AnkiDidacticCard[K]) {
     setDraft((previous) => ({ ...previous, [field]: value }));
