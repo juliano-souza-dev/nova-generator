@@ -1,6 +1,6 @@
 from nova_generator.domain.exports.anki_reel import (
-    AnkiAudioExport,
     DIDACTIC_LAYOUT,
+    AnkiAudioExport,
     ExportCue,
     ReelInterval,
 )
