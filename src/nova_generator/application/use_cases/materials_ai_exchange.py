@@ -14,7 +14,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.use_cases.anki_proposal import (
     AnkiProposal,
+    DidacticAnkiCard,
+    DidacticAnkiProposal,
+    legacy_to_didactic,
     reconcile_anki_proposal,
+    reconcile_didactic_proposal,
+    validate_didactic_cards,
 )
 from nova_generator.application.use_cases.editorial_assistance import build_editorial_prompt
 
@@ -138,9 +143,17 @@ class MaterialsAiExchange:
         found_draft = False
         for scene in scenes:
             prepared = self._read(project_id, f"anki-prepared-{scene['scene_id']}.json")
-            if not prepared or prepared.get("contract") != "nova-generator-anki-proposal/1.0":
+            if not prepared or prepared.get("contract") not in {
+                "nova-generator-anki-proposal/1.0", "nova-generator-anki-proposal/2.0"
+            }:
                 continue
             found_draft = True
+            if prepared["contract"] == "nova-generator-anki-proposal/1.0":
+                prepared = legacy_to_didactic(
+                    AnkiProposal.model_validate_json(json.dumps(prepared)),
+                    {cue_id: (cue["approved_en"], cue["approved_pt"])
+                     for cue_id, cue in available.items()},
+                ).model_dump(mode="json")
             candidates = prepared.get("anki_cards", [])
             if not isinstance(candidates, list):
                 continue
@@ -151,8 +164,8 @@ class MaterialsAiExchange:
                 approved = available.get(card.get("cue_id"))
                 if (
                     approved is not None
-                    and card.get("front_en") == approved["approved_en"]
-                    and card.get("back_pt") == approved["approved_pt"]
+                    and card.get("source_context_en") == approved["approved_en"]
+                    and card.get("source_context_pt") == approved["approved_pt"]
                 ):
                     prepared_cards.append(card)
                 else:
@@ -174,14 +187,16 @@ class MaterialsAiExchange:
                 "policy": (
                     "Gere texto pedagógico real para cada seção, incluindo "
                     "exercícios com respostas. "
-                    "Os cards Anki devem usar cue_id existentes, e front_en/back_pt precisam "
-                    "ser idênticos ao texto EN/PT aprovado. Se source.anki_prepared estiver "
+                    "Os cards Anki devem usar cue_id existentes. source_context_en e "
+                    "source_context_pt preservam literalmente a fala aprovada; front_en "
+                    "e back_pt devem ensinar uma estrutura em frases didáticas naturais, "
+                    "não repetir automaticamente a legenda. Se source.anki_prepared estiver "
                     "presente, reutilize essas mini-aulas já preparadas no primeiro pacote "
                     "e não as gere novamente. Cards com cue alterada exigem revisão. "
                     "Inclua card_type, focus_text, "
                     "meaning, marked_en, marked_pt, explanation_pt, example_en e example_pt "
                     "para reproduzir a mini lesson do iHub. O marked_en/marked_pt deve existir "
-                    "literalmente na frase aprovada; os exemplos devem ter EN e PT. "
+                    "respectivamente em front_en e back_pt; os exemplos devem ter EN e PT. "
                     "Não altere IDs ou tempos. "
                     "Retorne apenas JSON validado pelo contrato de saída."
                 ),
@@ -192,9 +207,10 @@ class MaterialsAiExchange:
         """Import the Anki-only proposal without pretending it is a seven-section workbook."""
         try:
             # Strict Pydantic models accept UUID strings through JSON parsing.
-            proposal = AnkiProposal.model_validate_json(
-                json.dumps(data, ensure_ascii=False)
-            )
+            is_didactic = data.get("contract") == "nova-generator-anki-proposal/2.0"
+            proposal = (
+                DidacticAnkiProposal if is_didactic else AnkiProposal
+            ).model_validate_json(json.dumps(data, ensure_ascii=False))
         except (ValidationError, ValueError, TypeError) as error:
             raise MaterialsAiError(f"invalid Anki proposal: {error}") from error
 
@@ -231,7 +247,10 @@ class MaterialsAiExchange:
                 "approve the current editorial cues before importing Anki content"
             )
         try:
-            proposal = reconcile_anki_proposal(proposal, cues)
+            proposal = (
+                reconcile_didactic_proposal(proposal, cues)
+                if is_didactic else reconcile_anki_proposal(proposal, cues)
+            )
         except ValueError as error:
             raise MaterialsAiError(str(error)) from error
 
@@ -245,12 +264,14 @@ class MaterialsAiExchange:
 
     def import_result(self, project_id: UUID, data: Any) -> dict[str, Any]:
         if isinstance(data, dict):
-            if data.get("contract") == "nova-generator-anki-proposal/1.0":
+            if data.get("contract") in {
+                "nova-generator-anki-proposal/1.0", "nova-generator-anki-proposal/2.0"
+            }:
                 return self.import_anki_proposal(project_id, data)
             if data.get("contract") != OUTPUT_CONTRACT:
                 raise MaterialsAiError(
                     "unsupported material contract: expected nova-generator-materials-output/1.0 "
-                    "or nova-generator-anki-proposal/1.0"
+                    "or nova-generator-anki-proposal/1.0 or nova-generator-anki-proposal/2.0"
                 )
         source = self.package(project_id)
         try:
@@ -307,11 +328,67 @@ class MaterialsAiExchange:
         self._write(project_id, "external-draft.json", document)
         return {"status": "draft", "source_sha256": source["source_sha256"], "document": document}
 
+    def update_anki_card(
+        self, project_id: UUID, scene_id: UUID, card_id: UUID,
+        data: Any, *, expected_sha256: str,
+    ) -> dict[str, Any]:
+        """Save one edited didactic card atomically without changing any editorial cue."""
+        if not any(
+            scene.id == scene_id for scene in self.repository.get_project_scenes(project_id)
+        ):
+            raise MaterialsAiError("scene not found in project")
+        filename = f"anki-prepared-{scene_id}.json"
+        original = self._read(project_id, filename)
+        if original is None:
+            raise MaterialsAiError("Anki preparation not found for this scene")
+        original_hash = sha256(
+            json.dumps(original, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        if expected_sha256 != original_hash:
+            raise MaterialsAiError("Anki draft changed; reload before saving your edits")
+        approved = {
+            str(cue.id): (cue.approved_en, cue.approved_pt)
+            for cue in self.repository.get_scene_cues(scene_id)
+        }
+        try:
+            if original["contract"] == "nova-generator-anki-proposal/1.0":
+                proposal = legacy_to_didactic(
+                    AnkiProposal.model_validate_json(json.dumps(original)), approved
+                )
+            else:
+                proposal = DidacticAnkiProposal.model_validate_json(json.dumps(original))
+            update = DidacticAnkiCard.model_validate_json(
+                json.dumps(data, ensure_ascii=False)
+            )
+        except (ValidationError, TypeError, ValueError) as error:
+            raise MaterialsAiError(f"invalid edited Anki card: {error}") from error
+        if update.card_id != card_id:
+            raise MaterialsAiError("Anki card identity mismatch")
+        original_cards = proposal.anki_cards
+        if not any(card.card_id == card_id for card in original_cards):
+            raise MaterialsAiError("Anki card not found")
+        edited = [update if card.card_id == card_id else card for card in original_cards]
+        revised = proposal.model_copy(update={"anki_cards": edited})
+        try:
+            validate_didactic_cards(revised, approved)
+        except ValueError as error:
+            raise MaterialsAiError(str(error)) from error
+        self._write(project_id, filename, revised.model_dump(mode="json"))
+        return self.status(project_id)
+
     def status(self, project_id: UUID) -> dict[str, Any]:
         source = self.package(project_id)
+        revision_by_scene = {}
+        for scene in self.repository.get_project_scenes(project_id):
+            saved = self._read(project_id, f"anki-prepared-{scene.id}.json")
+            if saved is not None:
+                revision_by_scene[str(scene.id)] = sha256(
+                    json.dumps(saved, sort_keys=True, ensure_ascii=False).encode("utf-8")
+                ).hexdigest()
         anki = {
             "anki_prepared": source["source"].get("anki_prepared", []),
             "anki_needs_review": source["source"].get("anki_prepared_needs_review", 0),
+            "anki_revisions": revision_by_scene,
         }
         for state, filename in (("approved", "approved.json"), ("draft", "external-draft.json")):
             data = self._read(project_id, filename)
