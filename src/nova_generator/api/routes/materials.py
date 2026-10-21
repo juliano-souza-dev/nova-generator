@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
@@ -9,6 +10,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 
 from nova_generator.api.dependencies import (
@@ -16,6 +18,12 @@ from nova_generator.api.dependencies import (
     get_job,
     get_manage_voice_profiles,
     get_session_factory,
+)
+from nova_generator.application.use_cases.build_delivery_zip import (
+    DeliveryAsset,
+    DeliveryError,
+    build_delivery_zip,
+    verify_didactic_publication,
 )
 from nova_generator.application.use_cases.editorial_publication_snapshot import (
     editorial_publication_sha256,
@@ -25,6 +33,10 @@ from nova_generator.application.use_cases.manage_voice_profiles import ManageVoi
 from nova_generator.application.use_cases.materials_ai_exchange import (
     MaterialsAiError,
     MaterialsAiExchange,
+)
+from nova_generator.application.use_cases.prepare_shadowing import (
+    PrepareShadowing,
+    ShadowingError,
 )
 from nova_generator.application.use_cases.publish_anki_reel import (
     AnkiPublicationError,
@@ -108,6 +120,7 @@ class ExportResponse(BaseModel):
     manifest_url: str | None = None
     reel_url: str | None = None
     hub_final_url: str | None = None
+    bundle_url: str | None = None
     youtube_video_id: str | None = None
 
 
@@ -607,6 +620,7 @@ def get_material_export(
         manifest_url=f"{base}/anki-audio-manifest.json" if job.status == "succeeded" else None,
         reel_url=f"{base}/anki-reel.mp4" if job.status == "succeeded" else None,
         hub_final_url=f"{base}/hub_final.json" if publication else None,
+        bundle_url=f"{base}/kit-completo.zip" if publication else None,
         youtube_video_id=publication["ankiAudio"]["youtube"]["video_id"] if publication else None,
     )
 
@@ -659,6 +673,145 @@ def download_hub_final(
     return FileResponse(
         _publisher().publication_path(project_id, job_id), filename="hub_final.json"
     )
+
+
+@router.get("/exports/{job_id}/kit-completo.zip")
+def download_complete_delivery(
+    project_id: UUID,
+    job_id: UUID,
+    jobs: Annotated[GetJob, Depends(get_job)],
+) -> FileResponse:
+    """Package only the files from this successful, published export job."""
+    job = _export_job(project_id, job_id, jobs)
+    if job.status != "succeeded":
+        raise HTTPException(409, detail="Conclua a exportação antes de baixar o kit.")
+    publication = _publication_document(project_id, job_id)
+    if publication is None:
+        raise HTTPException(
+            409, detail="Vincule o reel ao YouTube para gerar o JSON final antes do ZIP."
+        )
+    settings = get_settings()
+    export_dir = settings.media_cache_root / "exports" / str(job_id)
+    publication_path = _publisher().publication_path(project_id, job_id)
+    manifest_path = export_dir / "anki-audio-manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("schema") != "nova-generator-anki-audio":
+            raise DeliveryError("Manifesto do reel incompatível com a entrega.")
+        apkg_sha = manifest["apkg_sha256"]
+        reel_sha = manifest["reel_sha256"]
+        if not all(isinstance(value, str) and len(value) == 64
+                   for value in (apkg_sha, reel_sha)):
+            raise DeliveryError("Hashes inválidos no manifesto de áudio.")
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise HTTPException(409, detail="Manifesto Anki indisponível ou inválido.") from error
+
+    cards = job.input.get("anki_cards") if job.input.get("mode") == "didactic" else None
+    if cards is not None:
+        try:
+            verify_didactic_publication(cards, publication)
+        except (DeliveryError, KeyError, TypeError) as error:
+            raise HTTPException(409, detail=str(error)) from error
+
+    voice_data = job.input.get("voice_snapshot", {})
+    try:
+        snapshot = VoiceProfileSnapshot(
+            profile_id=UUID(str(voice_data["profile_id"])),
+            name=str(voice_data["name"]),
+            version=int(voice_data["version"]),
+            model_id=str(voice_data["model_id"]),
+            model_sha256=str(voice_data["model_sha256"]),
+            reference_audio_sha256=(
+                str(voice_data["reference_audio_sha256"])
+                if voice_data.get("reference_audio_sha256") else None
+            ),
+            parameters=dict(voice_data.get("parameters", {})),
+        )
+        if snapshot.sha256 != voice_data.get("snapshot_sha256"):
+            raise DeliveryError("A voz da exportação foi alterada.")
+    except (ValueError, TypeError, KeyError) as error:
+        raise HTTPException(409, detail="Snapshot de voz inválido.") from error
+
+    cache = FileSpeechCache(settings.media_cache_root)
+    assets = [
+        DeliveryAsset("hub_final.json", publication_path),
+        DeliveryAsset("anki/anki.apkg", export_dir / "anki.apkg", apkg_sha),
+        DeliveryAsset("anki/anki-reel.mp4", export_dir / "anki-reel.mp4", reel_sha),
+        DeliveryAsset("anki/anki-audio-manifest.json", manifest_path),
+    ]
+    repository = _repository()
+    records = (
+        [(str(card["card_id"]), str(card["front_en"])) for card in cards]
+        if cards is not None
+        else [
+            (str(cue_id), repository.get_cue(UUID(str(cue_id))).approved_en)
+            for cue_id in job.input["cue_ids"]
+        ]
+    )
+    for card_id, sentence in records:
+        speech = cache.find(cache.cache_key(
+            text=sentence, profile=snapshot, parameters={}
+        ))
+        if speech is None:
+            raise HTTPException(
+                409, detail=f"Áudio original desta exportação indisponível: {card_id}"
+            )
+        expected_sha = job.input.get("audio_hashes", {}).get(card_id)
+        if not isinstance(expected_sha, str):
+            raise HTTPException(409, detail=f"Hash do WAV ausente: {card_id}")
+        assets.append(DeliveryAsset(
+            f"audio/wav/{card_id}.wav", Path(speech.audio_path), expected_sha
+        ))
+
+    temporary = tempfile.TemporaryDirectory(prefix="nova_kit_")
+    try:
+        temp_dir = Path(temporary.name)
+        # Optional pedagogical material belongs to the same approved source.
+        try:
+            approved = MaterialsAiExchange(repository, settings.project_root).status(project_id)
+            if approved["status"] == "approved" and approved["document"]:
+                pedagogy = temp_dir / "material-didatico.json"
+                pedagogy.write_text(
+                    json.dumps(approved["document"], ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                assets.append(DeliveryAsset("materiais/material-didatico.json", pedagogy))
+        except MaterialsAiError:
+            pass
+        shadowing = PrepareShadowing(repository, settings.project_root)
+        for scene in repository.get_project_scenes(project_id):
+            try:
+                plan = shadowing.scene(project_id, scene.id)
+            except ShadowingError:
+                continue
+            if plan.get("status") != "approved":
+                continue
+            plan_path = temp_dir / f"shadowing-{scene.id}.json"
+            plan_path.write_text(
+                json.dumps(plan, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            assets.append(
+                DeliveryAsset(f"shadowing/{scene.id}.json", plan_path)
+            )
+        destination = temp_dir / "kit-completo.zip"
+        build_delivery_zip(
+            destination,
+            project_id=str(project_id),
+            job_id=str(job_id),
+            assets=assets,
+            didactic_cards=cards,
+        )
+        return FileResponse(
+            destination,
+            media_type="application/zip",
+            filename=f"kit-completo-{project_id}.zip",
+            background=BackgroundTask(temporary.cleanup),
+            headers={"Cache-Control": "no-store"},
+        )
+    except (DeliveryError, OSError, TypeError, KeyError) as error:
+        temporary.cleanup()
+        raise HTTPException(409, detail=str(error)) from error
 
 
 @router.get("/exports/{job_id}/{artifact}")
