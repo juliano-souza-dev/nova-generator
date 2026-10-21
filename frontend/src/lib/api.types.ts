@@ -311,4 +311,7 @@ export type MaterialAiReview = {
   status: "pending" | "draft" | "approved";
   source_sha256: string;
   document: MaterialAiDocument | null;
+  anki_prepared?: MaterialAiDocument["anki_cards"];
+  anki_needs_review?: number;
+  imported?: "anki";
 };
