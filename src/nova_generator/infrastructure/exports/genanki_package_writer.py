@@ -11,28 +11,172 @@ from typing import Any
 
 from nova_generator.domain.exports import ExportCue
 
+# A new Anki model ID is essential. Anki keeps the template of previously
+# imported model IDs, even if a future APKG includes changed HTML/CSS.
+DIDACTIC_MODEL_ID = 1607392323
+DIDACTIC_MODEL_NAME = "iHub English · Didactic v3"
+DIDACTIC_DECK_ID = 2059400111
+
 _DIDACTIC_CSS = """
-.card {font-family: Arial, sans-serif; background:#eef4fa; color:#0b264a;
-  margin:0; padding:16px; text-align:left; font-size:18px; line-height:1.5}
-.ihub-card {max-width:720px; margin:0 auto; padding:22px;
-  background:#fff; border:1px solid #d9e6f1; border-radius:14px}
-.ihub-label {display:block; color:#9a4b00; font-size:11px;
-  font-weight:800; letter-spacing:1px; text-transform:uppercase}
-.ihub-sentence {font-size:clamp(21px, 4vw, 29px); font-weight:750;
-  margin:14px 0 20px; overflow-wrap:anywhere}
-.ihub-highlight {background:#fff0bd; color:#173d7c; font-weight:800;
-  border-radius:3px; padding:0 2px}
-.ihub-lesson {margin-top:20px; display:grid; gap:12px}
-.ihub-section {padding:16px; background:#eef4fa; border-left:4px solid #3478df}
-.ihub-section.understand {background:#f3f5f6; border-left-color:#f36b5c}
-.ihub-section.example {background:#fff; border:1px solid #d5dfe6; border-radius:8px}
-.ihub-section p {margin:7px 0 0; font-size:15px}
-.ihub-term {display:block; font-weight:800; font-size:20px}
-.ihub-meaning {font-weight:700; color:#a34e00}
-.ihub-example-pt {display:block; color:#446485; font-size:14px}
-.ihub-context {font-size:13px; color:#496985; padding-top:16px;
-  margin-top:16px; border-top:1px solid #d5dfe6}
-.ihub-audio {margin-top:14px}
+/* Offline iHub card. No remote fonts, scripts, or network resources. */
+.card {
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 19px;
+  color: #09264b;
+  background: #fff9f2;
+  text-align: left;
+  margin: 0;
+  padding: 12px 16px 36px;
+  line-height: 1.44;
+}
+#qa, #qa > div { max-width: 100%; }
+.ihub-card {
+  width: 100%;
+  max-width: 680px;
+  box-sizing: border-box;
+  margin: 10px auto;
+  background: #fffaf2;
+  border: 1px solid #eddfc9;
+  border-radius: 15px;
+  padding: 24px 24px 28px;
+  color: #082b54;
+  text-align: left;
+}
+.ihub-pill {
+  display: inline-block;
+  padding: 7px 11px;
+  background: #dff7ec;
+  color: #087448;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: .025em;
+}
+.ihub-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.05px;
+  font-weight: 850;
+  color: #305d7a;
+  margin: 0 0 7px;
+}
+.ihub-sentence {
+  margin: 17px 0;
+  color: #072346;
+  font-size: 28px;
+  line-height: 1.35;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.ihub-sentence.ihub-pt {
+  color: #087b50;
+  font-size: 27px;
+}
+.ihub-highlight {
+  background: #ffcf65;
+  color: #754000 !important;
+  border-radius: 5px;
+  padding: 1px 5px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  font-weight: 900;
+}
+.ihub-audio { margin: 20px 0 8px; }
+.ihub-audio .replay-button, .ihub-audio .soundLink {
+  color: #1179ad !important;
+}
+.ihub-front-hint {
+  color: #52718a;
+  font-size: 13px;
+  margin-top: 17px;
+}
+.ihub-divider {
+  height: 1px;
+  border: 0;
+  margin: 24px 0;
+  background: #bfc3c3;
+}
+.ihub-lesson-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1.4px;
+  color: #315976;
+  text-transform: uppercase;
+  margin: 24px 0 8px;
+}
+.ihub-lesson { display: block; }
+.ihub-section {
+  padding: 16px 18px;
+  margin-top: 12px;
+  border-left: 4px solid #348ce2;
+  background: #e9f4ff;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+.ihub-section.ihub-understand {
+  background: #f1f4f5;
+  border-left-color: #f16a62;
+}
+.ihub-section.ihub-example {
+  border: 1px solid #d6e0e4;
+  border-radius: 8px;
+  background: #ffffff;
+  margin-top: 12px;
+  padding: 15px;
+}
+.ihub-term {
+  display: block;
+  color: #002e65;
+  font-size: 23px;
+  line-height: 1.35;
+  font-weight: 850;
+  margin: 3px 0 10px;
+}
+.ihub-meaning {
+  display: block;
+  font-weight: 800;
+  font-size: 18px;
+  color: #995000;
+}
+.ihub-explanation {
+  font-size: 16px;
+  color: #1c344c;
+  line-height: 1.55;
+  margin: 7px 0 0;
+}
+.ihub-example-en {
+  display: block;
+  font-size: 16px;
+  font-weight: 750;
+  color: #143257;
+}
+.ihub-example-pt {
+  display: block;
+  font-size: 14px;
+  color: #486f90;
+  margin-top: 6px;
+}
+.ihub-context {
+  color: #58718a;
+  margin-top: 20px;
+  padding-top: 13px;
+  border-top: 1px solid #e2e6ea;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.ihub-context p { margin: 4px 0; }
+.ihub-tags { color: #6c7891; font-size: 11px; margin-top: 13px; }
+@media (max-width: 480px) {
+  .card { padding: 0 3px 24px; font-size: 16px; }
+  .ihub-card { padding: 16px 14px 22px; border-radius: 9px; }
+  .ihub-sentence { font-size: 23px; }
+  .ihub-sentence.ihub-pt { font-size: 23px; }
+  .ihub-term { font-size: 21px; }
+  .ihub-section { padding: 13px; }
+}
+.nightMode .card, .nightMode.card { background: #fff9f2 !important; color: #09264b !important; }
 """
 
 _DIDACTIC_FIELDS = [
@@ -42,40 +186,45 @@ _DIDACTIC_FIELDS = [
 
 _DIDACTIC_FRONT = """
 <div class="ihub-card ihub-front">
-  <span class="ihub-label">FRONT · ENGLISH</span>
+  <span class="ihub-pill">EN → PT</span>
   <div class="ihub-sentence">{{Front}}</div>
   <div class="ihub-audio">{{Audio}}</div>
+  <div class="ihub-front-hint">Ouça a frase. Lembre-se do significado e revele a mini-aula.</div>
 </div>
 """
 
 _DIDACTIC_BACK = """
 <div class="ihub-card ihub-back">
-  <span class="ihub-label">FRONT · ENGLISH</span>
+  <span class="ihub-pill">EN → PT</span>
   <div class="ihub-sentence">{{Front}}</div>
-  <span class="ihub-label">BACK · PORTUGUÊS</span>
-  <div class="ihub-sentence">{{Back}}</div>
+  <hr class="ihub-divider">
+  <div class="ihub-sentence ihub-pt">{{Back}}</div>
+  <span class="ihub-lesson-title">MINI AULA</span>
   <div class="ihub-lesson">
-    <section class="ihub-section">
-      <span class="ihub-label">MINI LESSON · {{CardType}}</span>
+    <section class="ihub-section ihub-structure">
+      <span class="ihub-label">{{CardType}}</span>
       <span class="ihub-term">{{Focus}}</span>
-      <span class="ihub-label">MEANING</span>
+      <span class="ihub-label">SIGNIFICADO</span>
       <span class="ihub-meaning">{{Meaning}}</span>
     </section>
-    <section class="ihub-section understand">
-      <span class="ihub-label">HOW TO UNDERSTAND / USE</span>
-      <p>{{Explanation}}</p>
+    <section class="ihub-section ihub-understand">
+      <span class="ihub-label">COMO ENTENDER / USAR</span>
+      <p class="ihub-explanation">{{Explanation}}</p>
     </section>
-    <section class="ihub-section example">
-      <span class="ihub-label">ANOTHER EXAMPLE</span>
-      <strong>{{ExampleEn}}</strong>
+    <section class="ihub-section ihub-example">
+      <span class="ihub-label">OUTRO EXEMPLO</span>
+      <span class="ihub-example-en">{{ExampleEn}}</span>
       <span class="ihub-example-pt">{{ExamplePt}}</span>
     </section>
   </div>
   <div class="ihub-audio">{{Audio}}</div>
+  {{#ContextEn}}
   <div class="ihub-context">
-    <span class="ihub-label">CONTEXT FROM THE SCENE</span>
-    {{ContextEn}}<p>{{ContextPt}}</p>
+    <span class="ihub-label">CONTEXTO DA CENA</span>
+    <p>{{ContextEn}}</p><p>{{ContextPt}}</p>
   </div>
+  {{/ContextEn}}
+  {{#Tags}}<div class="ihub-tags">{{Tags}}</div>{{/Tags}}
 </div>
 """
 
@@ -134,8 +283,8 @@ class GenankiPackageWriter:
             raise ValueError("Não misture cards didáticos com cards legados no mesmo APKG")
         if didactic:
             model = genanki.Model(
-                1607392320,
-                "iHub Anki Didactic v2",
+                DIDACTIC_MODEL_ID,
+                DIDACTIC_MODEL_NAME,
                 fields=[{"name": field} for field in _DIDACTIC_FIELDS],
                 templates=[{
                     "name": "iHub Front and Back",
@@ -156,7 +305,10 @@ class GenankiPackageWriter:
                 }],
             )
 
-        deck = genanki.Deck(2059400110, deck_name)
+        deck = (
+            genanki.Deck(DIDACTIC_DECK_ID, f"iHub English::{deck_name}")
+            if didactic else genanki.Deck(2059400110, deck_name)
+        )
         with tempfile.TemporaryDirectory(prefix="nova_generator_anki_") as temporary:
             media: list[str] = []
             for cue in cues:
@@ -175,8 +327,11 @@ class GenankiPackageWriter:
                     genanki.Note(
                         model=model,
                         fields=fields,
-                        guid=genanki.guid_for(
-                            str(cue.cue_id), cue.text_sha256, cue.audio_sha256
+                        guid=(
+                            genanki.guid_for(DIDACTIC_MODEL_NAME, str(cue.cue_id))
+                            if didactic else genanki.guid_for(
+                                str(cue.cue_id), cue.text_sha256, cue.audio_sha256
+                            )
                         ),
                     )
                 )

@@ -10,7 +10,7 @@ from nova_generator.application.ports.audio_reel_renderer import AudioReelRender
 from nova_generator.application.ports.reel_validator import ReelValidator
 from nova_generator.application.ports.wav_probe import WavProbe
 from nova_generator.core.observability import metrics
-from nova_generator.domain.exports import AnkiAudioExport, ExportCue
+from nova_generator.domain.exports import DIDACTIC_LAYOUT, AnkiAudioExport, ExportCue
 from nova_generator.domain.voices import VoiceProfileSnapshot
 
 
@@ -58,7 +58,7 @@ class ExportAnkiReel:
             "schema": "nova-generator-anki-audio",
             "schema_version": "1.0",
             "card_layout": (
-                "ihub-didactic-v2"
+                DIDACTIC_LAYOUT
                 if all(cue.lesson is not None for cue in cues)
                 else "legacy-cue-v1"
             ),

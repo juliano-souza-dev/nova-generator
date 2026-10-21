@@ -42,6 +42,10 @@ from nova_generator.application.use_cases.publish_anki_reel import (
     AnkiPublicationError,
     PublishAnkiReel,
 )
+from nova_generator.application.use_cases.rebuild_anki_package import (
+    AnkiPackageRebuildError,
+    rebuild_didactic_apkg,
+)
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.projects.entities import Cue, WordTiming, utf8_sha256
 from nova_generator.domain.voices import VoiceProfileSnapshot
@@ -121,6 +125,8 @@ class ExportResponse(BaseModel):
     reel_url: str | None = None
     hub_final_url: str | None = None
     bundle_url: str | None = None
+    anki_layout: str | None = None
+    can_rebuild_anki: bool = False
     youtube_video_id: str | None = None
 
 
@@ -155,18 +161,21 @@ def _export_job(project_id: UUID, job_id: UUID, jobs: GetJob):
     return job
 
 
-def _has_complete_anki_layout(job_id: UUID, *, didactic: bool) -> bool:
-    if not didactic:
-        return True
-    manifest_path = (
+def _anki_export_layout(job_id: UUID) -> str | None:
+    manifest = (
         get_settings().media_cache_root / "exports" / str(job_id)
         / "anki-audio-manifest.json"
     )
     try:
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-        return payload.get("card_layout") == "ihub-didactic-v2"
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        layout = data.get("card_layout")
+        return layout if isinstance(layout, str) else None
     except (OSError, ValueError, TypeError):
-        return False
+        return None
+
+
+def _has_complete_anki_layout(job_id: UUID, *, didactic: bool) -> bool:
+    return not didactic or _anki_export_layout(job_id) == "ihub-didactic-v3"
 
 
 def _publication_document(project_id: UUID, job_id: UUID) -> dict | None:
@@ -390,6 +399,20 @@ def export_materials(
     voices: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
     enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
 ) -> ExportResponse:
+    # Legacy cue-only cards remain supported for projects without an Anki
+    # lesson. Never accidentally replace imported mini-lessons with plain text.
+    try:
+        prepared = _didactic_exchange().package(project_id)["source"]
+        if prepared.get("anki_prepared"):
+            raise HTTPException(
+                409,
+                detail=(
+                    "Este projeto possui cards Anki didáticos preparados. "
+                    "Use Exportar Anki didático para incluir a mini-aula completa."
+                ),
+            )
+    except MaterialsAiError:
+        pass
     selected = [
         cue
         for _, cue in _project_cues(project_id)
@@ -634,6 +657,10 @@ def get_material_export(
         manifest_url=f"{base}/anki-audio-manifest.json" if job.status == "succeeded" else None,
         reel_url=f"{base}/anki-reel.mp4" if job.status == "succeeded" else None,
         hub_final_url=f"{base}/hub_final.json" if publication else None,
+        anki_layout=_anki_export_layout(job_id) if job.status == "succeeded" else None,
+        can_rebuild_anki=(
+            job.status == "succeeded" and job.input.get("mode") == "didactic"
+        ),
         bundle_url=(
             f"{base}/kit-completo.zip"
             if publication and _has_complete_anki_layout(
@@ -727,6 +754,43 @@ def regenerate_final_materials(
     )
 
 
+@router.post(
+    "/exports/{job_id}/anki/rebuild",
+    response_model=ExportResponse,
+)
+def rebuild_anki_template(
+    project_id: UUID,
+    job_id: UUID,
+    jobs: Annotated[GetJob, Depends(get_job)],
+) -> ExportResponse:
+    """Refresh a published or unpublished didactic APKG, never the reel or TTS."""
+    job = _export_job(project_id, job_id, jobs)
+    existing = _publication_document(project_id, job_id)
+    youtube = (
+        existing.get("ankiAudio", {}).get("youtube", {}).get("video_id")
+        if existing else None
+    )
+
+    def republish() -> None:
+        if isinstance(youtube, str) and youtube:
+            _publisher().execute(project_id=project_id, job=job, youtube=youtube)
+
+    settings = get_settings()
+    try:
+        rebuild_didactic_apkg(
+            project_id=project_id,
+            job=job,
+            repository=_repository(),
+            export_root=settings.media_cache_root / "exports",
+            project_root=settings.project_root,
+            media_cache_root=settings.media_cache_root,
+            republish=republish if existing is not None else None,
+        )
+    except (AnkiPackageRebuildError, AnkiPublicationError) as error:
+        raise HTTPException(409, detail=str(error)) from error
+    return get_material_export(project_id, job_id, jobs)
+
+
 @router.get("/exports/{job_id}/hub_final.json")
 def download_hub_final(
     project_id: UUID, job_id: UUID, jobs: Annotated[GetJob, Depends(get_job)]
@@ -766,7 +830,7 @@ def download_complete_delivery(
             raise DeliveryError("Manifesto do reel incompatível com a entrega.")
         if (
             job.input.get("mode") == "didactic"
-            and manifest.get("card_layout") != "ihub-didactic-v2"
+            and manifest.get("card_layout") != "ihub-didactic-v3"
         ):
             raise DeliveryError(
                 "APKG gerado no formato antigo: exporte novamente o Anki didático "
@@ -911,7 +975,10 @@ def download_material_export(
     path = Path(get_settings().media_cache_root) / "exports" / str(job_id) / artifact
     if not path.is_file():
         raise HTTPException(404, detail="artifact not found")
-    return FileResponse(path, filename=artifact)
+    return FileResponse(
+        path, filename=artifact,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 def _voice_payload(snapshot: VoiceProfileSnapshot) -> dict[str, object]:

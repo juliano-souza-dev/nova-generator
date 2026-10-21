@@ -638,3 +638,32 @@
 .materials-complete-delivery p {
   margin: 0;
 }
+
+.materials-anki-layout-upgrade {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.85rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.materials-anki-layout-upgrade > div {
+  flex: 1 1 260px;
+}
+
+.materials-anki-layout-upgrade strong {
+  display: block;
+}
+
+.materials-anki-layout-upgrade p {
+  margin: 0.35rem 0;
+  font-size: 0.82rem;
+}
+
+.materials-anki-layout-upgrade button {
+  min-height: 42px;
+}

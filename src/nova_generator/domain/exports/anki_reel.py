@@ -8,6 +8,8 @@ from uuid import UUID
 
 from nova_generator.domain.voices import VoiceProfileSnapshot
 
+DIDACTIC_LAYOUT = "ihub-didactic-v3"
+
 
 @dataclass(frozen=True)
 class ExportCue:
