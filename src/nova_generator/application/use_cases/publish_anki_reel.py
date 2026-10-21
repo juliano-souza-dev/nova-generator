@@ -544,6 +544,52 @@ class PublishAnkiReel:
         return times
 
 
+
+def _context_only_cue_row(
+    cue: Cue,
+    words: list[Any],
+    timing: tuple[int, int],
+    origin_ms: int,
+) -> dict[str, Any]:
+    """Keep a real source cue when external Context selects it but Anki does not."""
+    if (
+        "".join(word.surface for word in words)
+        + str(cue.provenance.get("editorial_preparation_trailing", ""))
+        != cue.approved_en
+    ):
+        raise StructuresInContextError(
+            f"Source words for English in Context cue {cue.id} need reconciliation"
+        )
+    shift = timing[0] - cue.speech_start_ms - origin_ms
+    return {
+        "order": 0,  # assigned globally after chronological sorting
+        "speaker": cue.speaker,
+        "original_en": cue.original_en,
+        "approved_en": cue.approved_en,
+        "final_en": cue.approved_en,
+        "pt": cue.approved_pt,
+        "trailing": str(cue.provenance.get("editorial_preparation_trailing", "")),
+        "start": (timing[0] - origin_ms) / 1000,
+        "end": (timing[1] - origin_ms) / 1000,
+        "speech_start_ms": timing[0] - origin_ms,
+        "speech_end_ms": timing[1] - origin_ms,
+        "subtitle_start_ms": timing[0] - origin_ms,
+        "subtitle_end_ms": timing[1] - origin_ms,
+        "words": [
+            {
+                "text": word.surface,
+                "start_ms": word.start_ms + shift,
+                "end_ms": word.end_ms + shift,
+                "original_start_ms": word.original_start_ms + shift,
+                "original_end_ms": word.original_end_ms + shift,
+            }
+            for word in words
+        ],
+        "anki": {"include": False, "items": []},
+    }
+
+
+
 def _snapshot(raw: dict[str, Any]) -> VoiceProfileSnapshot:
     snapshot = VoiceProfileSnapshot(
         profile_id=UUID(str(raw["profile_id"])),
