@@ -148,6 +148,23 @@ describe("ShadowingPage", () => {
     expect(screen.getByRole("button", { name: "Aprovar Shadowing" })).toBeEnabled();
   });
 
+  it("plays a selected practice and lets the user switch to another", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    mount();
+    const second = await screen.findByRole("button", { name: "Reproduzir prática 2" });
+    const video = screen.getByLabelText("Prévia de shadowing") as HTMLVideoElement;
+    fireEvent.click(second);
+    await waitFor(() => expect(screen.getByText("Bloco 2/2")).toBeInTheDocument());
+    expect(video.currentTime).toBe(3);
+    video.currentTime = 4.9;
+    fireEvent.timeUpdate(video);
+    expect(screen.getByText("PAUSA · REPITA EM VOZ ALTA")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reproduzir prática 1" }));
+    await waitFor(() => expect(screen.getByText("Bloco 1/2")).toBeInTheDocument());
+    expect(video.currentTime).toBe(1);
+    expect(play).toHaveBeenCalledTimes(2);
+  });
+
   it("deletes a group without touching the editorial cues", async () => {
     mount();
     await screen.findByText("Prática 1 · Mike");

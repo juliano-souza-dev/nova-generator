@@ -33,6 +33,7 @@ export function ShadowingPage() {
   const [activeSceneId, setActiveSceneId] = useState("");
   const [previewIndex, setPreviewIndex] = useState(-1);
   const [phase, setPhase] = useState<PreviewPhase>("ready");
+  const [singlePreview, setSinglePreview] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [selectedFileName, setSelectedFileName] = useState("");
   const [actionNotice, setActionNotice] = useState("");
@@ -107,6 +108,7 @@ export function ShadowingPage() {
   useEffect(() => {
     setPreviewIndex(-1);
     setPhase("ready");
+    setSinglePreview(false);
     setPreviewError("");
     playerRef.current?.pause();
   }, [projectId, active?.scene_id, active?.source_sha256, active?.plan_sha256]);
@@ -116,6 +118,10 @@ export function ShadowingPage() {
     const block = active.blocks[previewIndex];
     if (!block) return;
     const timeout = window.setTimeout(() => {
+      if (singlePreview) {
+        setPhase("finished");
+        return;
+      }
       const nextIndex = previewIndex + 1;
       if (nextIndex >= active.blocks.length) {
         setPhase("finished");
@@ -132,13 +138,16 @@ export function ShadowingPage() {
       }
     }, block.pause_duration_ms);
     return () => window.clearTimeout(timeout);
-  }, [active, phase, previewIndex]);
+  }, [active, phase, previewIndex, singlePreview]);
 
-  function startPreview() {
-    if (!active?.blocks.length || !playerRef.current) return;
+  function startPreview(index = 0, single = false) {
+    if (!active?.blocks[index] || !playerRef.current) return;
+    playerRef.current.pause();
     setPreviewError("");
-    setPreviewIndex(0);
-    playerRef.current.currentTime = active.blocks[0].start_ms / 1000;
+    setSinglePreview(single);
+    setPhase("ready");
+    setPreviewIndex(index);
+    playerRef.current.currentTime = active.blocks[index].start_ms / 1000;
     void playerRef.current.play().then(
       () => setPhase("playing"),
       () => setPreviewError("Não foi possível reproduzir o vídeo do projeto."),
@@ -149,6 +158,7 @@ export function ShadowingPage() {
     playerRef.current?.pause();
     setPreviewIndex(-1);
     setPhase("ready");
+    setSinglePreview(false);
   }
 
   function handleProgress() {
@@ -370,13 +380,13 @@ export function ShadowingPage() {
                 </>
               )}
               {phase === "finished" && (
-                <strong>Prévia concluída. Você pode aprovar o plano.</strong>
+                <strong>{singlePreview ? "Prática concluída." : "Prévia concluída. Você pode aprovar o plano."}</strong>
               )}
             </div>
             <div className="shadowing-preview-actions">
               <button
                 type="button"
-                onClick={startPreview}
+                onClick={() => startPreview()}
                 disabled={
                   !media.data?.cut_url ||
                   !active.blocks.length ||
@@ -474,6 +484,14 @@ export function ShadowingPage() {
                       </div>
                     )}
                     <div className="shadowing-block-actions">
+                      <button
+                        type="button"
+                        disabled={isBusy || !media.data?.cut_url}
+                        onClick={() => startPreview(index, true)}
+                        aria-label={`Reproduzir prática ${index + 1}`}
+                      >
+                        <Play aria-hidden="true" /> Reproduzir
+                      </button>
                       <button
                         type="button"
                         disabled={isBusy || Boolean(mergeReason)}
