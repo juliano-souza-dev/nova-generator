@@ -14,7 +14,6 @@ from nova_generator.domain.exports import DIDACTIC_LAYOUT, AnkiAudioExport, Expo
 from nova_generator.domain.voices import VoiceProfileSnapshot
 
 
-
 class ExportAnkiReel:
     """Build Anki and a publishable reel from the same immutable per-cue WAVs."""
 
