@@ -198,6 +198,7 @@ def test_didactic_publication_keeps_original_scene_and_separate_audio_per_card(
     source = Mock()
     source.get_project.return_value = project
     source.get_project_scenes.return_value = [scene]
+    source.get_scene_cues.return_value = [cue]
     source.get_cue.return_value = cue
     source.get_scene_project_id.return_value = project_id
     source.get_cue_words.return_value = [word]
@@ -305,6 +306,28 @@ def test_didactic_publication_keeps_original_scene_and_separate_audio_per_card(
         },
         None, 1, 3,
     )
+    # The external AI prepared Notice independently from the Anki cards.
+    # The expressions can coincide, but their explanations are independently authored.
+    context_path = (
+        tmp_path / "projects" / str(project_id) / "editorial-ai"
+        / f"scene-{scene_id}-english-in-context.json"
+    )
+    context_path.parent.mkdir(parents=True, exist_ok=True)
+    context_path.write_text(json.dumps({
+        "scene_id": str(scene_id),
+        "wbw_practices": [
+            {
+                "source_cue_id": str(cue_id),
+                "word_ids": [str(word.id)],
+                "type": "expression",
+                "expression_en": "Hello.",
+                "meaning_pt": "Saudação original da IA externa.",
+                "explanation_pt": "Conteúdo independente do baralho Anki.",
+                "example_en": "Hello, everyone.",
+                "example_pt": "Olá, pessoal.",
+            },
+        ],
+    }), encoding="utf-8")
     publisher = PublishAnkiReel(
         source, Mock(), tmp_path / "exports", tmp_path / "projects"
     )
@@ -320,6 +343,19 @@ def test_didactic_publication_keeps_original_scene_and_separate_audio_per_card(
         card["front_en"] for card in cards
     ]
     assert len(doc["ankiAudio"]["cues"]) == 2
+    # The same reviewed mini-lessons must also reach iHub stage 03 (Notice).
+    assert len(doc["wbw_practices"]) == 1
+    assert [practice["cue_order"] for practice in doc["wbw_practices"]] == [1]
+    assert doc["wbw_practices"][0]["expression_en"] == "Hello."
+    assert all(practice["word_indexes"] == [0] for practice in doc["wbw_practices"])
+    assert all(practice["start_ms"] == 100 for practice in doc["wbw_practices"])
+    assert all(practice["end_ms"] == 700 for practice in doc["wbw_practices"])
+    assert doc["wbw_practices"][0]["meaning_pt"] == "Saudação original da IA externa."
+    assert doc["wbw_practices"][0]["explanation_pt"] == (
+        "Conteúdo independente do baralho Anki."
+    )
+    assert doc["wbw_practices"][0]["example_en"] == "Hello, everyone."
+    assert doc["wbw_practices"][0]["example_pt"] == "Olá, pessoal."
     assert [interval["card_key"] for interval in doc["ankiAudio"]["cues"]] == [
         f"anki-{cid}" for cid in card_ids
     ]

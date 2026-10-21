@@ -38,6 +38,11 @@ from nova_generator.application.use_cases.prepare_shadowing import (
     PrepareShadowing,
     ShadowingError,
 )
+from nova_generator.application.use_cases.structures_in_context import (
+    StructuresInContextError,
+    prepare_external_structures,
+    write_external_structures,
+)
 
 
 class _ExternalSemanticUnit(BaseModel):
@@ -68,6 +73,22 @@ class _ExternalSpeakerTurn(BaseModel):
     confidence: Literal["high", "medium", "uncertain"] = "uncertain"
 
 
+class _ExternalContextPractice(BaseModel):
+    """Independent pedagogical selection prepared by the external AI."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    type: Literal[
+        "vocabulary", "phrasal_verb", "structure", "collocation", "idiom", "expression"
+    ]
+    word_ids: list[str] = Field(min_length=1)
+    expression_en: str = Field(min_length=1)
+    meaning_pt: str = Field(min_length=1)
+    explanation_pt: str = Field(min_length=1)
+    example_en: str = Field(min_length=1)
+    example_pt: str = Field(min_length=1)
+
+
 class _ExternalSuggestion(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -78,6 +99,7 @@ class _ExternalSuggestion(BaseModel):
     notes: str = ""
     word_translations: list[_ExternalWordTranslation] = Field(default_factory=list)
     semantic_units: list[_ExternalSemanticUnit] = Field(default_factory=list)
+    context_practices: list[_ExternalContextPractice] = Field(default_factory=list)
     trailing: str = ""
     speaker_turns: list[_ExternalSpeakerTurn] = Field(default_factory=list)
     merge_with_previous: bool = False
@@ -173,6 +195,12 @@ class ExternalEditorialExchange:
                 }
                 for index, chunk in enumerate(chunks, start=1)
             ],
+        }
+        manifest["english_in_context"] = {
+            "required": True,
+            "source": "chunks/*-result.json suggestions[].context_practices",
+            "published_field": "wbw_practices",
+            "separate_from_anki": True,
         }
         manifest["anki"] = {
             "required": True,
@@ -443,6 +471,27 @@ class ExternalEditorialExchange:
                 item.cue_id: [turn.model_dump() for turn in item.speaker_turns]
                 for item in document.suggestions
             })
+        # The external AI owns the pedagogical English-in-Context selection.
+        # Validate against the same revised word IDs as the editorial text,
+        # independently from the Anki proposal and before mutating the scene.
+        all_suggestions = [
+            item.model_dump()
+            for chunk in manifest_chunks
+            for item in documents[chunk["id"]][0].suggestions
+        ]
+        if manifest.get("english_in_context", {}).get("required") and any(
+            "context_practices" not in item.model_fields_set
+            for chunk in manifest_chunks
+            for item in documents[chunk["id"]][0].suggestions
+        ):
+            raise EditorialAssistanceError(
+                "English in Context is missing: include context_practices "
+                "(possibly []) in every editorial suggestion"
+            )
+        try:
+            prepare_external_structures(all_suggestions)
+        except StructuresInContextError as error:
+            raise EditorialAssistanceError(str(error)) from error
         prepared_anki: _ExternalAnkiProposal | DidacticAnkiProposal | None = None
         if anki_result is not None:
             if len(anki_result) > self._maximum_result_bytes:
@@ -534,6 +583,9 @@ class ExternalEditorialExchange:
                 os.replace(temporary, destination)
             finally:
                 temporary.unlink(missing_ok=True)
+        write_external_structures(
+            self._project_root, project_id, scene_id, source_hash, all_suggestions
+        )
         return combined
 
     def _import_chunk(
@@ -822,6 +874,14 @@ pelo Generator após validar o pacote inteiro. Nunca una falas de pessoas distin
 e nunca una somente porque são frases curtas; leve em conta speaker, vocativo,
 pontuação, contexto e tempo entre as falas. Em caso de dúvida, deixe false em
 merge_with_previous e explique em notes. Não invente tempos, não apague palavras.
+Prepare também o ENGLISH IN CONTEXT na MESMA suggestion de cada cue, no array
+`context_practices`. Selecione independentemente do Anki expressões úteis,
+phrasal verbs, collocations e estruturas. Para cada prática inclua `type`,
+`word_ids` contíguos, `expression_en` literal às palavras selecionadas,
+`meaning_pt`, `explanation_pt`, `example_en`, `example_pt`.
+Não gere marcação de tempo artificial: o Generator encontrará os tempos pelos
+`word_ids` aprovados. Retorne [] onde não houver conteúdo relevante.
+O English in Context é uma seção pedagógica INDEPENDENTE dos cards Anki.
 Devolva somente o JSON preenchido. O Generator o importará como sugestão de rascunho.
 """
 
@@ -854,6 +914,7 @@ def _template(
                     for word in cue.words
                 ],
                 "semantic_units": [],
+                "context_practices": [],
                 "speaker_turns": [],
                 "merge_with_previous": False,
                 "trailing": cue.trailing,
@@ -871,6 +932,10 @@ scene_id, input_sha256, chunk_id, cue_id, ordem ou ids. Preserve literalmente po
 Use português brasileiro natural e crie unidades semânticas para expressões como phrasal verbs;
 por exemplo, “Can I help?” deve ser “Posso ajudar?”, nunca uma tradução mecânica palavra a palavra.
 Cada palavra precisa manter seu tempo dentro do cue e ter uma tradução contextual.
+Inclua em context_practices as mini-aulas de English in Context (independentes
+do Anki), com type, word_ids contíguos, expression_en literal à cena,
+meaning_pt, explanation_pt, example_en e example_pt. Use [] se não houver
+expressões relevantes. Não invente tempos.
 Procure ativamente trocas de interlocutor dentro das cues. Não presuma que o áudio
 contém uma só pessoa por cue. Se houver alternância, documente em notes uma proposta
 SPEAKER_SPLIT_PROPOSAL: fronteiras por word_id, trechos, speakers inferidos e grau de

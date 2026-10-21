@@ -24,6 +24,12 @@ from nova_generator.application.use_cases.shadowing_publication import (
     approved_shadowing_transport,
     attach_approved_shadowing,
 )
+from nova_generator.application.use_cases.structures_in_context import (
+    StructuresInContextError,
+    load_external_structures,
+    publish_external_structures,
+    resolve_external_context_cues,
+)
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.exports import AnkiAudioExport, ReelInterval
 from nova_generator.domain.jobs import Job
@@ -75,6 +81,15 @@ class PublishAnkiReel:
         scenes = self._repository.get_project_scenes(project_id)
         didactic = job.input.get("mode") == "didactic"
         try:
+            external_context = load_external_structures(
+                self._project_root, project_id, [scene.id for scene in scenes]
+            )
+            context_cues = resolve_external_context_cues(
+                external_context, scenes, self._repository
+            )
+        except (StructuresInContextError, OSError, ValueError) as error:
+            raise AnkiPublicationError(f"English in Context: {error}") from error
+        try:
             shadowing_transport = approved_shadowing_transport(
                 self._repository, self._project_root, project_id, scenes, cues
             )
@@ -111,13 +126,17 @@ class PublishAnkiReel:
             )
         source_url = project.provenance.get("youtube_url")
         has_source = isinstance(source_url, str) and bool(source_url)
+        if external_context and not has_source:
+            raise AnkiPublicationError(
+                "English in Context requires the original scene video to play its examples."
+            )
         if shadowing_transport.plans and not has_source:
             raise AnkiPublicationError(
                 "Shadowing aprovado exige o vídeo original da cena. "
                 "Configure o YouTube de origem antes de publicar."
             )
         all_cues = list({cue.id: cue for cue in [
-            *cues, *shadowing_transport.additional_cues
+            *cues, *shadowing_transport.additional_cues, *context_cues
         ]}.values())
         if has_source:
             all_times = self._source_times(project_id, all_cues, scenes)
@@ -131,7 +150,9 @@ class PublishAnkiReel:
             ]
             source_times = {}
         publication_times = (
-            list(source_times.values()) if shadowing_transport.plans else cue_times
+            list(source_times.values())
+            if (shadowing_transport.plans or external_context)
+            else cue_times
         )
         scene_start = min(start for start, _ in publication_times)
         scene_end = max(end for _, end in publication_times)
@@ -306,6 +327,65 @@ class PublishAnkiReel:
                 )
             except ShadowingPublicationError as error:
                 raise AnkiPublicationError(str(error)) from error
+        if external_context:
+            # Publish all AI-selected Context cues AFTER Shadowing has synchronized
+            # its own source cues. Neither stage is allowed to discard the other.
+            try:
+                if shadowing_transport.plans:
+                    published_ids = document["generator"]["source_cue_ids"]
+                elif didactic:
+                    published_ids = list(by_source)
+                else:
+                    published_ids = [str(cue.id) for cue in cues]
+                cue_by_id = {str(cue.id): cue for cue in all_cues}
+                context_rows = [
+                    (cue_by_id[cue_id], row)
+                    for cue_id, row in zip(
+                        published_ids, document["cues"], strict=True
+                    )
+                ]
+                included = {cue.id for cue, _row in context_rows}
+                for cue in context_cues:
+                    if cue.id not in included:
+                        context_rows.append((
+                            cue,
+                            _context_only_cue_row(
+                                cue, self._repository.get_cue_words(cue.id),
+                                source_times[str(cue.id)], timeline_origin,
+                            ),
+                        ))
+                context_rows.sort(key=lambda pair: (
+                    pair[1]["start"], pair[1]["end"]
+                ))
+                final_order = {}
+                for order, (cue, row) in enumerate(context_rows, 1):
+                    row["order"] = order
+                    final_order[str(cue.id)] = order
+                document["cues"] = [row for _cue, row in context_rows]
+                document["generator"]["source_cue_ids"] = [
+                    str(cue.id) for cue, _row in context_rows
+                ]
+                if didactic:
+                    for timeline, card in zip(
+                        document["ankiAudio"]["cues"],
+                        job.input["anki_cards"], strict=True,
+                    ):
+                        timeline["source_cue_order"] = final_order[str(card["cue_id"])]
+                else:
+                    for timeline, cue in zip(
+                        document["ankiAudio"]["cues"], cues, strict=True
+                    ):
+                        timeline["cue_order"] = final_order[str(cue.id)]
+                document["wbw_practices"] = publish_external_structures(
+                    practices=external_context,
+                    source_rows=context_rows,
+                    repository=self._repository,
+                )
+            except (StructuresInContextError, OSError, ValueError) as error:
+                raise AnkiPublicationError(
+                    f"English in Context: {error}"
+                ) from error
+
         validate_anki_audio(document)
         path = self.publication_path(project_id, job.id)
         if path.is_file():
@@ -471,6 +551,52 @@ class PublishAnkiReel:
                 raise AnkiPublicationError(f"Tempo do card {cue.id} inválido.")
             times.append((start, end))
         return times
+
+
+
+def _context_only_cue_row(
+    cue: Cue,
+    words: list[Any],
+    timing: tuple[int, int],
+    origin_ms: int,
+) -> dict[str, Any]:
+    """Keep a real source cue when external Context selects it but Anki does not."""
+    if (
+        "".join(word.surface for word in words)
+        + str(cue.provenance.get("editorial_preparation_trailing", ""))
+        != cue.approved_en
+    ):
+        raise StructuresInContextError(
+            f"Source words for English in Context cue {cue.id} need reconciliation"
+        )
+    shift = timing[0] - cue.speech_start_ms - origin_ms
+    return {
+        "order": 0,  # assigned globally after chronological sorting
+        "speaker": cue.speaker,
+        "original_en": cue.original_en,
+        "approved_en": cue.approved_en,
+        "final_en": cue.approved_en,
+        "pt": cue.approved_pt,
+        "trailing": str(cue.provenance.get("editorial_preparation_trailing", "")),
+        "start": (timing[0] - origin_ms) / 1000,
+        "end": (timing[1] - origin_ms) / 1000,
+        "speech_start_ms": timing[0] - origin_ms,
+        "speech_end_ms": timing[1] - origin_ms,
+        "subtitle_start_ms": timing[0] - origin_ms,
+        "subtitle_end_ms": timing[1] - origin_ms,
+        "words": [
+            {
+                "text": word.surface,
+                "start_ms": word.start_ms + shift,
+                "end_ms": word.end_ms + shift,
+                "original_start_ms": word.original_start_ms + shift,
+                "original_end_ms": word.original_end_ms + shift,
+            }
+            for word in words
+        ],
+        "anki": {"include": False, "items": []},
+    }
+
 
 
 def _snapshot(raw: dict[str, Any]) -> VoiceProfileSnapshot:
