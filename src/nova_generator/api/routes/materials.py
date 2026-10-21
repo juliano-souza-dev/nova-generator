@@ -164,7 +164,7 @@ def _has_complete_anki_layout(job_id: UUID, *, didactic: bool) -> bool:
     )
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-        return payload.get("card_layout") == "ihub-didactic-v2"
+        return payload.get("card_layout") == "ihub-didactic-v3"
     except (OSError, ValueError, TypeError):
         return False
 
@@ -766,7 +766,7 @@ def download_complete_delivery(
             raise DeliveryError("Manifesto do reel incompatível com a entrega.")
         if (
             job.input.get("mode") == "didactic"
-            and manifest.get("card_layout") != "ihub-didactic-v2"
+            and manifest.get("card_layout") != "ihub-didactic-v3"
         ):
             raise DeliveryError(
                 "APKG gerado no formato antigo: exporte novamente o Anki didático "
