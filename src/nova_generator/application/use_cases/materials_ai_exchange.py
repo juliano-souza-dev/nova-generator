@@ -167,7 +167,7 @@ class MaterialsAiExchange:
                     and card.get("source_context_en") == approved["approved_en"]
                     and card.get("source_context_pt") == approved["approved_pt"]
                 ):
-                    prepared_cards.append(card)
+                    prepared_cards.append({**card, "scene_id": scene["scene_id"]})
                 else:
                     needs_review += 1
         if found_draft:
