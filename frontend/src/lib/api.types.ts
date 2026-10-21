@@ -207,6 +207,8 @@ export type MaterialExport = {
   reel_url: string | null;
   hub_final_url?: string | null;
   bundle_url?: string | null;
+  anki_layout?: string | null;
+  can_rebuild_anki?: boolean;
   youtube_video_id?: string | null;
 };
 export type MaterialPublication = {
