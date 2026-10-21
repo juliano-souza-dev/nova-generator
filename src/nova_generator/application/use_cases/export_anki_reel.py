@@ -10,10 +10,9 @@ from nova_generator.application.ports.audio_reel_renderer import AudioReelRender
 from nova_generator.application.ports.reel_validator import ReelValidator
 from nova_generator.application.ports.wav_probe import WavProbe
 from nova_generator.core.observability import metrics
-from nova_generator.domain.exports import AnkiAudioExport, DIDACTIC_LAYOUT, ExportCue
+from nova_generator.domain.exports import DIDACTIC_LAYOUT, AnkiAudioExport, ExportCue
 from nova_generator.domain.voices import VoiceProfileSnapshot
 
-DIDACTIC_LAYOUT = "ihub-didactic-v3"
 
 
 class ExportAnkiReel:
