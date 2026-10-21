@@ -61,6 +61,10 @@ class MaterialSection(StrictModel):
 
 class MaterialCard(StrictModel):
     cue_id: UUID
+    card_id: UUID | None = None
+    source_context_en: str | None = None
+    source_context_pt: str | None = None
+    uses_literal_scene_line: bool | None = None
     front_en: str = Field(min_length=1)
     back_pt: str = Field(min_length=1)
     explanation_pt: str = Field(min_length=1, max_length=3000)
@@ -311,15 +315,32 @@ class MaterialsAiExchange:
                     f"Anki cue_id {cue_id} has the same pedagogical focus repeated"
                 )
             used.add(focus_key)
-            if (
+            if card.source_context_en is not None or card.source_context_pt is not None:
+                if (
+                    card.source_context_en != source_cue["approved_en"]
+                    or card.source_context_pt != source_cue["approved_pt"]
+                    or card.card_id is None
+                    or card.uses_literal_scene_line is None
+                ):
+                    raise MaterialsAiError(
+                        f"Anki card {cue_id} must preserve the approved editorial context"
+                    )
+                if card.uses_literal_scene_line != (
+                    card.front_en == source_cue["approved_en"]
+                    and card.back_pt == source_cue["approved_pt"]
+                ):
+                    raise MaterialsAiError(
+                        f"Anki card {cue_id} has inconsistent literal scene flag"
+                    )
+            elif (
                 card.front_en != source_cue["approved_en"]
                 or card.back_pt != source_cue["approved_pt"]
             ):
                 raise MaterialsAiError(f"Anki card {cue_id} changed the approved literal text")
             if card.marked_en and card.marked_en.casefold() not in card.front_en.casefold():
-                raise MaterialsAiError(f"Anki card {cue_id} has marked_en outside the approved cue")
+                raise MaterialsAiError(f"Anki card {cue_id} has marked_en outside the front text")
             if card.marked_pt and card.marked_pt.casefold() not in card.back_pt.casefold():
-                raise MaterialsAiError(f"Anki card {cue_id} has marked_pt outside the approved cue")
+                raise MaterialsAiError(f"Anki card {cue_id} has marked_pt outside the back text")
             if bool(card.example_en.strip()) != bool(card.example_pt.strip()):
                 raise MaterialsAiError(f"Anki card {cue_id} needs both example_en and example_pt")
         document = output.model_dump(mode="json")
