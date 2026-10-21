@@ -26,7 +26,8 @@ from nova_generator.application.use_cases.shadowing_publication import (
 )
 from nova_generator.application.use_cases.structures_in_context import (
     StructuresInContextError,
-    build_structures_in_context,
+    load_external_structures,
+    publish_external_structures,
 )
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.exports import AnkiAudioExport, ReelInterval
@@ -273,15 +274,37 @@ class PublishAnkiReel:
                     "tags": snapshot["tags"],
                 })
             base["cues"] = unique_rows
-            try:
-                base["wbw_practices"] = build_structures_in_context(
-                    snapshots, by_source
-                )
-            except StructuresInContextError as error:
-                raise AnkiPublicationError(str(error)) from error
             base["generator"]["anki_card_ids"] = [
                 str(card["card_id"]) for card in snapshots
             ]
+
+        # English in Context is authored in the external editorial response,
+        # independently of the selected Anki lessons.
+        try:
+            external_context = load_external_structures(
+                self._project_root, project_id, [scene.id for scene in scenes]
+            )
+            if external_context:
+                context_rows = (
+                    [(editorial_by_id[cue_id][0], row)
+                     for cue_id, row in by_source.items()]
+                    if didactic
+                    else [
+                        (cue, row)
+                        for (cue, _words), row in zip(
+                            publication_rows, base["cues"], strict=True
+                        )
+                    ]
+                )
+                base["wbw_practices"] = publish_external_structures(
+                    practices=external_context,
+                    source_rows=context_rows,
+                    repository=self._repository,
+                )
+        except (StructuresInContextError, OSError, ValueError) as error:
+            raise AnkiPublicationError(
+                f"English in Context: {error}"
+            ) from error
 
         document = add_manual_youtube_anki_audio(
             base, youtube_video_id=video.video_id, export=export
