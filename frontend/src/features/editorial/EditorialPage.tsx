@@ -271,6 +271,7 @@ export function EditorialPage() {
   const [assistantFallbackRequired, setAssistantFallbackRequired] = useState(false);
   const [assistantStatusFailed, setAssistantStatusFailed] = useState(false);
   const [showPreparationTools, setShowPreparationTools] = useState(false);
+  const [showAiReexport, setShowAiReexport] = useState(false);
   const [semanticDraftUnits, setSemanticDraftUnits] = useState<EditorialSemanticUnit[] | null>(
     null,
   );
@@ -1505,6 +1506,68 @@ export function EditorialPage() {
       <PageHeader
         title="Revisão editorial"
         description="Ouça, compare e aprove cada cue sem perder o contexto do corte."
+        actions={
+          selectedCue && editorialGateReady ? (
+            <div className="editorial-ai-menu">
+              <button
+                type="button"
+                className="secondary-button"
+                aria-expanded={showAiReexport}
+                aria-controls="editorial-ai-reexport-panel"
+                onClick={() => setShowAiReexport((open) => !open)}
+              >
+                <Download aria-hidden="true" /> Regerar JSON / importar IA
+              </button>
+              {showAiReexport && (
+                <section
+                  id="editorial-ai-reexport-panel"
+                  className="editorial-ai-reexport panel"
+                  aria-label="Regerar JSON da IA externa"
+                >
+                  <div className="editorial-ai-reexport-copy">
+                    <span className="eyebrow">Sem reprocessar a mídia</span>
+                    <h2>Regerar pacote da IA externa</h2>
+                    <p>
+                      Exporta as cues e palavras atuais, incluindo preparação Anki.
+                      Não baixa o vídeo, não refaz o corte nem a transcrição.
+                      O editorial permanece salvo até a importação do retorno.
+                    </p>
+                  </div>
+                  <div className="editorial-ai-reexport-actions">
+                    {isDirty ? (
+                      <span role="status">
+                        Salve ou descarte as alterações antes de regenerar o pacote.
+                      </span>
+                    ) : (
+                      <a
+                        className="secondary-button"
+                        href={studioApi.externalEditorialPackageUrl(sceneId)}
+                        download
+                        aria-label="Gerar novamente JSON para IA externa"
+                      >
+                        <Download aria-hidden="true" /> Gerar novamente JSON para IA externa
+                      </a>
+                    )}
+                    <EditorialImportDropzone
+                      disabled={assistantBusy || saving || isDirty}
+                      onImport={(files) => void importExternalResult(files)}
+                    />
+                  </div>
+                  {assistantMessage && (
+                    <p className="assistant-message" role="status">{assistantMessage}</p>
+                  )}
+                  <button
+                    type="button"
+                    className="preparation-source-dismiss"
+                    onClick={() => setShowAiReexport(false)}
+                  >
+                    Fechar opções de IA
+                  </button>
+                </section>
+              )}
+            </div>
+          ) : undefined
+        }
       />
       <header className="review-context" aria-label="Contexto da revisão">
         <label>
@@ -1562,38 +1625,6 @@ export function EditorialPage() {
           )}
         </div>
       </header>
-      {selectedCue && editorialGateReady && (
-        <section className="editorial-ai-reexport panel" aria-label="Regerar JSON da IA externa">
-          <div className="editorial-ai-reexport-copy">
-            <span className="eyebrow">Reprocessamento sem mídia</span>
-            <h2>Regerar pacote da IA externa</h2>
-            <p>
-              Gera um novo pacote usando as cues e palavras da cena atual. Não baixa o vídeo,
-              não refaz o corte e não executa a transcrição. O editorial salvo permanece intacto
-              até você importar um novo retorno.
-            </p>
-          </div>
-          <div className="editorial-ai-reexport-actions">
-            {isDirty ? (
-              <span role="status">Salve ou descarte as alterações para gerar o pacote.</span>
-            ) : (
-              <a
-                className="secondary-button"
-                href={studioApi.externalEditorialPackageUrl(sceneId)}
-                download
-                aria-label="Gerar novamente JSON para IA externa"
-              >
-                <Download aria-hidden="true" /> Gerar novamente JSON para IA externa
-              </a>
-            )}
-            <EditorialImportDropzone
-              disabled={assistantBusy || saving || isDirty}
-              onImport={(files) => void importExternalResult(files)}
-            />
-          </div>
-          {assistantMessage && <p className="assistant-message" role="status">{assistantMessage}</p>}
-        </section>
-      )}
       {message && !saveFeedback && (
         <p className="review-message" role="status">
           {message}
