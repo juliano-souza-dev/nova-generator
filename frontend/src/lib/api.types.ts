@@ -206,6 +206,7 @@ export type MaterialExport = {
   manifest_url: string | null;
   reel_url: string | null;
   hub_final_url?: string | null;
+  bundle_url?: string | null;
   youtube_video_id?: string | null;
 };
 export type MaterialPublication = {
