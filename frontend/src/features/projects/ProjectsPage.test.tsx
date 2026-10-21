@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { studioApi } from "../../lib/studio-api";
 import { ProjectsPage } from "./ProjectsPage";
 
 vi.mock("../../lib/studio-api", () => ({
@@ -14,6 +15,7 @@ vi.mock("../../lib/studio-api", () => ({
       channel: "Canal",
     }),
     createProject: vi.fn(),
+    createProjectFromIhub: vi.fn().mockResolvedValue({ id: "fresh-id" }),
     duplicateProject: vi.fn(),
     archiveProject: vi.fn(),
     restoreProject: vi.fn(),
@@ -22,6 +24,30 @@ vi.mock("../../lib/studio-api", () => ({
 }));
 
 describe("ProjectsPage", () => {
+  it("recreates an iHub kit as a separate fresh project", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <ProjectsPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Importar JSON do iHub" }));
+    expect(screen.getByText(/Somente o vídeo do YouTube/)).toBeInTheDocument();
+    const submit = screen.getByRole("button", { name: "Criar projeto com esse corte" });
+    expect(submit).toBeDisabled();
+    const file = new File(['{"schema":"immersionhub-super-json"}'], "kit.json", {
+      type: "application/json",
+    });
+    fireEvent.change(screen.getByLabelText("Arquivo JSON do iHub"), {
+      target: { files: [file] },
+    });
+    fireEvent.click(submit);
+    await waitFor(() => {
+      expect(studioApi.createProjectFromIhub).toHaveBeenCalledWith(file);
+    });
+  });
+
   it("requires and verifies the URL while leaving the production title optional", async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
