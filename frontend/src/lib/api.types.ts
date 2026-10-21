@@ -93,6 +93,8 @@ export type ProjectMedia = {
   cut_url: string | null;
   cut_start_ms: number | null;
   cut_end_ms: number | null;
+  suggested_cut_start_ms: number | null;
+  suggested_cut_end_ms: number | null;
   waveform: { sample_rate_hz: number; bucket_ms: number; peaks: number[] } | null;
   transcript_candidate: {
     engine: string;
