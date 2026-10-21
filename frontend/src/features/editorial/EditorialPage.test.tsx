@@ -259,7 +259,7 @@ describe("EditorialPage", () => {
     });
     expect(regenerate).toHaveAttribute("href", "/api/external.zip");
     expect(screen.getByLabelText("Importar retorno editorial")).toBeInTheDocument();
-    expect(screen.getByText(/não refaz o corte e não executa a transcrição/i)).toBeInTheDocument();
+    expect(screen.getByText(/não refaz o corte nem a transcrição/i)).toBeInTheDocument();
     expect(mocks.startProjectMedia).not.toHaveBeenCalled();
   });
 
