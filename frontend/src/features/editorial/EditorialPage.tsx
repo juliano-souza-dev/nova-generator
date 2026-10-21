@@ -2300,7 +2300,6 @@ export function EditorialPage() {
                     “Regerar pacote da IA externa”, acima da revisão.
                   </p>
                 </div>
-                {assistantMessage && <p className="assistant-message">{assistantMessage}</p>}
                 {selectedSuggestion && (
                   <div className="assistant-suggestion">
                     <div className="assistant-suggestion-copy">
