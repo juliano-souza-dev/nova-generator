@@ -21,8 +21,11 @@ from nova_generator.application.ports.editorial_assistant import (
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.use_cases.anki_proposal import AnkiProposal as _ExternalAnkiProposal
 from nova_generator.application.use_cases.anki_proposal import (
+    DidacticAnkiProposal,
     reconcile_anki_proposal,
+    reconcile_didactic_proposal,
     validate_anki_cards,
+    validate_didactic_cards,
 )
 from nova_generator.application.use_cases.editorial_assistance import (
     EditorialAssistanceError,
@@ -97,11 +100,13 @@ class _ExternalResult(BaseModel):
     suggestions: list[_ExternalSuggestion] = Field(min_length=1)
 
 
-ANKI_INPUT_CONTRACT = "nova-generator-anki-input/1.0"
-ANKI_OUTPUT_CONTRACT = "nova-generator-anki-proposal/1.0"
+ANKI_INPUT_CONTRACT = "nova-generator-anki-input/2.0"
+ANKI_OUTPUT_CONTRACT = "nova-generator-anki-proposal/2.0"
 ANKI_FIELDS = (
-    "cue_id", "front_en", "back_pt", "card_type", "focus_text", "meaning",
-    "marked_en", "marked_pt", "explanation_pt", "example_en", "example_pt", "tags",
+    "card_id", "cue_id", "source_context_en", "source_context_pt",
+    "front_en", "back_pt", "uses_literal_scene_line", "card_type",
+    "focus_text", "meaning", "marked_en", "marked_pt", "explanation_pt",
+    "example_en", "example_pt", "tags",
 )
 
 
@@ -443,7 +448,13 @@ class ExternalEditorialExchange:
             if len(anki_result) > self._maximum_result_bytes:
                 raise EditorialAssistanceError("Anki result exceeds the allowed size")
             try:
-                prepared_anki = _ExternalAnkiProposal.model_validate_json(anki_result)
+                parsed = json.loads(anki_result)
+                parser = (
+                    DidacticAnkiProposal
+                    if parsed.get("contract") == ANKI_OUTPUT_CONTRACT
+                    else _ExternalAnkiProposal
+                )
+                prepared_anki = parser.model_validate_json(anki_result)
             except (ValidationError, ValueError) as error:
                 raise EditorialAssistanceError(
                     f"Anki result violates the required contract: {_validation_detail(error)}"
@@ -456,7 +467,10 @@ class ExternalEditorialExchange:
                 for item in document.suggestions
             }
             try:
-                validate_anki_cards(prepared_anki, editorial_by_id)
+                if isinstance(prepared_anki, DidacticAnkiProposal):
+                    validate_didactic_cards(prepared_anki, editorial_by_id)
+                else:
+                    validate_anki_cards(prepared_anki, editorial_by_id)
             except ValueError as error:
                 raise EditorialAssistanceError(str(error)) from error
         first = validated_chunks[0]
@@ -499,8 +513,14 @@ class ExternalEditorialExchange:
             # If reconciliation is ambiguous, retain the original proposal for
             # manual review rather than deleting it or fabricating a cue match.
             try:
-                prepared_anki = reconcile_anki_proposal(
-                    prepared_anki, self._repository.get_scene_cues(scene_id)
+                prepared_anki = (
+                    reconcile_didactic_proposal(
+                        prepared_anki, self._repository.get_scene_cues(scene_id)
+                    )
+                    if isinstance(prepared_anki, DidacticAnkiProposal)
+                    else reconcile_anki_proposal(
+                        prepared_anki, self._repository.get_scene_cues(scene_id)
+                    )
                 )
             except ValueError:
                 pass
@@ -634,11 +654,15 @@ def _anki_input(
                 "Não crie um card para cada palavra. Explique o foco de cada card em PT-BR."
             ),
             "integrity_policy": (
-                "Retorne no MESMO lote dos resultados editoriais. Use cue_ids existentes, "
-                "não invente mídia ou tempos; front_en/back_pt devem ser literalmente iguais "
-                "ao approved_en/approved_pt enviados para cada cue nos resultados editoriais. "
-                "marked_en/marked_pt devem existir literalmente na frase. "
-                "Forneça exemplos adicionais naturais em EN/PT e mini-aula contextual."
+                "Retorne no MESMO lote dos resultados editoriais. Use cue_ids existentes. "
+                "source_context_en/source_context_pt preservam exatamente approved_en/approved_pt "
+                "das sugestões editoriais; front_en/back_pt são frases DIDÁTICAS novas "
+                "que usam a estrutura da cena em um contexto equivalente. "
+                "NUNCA copie a cue inteira como padrão. "
+                "focus_text deve ser uma expressão literal da cue de origem. "
+                "marked_en/marked_pt devem existir na frente e no verso DIDÁTICOS. "
+                "Forneça exemplos adicionais EN/PT, mini-aula e UUID estável por card. "
+                "Não invente mídia, tempos ou outras falas da cena."
             ),
         },
     }
@@ -647,16 +671,22 @@ def _anki_input(
 def _anki_template(
     scene_id: UUID, input_sha256: str, cues: tuple[EditorialCuePrompt, ...]
 ) -> dict[str, object]:
-    # Intentional blank template: not an acceptable AI result until fully filled.
+    # Example is deliberately incomplete: AI must select a genuine focus
+    # and replace ALL placeholder learning text with original didactic content.
+    from uuid import uuid5
     return {
         "contract": ANKI_OUTPUT_CONTRACT,
         "scene_id": str(scene_id),
         "input_sha256": input_sha256,
         "anki_cards": [
             {
+                "card_id": str(uuid5(scene_id, cues[0].id + ":example")),
                 "cue_id": cues[0].id,
-                "front_en": cues[0].word_by_word_en,
+                "source_context_en": "",
+                "source_context_pt": "",
+                "front_en": "",
                 "back_pt": "",
+                "uses_literal_scene_line": False,
                 "card_type": "EXPRESSION",
                 "focus_text": "",
                 "meaning": "",
@@ -699,11 +729,15 @@ Além dos resultados editoriais, leia `anki/anki-ai-input.json`, siga
 `anki/anki-ai-prompt.md` e devolva `anki/anki-ai-result.json` no mesmo ZIP.
 Não basta traduzir as cues ou preparar o shadowing. O Anki exige **seleção
 pedagógica** e **mini-aula** para cada card. Veja `contracts/anki-ai/v1`.
-Cada card deve conter EXATAMENTE: cue_id, front_en, back_pt, card_type,
-focus_text, meaning, marked_en, marked_pt, explanation_pt, example_en,
-example_pt e tags. A seleção deve cobrir o que é relevante para aprendizagem,
-sem fazer card para palavras triviais. A frente e o verso devem coincidir
-literalmente com approved_en/approved_pt devolvidos no editorial desta cena.
+Cada card deve conter EXATAMENTE os campos do contrato 2.0: card_id,
+cue_id, source_context_en, source_context_pt, front_en, back_pt,
+uses_literal_scene_line, card_type, focus_text, meaning, marked_en,
+marked_pt, explanation_pt, example_en, example_pt e tags.
+Escolha phrasal verbs, collocations, padrões gramaticais e expressões
+importantes. Preserve a fala da cena APENAS em source_context_en/pt, ambos
+idênticos a approved_en/pt. A frente e o verso devem ser NOVOS exemplos
+didáticos derivados da cena (salvo exceção pedagógica fundamentada,
+marcada por uses_literal_scene_line=true).
 Não invente cues, tempos, mídia ou áudio. O resultado é um RASCUNHO para
 revisão, não uma aprovação automática de Anki.
 Ao devolver um ZIP completo com manifest.json, a ausência do arquivo Anki
@@ -715,8 +749,8 @@ def _anki_prompt(source: dict[str, object], template: dict[str, object]) -> str:
     return (
         "Você é a IA pedagógica do Nova Generator. Complete o Anki com conteúdo REAL "
         "para esta cena, preservando IDs e hashes. Responda APENAS com o JSON "
-        "nova-generator-anki-proposal/1.0, salvo em anki/anki-ai-result.json. "
-        "Escolha as cues mais relevantes; uma cue por card; elimine as triviais. "
+        "nova-generator-anki-proposal/2.0, salvo em anki/anki-ai-result.json. "
+        "Escolha as estruturas relevantes, podendo ter dois focos distintos da mesma cue. "
         "Cada card deve trazer uma mini-aula em português, expressão principal, "
         "significado contextual, highlights EN/PT literais, exemplo NOVO EN/PT, "
         "tipo e tags. As frases front_en/back_pt têm de ser IDÊNTICAS às versões "
