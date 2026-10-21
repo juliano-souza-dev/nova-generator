@@ -181,3 +181,71 @@ def test_materials_package_reuses_anki_from_initial_external_export(tmp_path):
     needs_review = exchange.package(PROJECT)["source"]
     assert needs_review["anki_prepared"] == []
     assert needs_review["anki_prepared_needs_review"] == 1
+
+
+def anki_proposal(*, english="Hello.", portuguese="Olá.", digest="a" * 64):
+    return {
+        "contract": "nova-generator-anki-proposal/1.0",
+        "scene_id": str(SCENE),
+        "input_sha256": digest,
+        "anki_cards": [
+            {
+                "cue_id": str(CUE),
+                "front_en": english,
+                "back_pt": portuguese,
+                "card_type": "EXPRESSION",
+                "focus_text": "Hello.",
+                "meaning": "Olá.",
+                "marked_en": "Hello.",
+                "marked_pt": "Olá.",
+                "explanation_pt": "Cumprimento natural nesta conversa.",
+                "example_en": "Hello, my friend!",
+                "example_pt": "Olá, meu amigo!",
+                "tags": ["greetings"],
+            }
+        ],
+    }
+
+
+def test_material_import_accepts_anki_only_without_workbook_sections(tmp_path):
+    import json
+
+    repo = Repository()
+    exchange = MaterialsAiExchange(repo, tmp_path)
+    manifest = tmp_path / str(PROJECT) / "editorial-ai" / f"scene-{SCENE}-external-ai-manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"input_sha256": "a" * 64}), encoding="utf-8")
+
+    accepted = exchange.import_result(PROJECT, anki_proposal())
+    assert accepted["imported"] == "anki"
+    assert accepted["status"] == "pending"
+    assert accepted["document"] is None
+    assert len(accepted["anki_prepared"]) == 1
+    assert accepted["anki_needs_review"] == 0
+    assert exchange.status(PROJECT)["anki_prepared"][0]["focus_text"] == "Hello."
+
+    saved = exchange._read(PROJECT, f"anki-prepared-{SCENE}.json")
+    assert saved is not None and saved["contract"] == "nova-generator-anki-proposal/1.0"
+    # Re-import is idempotent, not an attempt to fabricate a seven-section workbook.
+    assert len(exchange.import_result(PROJECT, anki_proposal())["anki_prepared"]) == 1
+
+
+def test_anki_only_import_rejects_wrong_source_and_unapproved_text(tmp_path):
+    import json
+
+    repo = Repository()
+    exchange = MaterialsAiExchange(repo, tmp_path)
+    manifest = tmp_path / str(PROJECT) / "editorial-ai" / f"scene-{SCENE}-external-ai-manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"input_sha256": "a" * 64}), encoding="utf-8")
+
+    with pytest.raises(MaterialsAiError, match="input_sha256"):
+        exchange.import_result(PROJECT, anki_proposal(digest="b" * 64))
+    with pytest.raises(MaterialsAiError, match="different from the approved"):
+        exchange.import_result(PROJECT, anki_proposal(english="Good morning."))
+    assert exchange._read(PROJECT, f"anki-prepared-{SCENE}.json") is None
+
+    unknown = anki_proposal()
+    unknown["contract"] = "nova-generator-wrong/1.0"
+    with pytest.raises(MaterialsAiError, match="unsupported material contract"):
+        exchange.import_result(PROJECT, unknown)

@@ -17,3 +17,7 @@ Cada card requer `cue_id`, `front_en`, `back_pt`, `card_type`, `focus_text`, `me
 A importação em lote pré-valida os chunks editoriais **e** o Anki, grava o material preliminar em `data/projects/<project_id>/materials/anki-prepared-<scene_id>.json` e preserva a aprovação editorial separada. Os pacotes antigos sem Anki continuam legíveis; o novo formato é exigido quando o ZIP de retorno traz o `manifest.json` com `anki.required=true`.
 
 Esse é um contrato específico para Anki e **não substitui** o contrato de workbook/PDF de sete seções `contracts/materials-ai/v1`. O Anki preparado deve ser reutilizado na etapa Materiais, sem pedir à IA que o reescreva. Não publicar card antes da revisão final.
+
+## Importação separada na aba Materiais
+
+O arquivo `anki-ai-result.json` com contrato `nova-generator-anki-proposal/1.0` pode ser importado diretamente na aba Materiais por `POST /api/projects/{project_id}/materials-ai/import`. O servidor valida o SHA da exportação editorial e a correspondência literal com as cues editoriais aprovadas, salva o rascunho por cena e expõe `anki_prepared` em `GET .../materials-ai/review`. Não exige `sections`, `project_id` nem `source_sha256`, pois esses campos pertencem ao contrato do workbook. A importação não aprova os cards e não cria workbook artificial.

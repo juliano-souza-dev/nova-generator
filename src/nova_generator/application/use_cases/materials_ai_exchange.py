@@ -12,6 +12,11 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
+from nova_generator.application.use_cases.anki_proposal import (
+    AnkiProposal,
+    validate_anki_cards,
+)
+from nova_generator.application.use_cases.editorial_assistance import build_editorial_prompt
 
 INPUT_CONTRACT = "nova-generator-materials-input/1.0"
 OUTPUT_CONTRACT = "nova-generator-materials-output/1.0"
@@ -183,7 +188,70 @@ class MaterialsAiExchange:
             },
         }
 
+    def import_anki_proposal(self, project_id: UUID, data: Any) -> dict[str, Any]:
+        """Import the Anki-only proposal without pretending it is a seven-section workbook."""
+        try:
+            # Strict Pydantic models accept UUID strings through JSON parsing.
+            proposal = AnkiProposal.model_validate_json(
+                json.dumps(data, ensure_ascii=False)
+            )
+        except (ValidationError, ValueError, TypeError) as error:
+            raise MaterialsAiError(f"invalid Anki proposal: {error}") from error
+
+        scene = next(
+            (
+                item for item in self.repository.get_project_scenes(project_id)
+                if item.id == proposal.scene_id
+            ),
+            None,
+        )
+        if scene is None:
+            raise MaterialsAiError(
+                "Anki scene_id does not belong to the selected project"
+            )
+        manifest_path = (
+            self.project_root / str(project_id) / "editorial-ai"
+            / f"scene-{scene.id}-external-ai-manifest.json"
+        )
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            expected_hash = manifest.get("input_sha256")
+        except (OSError, ValueError):
+            # Standalone import is possible only for a matching current snapshot.
+            expected_hash, _cues = build_editorial_prompt(self.repository, scene.id)
+        if proposal.input_sha256 != expected_hash:
+            raise MaterialsAiError(
+                "Anki input_sha256 differs from the scene's exported editorial package; "
+                "use the Anki JSON for the current scene or export a new package"
+            )
+
+        approved_cues = {
+            str(cue.id): (cue.approved_en, cue.approved_pt)
+            for cue in self.repository.get_scene_cues(scene.id)
+            if cue.provenance.get("approval") != "draft"
+        }
+        try:
+            validate_anki_cards(proposal, approved_cues)
+        except ValueError as error:
+            raise MaterialsAiError(str(error)) from error
+
+        # Do not mark the workbook approved or overwrite its sections.
+        self._write(
+            project_id,
+            f"anki-prepared-{scene.id}.json",
+            proposal.model_dump(mode="json"),
+        )
+        return {**self.status(project_id), "imported": "anki"}
+
     def import_result(self, project_id: UUID, data: Any) -> dict[str, Any]:
+        if isinstance(data, dict):
+            if data.get("contract") == "nova-generator-anki-proposal/1.0":
+                return self.import_anki_proposal(project_id, data)
+            if data.get("contract") != OUTPUT_CONTRACT:
+                raise MaterialsAiError(
+                    "unsupported material contract: expected nova-generator-materials-output/1.0 "
+                    "or nova-generator-anki-proposal/1.0"
+                )
         source = self.package(project_id)
         try:
             output = MaterialOutput.model_validate(data)
@@ -238,11 +306,25 @@ class MaterialsAiExchange:
 
     def status(self, project_id: UUID) -> dict[str, Any]:
         source = self.package(project_id)
+        anki = {
+            "anki_prepared": source["source"].get("anki_prepared", []),
+            "anki_needs_review": source["source"].get("anki_prepared_needs_review", 0),
+        }
         for state, filename in (("approved", "approved.json"), ("draft", "external-draft.json")):
             data = self._read(project_id, filename)
             if data and data.get("source_sha256") == source["source_sha256"]:
-                return {"status": state, "source_sha256": source["source_sha256"], "document": data}
-        return {"status": "pending", "source_sha256": source["source_sha256"], "document": None}
+                return {
+                    "status": state,
+                    "source_sha256": source["source_sha256"],
+                    "document": data,
+                    **anki,
+                }
+        return {
+            "status": "pending",
+            "source_sha256": source["source_sha256"],
+            "document": None,
+            **anki,
+        }
 
     def approve(self, project_id: UUID, source_sha256: str) -> dict[str, Any]:
         current = self.status(project_id)
