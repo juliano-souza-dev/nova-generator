@@ -19,6 +19,11 @@ from nova_generator.application.use_cases.editorial_publication_snapshot import 
     editorial_publication_sha256,
 )
 from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
+from nova_generator.application.use_cases.shadowing_publication import (
+    ShadowingPublicationError,
+    approved_shadowing_transport,
+    attach_approved_shadowing,
+)
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.exports import AnkiAudioExport, ReelInterval
 from nova_generator.domain.jobs import Job
@@ -69,6 +74,12 @@ class PublishAnkiReel:
         cues = self._approved_cues(project_id, job, export)
         scenes = self._repository.get_project_scenes(project_id)
         didactic = job.input.get("mode") == "didactic"
+        try:
+            shadowing_transport = approved_shadowing_transport(
+                self._repository, self._project_root, project_id, scenes, cues
+            )
+        except ShadowingPublicationError as error:
+            raise AnkiPublicationError(str(error)) from error
         editorial_by_id = {
             str(cue.id): (cue, self._repository.get_cue_words(cue.id))
             for cue in cues
@@ -100,13 +111,30 @@ class PublishAnkiReel:
             )
         source_url = project.provenance.get("youtube_url")
         has_source = isinstance(source_url, str) and bool(source_url)
-        cue_times = (
-            self._source_times(project_id, cues, scenes)
-            if has_source
-            else [(interval.start_ms, interval.end_ms) for interval in export.intervals]
+        if shadowing_transport.plans and not has_source:
+            raise AnkiPublicationError(
+                "Shadowing aprovado exige o vídeo original da cena. "
+                "Configure o YouTube de origem antes de publicar."
+            )
+        all_cues = list({cue.id: cue for cue in [
+            *cues, *shadowing_transport.additional_cues
+        ]}.values())
+        if has_source:
+            all_times = self._source_times(project_id, all_cues, scenes)
+            source_times = dict(zip(
+                (str(cue.id) for cue in all_cues), all_times, strict=True
+            ))
+            cue_times = [source_times[str(cue.id)] for cue in cues]
+        else:
+            cue_times = [
+                (interval.start_ms, interval.end_ms) for interval in export.intervals
+            ]
+            source_times = {}
+        publication_times = (
+            list(source_times.values()) if shadowing_transport.plans else cue_times
         )
-        scene_start = min(start for start, _ in cue_times)
-        scene_end = max(end for _, end in cue_times)
+        scene_start = min(start for start, _ in publication_times)
+        scene_end = max(end for _, end in publication_times)
         check_times = (
             list(dict.fromkeys(cue_times)) if didactic else cue_times
         )
@@ -254,6 +282,30 @@ class PublishAnkiReel:
             ):
                 timeline["card_key"] = f"anki-{card['card_id']}"
                 timeline["source_cue_order"] = source_order[str(card["cue_id"])]
+        if shadowing_transport.plans:
+            try:
+                attach_approved_shadowing(
+                    document,
+                    selected_cues=cues,
+                    additional_cues=shadowing_transport.additional_cues,
+                    plans=shadowing_transport.plans,
+                    times_by_id=source_times,
+                    words_by_id={
+                        str(cue.id): self._repository.get_cue_words(cue.id)
+                        for cue in shadowing_transport.additional_cues
+                    },
+                    origin_ms=timeline_origin,
+                    didactic=didactic,
+                    card_to_cue=(
+                        {
+                            f"anki-{card['card_id']}": str(card["cue_id"])
+                            for card in job.input["anki_cards"]
+                        }
+                        if didactic else None
+                    ),
+                )
+            except ShadowingPublicationError as error:
+                raise AnkiPublicationError(str(error)) from error
         validate_anki_audio(document)
         path = self.publication_path(project_id, job.id)
         if path.is_file():
@@ -264,7 +316,11 @@ class PublishAnkiReel:
                     "Esta exportação já foi vinculada a outro vídeo. "
                     "Crie uma nova exportação para corrigir o vínculo."
                 )
-            return AnkiPublication(path, video.video_id, video.canonical_url)
+            if existing == document:
+                return AnkiPublication(path, video.video_id, video.canonical_url)
+            # An approval made after the first publication may add or update
+            # generatorShadowing. Refresh the JSON atomically without touching
+            # the reel, APKG, audio or approved authoring plan.
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(".tmp.json")
         temporary.write_text(
