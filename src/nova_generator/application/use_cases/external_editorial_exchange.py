@@ -710,9 +710,12 @@ def _instructions() -> str:
 Este pacote contém somente texto: não há vídeo nem áudio. Por isso, inferências de
 interlocutores e tempos devem ser conservadoras e baseadas nos word_ids e
 timestamps disponíveis. Abra cada arquivo
-`chunks/*-prompt.md`, cole-o em uma conversa nova da Groq e salve a resposta como JSON no
-arquivo `chunks/*-result.json` correspondente. Envie os retornos um a um ao Generator; cada
-bloco é validado e aplicado imediatamente. Nunca misture cues de blocos diferentes.
+`chunks/*-prompt.md`, preencha o JSON editorial correspondente e também
+`anki/anki-ai-prompt.md`. Na preparação completa, devolva TODOS os arquivos
+`chunks/*-result.json` e `anki/anki-ai-result.json` no MESMO ZIP, preservando
+`manifest.json`, e importe de uma vez pelo endpoint em lote. O envio individual
+de chunks permanece apenas para compatibilidade legada e não prepara o Anki.
+Nunca misture cues de blocos diferentes.
 
 Use o `*-input.json` como fonte canônica.
 Preencha `approved_en`, `approved_pt`, `notes`, `word_translations` e `semantic_units` no arquivo
