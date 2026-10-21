@@ -38,6 +38,7 @@ export function MaterialsPage() {
   const audioRequestsInFlight = useRef(new Set<string>());
   const [youtube, setYoutube] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [finalRevision, setFinalRevision] = useState(0);
   const [previewCueId, setPreviewCueId] = useState<string | null>(null);
   const [previewFocusText, setPreviewFocusText] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -183,6 +184,14 @@ export function MaterialsPage() {
   const publication = useMutation({
     mutationFn: () => studioApi.publishMaterialExport(projectId, activeExportId!, youtube.trim()),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["material-export", projectId] }),
+  });
+  const regenerateFinal = useMutation({
+    mutationFn: () => studioApi.regenerateFinalMaterials(projectId, activeExportId!),
+    onSuccess: () => {
+      setFinalRevision((revision) => revision + 1);
+      void client.invalidateQueries({ queryKey: ["material-export", projectId] });
+      void client.invalidateQueries({ queryKey: ["material-latest-export", projectId] });
+    },
   });
   const selectedVoice = voices.data?.find((voice) => voice.id === voiceId);
   const voiceReferenceError =
@@ -835,9 +844,39 @@ export function MaterialsPage() {
           {exportStatus.data.hub_final_url ? (
             <div className="materials-complete-delivery">
               <p>Reel vinculado ao YouTube: {exportStatus.data.youtube_video_id}</p>
+              <div className="materials-regenerate-finals">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={regenerateFinal.isPending || publication.isPending}
+                  onClick={() => regenerateFinal.mutate()}
+                >
+                  {regenerateFinal.isPending
+                    ? "Regerando materiais finais…"
+                    : "Regerar materiais finais"}
+                </button>
+                <small>
+                  Atualiza o hub_final.json com Editorial, Anki e Shadowing aprovado.
+                  Reutiliza o APKG, o reel, os WAVs e o vínculo atual do YouTube.
+                </small>
+                {regenerateFinal.isSuccess && (
+                  <p role="status">
+                    Materiais finais atualizados. Baixe o novo JSON ou o ZIP completo.
+                  </p>
+                )}
+                {regenerateFinal.isError && (
+                  <p role="alert">
+                    Não foi possível regerar os materiais finais: {regenerateFinal.error.message}
+                  </p>
+                )}
+              </div>
               {exportStatus.data.bundle_url ? (
                 <>
-                  <a className="primary-button" href={exportStatus.data.bundle_url} download>
+                  <a
+                    className="primary-button"
+                    href={`${exportStatus.data.bundle_url}${finalRevision ? `?revision=${finalRevision}` : ""}`}
+                    download
+                  >
                     <Download aria-hidden="true" /> Baixar kit completo (ZIP)
                   </a>
                   <p>
@@ -851,7 +890,11 @@ export function MaterialsPage() {
                   para liberar o ZIP com as mini-aulas.
                 </p>
               )}
-              <a href={exportStatus.data.hub_final_url}>Baixar hub_final.json</a>
+              <a
+                href={`${exportStatus.data.hub_final_url}${finalRevision ? `?revision=${finalRevision}` : ""}`}
+              >
+                Baixar hub_final.json
+              </a>
             </div>
           ) : exportStatus.data.status === "succeeded" ? (
             <form
