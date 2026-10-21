@@ -298,6 +298,23 @@ export const studioApi = {
       method: "POST",
       body: JSON.stringify({ source_sha256 }),
     }),
+  updateAnkiCard: (
+    projectId: string,
+    sceneId: string,
+    cardId: string,
+    card: import("./api.types").AnkiDidacticCard,
+    expected_sha256: string,
+  ) =>
+    apiRequest<MaterialAiReview>(
+      `/projects/${projectId}/materials-ai/anki/${sceneId}/cards/${cardId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          expected_sha256,
+          card: (({ scene_id: _sceneId, ...fields }) => fields)(card),
+        }),
+      },
+    ),
   materials: (projectId: string, voiceId?: string) =>
     apiRequest<MaterialList>(
       `/projects/${projectId}/materials${voiceId ? `?voice_id=${encodeURIComponent(voiceId)}` : ""}`,
