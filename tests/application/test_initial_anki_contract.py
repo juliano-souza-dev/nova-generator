@@ -89,7 +89,10 @@ def _completed_package(exchange, scene, *, include_anki=True, invalid_anki=False
         for name, result in chunks:
             archive.writestr(name, json.dumps(result, ensure_ascii=False))
         if include_anki:
-            archive.writestr("anki/anki-ai-result.json", json.dumps(anki_template, ensure_ascii=False))
+            archive.writestr(
+                "anki/anki-ai-result.json",
+                json.dumps(anki_template, ensure_ascii=False),
+            )
     return target.getvalue()
 
 
