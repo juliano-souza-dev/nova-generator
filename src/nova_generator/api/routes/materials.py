@@ -20,12 +20,12 @@ from nova_generator.api.dependencies import (
 from nova_generator.application.use_cases.editorial_publication_snapshot import (
     editorial_publication_sha256,
 )
+from nova_generator.application.use_cases.manage_jobs import EnqueueJob, GetJob
+from nova_generator.application.use_cases.manage_voice_profiles import ManageVoiceProfiles
 from nova_generator.application.use_cases.materials_ai_exchange import (
     MaterialsAiError,
     MaterialsAiExchange,
 )
-from nova_generator.application.use_cases.manage_jobs import EnqueueJob, GetJob
-from nova_generator.application.use_cases.manage_voice_profiles import ManageVoiceProfiles
 from nova_generator.application.use_cases.publish_anki_reel import (
     AnkiPublicationError,
     PublishAnkiReel,
@@ -540,7 +540,9 @@ def export_didactic_anki(
         cue_id = UUID(card["cue_id"])
         cue = repo.get_cue(cue_id)
         if cue is None or cue.provenance.get("approval") == "draft":
-            raise HTTPException(409, detail=f"Source cue for card {card['card_id']} is not approved")
+            raise HTTPException(
+                409, detail=f"Source cue for card {card['card_id']} is not approved"
+            )
         source_cues[str(cue_id)] = cue
         speech = cache.find(cache.cache_key(text=card["front_en"], profile=voice, parameters={}))
         if speech is None:
