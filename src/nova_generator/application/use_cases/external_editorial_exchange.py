@@ -24,16 +24,16 @@ from nova_generator.application.use_cases.anki_proposal import (
     reconcile_anki_proposal,
     validate_anki_cards,
 )
-from nova_generator.application.use_cases.prepare_shadowing import (
-    PrepareShadowing,
-    ShadowingError,
-)
 from nova_generator.application.use_cases.editorial_assistance import (
     EditorialAssistanceError,
     build_editorial_prompt,
     persist_editorial_chunk_preparation,
     persist_editorial_chunk_with_speaker_turns,
     validate_editorial_result,
+)
+from nova_generator.application.use_cases.prepare_shadowing import (
+    PrepareShadowing,
+    ShadowingError,
 )
 
 
