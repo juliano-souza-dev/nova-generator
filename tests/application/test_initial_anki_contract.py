@@ -109,7 +109,7 @@ def test_combined_import_persists_valid_anki_draft(tmp_path):
     exchange, scene, project_id = _setup(tmp_path)
     completed = _completed_package(exchange, scene)
     exchange.import_batch(scene.id, [("completed.zip", completed)])
-    draft = tmp_path / str(project_id) / "materials" / "anki-prepared.json"
+    draft = tmp_path / str(project_id) / "materials" / f"anki-prepared-{scene.id}.json"
     result = json.loads(draft.read_text(encoding="utf-8"))
     assert result["contract"] == "nova-generator-anki-proposal/1.0"
     assert len(result["anki_cards"]) == 1
@@ -121,7 +121,7 @@ def test_completed_zip_without_anki_is_rejected(tmp_path):
     completed = _completed_package(exchange, scene, include_anki=False)
     with pytest.raises(EditorialAssistanceError, match="Anki result is required"):
         exchange.import_batch(scene.id, [("completed.zip", completed)])
-    assert not (tmp_path / str(project_id) / "materials" / "anki-prepared.json").exists()
+    assert not (tmp_path / str(project_id) / "materials" / f"anki-prepared-{scene.id}.json").exists()
 
 
 def test_invalid_anki_rejected_before_editorial_changes(tmp_path):
@@ -131,4 +131,4 @@ def test_invalid_anki_rejected_before_editorial_changes(tmp_path):
     with pytest.raises(EditorialAssistanceError, match="Anki result violates"):
         exchange.import_batch(scene.id, [("completed.zip", completed)])
     assert exchange._repository.get_scene_cues(scene.id) == original
-    assert not (tmp_path / str(project_id) / "materials" / "anki-prepared.json").exists()
+    assert not (tmp_path / str(project_id) / "materials" / f"anki-prepared-{scene.id}.json").exists()
