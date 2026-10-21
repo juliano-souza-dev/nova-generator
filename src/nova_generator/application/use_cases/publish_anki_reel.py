@@ -227,6 +227,8 @@ class PublishAnkiReel:
                     "focus": snapshot["front_en"],
                     "meaning": snapshot["back_pt"],
                     "focus_text": snapshot["focus_text"],
+                    "highlight_en": snapshot["focus_text"],
+                    "highlight_pt": snapshot["meaning"],
                     "marked_en": snapshot["marked_en"],
                     "marked_pt": snapshot["marked_pt"],
                     "explanation": snapshot["explanation_pt"],
