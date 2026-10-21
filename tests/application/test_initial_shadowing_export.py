@@ -42,6 +42,11 @@ def _setup(tmp_path):
 
 def test_initial_export_includes_auto_shadowing_anki_and_editorial(tmp_path):
     repository, project_id, scene = _setup(tmp_path)
+    for cue in repository.get_scene_cues(scene.id):
+        repository.save_cue(
+            replace(cue, provenance={**cue.provenance, "approval": "draft"}),
+            repository.get_cue_words(cue.id),
+        )
     exchange = ExternalEditorialExchange(repository, tmp_path)
     package = exchange.build_package(scene.id)
     with zipfile.ZipFile(package) as archive:
