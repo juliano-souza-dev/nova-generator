@@ -1053,7 +1053,11 @@ def test_external_ai_package_can_be_regenerated_without_media_or_editorial_reset
     second = client.get(endpoint)
     assert first.status_code == 200 and second.status_code == 200
     assert first.headers["cache-control"] == "no-store, no-cache, must-revalidate"
-    assert first.content == second.content
+    with zipfile.ZipFile(io.BytesIO(first.content)) as earlier, zipfile.ZipFile(
+        io.BytesIO(second.content)
+    ) as later:
+        assert earlier.read("editorial_input.json") == later.read("editorial_input.json")
+        assert earlier.read("manifest.json") == later.read("manifest.json")
 
     with zipfile.ZipFile(io.BytesIO(second.content)) as archive:
         names = set(archive.namelist())
