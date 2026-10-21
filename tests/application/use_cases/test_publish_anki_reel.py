@@ -305,6 +305,28 @@ def test_didactic_publication_keeps_original_scene_and_separate_audio_per_card(
         },
         None, 1, 3,
     )
+    # The external AI prepared Notice independently from the Anki cards.
+    # The expressions can coincide, but their explanations are independently authored.
+    context_path = (
+        tmp_path / "projects" / str(project_id) / "editorial-ai"
+        / f"scene-{scene_id}-english-in-context.json"
+    )
+    context_path.parent.mkdir(parents=True, exist_ok=True)
+    context_path.write_text(json.dumps({
+        "scene_id": str(scene_id),
+        "wbw_practices": [
+            {
+                "source_cue_id": str(cue_id),
+                "word_ids": [str(word.id)],
+                "type": "expression",
+                "expression_en": "Hello.",
+                "meaning_pt": "Saudação original da IA externa.",
+                "explanation_pt": "Conteúdo independente do baralho Anki.",
+                "example_en": "Hello, everyone.",
+                "example_pt": "Olá, pessoal.",
+            },
+        ],
+    }), encoding="utf-8")
     publisher = PublishAnkiReel(
         source, Mock(), tmp_path / "exports", tmp_path / "projects"
     )
@@ -321,17 +343,15 @@ def test_didactic_publication_keeps_original_scene_and_separate_audio_per_card(
     ]
     assert len(doc["ankiAudio"]["cues"]) == 2
     # The same reviewed mini-lessons must also reach iHub stage 03 (Notice).
-    assert len(doc["wbw_practices"]) == 2
-    assert [practice["cue_order"] for practice in doc["wbw_practices"]] == [1, 1]
-    assert [practice["expression_en"] for practice in doc["wbw_practices"]] == [
-        card["focus_text"] for card in cards
-    ]
+    assert len(doc["wbw_practices"]) == 1
+    assert [practice["cue_order"] for practice in doc["wbw_practices"]] == [1]
+    assert doc["wbw_practices"][0]["expression_en"] == "Hello."
     assert all(practice["word_indexes"] == [0] for practice in doc["wbw_practices"])
     assert all(practice["start_ms"] == 100 for practice in doc["wbw_practices"])
     assert all(practice["end_ms"] == 700 for practice in doc["wbw_practices"])
-    assert doc["wbw_practices"][0]["meaning_pt"] == "Olá"
+    assert doc["wbw_practices"][0]["meaning_pt"] == "Saudação original da IA externa."
     assert doc["wbw_practices"][0]["explanation_pt"] == (
-        "Uma saudação em ambiente profissional."
+        "Conteúdo independente do baralho Anki."
     )
     assert doc["wbw_practices"][0]["example_en"] == "Hello, everyone."
     assert doc["wbw_practices"][0]["example_pt"] == "Olá, pessoal."
