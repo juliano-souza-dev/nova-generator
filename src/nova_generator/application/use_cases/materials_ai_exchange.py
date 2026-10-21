@@ -121,27 +121,40 @@ class MaterialsAiExchange:
             "content_type": project.content_type,
             "scenes": scenes,
         }
-        # Reuse the Anki mini-lessons prepared in the initial external AI round trip.
-        # Only preserve cards whose identity and literal EN/PT still match the
-        # editorial snapshot; do not silently rewrite cards after a split/merge.
-        prepared = self._read(project_id, "anki-prepared.json")
-        if prepared and prepared.get("contract") == "nova-generator-anki-proposal/1.0":
-            available = {
-                cue["id"]: cue
-                for scene in scenes for cue in scene["cues"]
-            }
+        # Reuse Anki prepared at first export for each scene independently.
+        # If the editorial later changes a cue, keep it out of publication
+        # and flag the prepared card for manual reconciliation.
+        available = {
+            cue["id"]: cue
+            for scene in scenes for cue in scene["cues"]
+        }
+        prepared_cards: list[dict[str, Any]] = []
+        needs_review = 0
+        found_draft = False
+        for scene in scenes:
+            prepared = self._read(project_id, f"anki-prepared-{scene['scene_id']}.json")
+            if not prepared or prepared.get("contract") != "nova-generator-anki-proposal/1.0":
+                continue
+            found_draft = True
             candidates = prepared.get("anki_cards", [])
-            if isinstance(candidates, list):
-                source["anki_prepared"] = [
-                    card for card in candidates
-                    if isinstance(card, dict)
-                    and (approved := available.get(card.get("cue_id"))) is not None
+            if not isinstance(candidates, list):
+                continue
+            for card in candidates:
+                if not isinstance(card, dict):
+                    needs_review += 1
+                    continue
+                approved = available.get(card.get("cue_id"))
+                if (
+                    approved is not None
                     and card.get("front_en") == approved["approved_en"]
                     and card.get("back_pt") == approved["approved_pt"]
-                ]
-                source["anki_prepared_needs_review"] = len(candidates) - len(
-                    source["anki_prepared"]
-                )
+                ):
+                    prepared_cards.append(card)
+                else:
+                    needs_review += 1
+        if found_draft:
+            source["anki_prepared"] = prepared_cards
+            source["anki_prepared_needs_review"] = needs_review
         fingerprint = sha256(json.dumps(
             source, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         ).encode("utf-8")).hexdigest()
