@@ -460,6 +460,8 @@
 }
 
 .anki-editor-face {
+  background: #fff;
+  color: #071828;
   min-width: 0;
   height: auto;
   min-height: 135px;
