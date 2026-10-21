@@ -532,12 +532,18 @@ def export_didactic_anki(
     # The reel must respect the chronology of the original scene, even when
     # the AI proposed cards in a different pedagogical order.
     repo = _repository()
-    scenes = {str(scene.id): scene.order for scene in repo.get_project_scenes(project_id)}
+    project_scenes = repo.get_project_scenes(project_id)
+    scenes = {str(scene.id): scene.order for scene in project_scenes}
+    cue_orders = {
+        str(cue.id): cue.order
+        for scene in project_scenes
+        for cue in repo.get_scene_cues(scene.id)
+    }
     cards = sorted(
         cards,
         key=lambda card: (
             scenes.get(card["scene_id"], 0),
-            repo.get_cue(UUID(card["cue_id"])).order,
+            cue_orders.get(card["cue_id"], 0),
         ),
     )
     if prepared.get("anki_prepared_needs_review"):
