@@ -362,6 +362,11 @@ export const studioApi = {
     apiRequest<MaterialExport>(`/projects/${projectId}/materials/exports/${jobId}`),
   latestMaterialExport: (projectId: string) =>
     apiRequest<MaterialExport>(`/projects/${projectId}/materials/latest-export`),
+  rebuildAnkiPackage: (projectId: string, jobId: string) =>
+    apiRequest<MaterialExport>(
+      `/projects/${projectId}/materials/exports/${jobId}/anki/rebuild`,
+      { method: "POST" },
+    ),
   regenerateFinalMaterials: (projectId: string, jobId: string) =>
     apiRequest<MaterialPublication>(
       `/projects/${projectId}/materials/exports/${jobId}/publication/regenerate`,
