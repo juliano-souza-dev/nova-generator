@@ -1,6 +1,7 @@
 """The APKG and published iHub cards must share all pedagogical content."""
 
 import json
+import re
 import sqlite3
 from hashlib import sha256
 from pathlib import Path
@@ -74,10 +75,10 @@ def test_didactic_apkg_has_same_face_back_and_mini_lesson_as_ihub(tmp_path):
     fields = [note[0].split("\x1f") for note in notes]
     assert all(len(item) == 12 for item in fields)
     for lesson, field in zip(lessons, fields, strict=True):
-        assert lesson["front_en"].replace("answer to", "") in field[0]
+        assert re.sub(r"<[^>]+>", "", field[0]) == lesson["front_en"]
         assert '<span class="ihub-highlight">answer to</span>' in field[0]
-        assert lesson["back_pt"].replace("prestam contas", "") in field[1]
-        assert "prestam contas" in field[1]
+        assert re.sub(r"<[^>]+>", "", field[1]) == lesson["back_pt"]
+        assert '<span class="ihub-highlight">prestam contas</span>' in field[1]
         assert field[3] == lesson["focus_text"]
         assert field[4] == lesson["meaning"]
         assert field[5] == lesson["explanation_pt"]
