@@ -6,9 +6,9 @@ import json
 import os
 import shutil
 import tempfile
+from collections.abc import Callable
 from hashlib import sha256
 from pathlib import Path
-from typing import Callable
 from uuid import UUID
 
 from nova_generator.application.ports.editorial_project_repository import (
