@@ -24,7 +24,13 @@ def _token(value: object) -> str:
     value = unicodedata.normalize("NFKC", str(value or ""))
     for apostrophe in ("’", "‘", "`", "´"):
         value = value.replace(apostrophe, "'")
-    return value.casefold().strip(" \\t\\n.,?!:;\\\"“”()[]")
+    text = value.casefold()
+    start, end = 0, len(text)
+    while start < end and not (text[start].isalnum() or text[start] == "'"):
+        start += 1
+    while end > start and not (text[end - 1].isalnum() or text[end - 1] == "'"):
+        end -= 1
+    return text[start:end]
 
 
 def _tokens(value: object) -> list[str]:
