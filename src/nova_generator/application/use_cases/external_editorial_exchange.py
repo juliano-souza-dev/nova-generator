@@ -443,18 +443,16 @@ class ExternalEditorialExchange:
                 item.cue_id: [turn.model_dump() for turn in item.speaker_turns]
                 for item in document.suggestions
             })
-        prepared_anki: _ExternalAnkiProposal | None = None
+        prepared_anki: _ExternalAnkiProposal | DidacticAnkiProposal | None = None
         if anki_result is not None:
             if len(anki_result) > self._maximum_result_bytes:
                 raise EditorialAssistanceError("Anki result exceeds the allowed size")
             try:
                 parsed = json.loads(anki_result)
-                parser = (
-                    DidacticAnkiProposal
-                    if parsed.get("contract") == ANKI_OUTPUT_CONTRACT
-                    else _ExternalAnkiProposal
-                )
-                prepared_anki = parser.model_validate_json(anki_result)
+                if parsed.get("contract") == ANKI_OUTPUT_CONTRACT:
+                    prepared_anki = DidacticAnkiProposal.model_validate_json(anki_result)
+                else:
+                    prepared_anki = _ExternalAnkiProposal.model_validate_json(anki_result)
             except (ValidationError, ValueError) as error:
                 raise EditorialAssistanceError(
                     f"Anki result violates the required contract: {_validation_detail(error)}"
