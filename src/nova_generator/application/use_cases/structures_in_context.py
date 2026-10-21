@@ -1,105 +1,192 @@
-"""Map approved Anki lessons to the iHub Structures in Context transport.
+"""Transport independently authored English-in-Context lessons from the external AI.
 
-This does not generate new pedagogy, alter Anki cards, or estimate word timings.
-Only verified focus spans from the original editorial audio are published.
+Pedagogical text is never generated from Anki cards.  Stable editorial word IDs
+are the link between the external response and the approved source timeline.
 """
 
 from __future__ import annotations
 
+import json
 import unicodedata
+from pathlib import Path
 from typing import Any
+from uuid import UUID
+
+from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
+from nova_generator.domain.projects.entities import Cue
 
 
 class StructuresInContextError(ValueError):
-    """A prepared lesson cannot be published as a playable source expression."""
+    """The external pedagogical material does not match the published source."""
 
 
-def _normalized_token(value: object) -> str:
-    text = unicodedata.normalize("NFKC", str(value or ""))
-    for mark in ("’", "‘", "`", "´"):
-        text = text.replace(mark, "'")
-    text = text.casefold()
-    start, end = 0, len(text)
-    while start < end and not (text[start].isalnum() or text[start] == "'"):
-        start += 1
-    while end > start and not (text[end - 1].isalnum() or text[end - 1] == "'"):
-        end -= 1
-    return text[start:end]
+def _token(value: object) -> str:
+    value = unicodedata.normalize("NFKC", str(value or ""))
+    for apostrophe in ("’", "‘", "`", "´"):
+        value = value.replace(apostrophe, "'")
+    return value.casefold().strip(" \\t\\n.,?!:;\\\"“”()[]")
 
 
-def _matching_word_indexes(words: list[dict[str, Any]], expression: str) -> list[int]:
-    # Match the same contiguous, normalized tokens as iHub's word-study player.
-    target = [_normalized_token(token) for token in expression.split()]
-    target = [token for token in target if token]
-    source = [_normalized_token(word.get("text", "")) for word in words]
-    if not target or len(target) > len(source):
-        return []
-    for start in range(len(source) - len(target) + 1):
-        if source[start:start + len(target)] == target:
-            return list(range(start, start + len(target)))
-    return []
+def _tokens(value: object) -> list[str]:
+    return [token for part in str(value).split() if (token := _token(part))]
 
 
-def build_structures_in_context(
-    cards: list[dict[str, Any]],
-    rows_by_cue: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Create iHub's wbw_practices from frozen, approved didactic cards.
+def prepare_external_structures(suggestions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Validate AI selections against its *own* approved editorial word list.
 
-    Cue references and word ranges use the same published source timeline.
-    On an unplayable or incomplete item, fail instead of silently dropping a
-    curated lesson or manufacturing fake word-level intervals.
+    Every selected expression must have word IDs in the correct, contiguous
+    order.  No artificial durations or Anki-derived text are introduced.
     """
-    allowed = {
-        "vocabulary", "phrasal_verb", "structure",
-        "collocation", "idiom", "expression",
+    prepared: list[dict[str, Any]] = []
+    for suggestion in suggestions:
+        words = suggestion.get("word_translations", [])
+        word_ids = [str(word.get("word_id", "")) for word in words]
+        cue_id = str(suggestion["cue_id"])
+        for practice in suggestion.get("context_practices", []):
+            selected = [str(word_id) for word_id in practice["word_ids"]]
+            try:
+                positions = [word_ids.index(word_id) for word_id in selected]
+            except ValueError as error:
+                raise StructuresInContextError(
+                    f"English in Context cue {cue_id}: unknown word ID"
+                ) from error
+            if len(set(positions)) != len(positions) or positions != list(
+                range(positions[0], positions[-1] + 1)
+            ):
+                raise StructuresInContextError(
+                    f"English in Context cue {cue_id}: word IDs must be contiguous"
+                )
+            source_text = "".join(
+                str(words[index].get("leading") or "")
+                + str(words[index].get("surface") or "")
+                for index in positions
+            ).strip()
+            expression = str(practice["expression_en"]).strip()
+            if _tokens(source_text) != _tokens(expression):
+                raise StructuresInContextError(
+                    f"English in Context cue {cue_id}: expression {expression!r} "
+                    "does not match the selected editorial words"
+                )
+            prepared.append({
+                "source_cue_id": cue_id,
+                "word_ids": selected,
+                "type": str(practice["type"]),
+                "expression_en": expression,
+                "meaning_pt": str(practice["meaning_pt"]),
+                "explanation_pt": str(practice["explanation_pt"]),
+                "example_en": str(practice["example_en"]),
+                "example_pt": str(practice["example_pt"]),
+            })
+    return prepared
+
+
+def external_structures_path(
+    project_root: Path, project_id: UUID, scene_id: UUID
+) -> Path:
+    return (
+        project_root / str(project_id) / "editorial-ai"
+        / f"scene-{scene_id}-english-in-context.json"
+    )
+
+
+def write_external_structures(
+    project_root: Path, project_id: UUID, scene_id: UUID,
+    source_sha256: str, suggestions: list[dict[str, Any]],
+) -> None:
+    practices = prepare_external_structures(suggestions)
+    path = external_structures_path(project_root, project_id, scene_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = {
+        "contract": "nova-generator-english-in-context/1.0",
+        "scene_id": str(scene_id),
+        "input_sha256": source_sha256,
+        "wbw_practices": practices,
     }
-    practices: list[dict[str, Any]] = []
-    for number, card in enumerate(cards, start=1):
-        cue_id = str(card.get("cue_id", ""))
-        source = rows_by_cue.get(cue_id)
-        if source is None:
+    temporary = path.with_suffix(".tmp")
+    try:
+        temporary.write_text(json.dumps(body, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def load_external_structures(
+    project_root: Path, project_id: UUID, scene_ids: list[UUID]
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for scene_id in scene_ids:
+        path = external_structures_path(project_root, project_id, scene_id)
+        if path.exists():
+            body = json.loads(path.read_text(encoding="utf-8"))
+            if body.get("scene_id") != str(scene_id) or not isinstance(
+                body.get("wbw_practices"), list
+            ):
+                raise StructuresInContextError("Saved English in Context file is invalid")
+            results.extend(body["wbw_practices"])
+    return results
+
+
+def publish_external_structures(
+    *,
+    practices: list[dict[str, Any]],
+    source_rows: list[tuple[Cue, dict[str, Any]]],
+    repository: EditorialProjectRepository,
+) -> list[dict[str, Any]]:
+    """Bind stored AI material to the current published source cue and words.
+
+    The iHub requires cue_order, contiguous word_indexes and actual timing in
+    the published audio timeline. Incompatible editorial edits fail visibly.
+    """
+    candidates = []
+    for cue, row in source_rows:
+        words = repository.get_cue_words(cue.id)
+        candidates.append((row, words))
+    published = []
+    for practice in practices:
+        wanted = [str(item) for item in practice["word_ids"]]
+        matches = []
+        for row, words in candidates:
+            lookup = {str(word.id): index for index, word in enumerate(words)}
+            if all(word_id in lookup for word_id in wanted):
+                indexes = [lookup[word_id] for word_id in wanted]
+                if indexes == list(range(indexes[0], indexes[-1] + 1)):
+                    matches.append((row, indexes))
+        if len(matches) != 1:
             raise StructuresInContextError(
-                f"English in Context card {number} has no published source cue"
+                f"English in Context {practice['expression_en']!r} cannot be "
+                "associated unambiguously with a published cue"
             )
-        expression = str(card.get("focus_text", "")).strip()
-        meaning = str(card.get("meaning", "")).strip()
-        explanation = str(card.get("explanation_pt", "")).strip()
-        example_en = str(card.get("example_en", "")).strip()
-        example_pt = str(card.get("example_pt", "")).strip()
-        if not all((expression, meaning, explanation, example_en, example_pt)):
+        row, indexes = matches[0]
+        word_rows = row["words"]
+        expression = str(practice["expression_en"])
+        if _tokens(expression) != [
+            _token(word_rows[index]["text"])
+            for index in indexes
+            if _token(word_rows[index]["text"])
+        ]:
             raise StructuresInContextError(
-                f"English in Context card {number} is missing its mini-lesson fields"
+                f"English in Context {expression!r} no longer matches the approved text"
             )
-        words = source.get("words", [])
-        indexes = _matching_word_indexes(words, expression)
-        if not indexes:
+        start = int(word_rows[indexes[0]]["start_ms"])
+        end = int(word_rows[indexes[-1]]["end_ms"])
+        if start < 0 or end <= start:
             raise StructuresInContextError(
-                f"English in Context card {number}: focus_text {expression!r} "
-                "does not match contiguous source words; review its word timings"
+                f"English in Context {expression!r} has invalid word times"
             )
-        start_ms = int(words[indexes[0]]["start_ms"])
-        end_ms = int(words[indexes[-1]]["end_ms"])
-        if start_ms < 0 or end_ms <= start_ms:
-            raise StructuresInContextError(
-                f"English in Context card {number} has invalid original audio timing"
-            )
-        kind = str(card.get("card_type", "structure")).strip().lower()
-        kind = kind.replace(" ", "_").replace("-", "_")
-        if kind == "phrasal":
-            kind = "phrasal_verb"
-        if kind not in allowed:
-            kind = "structure"
-        practices.append({
-            "cue_order": int(source["order"]),
-            "type": kind,
+        published.append({
+            "cue_order": int(row["order"]),
+            "type": practice["type"],
+            "highlight": expression,
             "expression_en": expression,
             "word_indexes": indexes,
-            "meaning_pt": meaning,
-            "explanation_pt": explanation,
-            "example_en": example_en,
-            "example_pt": example_pt,
-            "start_ms": start_ms,
-            "end_ms": end_ms,
+            "context_en": str(row["approved_en"]),
+            "context_pt": str(row["pt"]),
+            "meaning_pt": practice["meaning_pt"],
+            "explanation_pt": practice["explanation_pt"],
+            "examples": [{"en": practice["example_en"], "pt": practice["example_pt"]}],
+            "example_en": practice["example_en"],
+            "example_pt": practice["example_pt"],
+            "start_ms": start,
+            "end_ms": end,
         })
-    return practices
+    return published
