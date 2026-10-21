@@ -185,6 +185,7 @@ class MaterialsJobHandler:
                 card_id, order, frozen["front_en"], frozen["back_pt"],
                 Path(speech.audio_path), speech.duration_ms,
                 utf8_sha256(frozen["front_en"]),
+                lesson=dict(frozen),
             )
             if export_card.audio_sha256 != job.input.get("audio_hashes", {}).get(str(card_id)):
                 raise ValueError(f"didactic WAV changed for card {card_id}")

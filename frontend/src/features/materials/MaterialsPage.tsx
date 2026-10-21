@@ -833,8 +833,24 @@ export function MaterialsPage() {
           )}
           {exportStatus.data.reel_url && <a href={exportStatus.data.reel_url}>Baixar reel</a>}
           {exportStatus.data.hub_final_url ? (
-            <div>
+            <div className="materials-complete-delivery">
               <p>Reel vinculado ao YouTube: {exportStatus.data.youtube_video_id}</p>
+              {exportStatus.data.bundle_url ? (
+                <>
+                  <a className="primary-button" href={exportStatus.data.bundle_url} download>
+                    <Download aria-hidden="true" /> Baixar kit completo (ZIP)
+                  </a>
+                  <p>
+                    Inclui JSON final, Anki, reel, WAVs e os arquivos aprovados disponíveis.
+                  </p>
+                </>
+              ) : (
+                <p role="status">
+                  Este APKG didático foi gerado antes do formato completo do iHub.
+                  Clique em “Exportar Anki didático” novamente, sem refazer os áudios,
+                  para liberar o ZIP com as mini-aulas.
+                </p>
+              )}
               <a href={exportStatus.data.hub_final_url}>Baixar hub_final.json</a>
             </div>
           ) : exportStatus.data.status === "succeeded" ? (

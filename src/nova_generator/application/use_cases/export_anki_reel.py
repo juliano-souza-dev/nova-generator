@@ -57,6 +57,11 @@ class ExportAnkiReel:
         payload = {
             "schema": "nova-generator-anki-audio",
             "schema_version": "1.0",
+            "card_layout": (
+                "ihub-didactic-v2"
+                if all(cue.lesson is not None for cue in cues)
+                else "legacy-cue-v1"
+            ),
             "voice": _voice_payload(voice),
             "apkg_sha256": _file_hash(apkg),
             "reel_sha256": _file_hash(reel),

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from nova_generator.domain.voices import VoiceProfileSnapshot
@@ -19,6 +20,7 @@ class ExportCue:
     audio_path: Path
     duration_ms: int
     text_sha256: str
+    lesson: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if self.order < 1 or self.duration_ms < 1 or not self.approved_en:

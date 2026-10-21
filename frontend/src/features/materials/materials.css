@@ -617,3 +617,24 @@
 .materials-didactic-audio button {
   min-height: 40px;
 }
+
+.materials-complete-delivery {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  padding: 0.65rem 0;
+}
+
+.materials-complete-delivery .primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.7rem 1rem;
+  text-decoration: none;
+}
+
+.materials-complete-delivery p {
+  margin: 0;
+}

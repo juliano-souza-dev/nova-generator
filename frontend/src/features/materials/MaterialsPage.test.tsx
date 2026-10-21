@@ -415,6 +415,52 @@ describe("MaterialsPage", () => {
     expect(screen.queryByRole("button", { name: "Preparar WAV" })).not.toBeInTheDocument();
   });
 
+  it("provides the final ZIP only when a published export has a complete kit", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [card],
+      voice_id: null,
+      voice_version: null,
+    });
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "pending",
+      source_sha256: "a".repeat(64),
+      document: null,
+    });
+    vi.mocked(studioApi.latestMaterialExport).mockResolvedValue({
+      job_id: "job-published",
+      status: "succeeded",
+      apkg_url: "/anki.apkg",
+      manifest_url: "/manifest.json",
+      reel_url: "/reel.mp4",
+      hub_final_url: "/hub_final.json",
+      bundle_url: "/api/projects/project-1/materials/exports/job-published/kit-completo.zip",
+      youtube_video_id: "bbbbbbbbbbb",
+    });
+    vi.mocked(studioApi.materialExport).mockResolvedValue({
+      job_id: "job-published",
+      status: "succeeded",
+      apkg_url: "/anki.apkg",
+      manifest_url: "/manifest.json",
+      reel_url: "/reel.mp4",
+      hub_final_url: "/hub_final.json",
+      bundle_url: "/api/projects/project-1/materials/exports/job-published/kit-completo.zip",
+      youtube_video_id: "bbbbbbbbbbb",
+    });
+    mount();
+    expect(
+      await screen.findByRole("link", { name: "Baixar kit completo (ZIP)" }),
+    ).toHaveAttribute(
+      "href", "/api/projects/project-1/materials/exports/job-published/kit-completo.zip",
+    );
+    expect(screen.getByRole("link", { name: "Baixar hub_final.json" })).toHaveAttribute(
+      "href", "/hub_final.json",
+    );
+  });
+
   it("shows literal approved text, canonical preview, reel interval and submits selection", async () => {
     vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
       status: "approved",
