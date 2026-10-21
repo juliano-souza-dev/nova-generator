@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Nova Generator automatically prepared Shadowing seed",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "project_id",
+    "scene_id",
+    "editorial_input_sha256",
+    "source_sha256",
+    "status",
+    "origin",
+    "recompute_after_editorial",
+    "external_ai_required",
+    "warning",
+    "constraints",
+    "source_cues",
+    "blocks"
+  ],
+  "properties": {
+    "contract": {
+      "const": "nova-generator-shadowing-seed/1.0"
+    },
+    "project_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "scene_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "editorial_input_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "status": {
+      "const": "provisional"
+    },
+    "origin": {
+      "const": "automatic"
+    },
+    "recompute_after_editorial": {
+      "const": true
+    },
+    "external_ai_required": {
+      "const": false
+    },
+    "warning": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_duration_ms",
+        "max_words",
+        "max_gap_ms",
+        "same_speaker",
+        "contiguous_cues_per_group",
+        "optional_cues"
+      ],
+      "properties": {
+        "max_duration_ms": {
+          "const": 6500
+        },
+        "max_words": {
+          "const": 14
+        },
+        "max_gap_ms": {
+          "const": 1000
+        },
+        "same_speaker": {
+          "const": true
+        },
+        "contiguous_cues_per_group": {
+          "const": true
+        },
+        "optional_cues": {
+          "const": true
+        }
+      }
+    },
+    "source_cues": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "order",
+          "speaker",
+          "start_ms",
+          "end_ms",
+          "en",
+          "pt",
+          "eligible"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "speaker": {
+            "type": "string"
+          },
+          "start_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end_ms": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "en": {
+            "type": "string"
+          },
+          "pt": {
+            "type": "string"
+          },
+          "eligible": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "start_ms",
+          "end_ms",
+          "pause_duration_ms",
+          "speaker",
+          "word_count",
+          "cue_ids",
+          "en",
+          "pt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "start_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end_ms": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pause_duration_ms": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 9000
+          },
+          "speaker": {
+            "type": "string"
+          },
+          "word_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 14
+          },
+          "cue_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "en": {
+            "type": "string"
+          },
+          "pt": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

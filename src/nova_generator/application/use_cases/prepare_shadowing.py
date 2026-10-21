@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -101,6 +102,97 @@ class PrepareShadowing:
             status="draft",
             origin="automatic",
         )
+
+    def export_preparation(
+        self, project_id: UUID, scene_id: UUID, editorial_input_sha256: str
+    ) -> dict[str, Any]:
+        """Export an automatic Shadowing preview even before editorial approval.
+
+        This is *not* an AI proposal or an approved plan. The regular scene()
+        method remains authoritative and recomputes groups from approved cues.
+        All grouping, timing, duration and pause rules come from this module.
+        """
+        scene = next(
+            (
+                item for item in self.repository.get_project_scenes(project_id)
+                if item.id == scene_id
+            ),
+            None,
+        )
+        if self.repository.get_project(project_id) is None or scene is None:
+            raise ShadowingError("scene not found in project")
+        source_cues = sorted(
+            self.repository.get_scene_cues(scene_id), key=lambda cue: cue.order
+        )
+        if not source_cues:
+            raise ShadowingError("scene has no cues")
+
+        # If editorial was already approved, export the actual editable plan.
+        if all(
+            cue.provenance.get("approval") != "draft"
+            and cue.approved_en.strip() and cue.approved_pt.strip()
+            for cue in source_cues
+        ):
+            try:
+                plan = self.scene(project_id, scene_id)
+                return {
+                    **plan,
+                    "editorial_input_sha256": editorial_input_sha256,
+                    "recompute_after_editorial": True,
+                }
+            except ShadowingError:
+                # Incomplete timing is not a reason to block editorial export.
+                pass
+
+        # Original ASR words may not have approved translations yet. Reuse the
+        # unchanged algorithm with the current EN as a provisional source.
+        candidate_cues = [
+            replace(cue, approved_en=cue.approved_en or cue.original_en)
+            for cue in source_cues
+        ]
+        try:
+            blocks = _validated_blocks(
+                candidate_cues, _automatic_groups(candidate_cues)
+            )
+            warning = None
+        except ShadowingError as error:
+            blocks = []
+            warning = str(error)
+        snapshot = _digest(_snapshot(scene, candidate_cues))
+        return {
+            "contract": "nova-generator-shadowing-seed/1.0",
+            "project_id": str(project_id),
+            "scene_id": str(scene_id),
+            "editorial_input_sha256": editorial_input_sha256,
+            "source_sha256": snapshot,
+            "status": "provisional",
+            "origin": "automatic",
+            "recompute_after_editorial": True,
+            "external_ai_required": False,
+            "warning": warning,
+            "constraints": {
+                "max_duration_ms": MAX_BLOCK_MS,
+                "max_words": MAX_BLOCK_WORDS,
+                "max_gap_ms": MAX_CUE_GAP_MS,
+                "same_speaker": True,
+                "contiguous_cues_per_group": True,
+                "optional_cues": True,
+            },
+            "source_cues": [
+                {
+                    "id": str(cue.id),
+                    "order": cue.order,
+                    "speaker": cue.speaker.strip() or "Não identificado",
+                    "start_ms": cue.speech_start_ms,
+                    "end_ms": cue.speech_end_ms,
+                    "en": cue.approved_en,
+                    "pt": cue.approved_pt,
+                    "eligible": _cue_is_short(cue),
+                }
+                for cue in candidate_cues
+            ],
+            "blocks": blocks,
+        }
 
     def package(self, project_id: UUID, scene_id: UUID) -> dict[str, Any]:
         plan = self.scene(project_id, scene_id)

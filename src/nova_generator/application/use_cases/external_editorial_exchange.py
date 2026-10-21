@@ -31,6 +31,10 @@ from nova_generator.application.use_cases.editorial_assistance import (
     persist_editorial_chunk_with_speaker_turns,
     validate_editorial_result,
 )
+from nova_generator.application.use_cases.prepare_shadowing import (
+    PrepareShadowing,
+    ShadowingError,
+)
 
 
 class _ExternalSemanticUnit(BaseModel):
@@ -139,6 +143,14 @@ class ExternalEditorialExchange:
             "input_sha256": input_sha256,
             "cues": [asdict(cue) for cue in cues],
         }
+        try:
+            shadowing = PrepareShadowing(
+                self._repository, self._project_root
+            ).export_preparation(project_id, scene_id, input_sha256)
+        except ShadowingError as error:
+            raise EditorialAssistanceError(
+                f"cannot include Shadowing preparation: {error}"
+            ) from error
         chunks = [
             cues[index : index + self._CUES_PER_CHUNK]
             for index in range(0, len(cues), self._CUES_PER_CHUNK)
@@ -163,6 +175,15 @@ class ExternalEditorialExchange:
             "output_contract": ANKI_OUTPUT_CONTRACT,
             "response_path": "anki/anki-ai-result.json",
         }
+        manifest["shadowing"] = {
+            "required_in_export": True,
+            "generation": "automatic",
+            "status": shadowing["status"],
+            "contract": shadowing["contract"],
+            "prepared_path": "shadowing/shadowing-prepared.json",
+            "requires_external_ai_result": False,
+            "recompute_after_editorial_approval": True,
+        }
         (directory / f"scene-{scene_id}-external-ai-manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
@@ -170,7 +191,15 @@ class ExternalEditorialExchange:
             archive.writestr(
                 "manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
             )
-            archive.writestr("INSTRUCOES.md", _instructions() + _anki_instructions())
+            archive.writestr(
+                "INSTRUCOES.md",
+                _instructions() + _anki_instructions() + _shadowing_instructions(),
+            )
+            archive.writestr(
+                "shadowing/shadowing-prepared.json",
+                json.dumps(shadowing, ensure_ascii=False, indent=2) + "\n",
+            )
+            archive.writestr("shadowing/LEIA-ME.md", _shadowing_instructions())
             legacy_source = {**source, "schema_version": "nova-generator-editorial-input/1.3"}
             legacy_template = _template(scene_id, input_sha256, "", cues) | {
                 "schema_version": "nova-generator-editorial-suggestions/1.3"
@@ -641,6 +670,26 @@ def _anki_template(
         ],
     }
 
+
+def _shadowing_instructions() -> str:
+    return """
+## Shadowing: preparado automaticamente no pacote inicial
+
+O arquivo `shadowing/shadowing-prepared.json` acompanha ESTE pacote e já
+contém a seleção automática preliminar de blocos, limites e pausas, usando
+a MESMA lógica do Shadowing atual (limite 6,5 s, 14 palavras, 1 s entre cues,
+somente cues contíguos do mesmo speaker). A IA externa **NÃO deve editar,
+regenerar ou devolver JSON de Shadowing**. Sua tarefa continua sendo apenas
+o Editorial e o Anki. O arquivo não é um template a ser preenchido pela IA.
+
+Se `status=provisional`, a cena ainda não foi totalmente aprovada. O preview
+é informativo: após aplicar e aprovar o Editorial, o Generator recalcula os
+blocos da fonte canônica, com IDs, textos e tempos definitivos, mantendo a
+interface de edição, prévia e aprovação humana. NUNCA publique o seed como
+um plano aprovado. Se o arquivo já estiver no contrato
+`nova-generator-shadowing/2.0`, é um plano válido da cena aprovada, sujeito
+à checagem do hash caso o Editorial mude.
+"""
 
 def _anki_instructions() -> str:
     return """
