@@ -132,6 +132,43 @@ def load_external_structures(
     return results
 
 
+def resolve_external_context_cues(
+    practices: list[dict[str, Any]],
+    scenes: list[Any],
+    repository: EditorialProjectRepository,
+) -> list[Cue]:
+    """Find approved source cues even when a speaker split changed cue IDs."""
+    candidates = [
+        cue for scene in scenes for cue in repository.get_scene_cues(scene.id)
+    ]
+    ids_by_cue = {
+        cue.id: [str(word.id) for word in repository.get_cue_words(cue.id)]
+        for cue in candidates
+    }
+    selected: dict[UUID, Cue] = {}
+    for practice in practices:
+        word_ids = [str(value) for value in practice["word_ids"]]
+        possible = []
+        for cue in candidates:
+            ids = ids_by_cue[cue.id]
+            if all(word_id in ids for word_id in word_ids):
+                positions = [ids.index(word_id) for word_id in word_ids]
+                if positions == list(range(positions[0], positions[-1] + 1)):
+                    possible.append(cue)
+        if len(possible) != 1:
+            raise StructuresInContextError(
+                f"External English in Context {practice['expression_en']!r} "
+                "no longer matches a unique approved source cue"
+            )
+        cue = possible[0]
+        if cue.provenance.get("approval") == "draft":
+            raise StructuresInContextError(
+                f"English in Context source cue {cue.id} still needs approval"
+            )
+        selected[cue.id] = cue
+    return list(selected.values())
+
+
 def publish_external_structures(
     *,
     practices: list[dict[str, Any]],
