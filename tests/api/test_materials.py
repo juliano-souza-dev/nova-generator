@@ -385,3 +385,92 @@ def test_didactic_anki_audio_and_export_use_card_front_not_scene_subtitle(
     assert job["input"]["mode"] == "didactic"
     assert job["input"]["anki_cards"][0]["card_id"] == card_id
     assert job["input"]["anki_cards"][0]["front_en"] == front
+
+
+def test_regenerate_final_materials_reuses_published_video_without_new_jobs(
+    client, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from nova_generator.api.routes import materials as materials_routes
+
+    project_id, job_id = uuid4(), uuid4()
+    called = []
+
+    def fake_publish(*, project_id, job, youtube):
+        called.append((project_id, job, youtube))
+        return SimpleNamespace(
+            youtube_video_id=youtube,
+            youtube_url=f"https://www.youtube.com/watch?v={youtube}",
+        )
+
+    job = SimpleNamespace(id=job_id, status="succeeded")
+    monkeypatch.setattr(
+        materials_routes, "_export_job", lambda *args: job
+    )
+    monkeypatch.setattr(
+        materials_routes,
+        "_publication_document",
+        lambda *args: {
+            "ankiAudio": {"youtube": {"video_id": "bbbbbbbbbbb"}}
+        },
+    )
+    monkeypatch.setattr(
+        materials_routes,
+        "_publisher",
+        lambda: SimpleNamespace(execute=fake_publish),
+    )
+    response = client.post(
+        f"/api/projects/{project_id}/materials/exports/{job_id}/publication/regenerate"
+    )
+    assert response.status_code == 200, response.text
+    assert called == [(project_id, job, "bbbbbbbbbbb")]
+    assert response.json() == {
+        "youtube_video_id": "bbbbbbbbbbb",
+        "youtube_url": "https://www.youtube.com/watch?v=bbbbbbbbbbb",
+        "hub_final_url": (
+            f"/api/projects/{project_id}/materials/exports/{job_id}/hub_final.json"
+        ),
+    }
+
+
+def test_regenerate_finals_refuses_missing_publication_or_incomplete_export(
+    client, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from nova_generator.api.routes import materials as materials_routes
+
+    project_id, job_id = uuid4(), uuid4()
+    publishing = []
+    monkeypatch.setattr(
+        materials_routes,
+        "_publisher",
+        lambda: SimpleNamespace(
+            execute=lambda **kwargs: publishing.append(kwargs)
+        ),
+    )
+    monkeypatch.setattr(
+        materials_routes,
+        "_publication_document",
+        lambda *args: None,
+    )
+    monkeypatch.setattr(
+        materials_routes,
+        "_export_job",
+        lambda *args: SimpleNamespace(id=job_id, status="succeeded"),
+    )
+    url = f"/api/projects/{project_id}/materials/exports/{job_id}/publication/regenerate"
+    result = client.post(url)
+    assert result.status_code == 409
+    assert "Primeiro vincule o reel" in result.json()["detail"]
+
+    monkeypatch.setattr(
+        materials_routes,
+        "_export_job",
+        lambda *args: SimpleNamespace(id=job_id, status="running"),
+    )
+    result = client.post(url)
+    assert result.status_code == 409
+    assert "exportação precisa estar concluída" in result.json()["detail"]
+    assert publishing == []

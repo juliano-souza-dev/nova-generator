@@ -25,6 +25,7 @@ vi.mock("../../lib/studio-api", () => ({
     materialExport: vi.fn(),
     latestMaterialExport: vi.fn(),
     publishMaterialExport: vi.fn(),
+    regenerateFinalMaterials: vi.fn(),
   },
 }));
 
@@ -450,6 +451,11 @@ describe("MaterialsPage", () => {
       bundle_url: "/api/projects/project-1/materials/exports/job-published/kit-completo.zip",
       youtube_video_id: "bbbbbbbbbbb",
     });
+    vi.mocked(studioApi.regenerateFinalMaterials).mockResolvedValue({
+      youtube_video_id: "bbbbbbbbbbb",
+      youtube_url: "https://www.youtube.com/watch?v=bbbbbbbbbbb",
+      hub_final_url: "/hub_final.json",
+    });
     mount();
     expect(
       await screen.findByRole("link", { name: "Baixar kit completo (ZIP)" }),
@@ -459,6 +465,30 @@ describe("MaterialsPage", () => {
     expect(screen.getByRole("link", { name: "Baixar hub_final.json" })).toHaveAttribute(
       "href", "/hub_final.json",
     );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Regerar materiais finais" }),
+    );
+    await waitFor(() => {
+      expect(studioApi.regenerateFinalMaterials).toHaveBeenCalledWith(
+        "project-1",
+        "job-published",
+      );
+    });
+    expect(
+      await screen.findByText(/Materiais finais atualizados/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Baixar hub_final.json" }),
+    ).toHaveAttribute("href", "/hub_final.json?revision=1");
+    expect(
+      screen.getByRole("link", { name: "Baixar kit completo (ZIP)" }),
+    ).toHaveAttribute(
+      "href",
+      "/api/projects/project-1/materials/exports/job-published/kit-completo.zip?revision=1",
+    );
+    expect(studioApi.exportMaterials).not.toHaveBeenCalled();
+    expect(studioApi.exportDidacticAnki).not.toHaveBeenCalled();
+    expect(studioApi.prepareMaterialAudio).not.toHaveBeenCalled();
   });
 
   it("shows literal approved text, canonical preview, reel interval and submits selection", async () => {
