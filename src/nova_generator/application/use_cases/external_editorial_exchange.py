@@ -20,8 +20,10 @@ from nova_generator.application.ports.editorial_assistant import (
 )
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.use_cases.anki_proposal import AnkiProposal as _ExternalAnkiProposal
-from nova_generator.application.use_cases.anki_proposal import validate_anki_cards
-from nova_generator.application.use_cases.anki_proposal import reconcile_anki_proposal
+from nova_generator.application.use_cases.anki_proposal import (
+    reconcile_anki_proposal,
+    validate_anki_cards,
+)
 from nova_generator.application.use_cases.editorial_assistance import (
     EditorialAssistanceError,
     build_editorial_prompt,
