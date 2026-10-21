@@ -8,11 +8,11 @@ from pydantic import BaseModel, Field
 
 from nova_generator.api.dependencies import get_inspect_youtube_source, get_manage_projects
 from nova_generator.application.ports.youtube_metadata_inspector import YoutubeSourceUnavailable
-from nova_generator.application.use_cases.inspect_youtube_source import InspectYoutubeSource
 from nova_generator.application.use_cases.import_ihub_cut import (
     MAX_EXPORT_BYTES,
     extract_ihub_video_cut,
 )
+from nova_generator.application.use_cases.inspect_youtube_source import InspectYoutubeSource
 from nova_generator.application.use_cases.manage_projects import (
     ManagedProject,
     ManageProjects,
