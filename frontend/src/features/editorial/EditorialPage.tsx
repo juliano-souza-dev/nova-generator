@@ -590,7 +590,20 @@ export function EditorialPage() {
     }
   }, [assistantBusy, cues, refreshCues, sceneId]);
   async function importExternalResult(files: File[]) {
-    if (!sceneId || assistantBusy) return;
+    if (!sceneId || assistantBusy || files.length === 0) return;
+    if (isDirty) {
+      setAssistantMessage("Salve ou descarte as alterações da cue antes de importar outro JSON.");
+      return;
+    }
+    if (
+      cues.some((cue) => cue.provenance?.approval === "approved") &&
+      !window.confirm(
+        "O retorno da IA substituirá a preparação editorial atual e reabrirá as cues " +
+        "afetadas para revisão. A mídia e a transcrição original serão preservadas. Continuar?",
+      )
+    ) {
+      return;
+    }
     setAssistantBusy(true);
     setAssistantMessage(`Validando ${files.length} arquivo(s) da IA externa…`);
     try {
@@ -1549,6 +1562,38 @@ export function EditorialPage() {
           )}
         </div>
       </header>
+      {selectedCue && editorialGateReady && (
+        <section className="editorial-ai-reexport panel" aria-label="Regerar JSON da IA externa">
+          <div className="editorial-ai-reexport-copy">
+            <span className="eyebrow">Reprocessamento sem mídia</span>
+            <h2>Regerar pacote da IA externa</h2>
+            <p>
+              Gera um novo pacote usando as cues e palavras da cena atual. Não baixa o vídeo,
+              não refaz o corte e não executa a transcrição. O editorial salvo permanece intacto
+              até você importar um novo retorno.
+            </p>
+          </div>
+          <div className="editorial-ai-reexport-actions">
+            {isDirty ? (
+              <span role="status">Salve ou descarte as alterações para gerar o pacote.</span>
+            ) : (
+              <a
+                className="secondary-button"
+                href={studioApi.externalEditorialPackageUrl(sceneId)}
+                download
+                aria-label="Gerar novamente JSON para IA externa"
+              >
+                <Download aria-hidden="true" /> Gerar novamente JSON para IA externa
+              </a>
+            )}
+            <EditorialImportDropzone
+              disabled={assistantBusy || saving || isDirty}
+              onImport={(files) => void importExternalResult(files)}
+            />
+          </div>
+          {assistantMessage && <p className="assistant-message" role="status">{assistantMessage}</p>}
+        </section>
+      )}
       {message && !saveFeedback && (
         <p className="review-message" role="status">
           {message}
@@ -2250,17 +2295,10 @@ export function EditorialPage() {
                   >
                     <Bot aria-hidden="true" /> {assistantBusy ? "Processando…" : "Sugerir com Groq"}
                   </button>
-                  <a
-                    className="secondary-button"
-                    href={studioApi.externalEditorialPackageUrl(sceneId)}
-                    download
-                  >
-                    <Download aria-hidden="true" /> Blocos de texto para IA externa
-                  </a>
-                  <EditorialImportDropzone
-                    disabled={assistantBusy}
-                    onImport={(file) => void importExternalResult(file)}
-                  />
+                  <p className="assistant-provider-state">
+                    O pacote e a importação estão disponíveis no painel
+                    “Regerar pacote da IA externa”, acima da revisão.
+                  </p>
                 </div>
                 {assistantMessage && <p className="assistant-message">{assistantMessage}</p>}
                 {selectedSuggestion && (
