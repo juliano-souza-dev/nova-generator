@@ -575,3 +575,43 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.anki-editor-audio {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.anki-editor-audio audio {
+  max-width: 210px;
+  min-width: 160px;
+  height: 38px;
+}
+
+.anki-editor-audio .secondary-button {
+  min-height: 38px;
+}
+
+.materials-didactic-audio {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0.65rem 0 0.9rem;
+  padding: 0.8rem 1rem;
+}
+
+.materials-didactic-audio strong {
+  flex: 1 1 190px;
+}
+
+.materials-didactic-audio span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.materials-didactic-audio button {
+  min-height: 40px;
+}
