@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
 import pytest
@@ -33,29 +34,43 @@ def _cue(cue_id=MERGED, *, english=EN, portuguese=PT):
 
 def _proposal():
     return AnkiProposal.model_validate_json(
-        (
-            '{"contract":"nova-generator-anki-proposal/1.0",'
-            '"scene_id":"' + str(SCENE) + '","input_sha256":"' + "a" * 64 + '",'
-            '"anki_cards":['
-            '{"cue_id":"' + ORIGINAL_SUPERVISION + '",'
-            '"front_en":" However, Louis Litt, he oversees all associates,",'
-            '"back_pt":"No entanto, Louis Litt supervisiona todos os advogados associados,",'
-            '"focus_text":"oversees","meaning":"supervisiona",'
-            '"marked_en":"oversees","marked_pt":"supervisiona",'
-            '"card_type":"VERB","explanation_pt":"Supervisionar o trabalho.",'
-            '"example_en":"She oversees the team.","example_pt":"Ela supervisiona a equipe.",'
-            '"tags":["workplace"]},'
-            '{"cue_id":"' + ORIGINAL_ANSWER + '",'
-            '"front_en":" so you\\\'ll also answer to him.",'
-            '"back_pt":"então você também terá de prestar contas a ele.",'
-            '"focus_text":"answer to","meaning":"prestar contas a",'
-            '"marked_en":"answer to","marked_pt":"prestar contas a",'
-            '"card_type":"EXPRESSION","explanation_pt":"Responder ao superior.",'
-            '"example_en":"I answer to the manager.",'
-            '"example_pt":"Presto contas ao gerente.",'
-            '"tags":["workplace"]}'
-            ']}'
-        )
+        json.dumps({
+            "contract": "nova-generator-anki-proposal/1.0",
+            "scene_id": str(SCENE),
+            "input_sha256": "a" * 64,
+            "anki_cards": [
+                {
+                    "cue_id": ORIGINAL_SUPERVISION,
+                    "front_en": " However, Louis Litt, he oversees all associates,",
+                    "back_pt": (
+                        "No entanto, Louis Litt supervisiona todos os advogados associados,"
+                    ),
+                    "focus_text": "oversees",
+                    "meaning": "supervisiona",
+                    "marked_en": "oversees",
+                    "marked_pt": "supervisiona",
+                    "card_type": "VERB",
+                    "explanation_pt": "Supervisionar o trabalho.",
+                    "example_en": "She oversees the team.",
+                    "example_pt": "Ela supervisiona a equipe.",
+                    "tags": ["workplace"],
+                },
+                {
+                    "cue_id": ORIGINAL_ANSWER,
+                    "front_en": " so you'll also answer to him.",
+                    "back_pt": "então você também terá de prestar contas a ele.",
+                    "focus_text": "answer to",
+                    "meaning": "prestar contas a",
+                    "marked_en": "answer to",
+                    "marked_pt": "prestar contas a",
+                    "card_type": "EXPRESSION",
+                    "explanation_pt": "Responder ao superior.",
+                    "example_en": "I answer to the manager.",
+                    "example_pt": "Presto contas ao gerente.",
+                    "tags": ["workplace"],
+                },
+            ],
+        }, ensure_ascii=False)
     )
 
 
