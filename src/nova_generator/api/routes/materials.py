@@ -683,6 +683,50 @@ def publish_material_export(
     )
 
 
+@router.post(
+    "/exports/{job_id}/publication/regenerate",
+    response_model=PublicationResponse,
+)
+def regenerate_final_materials(
+    project_id: UUID,
+    job_id: UUID,
+    jobs: Annotated[GetJob, Depends(get_job)],
+) -> PublicationResponse:
+    """Rebuild the published JSON from current approved content and the frozen reel.
+
+    No voice synthesis, APKG creation or YouTube upload is invoked here. The
+    publisher checks original job hashes and keeps the existing video binding.
+    """
+    job = _export_job(project_id, job_id, jobs)
+    if job.status != "succeeded":
+        raise HTTPException(
+            409, detail="A exportação precisa estar concluída para regerar os materiais finais."
+        )
+    existing = _publication_document(project_id, job_id)
+    if existing is None:
+        raise HTTPException(
+            409,
+            detail="O kit ainda não foi publicado. Primeiro vincule o reel ao YouTube.",
+        )
+    youtube_id = existing.get("ankiAudio", {}).get("youtube", {}).get("video_id")
+    if not isinstance(youtube_id, str) or not youtube_id.strip():
+        raise HTTPException(409, detail="O vínculo original com o YouTube está ausente.")
+    try:
+        result = _publisher().execute(
+            project_id=project_id, job=job, youtube=youtube_id
+        )
+    except (AnkiPublicationError, ContractViolation) as error:
+        raise HTTPException(409, detail=str(error)) from error
+    return PublicationResponse(
+        youtube_video_id=result.youtube_video_id,
+        youtube_url=result.youtube_url,
+        hub_final_url=(
+            f"{get_settings().api_prefix}/projects/{project_id}/materials/exports/"
+            f"{job_id}/hub_final.json"
+        ),
+    )
+
+
 @router.get("/exports/{job_id}/hub_final.json")
 def download_hub_final(
     project_id: UUID, job_id: UUID, jobs: Annotated[GetJob, Depends(get_job)]
@@ -691,7 +735,9 @@ def download_hub_final(
     if job.status != "succeeded" or _publication_document(project_id, job_id) is None:
         raise HTTPException(404, detail="publication not found")
     return FileResponse(
-        _publisher().publication_path(project_id, job_id), filename="hub_final.json"
+        _publisher().publication_path(project_id, job_id),
+        filename="hub_final.json",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
     )
 
 
