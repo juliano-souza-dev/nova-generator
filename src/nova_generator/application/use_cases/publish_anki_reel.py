@@ -24,6 +24,10 @@ from nova_generator.application.use_cases.shadowing_publication import (
     approved_shadowing_transport,
     attach_approved_shadowing,
 )
+from nova_generator.application.use_cases.structures_in_context import (
+    StructuresInContextError,
+    build_structures_in_context,
+)
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.exports import AnkiAudioExport, ReelInterval
 from nova_generator.domain.jobs import Job
@@ -269,6 +273,12 @@ class PublishAnkiReel:
                     "tags": snapshot["tags"],
                 })
             base["cues"] = unique_rows
+            try:
+                base["wbw_practices"] = build_structures_in_context(
+                    snapshots, by_source
+                )
+            except StructuresInContextError as error:
+                raise AnkiPublicationError(str(error)) from error
             base["generator"]["anki_card_ids"] = [
                 str(card["card_id"]) for card in snapshots
             ]
