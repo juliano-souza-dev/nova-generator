@@ -18,6 +18,8 @@ from nova_generator.application.use_cases.build_hub_final_anki_audio import (
 from nova_generator.application.use_cases.editorial_publication_snapshot import (
     editorial_publication_sha256,
 )
+from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
+from nova_generator.core.settings import get_settings
 from nova_generator.domain.exports import AnkiAudioExport, ReelInterval
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.media.youtube import YoutubeVideo
@@ -66,7 +68,19 @@ class PublishAnkiReel:
         export = self._read_export(job)
         cues = self._approved_cues(project_id, job, export)
         scenes = self._repository.get_project_scenes(project_id)
-        editorial_cards = [(cue, self._repository.get_cue_words(cue.id)) for cue in cues]
+        didactic = job.input.get("mode") == "didactic"
+        editorial_by_id = {
+            str(cue.id): (cue, self._repository.get_cue_words(cue.id))
+            for cue in cues
+        }
+        # Publication intervals are per Anki card; editorial integrity is per
+        # unique source cue. A merged cue may yield several independent cards.
+        publication_rows = [
+            (cue, self._repository.get_cue_words(cue.id)) for cue in cues
+        ]
+        editorial_cards = (
+            list(editorial_by_id.values()) if didactic else publication_rows
+        )
         if any(
             "".join(word.surface for word in words)
             + str(cue.provenance.get("editorial_preparation_trailing", ""))
@@ -93,7 +107,13 @@ class PublishAnkiReel:
         )
         scene_start = min(start for start, _ in cue_times)
         scene_end = max(end for _, end in cue_times)
-        if any(cue_times[index][0] < cue_times[index - 1][1] for index in range(1, len(cue_times))):
+        check_times = (
+            list(dict.fromkeys(cue_times)) if didactic else cue_times
+        )
+        if any(
+            check_times[index][0] < check_times[index - 1][1]
+            for index in range(1, len(check_times))
+        ):
             raise AnkiPublicationError(
                 "Cues selecionadas se sobrepõem na fonte. Revise a ordem e os tempos."
             )
@@ -178,7 +198,7 @@ class PublishAnkiReel:
                     },
                 }
                 for (cue, words), interval, timing in zip(
-                    editorial_cards, export.intervals, cue_times, strict=True
+                    publication_rows, export.intervals, cue_times, strict=True
                 )
             ],
             "materials": [{"label": "Anki", "type": "ANKI", "fileName": "anki.apkg"}],
@@ -190,9 +210,50 @@ class PublishAnkiReel:
                 "editorial_sha256": job.input["editorial_sha256"],
             },
         }
+        if didactic:
+            # Keep the original scene transcript untouched. Cards are separate
+            # learning exercises, grouped under their source cue.
+            unique_rows: list[dict[str, Any]] = []
+            by_source: dict[str, dict[str, Any]] = {}
+            source_order: dict[str, int] = {}
+            snapshots = job.input["anki_cards"]
+            for row, snapshot in zip(base["cues"], snapshots, strict=True):
+                source = str(snapshot["cue_id"])
+                if source not in by_source:
+                    row["order"] = len(unique_rows) + 1
+                    row["anki"] = {"include": True, "items": []}
+                    by_source[source] = row
+                    source_order[source] = row["order"]
+                    unique_rows.append(row)
+                by_source[source]["anki"]["items"].append({
+                    "key": f"anki-{snapshot['card_id']}",
+                    "type": snapshot["card_type"],
+                    "focus": snapshot["front_en"],
+                    "meaning": snapshot["back_pt"],
+                    "focus_text": snapshot["focus_text"],
+                    "highlight_en": snapshot["focus_text"],
+                    "highlight_pt": snapshot["meaning"],
+                    "marked_en": snapshot["marked_en"],
+                    "marked_pt": snapshot["marked_pt"],
+                    "explanation": snapshot["explanation_pt"],
+                    "example_en": snapshot["example_en"],
+                    "example_pt": snapshot["example_pt"],
+                    "tags": snapshot["tags"],
+                })
+            base["cues"] = unique_rows
+            base["generator"]["anki_card_ids"] = [
+                str(card["card_id"]) for card in snapshots
+            ]
+
         document = add_manual_youtube_anki_audio(
             base, youtube_video_id=video.video_id, export=export
         )
+        if didactic:
+            for timeline, card in zip(
+                document["ankiAudio"]["cues"], job.input["anki_cards"], strict=True
+            ):
+                timeline["card_key"] = f"anki-{card['card_id']}"
+                timeline["source_cue_order"] = source_order[str(card["cue_id"])]
         validate_anki_audio(document)
         path = self.publication_path(project_id, job.id)
         if path.is_file():
@@ -254,7 +315,50 @@ class PublishAnkiReel:
             raise AnkiPublicationError("Manifesto Anki sem cues.")
         return AnkiAudioExport(apkg, reel, manifest, voice, intervals)
 
+    def _approved_didactic_cues(
+        self, project_id: UUID, job: Job, export: AnkiAudioExport
+    ) -> list[Cue]:
+        snapshots = job.input.get("anki_cards")
+        if not isinstance(snapshots, list) or len(snapshots) != len(export.intervals):
+            raise AnkiPublicationError("Didactic cards differ from Anki reel intervals")
+        exchange = MaterialsAiExchange(self._repository, get_settings().project_root)
+        cues: list[Cue] = []
+        for card, interval in zip(snapshots, export.intervals, strict=True):
+            card_id = UUID(str(card["card_id"]))
+            try:
+                active = exchange.find_anki_card(project_id, card_id)
+            except ValueError as error:
+                raise AnkiPublicationError(str(error)) from error
+            if active != card:
+                raise AnkiPublicationError(
+                    f"Card {card_id} was edited after export; export again"
+                )
+            cue = self._repository.get_cue(UUID(str(card["cue_id"])))
+            if (
+                cue is None
+                or self._repository.get_scene_project_id(cue.scene_id) != project_id
+                or cue.provenance.get("approval") == "draft"
+                or cue.approved_en != card["source_context_en"]
+                or cue.approved_pt != card["source_context_pt"]
+            ):
+                raise AnkiPublicationError(
+                    f"Source context changed for didactic card {card_id}"
+                )
+            if (
+                interval.text_sha256 != utf8_sha256(card["front_en"])
+                or interval.text_sha256 != job.input.get("text_hashes", {}).get(str(card_id))
+                or utf8_sha256(card["back_pt"]) != job.input.get("pt_hashes", {}).get(str(card_id))
+                or interval.audio_sha256 != job.input.get("audio_hashes", {}).get(str(card_id))
+            ):
+                raise AnkiPublicationError(
+                    f"Didactic card {card_id} or WAV changed after export"
+                )
+            cues.append(cue)
+        return cues
+
     def _approved_cues(self, project_id: UUID, job: Job, export: AnkiAudioExport) -> list[Cue]:
+        if job.input.get("mode") == "didactic":
+            return self._approved_didactic_cues(project_id, job, export)
         raw_ids = job.input.get("cue_ids")
         if not isinstance(raw_ids, list) or len(raw_ids) != len(export.intervals):
             raise AnkiPublicationError("Seleção de cards diverge do manifesto Anki.")

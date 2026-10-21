@@ -8,7 +8,9 @@ from nova_generator.application.use_cases.editorial_publication_snapshot import 
     editorial_publication_sha256,
 )
 from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
+from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
+from nova_generator.core.settings import get_settings
 from nova_generator.domain.exports import ExportCue
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.projects.entities import utf8_sha256
@@ -45,7 +47,14 @@ class MaterialsJobHandler:
         if cue.provenance.get("approval") == "draft":
             raise ValueError("card is a draft; approve it before generating materials")
         text = str(job.input["approved_en"])
-        if cue.approved_en != text:
+        card_id = job.input.get("anki_card_id")
+        if card_id is not None:
+            card = MaterialsAiExchange(
+                self._repository, get_settings().project_root
+            ).find_anki_card(project_id, UUID(str(card_id)))
+            if card["cue_id"] != str(cue_id) or card["front_en"] != text:
+                raise ValueError("Anki card changed; request fresh audio")
+        elif cue.approved_en != text:
             raise ValueError("approved cue changed; request fresh audio")
         voice = _snapshot(job.input["voice_snapshot"])
         speech = self._synthesis.execute(text=text, profile=voice)
@@ -68,6 +77,8 @@ class MaterialsJobHandler:
         execution.raise_if_cancelled()
         project_id = UUID(str(job.input["project_id"]))
         voice = _snapshot(job.input["voice_snapshot"])
+        if job.input.get("mode") == "didactic":
+            return self._export_didactic(job, execution, project_id, voice)
         raw_ids = job.input["cue_ids"]
         if not isinstance(raw_ids, list) or not raw_ids:
             raise ValueError("export requires selected cards")
@@ -124,6 +135,85 @@ class MaterialsJobHandler:
             "manifest": str(result.manifest_path),
             "reel": str(result.reel_path),
             "cards": len(cues),
+        }
+
+
+    def _export_didactic(
+        self, job: Job, execution: JobExecution,
+        project_id: UUID, voice: VoiceProfileSnapshot,
+    ) -> dict[str, Any]:
+        """Export real Anki lessons with one dedicated WAV per pedagogical card."""
+        snapshots = job.input.get("anki_cards")
+        if not isinstance(snapshots, list) or not snapshots:
+            raise ValueError("no didactic Anki cards for export")
+        exchange = MaterialsAiExchange(self._repository, get_settings().project_root)
+        cues: list[ExportCue] = []
+        source_cues = {}
+        for order, frozen in enumerate(snapshots, 1):
+            card_id = UUID(str(frozen["card_id"]))
+            current = exchange.find_anki_card(project_id, card_id)
+            if current != frozen:
+                raise ValueError(
+                    f"Didactic card {card_id} changed after enqueue; export again"
+                )
+            cue = self._repository.get_cue(UUID(str(frozen["cue_id"])))
+            if (
+                cue is None
+                or self._repository.get_scene_project_id(cue.scene_id) != project_id
+                or cue.provenance.get("approval") == "draft"
+            ):
+                raise ValueError(f"source cue of didactic card {card_id} changed")
+            if (
+                cue.approved_en != frozen["source_context_en"]
+                or cue.approved_pt != frozen["source_context_pt"]
+            ):
+                raise ValueError(f"source editorial context changed for card {card_id}")
+            if (
+                utf8_sha256(frozen["front_en"])
+                != job.input.get("text_hashes", {}).get(str(card_id))
+                or utf8_sha256(frozen["back_pt"])
+                != job.input.get("pt_hashes", {}).get(str(card_id))
+            ):
+                raise ValueError(f"didactic card {card_id} text hash changed")
+            key = self._cache.cache_key(
+                text=frozen["front_en"], profile=voice, parameters={}
+            )
+            speech = self._cache.find(key)
+            if speech is None:
+                raise ValueError(f"didactic WAV missing for card {card_id}")
+            export_card = ExportCue(
+                card_id, order, frozen["front_en"], frozen["back_pt"],
+                Path(speech.audio_path), speech.duration_ms,
+                utf8_sha256(frozen["front_en"]),
+            )
+            if export_card.audio_sha256 != job.input.get("audio_hashes", {}).get(str(card_id)):
+                raise ValueError(f"didactic WAV changed for card {card_id}")
+            cues.append(export_card)
+            source_cues[str(cue.id)] = (
+                cue, self._repository.get_cue_words(cue.id)
+            )
+            execution.heartbeat()
+        project = self._repository.get_project(project_id)
+        if project is None:
+            raise ValueError("project no longer exists")
+        if editorial_publication_sha256(
+            project, self._repository.get_project_scenes(project_id),
+            list(source_cues.values()),
+        ) != job.input.get("editorial_sha256"):
+            raise ValueError("editorial context changed after Anki export was queued")
+        result = self._exporter.execute(
+            cues=cues,
+            voice=voice,
+            output_directory=self._export_root / str(job.id),
+            deck_name=project.title,
+        )
+        execution.heartbeat()
+        return {
+            "apkg": str(result.apkg_path),
+            "manifest": str(result.manifest_path),
+            "reel": str(result.reel_path),
+            "cards": len(cues),
+            "mode": "didactic",
         }
 
 

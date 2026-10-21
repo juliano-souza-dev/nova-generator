@@ -73,6 +73,27 @@ async def import_external_materials(
     return _execute(lambda: _exchange(repository).import_result(project_id, document))
 
 
+class AnkiCardEditRequest(BaseModel):
+    expected_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    card: dict
+
+
+@router.put("/anki/{scene_id}/cards/{card_id}")
+def update_anki_card(
+    project_id: UUID,
+    scene_id: UUID,
+    card_id: UUID,
+    payload: AnkiCardEditRequest,
+    repository: Annotated[EditorialProjectRepository, Depends(get_editorial_repository)],
+) -> dict:
+    return _execute(
+        lambda: _exchange(repository).update_anki_card(
+            project_id, scene_id, card_id, payload.card,
+            expected_sha256=payload.expected_sha256,
+        )
+    )
+
+
 @router.post("/approval")
 def approve_external_materials(
     project_id: UUID,

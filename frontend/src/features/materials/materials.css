@@ -409,3 +409,211 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* Inline Anki review. One full-width lesson per row, never four narrow cards. */
+.anki-editor-list {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.9rem;
+}
+
+.anki-editor {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.anki-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.anki-editor-heading h4 {
+  margin: 0.18rem 0 0;
+  font-size: 1.05rem;
+}
+
+.anki-editor-heading span,
+.anki-editor-heading small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.anki-editor-main {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.86fr) minmax(300px, 1fr);
+  gap: 0.85rem;
+  padding: 0.85rem;
+}
+
+.anki-editor-faces {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.anki-editor-face {
+  background: #fff;
+  color: #071828;
+  min-width: 0;
+  height: auto;
+  min-height: 135px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.anki-editor-face .ihub-flashcard-sentence {
+  margin: 0.55rem 0;
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
+}
+
+.anki-editor-face .ihub-flashcard-mini-lesson {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.anki-editor-fields {
+  display: grid;
+  align-content: start;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.anki-editor-top-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.anki-editor-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.anki-editor-fields label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.anki-editor-fields :is(input:not([type="checkbox"]), select, textarea) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: #0f172a;
+  font: inherit;
+}
+
+.anki-editor-fields textarea {
+  resize: vertical;
+}
+
+.anki-editor-fields .anki-editor-literal {
+  display: flex;
+  align-items: center;
+}
+
+.anki-editor-context {
+  border-top: 1px solid var(--border);
+  padding-top: 0.55rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.anki-editor-context strong {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--text);
+}
+
+.anki-editor-context p {
+  margin: 0.4rem 0 0;
+}
+
+.anki-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.anki-editor-actions p {
+  width: 100%;
+  color: #fecdd3;
+  font-size: 0.8rem;
+}
+
+.anki-editor-actions button {
+  min-height: 40px;
+}
+
+@media (max-width: 1000px) {
+  .anki-editor-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 580px) {
+  .anki-editor-top-fields,
+  .anki-editor-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.anki-editor-audio {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.anki-editor-audio audio {
+  max-width: 210px;
+  min-width: 160px;
+  height: 38px;
+}
+
+.anki-editor-audio .secondary-button {
+  min-height: 38px;
+}
+
+.materials-didactic-audio {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0.65rem 0 0.9rem;
+  padding: 0.8rem 1rem;
+}
+
+.materials-didactic-audio strong {
+  flex: 1 1 190px;
+}
+
+.materials-didactic-audio span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.materials-didactic-audio button {
+  min-height: 40px;
+}

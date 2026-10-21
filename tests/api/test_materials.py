@@ -243,3 +243,145 @@ def test_materials_exclude_explicit_editorial_drafts(client):
         f"/api/projects/{project_id}/materials", params={"voice_id": voice["id"]}
     ).json()["cards"]
     assert all(card["cue_id"] != first_id for card in cards)
+
+
+def test_materials_recognize_editorial_v15_as_prepared(client):
+    """Regression: 1.5 editorial import must not block all cards/audio controls."""
+    from dataclasses import replace
+
+    from nova_generator.api.dependencies import get_session_factory
+    from nova_generator.infrastructure.database.editorial_project_repository import (
+        SqlAlchemyEditorialProjectRepository,
+    )
+
+    project_id, first_id, _ = _seed_project()
+    repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    cue = repository.get_cue(UUID(first_id))
+    assert cue is not None
+    repository.save_cue(
+        replace(
+            cue,
+            provenance={
+                **cue.provenance,
+                "approval": "approved",
+                "editorial_preparation": "complete",
+                "editorial_preparation_contract": "nova-generator-editorial-suggestions/1.5",
+            },
+        ),
+        repository.get_cue_words(cue.id),
+    )
+    result = client.get(f"/api/projects/{project_id}/materials")
+    assert result.status_code == 200
+    ready = next(card for card in result.json()["cards"] if card["cue_id"] == first_id)
+    assert ready["editorial_ready"] is True
+
+
+def test_didactic_anki_audio_and_export_use_card_front_not_scene_subtitle(
+    client, tmp_path, monkeypatch
+):
+    import io
+    import json
+    import wave
+
+    from nova_generator.core.settings import get_settings
+
+    monkeypatch.setenv("NOVA_GENERATOR_MEDIA_CACHE_ROOT", str(tmp_path / "media"))
+    monkeypatch.setenv("NOVA_GENERATOR_PROJECT_ROOT", str(tmp_path / "projects"))
+    get_settings.cache_clear()
+    project_id, cue_id, _ = _seed_project()
+    repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    source = repository.get_cue(UUID(cue_id))
+    assert source is not None
+    card_id = str(uuid4())
+    front = "Café is served in the law office."
+    back = "Café é servido no escritório de advocacia."
+    plan = {
+        "contract": "nova-generator-anki-proposal/2.0",
+        "scene_id": str(source.scene_id),
+        "input_sha256": "a" * 64,
+        "anki_cards": [{
+            "card_id": card_id,
+            "cue_id": cue_id,
+            "source_context_en": source.approved_en,
+            "source_context_pt": source.approved_pt,
+            "front_en": front,
+            "back_pt": back,
+            "uses_literal_scene_line": False,
+            "card_type": "EXPRESSION",
+            "focus_text": "Café",
+            "meaning": "Café no escritório",
+            "marked_en": "Café",
+            "marked_pt": "Café",
+            "explanation_pt": "Vocabulário ligado ao ambiente de escritório.",
+            "example_en": "Café is available every morning.",
+            "example_pt": "Há café todas as manhãs.",
+            "tags": ["workplace"],
+        }],
+    }
+    path = (
+        Path(get_settings().project_root) / project_id / "materials"
+        / f"anki-prepared-{source.scene_id}.json"
+    )
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(plan), encoding="utf-8")
+    with io.BytesIO() as output:
+        with wave.open(output, "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(16000)
+            audio.writeframes(b"\x00\x00" * 16000 * 7)
+        audio_bytes = output.getvalue()
+    reference = client.post(
+        "/api/voices/references",
+        files={"file": ("speaker.wav", audio_bytes, "audio/wav")},
+    )
+    assert reference.status_code == 201
+    voice = client.post(
+        "/api/voices",
+        json={
+            "name": "Didactic test voice",
+            "model_sha256": "c" * 64,
+            "reference_audio_sha256": reference.json()["sha256"],
+        },
+    )
+    assert voice.status_code == 201, voice.text
+    voice = voice.json()
+    base = f"/api/projects/{project_id}/materials"
+    status = client.get(f"{base}/anki-audio", params={"voice_id": voice["id"]})
+    assert status.status_code == 200, status.text
+    assert status.json()["cards"][0]["audio_ready"] is False
+
+    enqueued = client.post(
+        f"{base}/anki/{card_id}/audio", json={"voice_id": voice["id"]}
+    )
+    assert enqueued.status_code == 202, enqueued.text
+    job = next(
+        job for job in client.get("/api/jobs").json()["items"]
+        if job["id"] == enqueued.json()["id"]
+    )
+    assert job["input"]["anki_card_id"] == card_id
+    assert job["input"]["approved_en"] == front
+    assert job["input"]["approved_en"] != source.approved_en
+
+    profile = VoiceProfileSnapshot(
+        UUID(voice["id"]), voice["name"], voice["version"],
+        voice["model_id"], voice["model_sha256"], reference.json()["sha256"],
+        voice["parameters"],
+    )
+    cache = FileSpeechCache(Path(get_settings().media_cache_root))
+    key = cache.cache_key(text=front, profile=profile, parameters={})
+    wav = cache.staging_path(key)
+    wav.write_bytes(audio_bytes)
+    cache.save(key, SynthesizedSpeech(str(wav), "a" * 64, profile, {}, 7000, 16000, 1))
+    status = client.get(f"{base}/anki-audio", params={"voice_id": voice["id"]})
+    assert status.status_code == 200
+    assert status.json()["cards"][0]["audio_ready"] is True
+    export = client.post(f"{base}/anki-exports", json={"voice_id": voice["id"]})
+    assert export.status_code == 202, export.text
+    job = next(
+        job for job in client.get("/api/jobs").json()["items"]
+        if job["id"] == export.json()["job_id"]
+    )
+    assert job["input"]["mode"] == "didactic"
+    assert job["input"]["anki_cards"][0]["card_id"] == card_id
+    assert job["input"]["anki_cards"][0]["front_en"] == front

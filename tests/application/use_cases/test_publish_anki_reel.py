@@ -172,3 +172,159 @@ def test_publication_keeps_literal_text_words_and_card_timeline(
     repository.get_cue.return_value = replace(cue, provenance={"approval": "draft"})
     with pytest.raises(AnkiPublicationError, match="rascunho"):
         publisher.execute(project_id=project_id, job=job, youtube="bbbbbbbbbbb")
+
+
+def test_didactic_publication_keeps_original_scene_and_separate_audio_per_card(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from nova_generator.application.use_cases import publish_anki_reel as publication_module
+
+    project_id, scene_id, cue_id, job_id = (uuid4() for _ in range(4))
+    card_ids = [uuid4(), uuid4()]
+    scene = Scene(scene_id, project_id, 1, 2000)
+    project = Project(
+        project_id, "Workplace English", "dialogue",
+        {"youtube_url": "https://www.youtube.com/watch?v=aaaaaaaaaaa"},
+    )
+    cue = Cue(
+        cue_id, scene_id, 1, 100, 700, 100, 700,
+        "Ana", "Hello.", "Hello.", "Olá.",
+    )
+    word = WordTiming(uuid4(), cue_id, 1, "Hello.", 100, 700, 100, 700)
+    voice = VoiceProfile(uuid4(), "Ana", 1, "nano", "a" * 64).snapshot()
+    original_english = cue.approved_en
+    source = Mock()
+    source.get_project.return_value = project
+    source.get_project_scenes.return_value = [scene]
+    source.get_cue.return_value = cue
+    source.get_scene_project_id.return_value = project_id
+    source.get_cue_words.return_value = [word]
+
+    def card(card_id, front, back, focus):
+        return {
+            "card_id": str(card_id),
+            "cue_id": str(cue_id),
+            "scene_id": str(scene_id),
+            "source_context_en": original_english,
+            "source_context_pt": cue.approved_pt,
+            "front_en": front,
+            "back_pt": back,
+            "uses_literal_scene_line": False,
+            "card_type": "EXPRESSION",
+            "focus_text": focus,
+            "meaning": "Olá",
+            "marked_en": focus,
+            "marked_pt": "Olá",
+            "explanation_pt": "Uma saudação em ambiente profissional.",
+            "example_en": "Hello, everyone.",
+            "example_pt": "Olá, pessoal.",
+            "tags": ["work"],
+        }
+
+    cards = [
+        card(
+            card_ids[0], "Hello, welcome to the office.",
+            "Olá, bem-vindo ao escritório.", "Hello",
+        ),
+        card(
+            card_ids[1], "Hello, meet the partners.",
+            "Olá, conheça os sócios.", "Hello.",
+        ),
+    ]
+    # Two lessons can share one source cue while retaining distinct audio.
+    current = {item["card_id"]: item for item in cards}
+    monkeypatch.setattr(
+        publication_module, "MaterialsAiExchange",
+        lambda *_args: SimpleNamespace(
+            find_anki_card=lambda _project, cid: current[str(cid)]
+        ),
+    )
+    folder = tmp_path / "exports" / str(job_id)
+    folder.mkdir(parents=True)
+    apkg = folder / "anki.apkg"
+    reel = folder / "anki-reel.mp4"
+    apkg.write_bytes(b"real packaged audio")
+    reel.write_bytes(b"real reel")
+
+    def digest(path):
+        return sha256(path.read_bytes()).hexdigest()
+
+    intervals = [
+        {
+            "cue_order": index + 1,
+            "start_ms": index * 1200,
+            "end_ms": index * 1200 + 950,
+            "audio_sha256": ("b" if index == 0 else "c") * 64,
+            "text_sha256": utf8_sha256(item["front_en"]),
+        }
+        for index, item in enumerate(cards)
+    ]
+    manifest = {
+        "schema": "nova-generator-anki-audio",
+        "schema_version": "1.0",
+        "voice": {
+            "profile_id": str(voice.profile_id),
+            "name": voice.name,
+            "version": voice.version,
+            "model_id": voice.model_id,
+            "model_sha256": voice.model_sha256,
+            "reference_audio_sha256": None,
+            "parameters": voice.parameters,
+            "snapshot_sha256": voice.sha256,
+        },
+        "apkg_sha256": digest(apkg),
+        "reel_sha256": digest(reel),
+        "cues": intervals,
+    }
+    (folder / "anki-audio-manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    job = Job(
+        job_id, "export_materials", "succeeded",
+        {
+            "mode": "didactic",
+            "project_id": str(project_id),
+            "cue_ids": [str(cue_id), str(cue_id)],
+            "anki_cards": cards,
+            "text_hashes": {
+                item["card_id"]: utf8_sha256(item["front_en"]) for item in cards
+            },
+            "pt_hashes": {
+                item["card_id"]: utf8_sha256(item["back_pt"]) for item in cards
+            },
+            "audio_hashes": {
+                card["card_id"]: interval["audio_sha256"]
+                for card, interval in zip(cards, intervals, strict=True)
+            },
+            "editorial_sha256": editorial_publication_sha256(
+                project, [scene], [(cue, [word])]
+            ),
+            "voice_snapshot": {"snapshot_sha256": voice.sha256},
+        },
+        None, 1, 3,
+    )
+    publisher = PublishAnkiReel(
+        source, Mock(), tmp_path / "exports", tmp_path / "projects"
+    )
+    artifact = publisher.execute(
+        project_id=project_id, job=job, youtube="bbbbbbbbbbb"
+    )
+    doc = json.loads(artifact.path.read_text(encoding="utf-8"))
+    assert len(doc["cues"]) == 1
+    assert doc["cues"][0]["final_en"] == "Hello."
+    assert doc["cues"][0]["pt"] == "Olá."
+    assert len(doc["cues"][0]["anki"]["items"]) == 2
+    assert [item["focus"] for item in doc["cues"][0]["anki"]["items"]] == [
+        card["front_en"] for card in cards
+    ]
+    assert len(doc["ankiAudio"]["cues"]) == 2
+    assert [interval["card_key"] for interval in doc["ankiAudio"]["cues"]] == [
+        f"anki-{cid}" for cid in card_ids
+    ]
+    assert [interval["source_cue_order"] for interval in doc["ankiAudio"]["cues"]] == [1, 1]
+    assert [
+        (interval["start_ms"], interval["end_ms"])
+        for interval in doc["ankiAudio"]["cues"]
+    ] == [(0, 950), (1200, 2150)]

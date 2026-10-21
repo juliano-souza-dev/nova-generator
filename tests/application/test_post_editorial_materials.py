@@ -174,7 +174,11 @@ def test_materials_package_reuses_anki_from_initial_external_export(tmp_path):
     }
     exchange._write(PROJECT, f"anki-prepared-{SCENE}.json", prepared)
     ready = exchange.package(PROJECT)["source"]
-    assert ready["anki_prepared"] == prepared["anki_cards"]
+    assert len(ready["anki_prepared"]) == 1
+    assert ready["anki_prepared"][0]["front_en"] == "Hello."
+    assert ready["anki_prepared"][0]["source_context_en"] == "Hello."
+    assert ready["anki_prepared"][0]["uses_literal_scene_line"] is True
+    assert ready["anki_prepared"][0]["scene_id"] == str(SCENE)
     assert ready["anki_prepared_needs_review"] == 0
 
     repo.cue = replace(repo.cue, approved_en="Hi.", revision=2)
@@ -249,3 +253,89 @@ def test_anki_only_import_rejects_wrong_source_and_unapproved_text(tmp_path):
     unknown["contract"] = "nova-generator-wrong/1.0"
     with pytest.raises(MaterialsAiError, match="unsupported material contract"):
         exchange.import_result(PROJECT, unknown)
+
+
+def test_didactic_anki_v2_can_be_edited_without_changing_editorial(tmp_path):
+    import json
+    repo = Repository()
+    exchange = MaterialsAiExchange(repo, tmp_path)
+    manifest = tmp_path / str(PROJECT) / "editorial-ai" / f"scene-{SCENE}-external-ai-manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"input_sha256": "a" * 64}), encoding="utf-8")
+
+    original = anki_proposal()
+    exchange.import_result(PROJECT, original)
+    status = exchange.status(PROJECT)
+    didactic = status["anki_prepared"][0]
+    assert didactic["front_en"] == "Hello."
+
+    edited = dict(didactic)
+    edited.pop("scene_id")
+    edited.update({
+        "front_en": "Hello, welcome to our law office.",
+        "back_pt": "Olá, seja bem-vindo ao nosso escritório de advocacia.",
+        "uses_literal_scene_line": False,
+        "marked_en": "Hello",
+        "marked_pt": "Olá",
+    })
+    saved = exchange.update_anki_card(
+        PROJECT, SCENE, UUID(didactic["card_id"]), edited,
+        expected_sha256=status["anki_revisions"][str(SCENE)],
+    )
+    assert saved["anki_prepared"][0]["front_en"] == edited["front_en"]
+    assert saved["anki_prepared"][0]["source_context_en"] == "Hello."
+    assert repo.cue.approved_en == "Hello."
+    assert repo.cue.approved_pt == "Olá."
+    assert exchange._read(PROJECT, f"anki-prepared-{SCENE}.json")["contract"] == (
+        "nova-generator-anki-proposal/2.0"
+    )
+    with pytest.raises(MaterialsAiError, match="draft changed"):
+        exchange.update_anki_card(
+            PROJECT, SCENE, UUID(didactic["card_id"]), edited,
+            expected_sha256=status["anki_revisions"][str(SCENE)],
+        )
+    # Reject invented source phrase even when the didactic sentence itself is valid.
+    newer = dict(edited, focus_text="unknown expression")
+    with pytest.raises(MaterialsAiError, match="focus_text"):
+        exchange.update_anki_card(
+            PROJECT, SCENE, UUID(didactic["card_id"]), newer,
+            expected_sha256=saved["anki_revisions"][str(SCENE)],
+        )
+
+
+def test_v2_anki_import_accepts_didactic_phrase_with_literal_source_context(tmp_path):
+    import json
+
+    repo = Repository()
+    exchange = MaterialsAiExchange(repo, tmp_path)
+    manifest = tmp_path / str(PROJECT) / "editorial-ai" / f"scene-{SCENE}-external-ai-manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"input_sha256": "a" * 64}), encoding="utf-8")
+    proposal = {
+        "contract": "nova-generator-anki-proposal/2.0",
+        "scene_id": str(SCENE),
+        "input_sha256": "a" * 64,
+        "anki_cards": [{
+            "card_id": "00000000-0000-4000-8000-000000000167",
+            "cue_id": str(CUE),
+            "source_context_en": "Hello.",
+            "source_context_pt": "Olá.",
+            "front_en": "Hello, welcome to the firm.",
+            "back_pt": "Olá, bem-vindo ao escritório.",
+            "uses_literal_scene_line": False,
+            "card_type": "EXPRESSION",
+            "focus_text": "Hello",
+            "meaning": "Saudação",
+            "marked_en": "Hello",
+            "marked_pt": "Olá",
+            "explanation_pt": "Saudação em ambiente profissional.",
+            "example_en": "Hello, everyone!",
+            "example_pt": "Olá, pessoal!",
+            "tags": ["greeting"],
+        }],
+    }
+    result = exchange.import_result(PROJECT, proposal)
+    assert result["status"] == "pending"
+    assert result["anki_prepared"][0]["front_en"] != repo.cue.approved_en
+    assert result["anki_prepared"][0]["source_context_en"] == repo.cue.approved_en
+    assert result["anki_needs_review"] == 0

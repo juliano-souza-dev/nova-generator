@@ -12,6 +12,10 @@ vi.mock("../../lib/studio-api", () => ({
     externalMaterialsPackageUrl: vi.fn(),
     importExternalMaterials: vi.fn(),
     approveExternalMaterials: vi.fn(),
+    updateAnkiCard: vi.fn(),
+    didacticAnkiAudioStatus: vi.fn(),
+    prepareDidacticAnkiAudio: vi.fn(),
+    exportDidacticAnki: vi.fn(),
     voices: vi.fn(),
     materials: vi.fn(),
     updateMaterial: vi.fn(),
@@ -302,6 +306,86 @@ describe("MaterialsPage", () => {
     fireEvent.click(exportButton);
     await waitFor(() =>
       expect(studioApi.exportMaterials).toHaveBeenCalledWith("project-1", "voice-1"),
+    );
+  });
+
+  it("shows and saves editable iHub-style Anki front and back without preview buttons", async () => {
+    vi.mocked(studioApi.projects).mockResolvedValue([
+      { id: "project-1", title: "Lesson" } as never,
+    ]);
+    vi.mocked(studioApi.voices).mockResolvedValue([
+      { id: "voice-1", name: "Ana", version: 2 } as never,
+    ]);
+    vi.mocked(studioApi.materials).mockResolvedValue({
+      cards: [card],
+      voice_id: "voice-1",
+      voice_version: 2,
+    });
+    const prepared = {
+      card_id: "anki-1",
+      cue_id: "cue-1",
+      scene_id: "scene-1",
+      source_context_en: "Café?",
+      source_context_pt: "Café.",
+      front_en: "Café?",
+      back_pt: "Café.",
+      uses_literal_scene_line: true,
+      card_type: "EXPRESSION",
+      focus_text: "Café",
+      meaning: "Coffee",
+      marked_en: "Café",
+      marked_pt: "Café",
+      explanation_pt: "Pergunta contextual sobre café.",
+      example_en: "Coffee?",
+      example_pt: "Café?",
+      tags: ["coffee"],
+    };
+    vi.mocked(studioApi.externalMaterialsReview).mockResolvedValue({
+      status: "pending",
+      source_sha256: "x".repeat(64),
+      document: null,
+      anki_prepared: [prepared],
+      anki_revisions: { "scene-1": "a".repeat(64) },
+      anki_needs_review: 0,
+    });
+    vi.mocked(studioApi.didacticAnkiAudioStatus).mockResolvedValue({
+      cards: [{
+        card_id: "anki-1",
+        cue_id: "cue-1",
+        front_en: "Café?",
+        audio_ready: false,
+        audio_url: null,
+      }],
+    });
+    vi.mocked(studioApi.latestMaterialExport).mockRejectedValue({ status: 404 });
+    vi.mocked(studioApi.updateAnkiCard).mockResolvedValue({} as never);
+    mount();
+    expect(await screen.findByLabelText("Frente editável (EN)")).toHaveValue("Café?");
+    expect(screen.getByLabelText("Verso editável (PT)")).toHaveValue("Café.");
+    expect(screen.getByText("MINI LESSON")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ver como no iHub" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Frente editável (EN)"), {
+      target: { value: "Café is served at the office." },
+    });
+    fireEvent.change(screen.getByLabelText("Verso editável (PT)"), {
+      target: { value: "Café é servido no escritório." },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Usar excepcionalmente a fala original como card" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Salvar card" }));
+    await waitFor(() =>
+      expect(studioApi.updateAnkiCard).toHaveBeenCalledWith(
+        "project-1",
+        "scene-1",
+        "anki-1",
+        expect.objectContaining({
+          front_en: "Café is served at the office.",
+          back_pt: "Café é servido no escritório.",
+          uses_literal_scene_line: false,
+        }),
+        "a".repeat(64),
+      ),
     );
   });
 

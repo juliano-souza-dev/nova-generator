@@ -63,22 +63,26 @@ def _completed_package(exchange, scene, *, include_anki=True, invalid_anki=False
     selected = chunks[0][1]["suggestions"][0]
     anki_template["anki_cards"] = [
         {
+            "card_id": "00000000-0000-4000-8000-000000000197",
             "cue_id": selected["cue_id"],
-            "front_en": selected["approved_en"],
-            "back_pt": selected["approved_pt"],
+            "source_context_en": selected["approved_en"],
+            "source_context_pt": selected["approved_pt"],
+            "front_en": "I can't go to the meeting.",
+            "back_pt": "Não posso ir à reunião.",
+            "uses_literal_scene_line": False,
             "card_type": "EXPRESSION",
-            "focus_text": "I cannot",
+            "focus_text": "can't",
             "meaning": "Não posso",
-            "marked_en": selected["approved_en"].strip(),
-            "marked_pt": selected["approved_pt"],
-            "explanation_pt": "Expressão de impossibilidade no contexto da conversa.",
-            "example_en": "I cannot attend the meeting.",
+            "marked_en": "can't",
+            "marked_pt": "Não posso",
+            "explanation_pt": "Impossibilidade de comparecer, relacionada à fala da cena.",
+            "example_en": "I can't attend the meeting.",
             "example_pt": "Não posso participar da reunião.",
             "tags": ["conversation"],
         }
     ]
-    assert source["contract"] == "nova-generator-anki-input/1.0"
-    contracts = Path(__file__).parents[2] / "contracts" / "anki-ai" / "v1"
+    assert source["contract"] == "nova-generator-anki-input/2.0"
+    contracts = Path(__file__).parents[2] / "contracts" / "anki-ai" / "v2"
     jsonschema.validate(source, json.loads((contracts / "input.schema.json").read_text()))
     jsonschema.validate(anki_template, json.loads((contracts / "output.schema.json").read_text()))
     if invalid_anki:
@@ -111,7 +115,7 @@ def test_combined_import_persists_valid_anki_draft(tmp_path):
     exchange.import_batch(scene.id, [("completed.zip", completed)])
     draft = tmp_path / str(project_id) / "materials" / f"anki-prepared-{scene.id}.json"
     result = json.loads(draft.read_text(encoding="utf-8"))
-    assert result["contract"] == "nova-generator-anki-proposal/1.0"
+    assert result["contract"] == "nova-generator-anki-proposal/2.0"
     assert len(result["anki_cards"]) == 1
     assert result["anki_cards"][0]["explanation_pt"]
 
