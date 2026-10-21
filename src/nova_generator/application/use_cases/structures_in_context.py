@@ -141,6 +141,8 @@ def resolve_external_context_cues(
     repository: EditorialProjectRepository,
 ) -> list[Cue]:
     """Find approved source cues even when a speaker split changed cue IDs."""
+    if not practices:
+        return []
     candidates = [
         cue for scene in scenes for cue in repository.get_scene_cues(scene.id)
     ]
