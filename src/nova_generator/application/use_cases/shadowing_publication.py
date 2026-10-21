@@ -179,7 +179,7 @@ def attach_approved_shadowing(
         by_id,
         key=lambda cue_id: (times_by_id[cue_id][0], times_by_id[cue_id][1], cue_id),
     )
-    for previous, current in zip(ordered_ids, ordered_ids[1:]):
+    for previous, current in zip(ordered_ids, ordered_ids[1:], strict=False):
         if times_by_id[previous][1] > times_by_id[current][0]:
             raise ShadowingPublicationError(
                 "As cues do Shadowing se sobrepõem na cena publicada."
