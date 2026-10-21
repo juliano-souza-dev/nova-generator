@@ -121,7 +121,8 @@ def test_completed_zip_without_anki_is_rejected(tmp_path):
     completed = _completed_package(exchange, scene, include_anki=False)
     with pytest.raises(EditorialAssistanceError, match="Anki result is required"):
         exchange.import_batch(scene.id, [("completed.zip", completed)])
-    assert not (tmp_path / str(project_id) / "materials" / f"anki-prepared-{scene.id}.json").exists()
+    draft = tmp_path / str(project_id) / "materials" / f"anki-prepared-{scene.id}.json"
+    assert not draft.exists()
 
 
 def test_invalid_anki_rejected_before_editorial_changes(tmp_path):
@@ -131,4 +132,5 @@ def test_invalid_anki_rejected_before_editorial_changes(tmp_path):
     with pytest.raises(EditorialAssistanceError, match="Anki result violates"):
         exchange.import_batch(scene.id, [("completed.zip", completed)])
     assert exchange._repository.get_scene_cues(scene.id) == original
-    assert not (tmp_path / str(project_id) / "materials" / f"anki-prepared-{scene.id}.json").exists()
+    draft = tmp_path / str(project_id) / "materials" / f"anki-prepared-{scene.id}.json"
+    assert not draft.exists()
