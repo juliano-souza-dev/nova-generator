@@ -28,6 +28,7 @@ from nova_generator.application.use_cases.structures_in_context import (
     StructuresInContextError,
     load_external_structures,
     publish_external_structures,
+    resolve_external_context_cues,
 )
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.exports import AnkiAudioExport, ReelInterval
@@ -80,6 +81,15 @@ class PublishAnkiReel:
         scenes = self._repository.get_project_scenes(project_id)
         didactic = job.input.get("mode") == "didactic"
         try:
+            external_context = load_external_structures(
+                self._project_root, project_id, [scene.id for scene in scenes]
+            )
+            context_cues = resolve_external_context_cues(
+                external_context, scenes, self._repository
+            )
+        except (StructuresInContextError, OSError, ValueError) as error:
+            raise AnkiPublicationError(f"English in Context: {error}") from error
+        try:
             shadowing_transport = approved_shadowing_transport(
                 self._repository, self._project_root, project_id, scenes, cues
             )
@@ -116,13 +126,17 @@ class PublishAnkiReel:
             )
         source_url = project.provenance.get("youtube_url")
         has_source = isinstance(source_url, str) and bool(source_url)
+        if external_context and not has_source:
+            raise AnkiPublicationError(
+                "English in Context requires the original scene video to play its examples."
+            )
         if shadowing_transport.plans and not has_source:
             raise AnkiPublicationError(
                 "Shadowing aprovado exige o vídeo original da cena. "
                 "Configure o YouTube de origem antes de publicar."
             )
         all_cues = list({cue.id: cue for cue in [
-            *cues, *shadowing_transport.additional_cues
+            *cues, *shadowing_transport.additional_cues, *context_cues
         ]}.values())
         if has_source:
             all_times = self._source_times(project_id, all_cues, scenes)
@@ -136,7 +150,9 @@ class PublishAnkiReel:
             ]
             source_times = {}
         publication_times = (
-            list(source_times.values()) if shadowing_transport.plans else cue_times
+            list(source_times.values())
+            if (shadowing_transport.plans or external_context)
+            else cue_times
         )
         scene_start = min(start for start, _ in publication_times)
         scene_end = max(end for _, end in publication_times)
@@ -278,13 +294,10 @@ class PublishAnkiReel:
                 str(card["card_id"]) for card in snapshots
             ]
 
-        # English in Context is authored in the external editorial response,
-        # independently of the selected Anki lessons.
-        try:
-            external_context = load_external_structures(
-                self._project_root, project_id, [scene.id for scene in scenes]
-            )
-            if external_context:
+        # The external AI selected English in Context independently from Anki.
+        # Include its original source cues even when they are not Anki cards.
+        if external_context:
+            try:
                 context_rows = (
                     [(editorial_by_id[cue_id][0], row)
                      for cue_id, row in by_source.items()]
@@ -296,15 +309,36 @@ class PublishAnkiReel:
                         )
                     ]
                 )
+                included = {cue.id for cue, _row in context_rows}
+                for cue in context_cues:
+                    if cue.id in included:
+                        continue
+                    context_rows.append((
+                        cue,
+                        _context_only_cue_row(
+                            cue, self._repository.get_cue_words(cue.id),
+                            source_times[str(cue.id)], timeline_origin,
+                        ),
+                    ))
+                # Cue IDs can change on split/merge, but original word IDs
+                # ensure each pedagogical focus remains on its source passage.
+                context_rows.sort(key=lambda pair: (
+                    pair[1]["start"], pair[1]["end"]
+                ))
+                source_order = {}
+                for order, (cue, row) in enumerate(context_rows, 1):
+                    row["order"] = order
+                    source_order[str(cue.id)] = order
+                base["cues"] = [row for _cue, row in context_rows]
                 base["wbw_practices"] = publish_external_structures(
                     practices=external_context,
                     source_rows=context_rows,
                     repository=self._repository,
                 )
-        except (StructuresInContextError, OSError, ValueError) as error:
-            raise AnkiPublicationError(
-                f"English in Context: {error}"
-            ) from error
+            except (StructuresInContextError, OSError, ValueError) as error:
+                raise AnkiPublicationError(
+                    f"English in Context: {error}"
+                ) from error
 
         document = add_manual_youtube_anki_audio(
             base, youtube_video_id=video.video_id, export=export
@@ -315,6 +349,10 @@ class PublishAnkiReel:
             ):
                 timeline["card_key"] = f"anki-{card['card_id']}"
                 timeline["source_cue_order"] = source_order[str(card["cue_id"])]
+        elif external_context:
+            # Legacy reels use cue_order directly rather than card_key.
+            for timeline, cue in zip(document["ankiAudio"]["cues"], cues, strict=True):
+                timeline["cue_order"] = source_order[str(cue.id)]
         if shadowing_transport.plans:
             try:
                 attach_approved_shadowing(
