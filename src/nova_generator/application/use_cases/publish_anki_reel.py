@@ -73,9 +73,13 @@ class PublishAnkiReel:
             str(cue.id): (cue, self._repository.get_cue_words(cue.id))
             for cue in cues
         }
+        # Publication intervals are per Anki card; editorial integrity is per
+        # unique source cue. A merged cue may yield several independent cards.
+        publication_rows = [
+            (cue, self._repository.get_cue_words(cue.id)) for cue in cues
+        ]
         editorial_cards = (
-            list(editorial_by_id.values()) if didactic
-            else [(cue, self._repository.get_cue_words(cue.id)) for cue in cues]
+            list(editorial_by_id.values()) if didactic else publication_rows
         )
         if any(
             "".join(word.surface for word in words)
@@ -194,7 +198,7 @@ class PublishAnkiReel:
                     },
                 }
                 for (cue, words), interval, timing in zip(
-                    editorial_cards, export.intervals, cue_times, strict=True
+                    publication_rows, export.intervals, cue_times, strict=True
                 )
             ],
             "materials": [{"label": "Anki", "type": "ANKI", "fileName": "anki.apkg"}],
