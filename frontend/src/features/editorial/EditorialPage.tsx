@@ -271,6 +271,7 @@ export function EditorialPage() {
   const [assistantFallbackRequired, setAssistantFallbackRequired] = useState(false);
   const [assistantStatusFailed, setAssistantStatusFailed] = useState(false);
   const [showPreparationTools, setShowPreparationTools] = useState(false);
+  const [showAiReexport, setShowAiReexport] = useState(false);
   const [semanticDraftUnits, setSemanticDraftUnits] = useState<EditorialSemanticUnit[] | null>(
     null,
   );
@@ -590,7 +591,20 @@ export function EditorialPage() {
     }
   }, [assistantBusy, cues, refreshCues, sceneId]);
   async function importExternalResult(files: File[]) {
-    if (!sceneId || assistantBusy) return;
+    if (!sceneId || assistantBusy || files.length === 0) return;
+    if (isDirty) {
+      setAssistantMessage("Salve ou descarte as alterações da cue antes de importar outro JSON.");
+      return;
+    }
+    if (
+      cues.some((cue) => cue.provenance?.approval === "approved") &&
+      !window.confirm(
+        "O retorno da IA substituirá a preparação editorial atual e reabrirá as cues " +
+        "afetadas para revisão. A mídia e a transcrição original serão preservadas. Continuar?",
+      )
+    ) {
+      return;
+    }
     setAssistantBusy(true);
     setAssistantMessage(`Validando ${files.length} arquivo(s) da IA externa…`);
     try {
@@ -1492,6 +1506,68 @@ export function EditorialPage() {
       <PageHeader
         title="Revisão editorial"
         description="Ouça, compare e aprove cada cue sem perder o contexto do corte."
+        actions={
+          selectedCue && editorialGateReady ? (
+            <div className="editorial-ai-menu">
+              <button
+                type="button"
+                className="secondary-button"
+                aria-expanded={showAiReexport}
+                aria-controls="editorial-ai-reexport-panel"
+                onClick={() => setShowAiReexport((open) => !open)}
+              >
+                <Download aria-hidden="true" /> Regerar JSON / importar IA
+              </button>
+              {showAiReexport && (
+                <section
+                  id="editorial-ai-reexport-panel"
+                  className="editorial-ai-reexport panel"
+                  aria-label="Regerar JSON da IA externa"
+                >
+                  <div className="editorial-ai-reexport-copy">
+                    <span className="eyebrow">Sem reprocessar a mídia</span>
+                    <h2>Regerar pacote da IA externa</h2>
+                    <p>
+                      Exporta as cues e palavras atuais, incluindo preparação Anki.
+                      Não baixa o vídeo, não refaz o corte nem a transcrição.
+                      O editorial permanece salvo até a importação do retorno.
+                    </p>
+                  </div>
+                  <div className="editorial-ai-reexport-actions">
+                    {isDirty ? (
+                      <span role="status">
+                        Salve ou descarte as alterações antes de regenerar o pacote.
+                      </span>
+                    ) : (
+                      <a
+                        className="secondary-button"
+                        href={studioApi.externalEditorialPackageUrl(sceneId)}
+                        download
+                        aria-label="Gerar novamente JSON para IA externa"
+                      >
+                        <Download aria-hidden="true" /> Gerar novamente JSON para IA externa
+                      </a>
+                    )}
+                    <EditorialImportDropzone
+                      disabled={assistantBusy || saving || isDirty}
+                      onImport={(files) => void importExternalResult(files)}
+                    />
+                  </div>
+                  {assistantMessage && (
+                    <p className="assistant-message" role="status">{assistantMessage}</p>
+                  )}
+                  <button
+                    type="button"
+                    className="preparation-source-dismiss"
+                    onClick={() => setShowAiReexport(false)}
+                  >
+                    Fechar opções de IA
+                  </button>
+                </section>
+              )}
+            </div>
+          ) : undefined
+        }
       />
       <header className="review-context" aria-label="Contexto da revisão">
         <label>
@@ -2250,19 +2326,11 @@ export function EditorialPage() {
                   >
                     <Bot aria-hidden="true" /> {assistantBusy ? "Processando…" : "Sugerir com Groq"}
                   </button>
-                  <a
-                    className="secondary-button"
-                    href={studioApi.externalEditorialPackageUrl(sceneId)}
-                    download
-                  >
-                    <Download aria-hidden="true" /> Blocos de texto para IA externa
-                  </a>
-                  <EditorialImportDropzone
-                    disabled={assistantBusy}
-                    onImport={(file) => void importExternalResult(file)}
-                  />
+                  <p className="assistant-provider-state">
+                    O pacote e a importação estão disponíveis no painel
+                    “Regerar pacote da IA externa”, acima da revisão.
+                  </p>
                 </div>
-                {assistantMessage && <p className="assistant-message">{assistantMessage}</p>}
                 {selectedSuggestion && (
                   <div className="assistant-suggestion">
                     <div className="assistant-suggestion-copy">

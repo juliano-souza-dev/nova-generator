@@ -1036,3 +1036,37 @@ def test_removing_word_from_semantic_unit_marks_survivor_for_translation_review(
     assert len(remaining) == 2
     assert remaining[1].provenance.get("semantic_group_id") is None
     assert remaining[1].provenance["translation_review_required"] is True
+
+
+def test_external_ai_package_can_be_regenerated_without_media_or_editorial_reset(
+    client: TestClient,
+) -> None:
+    import io
+    import zipfile
+
+    repository, scene_id, cue = _seed(client)
+    original = repository.get_scene_cues(scene_id)
+    original_words = repository.get_cue_words(cue.id)
+    endpoint = f"/api/editorial/scenes/{scene_id}/external-package"
+
+    first = client.get(endpoint)
+    second = client.get(endpoint)
+    assert first.status_code == 200 and second.status_code == 200
+    assert first.headers["cache-control"] == "no-store, no-cache, must-revalidate"
+    with zipfile.ZipFile(io.BytesIO(first.content)) as earlier, zipfile.ZipFile(
+        io.BytesIO(second.content)
+    ) as later:
+        assert earlier.read("editorial_input.json") == later.read("editorial_input.json")
+        assert earlier.read("manifest.json") == later.read("manifest.json")
+
+    with zipfile.ZipFile(io.BytesIO(second.content)) as archive:
+        names = set(archive.namelist())
+        assert "editorial_input.json" in names
+        assert "anki/anki-ai-input.json" in names
+        assert "anki/anki-ai-prompt.md" in names
+        assert "manifest.json" in names
+        source = json.loads(archive.read("editorial_input.json"))
+        assert source["cues"][0]["id"] == str(cue.id)
+
+    assert repository.get_scene_cues(scene_id) == original
+    assert repository.get_cue_words(cue.id) == original_words
