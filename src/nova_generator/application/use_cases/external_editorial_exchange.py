@@ -83,6 +83,7 @@ class _ExternalContextPractice(BaseModel):
     ]
     word_ids: list[str] = Field(min_length=1)
     expression_en: str = Field(min_length=1)
+    highlight: str | None = Field(default=None, min_length=1)
     meaning_pt: str = Field(min_length=1)
     explanation_pt: str = Field(min_length=1)
     example_en: str = Field(min_length=1)
@@ -200,6 +201,8 @@ class ExternalEditorialExchange:
             "required": True,
             "source": "chunks/*-result.json suggestions[].context_practices",
             "published_field": "wbw_practices",
+            "highlight_field": "highlight",
+            "highlight_required": True,
             "separate_from_anki": True,
         }
         manifest["anki"] = {
@@ -487,6 +490,16 @@ class ExternalEditorialExchange:
             raise EditorialAssistanceError(
                 "English in Context is missing: include context_practices "
                 "(possibly []) in every editorial suggestion"
+            )
+        if manifest.get("english_in_context", {}).get("highlight_required") and any(
+            practice.highlight is None
+            for chunk in manifest_chunks
+            for suggestion in documents[chunk["id"]][0].suggestions
+            for practice in suggestion.context_practices
+        ):
+            raise EditorialAssistanceError(
+                "English in Context requires a 'highlight' for every context_practices item "
+                "(the exact selected word, phrasal verb or structure)."
             )
         try:
             prepare_external_structures(all_suggestions)
@@ -878,7 +891,13 @@ Prepare também o ENGLISH IN CONTEXT na MESMA suggestion de cada cue, no array
 `context_practices`. Selecione independentemente do Anki expressões úteis,
 phrasal verbs, collocations e estruturas. Para cada prática inclua `type`,
 `word_ids` contíguos, `expression_en` literal às palavras selecionadas,
+`highlight` obrigatório com o texto EXATO que ficará em destaque no English in Context,
 `meaning_pt`, `explanation_pt`, `example_en`, `example_pt`.
+`highlight` deve ser a palavra, phrasal verb ou estrutura retirada literalmente da cue,
+correspondente aos `word_ids` e igual a `expression_en` (não a frase inteira quando
+somente um trecho é relevante). Exemplo: na fala \"I used to look up to him\",
+selecione os word_ids de \"look up to\", expression_en=\"look up to\",
+highlight=\"look up to\". Não destaque a tradução nem invente texto.
 Não gere marcação de tempo artificial: o Generator encontrará os tempos pelos
 `word_ids` aprovados. Retorne [] onde não houver conteúdo relevante.
 O English in Context é uma seção pedagógica INDEPENDENTE dos cards Anki.
@@ -934,7 +953,11 @@ por exemplo, “Can I help?” deve ser “Posso ajudar?”, nunca uma traduçã
 Cada palavra precisa manter seu tempo dentro do cue e ter uma tradução contextual.
 Inclua em context_practices as mini-aulas de English in Context (independentes
 do Anki), com type, word_ids contíguos, expression_en literal à cena,
-meaning_pt, explanation_pt, example_en e example_pt. Use [] se não houver
+highlight obrigatório, meaning_pt, explanation_pt, example_en e example_pt.
+O campo highlight é a palavra, phrasal verb ou estrutura EXATA a destacar na cena.
+Deve ser idêntico a expression_en, referir-se aos word_ids escolhidos e não conter
+palavras adicionais. Exemplo: \"I used to look up to him\" → expression_en e
+highlight = \"look up to\" (word_ids de look, up, to). Use [] se não houver
 expressões relevantes. Não invente tempos.
 Procure ativamente trocas de interlocutor dentro das cues. Não presuma que o áudio
 contém uma só pessoa por cue. Se houver alternância, documente em notes uma proposta
