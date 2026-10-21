@@ -328,6 +328,14 @@ class MaterialsAiExchange:
         self._write(project_id, "external-draft.json", document)
         return {"status": "draft", "source_sha256": source["source_sha256"], "document": document}
 
+    def find_anki_card(self, project_id: UUID, card_id: UUID) -> dict[str, Any]:
+        """Return a current, source-checked Anki lesson identified by immutable card UUID."""
+        source = self.package(project_id)["source"]
+        for card in source.get("anki_prepared", []):
+            if card.get("card_id") == str(card_id):
+                return card
+        raise MaterialsAiError(f"Anki card not found or needs editorial review: {card_id}")
+
     def update_anki_card(
         self, project_id: UUID, scene_id: UUID, card_id: UUID,
         data: Any, *, expected_sha256: str,
