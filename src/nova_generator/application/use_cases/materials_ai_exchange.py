@@ -12,7 +12,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
-
 from nova_generator.application.use_cases.anki_proposal import (
     AnkiProposal,
     validate_anki_cards,
