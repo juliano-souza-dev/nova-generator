@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import zipfile
-from dataclasses import asdict, replace
+from dataclasses asdict, replace
 from io import BytesIO
 from pathlib import Path
-import os
 from typing import Literal
 from uuid import UUID
 
@@ -694,7 +694,8 @@ def _anki_prompt(source: dict[str, object], template: dict[str, object]) -> str:
         "Não invente falas, IDs, mídia ou tempos.\n\n"
         "ENTRADA:\n```json\n"
         + json.dumps(source, ensure_ascii=False, indent=2)
-        + "\n```\n\nMODELO A PREENCHER (adicione/remova cards conforme o mérito pedagógico):\n```json\n"
+        + "\n```\n\nMODELO A PREENCHER (adicione/remova cards "
+        "conforme o mérito pedagógico):\n```json\n"
         + json.dumps(template, ensure_ascii=False, indent=2)
         + "\n```\n"
     )
