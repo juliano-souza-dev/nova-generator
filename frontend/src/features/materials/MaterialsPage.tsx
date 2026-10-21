@@ -833,8 +833,19 @@ export function MaterialsPage() {
           )}
           {exportStatus.data.reel_url && <a href={exportStatus.data.reel_url}>Baixar reel</a>}
           {exportStatus.data.hub_final_url ? (
-            <div>
+            <div className="materials-complete-delivery">
               <p>Reel vinculado ao YouTube: {exportStatus.data.youtube_video_id}</p>
+              <a
+                className="primary-button"
+                href={
+                  exportStatus.data.bundle_url ??
+                  `/api/projects/${projectId}/materials/exports/${activeExportId}/kit-completo.zip`
+                }
+                download
+              >
+                <Download aria-hidden="true" /> Baixar kit completo (ZIP)
+              </a>
+              <p>Inclui JSON final, Anki, reel, áudios WAV e arquivos aprovados disponíveis.</p>
               <a href={exportStatus.data.hub_final_url}>Baixar hub_final.json</a>
             </div>
           ) : exportStatus.data.status === "succeeded" ? (
