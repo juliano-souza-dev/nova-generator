@@ -172,7 +172,7 @@ def test_materials_package_reuses_anki_from_initial_external_export(tmp_path):
             }
         ],
     }
-    exchange._write(PROJECT, "anki-prepared.json", prepared)
+    exchange._write(PROJECT, f"anki-prepared-{SCENE}.json", prepared)
     ready = exchange.package(PROJECT)["source"]
     assert ready["anki_prepared"] == prepared["anki_cards"]
     assert ready["anki_prepared_needs_review"] == 0
