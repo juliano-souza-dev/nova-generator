@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from nova_generator.domain.exports import DIDACTIC_LAYOUT, ExportCue
+from nova_generator.domain.exports import ExportCue
 
 # A new Anki model ID is essential. Anki keeps the template of previously
 # imported model IDs, even if a future APKG includes changed HTML/CSS.
