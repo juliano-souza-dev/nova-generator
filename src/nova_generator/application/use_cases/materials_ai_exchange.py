@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
 from nova_generator.application.use_cases.anki_proposal import (
     AnkiProposal,
-    validate_anki_cards,
+    reconcile_anki_proposal,
 )
 from nova_generator.application.use_cases.editorial_assistance import build_editorial_prompt
 
@@ -225,13 +225,13 @@ class MaterialsAiExchange:
                 "use the Anki JSON for the current scene or export a new package"
             )
 
-        approved_cues = {
-            str(cue.id): (cue.approved_en, cue.approved_pt)
-            for cue in self.repository.get_scene_cues(scene.id)
-            if cue.provenance.get("approval") != "draft"
-        }
+        cues = self.repository.get_scene_cues(scene.id)
+        if any(cue.provenance.get("approval") == "draft" for cue in cues):
+            raise MaterialsAiError(
+                "approve the current editorial cues before importing Anki content"
+            )
         try:
-            validate_anki_cards(proposal, approved_cues)
+            proposal = reconcile_anki_proposal(proposal, cues)
         except ValueError as error:
             raise MaterialsAiError(str(error)) from error
 
@@ -278,15 +278,18 @@ class MaterialsAiExchange:
             for scene in source["source"]["scenes"]
             for cue in scene["cues"]
         }
-        used: set[str] = set()
+        used: set[tuple[str, str]] = set()
         for card in output.anki_cards:
             cue_id = str(card.cue_id)
             source_cue = cue_by_id.get(cue_id)
             if not source_cue:
                 raise MaterialsAiError(f"Anki cue_id {cue_id} does not belong to the source")
-            if cue_id in used:
-                raise MaterialsAiError(f"Anki cue_id {cue_id} repeated")
-            used.add(cue_id)
+            focus_key = (cue_id, card.focus_text.strip().casefold())
+            if focus_key in used:
+                raise MaterialsAiError(
+                    f"Anki cue_id {cue_id} has the same pedagogical focus repeated"
+                )
+            used.add(focus_key)
             if (
                 card.front_en != source_cue["approved_en"]
                 or card.back_pt != source_cue["approved_pt"]
