@@ -243,3 +243,34 @@ def test_materials_exclude_explicit_editorial_drafts(client):
         f"/api/projects/{project_id}/materials", params={"voice_id": voice["id"]}
     ).json()["cards"]
     assert all(card["cue_id"] != first_id for card in cards)
+
+
+def test_materials_recognize_editorial_v15_as_prepared(client):
+    """Regression: 1.5 editorial import must not block all cards/audio controls."""
+    from dataclasses import replace
+
+    from nova_generator.api.dependencies import get_session_factory
+    from nova_generator.infrastructure.database.editorial_project_repository import (
+        SqlAlchemyEditorialProjectRepository,
+    )
+
+    project_id, first_id, _ = _seed_project()
+    repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    cue = repository.get_cue(UUID(first_id))
+    assert cue is not None
+    repository.save_cue(
+        replace(
+            cue,
+            provenance={
+                **cue.provenance,
+                "approval": "approved",
+                "editorial_preparation": "complete",
+                "editorial_preparation_contract": "nova-generator-editorial-suggestions/1.5",
+            },
+        ),
+        repository.get_cue_words(cue.id),
+    )
+    result = client.get(f"/api/projects/{project_id}/materials")
+    assert result.status_code == 200
+    ready = next(card for card in result.json()["cards"] if card["cue_id"] == first_id)
+    assert ready["editorial_ready"] is True
