@@ -197,7 +197,7 @@ class ExternalEditorialExchange:
             )
             archive.writestr(
                 "shadowing/shadowing-prepared.json",
-                json.dumps(shadowing, ensure_ascii=False, indent=2) + "\\n",
+                json.dumps(shadowing, ensure_ascii=False, indent=2) + "\n",
             )
             archive.writestr("shadowing/LEIA-ME.md", _shadowing_instructions())
             legacy_source = {**source, "schema_version": "nova-generator-editorial-input/1.3"}
