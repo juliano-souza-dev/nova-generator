@@ -9,8 +9,8 @@ from nova_generator.application.use_cases.editorial_publication_snapshot import 
 )
 from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
 from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
-from nova_generator.core.settings import get_settings
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
+from nova_generator.core.settings import get_settings
 from nova_generator.domain.exports import ExportCue
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.projects.entities import utf8_sha256
