@@ -73,11 +73,18 @@ def prepare_external_structures(suggestions: list[dict[str, Any]]) -> list[dict[
                     f"English in Context cue {cue_id}: expression {expression!r} "
                     "does not match the selected editorial words"
                 )
+            highlight = str(practice.get("highlight") or expression).strip()
+            if _tokens(highlight) != _tokens(expression):
+                raise StructuresInContextError(
+                    f"English in Context cue {cue_id}: highlight {highlight!r} "
+                    "must match expression_en and the selected word IDs"
+                )
             prepared.append({
                 "source_cue_id": cue_id,
                 "word_ids": selected,
                 "type": str(practice["type"]),
                 "expression_en": expression,
+                "highlight": highlight,
                 "meaning_pt": str(practice["meaning_pt"]),
                 "explanation_pt": str(practice["explanation_pt"]),
                 "example_en": str(practice["example_en"]),
@@ -224,7 +231,7 @@ def publish_external_structures(
         published.append({
             "cue_order": int(row["order"]),
             "type": practice["type"],
-            "highlight": expression,
+            "highlight": str(practice.get("highlight") or expression),
             "expression_en": expression,
             "word_indexes": indexes,
             "context_en": str(row["approved_en"]),

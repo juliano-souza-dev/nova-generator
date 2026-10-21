@@ -317,8 +317,9 @@ function NextMediaAction({ media }: { media: ProjectMedia }) {
           <span className="eyebrow">Próximo passo</span>
           <h2>Escolha o trecho que será estudado</h2>
           <p>
-            Use a waveform abaixo para definir IN e OUT. Depois, clique em “Extrair corte e
-            transcrever”.
+            {media.suggested_cut_start_ms !== null && media.suggested_cut_end_ms !== null
+              ? "O corte exportado do iHub já está marcado. Confira IN e OUT na waveform e gere uma transcrição nova."
+              : "Use a waveform abaixo para definir IN e OUT. Depois, clique em “Extrair corte e transcrever”."}
           </p>
         </div>
       </section>
@@ -403,12 +404,18 @@ function CutEditor({
   playerRef: RefObject<HTMLVideoElement | null>;
 }) {
   const duration = media.duration_ms ?? 0;
-  const [startMs, setStartMs] = useState(media.cut_start_ms ?? 0);
-  const [endMs, setEndMs] = useState(media.cut_end_ms ?? duration);
+  const [startMs, setStartMs] = useState(
+    media.cut_start_ms ?? media.suggested_cut_start_ms ?? 0,
+  );
+  const [endMs, setEndMs] = useState(
+    media.cut_end_ms ?? media.suggested_cut_end_ms ?? duration,
+  );
   const [language, setLanguage] = useState("en");
   useEffect(() => {
-    if (duration > 0) setEndMs((current) => Math.min(current, duration));
-  }, [duration]);
+    if (duration > 0 && media.suggested_cut_end_ms === null) {
+      setEndMs((current) => Math.min(current, duration));
+    }
+  }, [duration, media.suggested_cut_end_ms]);
   const updateStart = (value: number) =>
     setStartMs(Math.round(Math.min(Math.max(0, value), endMs - 100)));
   const updateEnd = (value: number) =>
@@ -423,6 +430,20 @@ function CutEditor({
         </div>
         <Scissors aria-hidden="true" />
       </div>
+      {media.suggested_cut_start_ms !== null &&
+        media.suggested_cut_end_ms !== null && (
+          <p className="hint" role="status">
+            Corte recuperado do iHub: {formatClock(media.suggested_cut_start_ms)} até{" "}
+            {formatClock(media.suggested_cut_end_ms)}. Nenhuma legenda antiga foi importada.
+          </p>
+        )}
+      {media.suggested_cut_end_ms !== null && duration > 0 &&
+        media.suggested_cut_end_ms > duration && (
+          <p className="field-error" role="alert">
+            O corte exportado termina depois da duração do vídeo disponível. Ajuste
+            a marcação final antes de transcrever.
+          </p>
+        )}
       <SourceWaveEditor
         peaks={waveform}
         failed={waveformError}

@@ -7,12 +7,13 @@ import {
   FolderKanban,
   Plus,
   Search,
+  Upload,
   Trash2,
   Undo2,
 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
@@ -46,6 +47,8 @@ export function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [isCreating, setCreating] = useState(false);
+  const [isImporting, setImporting] = useState(false);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const projects = useQuery({
     queryKey: ["projects", search, showArchived],
@@ -59,6 +62,14 @@ export function ProjectsPage() {
       setCreating(false);
     },
   });
+  const importHub = useMutation({
+    mutationFn: studioApi.createProjectFromIhub,
+    onSuccess: (project) => {
+      void refresh();
+      setImporting(false);
+      navigate(`/media?project=${project.id}`);
+    },
+  });
   const archive = useMutation({ mutationFn: studioApi.archiveProject, onSuccess: refresh });
   const restore = useMutation({ mutationFn: studioApi.restoreProject, onSuccess: refresh });
   const duplicate = useMutation({ mutationFn: studioApi.duplicateProject, onSuccess: refresh });
@@ -70,9 +81,26 @@ export function ProjectsPage() {
         title="Projetos"
         description="Organize a fonte de mídia, a revisão editorial e os artefatos de cada produção."
         actions={
-          <button className="primary-button" onClick={() => setCreating(true)}>
-            <Plus aria-hidden="true" /> Novo projeto
-          </button>
+          <>
+            <button
+              className="secondary-button"
+              onClick={() => {
+                setCreating(false);
+                setImporting(true);
+              }}
+            >
+              <Upload aria-hidden="true" /> Importar JSON do iHub
+            </button>
+            <button
+              className="primary-button"
+              onClick={() => {
+                setImporting(false);
+                setCreating(true);
+              }}
+            >
+              <Plus aria-hidden="true" /> Novo projeto
+            </button>
+          </>
         }
       />
       {isCreating && (
@@ -87,6 +115,14 @@ export function ProjectsPage() {
               youtube_url: input.youtube_url || undefined,
             })
           }
+        />
+      )}
+      {isImporting && (
+        <IhubImportPanel
+          busy={importHub.isPending}
+          error={importHub.error?.message}
+          onCancel={() => setImporting(false)}
+          onSubmit={(file) => importHub.mutate(file)}
         />
       )}
       <div className="project-toolbar" aria-label="Filtros de projetos">
@@ -140,6 +176,57 @@ export function ProjectsPage() {
         </div>
       )}
     </section>
+  );
+}
+
+function IhubImportPanel({
+  busy,
+  error,
+  onCancel,
+  onSubmit,
+}: {
+  busy: boolean;
+  error?: string;
+  onCancel: () => void;
+  onSubmit: (file: File) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  return (
+    <form
+      className="panel project-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (file && !busy) onSubmit(file);
+      }}
+    >
+      <h2>Recriar kit a partir do iHub</h2>
+      <p>
+        Selecione um JSON exportado do iHub. Somente o vídeo do YouTube e o início e
+        fim do corte serão utilizados. Transcrições, traduções, Anki, Shadowing e
+        demais materiais antigos serão descartados.
+      </p>
+      <label>
+        Arquivo JSON do iHub
+        <input
+          type="file"
+          accept=".json,application/json"
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+        />
+      </label>
+      <p className="hint">
+        O kit publicado no iHub não será alterado. O Generator criará um projeto
+        independente, com o corte pré-selecionado para uma nova transcrição.
+      </p>
+      {error && <p className="field-error" role="alert">{error}</p>}
+      <div className="form-actions">
+        <button className="primary-button" type="submit" disabled={busy || !file}>
+          {busy ? "Criando…" : "Criar projeto com esse corte"}
+        </button>
+        <button className="secondary-button" type="button" onClick={onCancel}>
+          Cancelar
+        </button>
+      </div>
+    </form>
   );
 }
 

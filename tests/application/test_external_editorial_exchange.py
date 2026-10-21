@@ -595,3 +595,51 @@ def test_ai_merge_with_previous_preserves_words_and_is_one_revision(tmp_path: Pa
     assert cues[0].provenance["ai_merged_from"]
     assert len(repository.get_cue_words(cues[0].id)) == 6
     assert len(repository.list_revisions(scene.id)) == before_revisions + 1
+
+
+def test_ai_english_in_context_requires_explicit_highlight(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'highlight.db'}")
+    Base.metadata.create_all(engine)
+    repository = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repository).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="external-highlight-validation",
+        imported_by="test",
+    )
+    scene = repository.get_project_scenes(project_id)[0]
+    exchange = ExternalEditorialExchange(repository, tmp_path)
+    with zipfile.ZipFile(exchange.build_package(scene.id)) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+        name = next(
+            name for name in archive.namelist() if name.endswith("-result.json")
+        )
+        payload = json.loads(archive.read(name))
+        instructions = archive.read("INSTRUCOES.md").decode("utf-8")
+    assert manifest["english_in_context"]["highlight_required"] is True
+    assert "highlight" in instructions
+    for suggestion in payload["suggestions"]:
+        suggestion["approved_pt"] = "Tradução da fala."
+        for word in suggestion["word_translations"]:
+            word["pt"] = "tradução"
+    first = payload["suggestions"][0]
+    first_word = first["word_translations"][0]
+    expression = first_word["surface"].strip()
+    first["context_practices"] = [{
+        "type": "vocabulary",
+        "word_ids": [first_word["word_id"]],
+        "expression_en": expression,
+        "meaning_pt": "Uma palavra da cena.",
+        "explanation_pt": "Uma explicação didática.",
+        "example_en": "This is an example.",
+        "example_pt": "Este é um exemplo.",
+    }]
+    uploads = [(name, json.dumps(payload).encode("utf-8"))]
+    before = len(repository.list_revisions(scene.id))
+    with pytest.raises(EditorialAssistanceError, match="highlight"):
+        exchange.import_batch(scene.id, uploads)
+    assert len(repository.list_revisions(scene.id)) == before
+    first["context_practices"][0]["highlight"] = "another word"
+    with pytest.raises(EditorialAssistanceError, match="highlight"):
+        exchange.import_batch(scene.id, [(name, json.dumps(payload).encode("utf-8"))])
+    assert len(repository.list_revisions(scene.id)) == before

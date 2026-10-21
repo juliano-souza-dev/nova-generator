@@ -53,7 +53,12 @@ class ManageProjects:
         return self._managed(self._require(project_id))
 
     def create(
-        self, *, title: str | None, content_type: str, youtube_url: str | None
+        self,
+        *,
+        title: str | None,
+        content_type: str,
+        youtube_url: str | None,
+        initial_cut: tuple[int, int] | None = None,
     ) -> ManagedProject:
         if content_type == "story":
             project = Project(uuid4(), _title(title), content_type, _story_provenance(youtube_url))
@@ -62,19 +67,26 @@ class ManageProjects:
                 raise ProjectCommandError("youtube_url is required for production projects")
             inspected = self._source_inspection.execute(youtube_url)
             manual_title = title.strip() if title else ""
+            provenance: dict[str, Any] = {
+                "lifecycle": "active",
+                "youtube_url": inspected.video.canonical_url,
+                "youtube_video_id": inspected.video.video_id,
+                "youtube_title": inspected.title,
+                "youtube_channel": inspected.channel,
+                "youtube_inspected_at_utc": inspected.inspected_at_utc.isoformat(),
+                "title_source": "manual" if manual_title else "youtube",
+            }
+            if initial_cut is not None:
+                start_ms, end_ms = initial_cut
+                if start_ms < 0 or end_ms <= start_ms:
+                    raise ProjectCommandError("invalid imported scene cut")
+                provenance["initial_cut_start_ms"] = start_ms
+                provenance["initial_cut_end_ms"] = end_ms
             project = Project(
                 uuid4(),
                 manual_title or inspected.title,
                 content_type,
-                {
-                    "lifecycle": "active",
-                    "youtube_url": inspected.video.canonical_url,
-                    "youtube_video_id": inspected.video.video_id,
-                    "youtube_title": inspected.title,
-                    "youtube_channel": inspected.channel,
-                    "youtube_inspected_at_utc": inspected.inspected_at_utc.isoformat(),
-                    "title_source": "manual" if manual_title else "youtube",
-                },
+                provenance,
             )
         self._repository.save_project(project)
         return self._managed(project)

@@ -66,6 +66,8 @@ class MediaSnapshot(BaseModel):
     cut_url: str | None
     cut_start_ms: int | None
     cut_end_ms: int | None
+    suggested_cut_start_ms: int | None
+    suggested_cut_end_ms: int | None
     waveform: dict[str, Any] | None
     transcript_candidate: dict[str, Any] | None
 
@@ -161,6 +163,8 @@ def get_project_media(project_id: UUID) -> MediaSnapshot:
         cut_url=f"{base}/cuts/{completed.id}" if completed and cut_ready else None,
         cut_start_ms=output.get("start_ms") if output else None,
         cut_end_ms=output.get("end_ms") if output else None,
+        suggested_cut_start_ms=_project.provenance.get("initial_cut_start_ms"),
+        suggested_cut_end_ms=_project.provenance.get("initial_cut_end_ms"),
         waveform=output.get("waveform") if output else None,
         transcript_candidate=output.get("transcript_candidate") if output else None,
     )
