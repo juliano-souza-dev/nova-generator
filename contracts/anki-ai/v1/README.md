@@ -14,6 +14,6 @@ Cada card requer `cue_id`, `front_en`, `back_pt`, `card_type`, `focus_text`, `me
 - Proibido inventar conteúdo de cenas, IDs, mídia, áudio, URLs, durações ou TTS. O arquivo prepara *conteúdo pedagógico*, não gera APKG nem reel.
 - O conteúdo Anki é rascunho humano-editável e não pode sobrescrever texto editorial nem ser aprovado automaticamente. Após editar/mesclar cues, o sistema deve reconciliar o conteúdo pelo `cue_id` e exigir revisão quando a identidade ou a frase mudar.
 
-A importação em lote pré-valida os chunks editoriais **e** o Anki, grava o material preliminar em `data/projects/<project_id>/materials/anki-prepared.json` e preserva a aprovação editorial separada. Os pacotes antigos sem Anki continuam legíveis; o novo formato é exigido quando o ZIP de retorno traz o `manifest.json` com `anki.required=true`.
+A importação em lote pré-valida os chunks editoriais **e** o Anki, grava o material preliminar em `data/projects/<project_id>/materials/anki-prepared-<scene_id>.json` e preserva a aprovação editorial separada. Os pacotes antigos sem Anki continuam legíveis; o novo formato é exigido quando o ZIP de retorno traz o `manifest.json` com `anki.required=true`.
 
 Esse é um contrato específico para Anki e **não substitui** o contrato de workbook/PDF de sete seções `contracts/materials-ai/v1`. O Anki preparado deve ser reutilizado na etapa Materiais, sem pedir à IA que o reescreva. Não publicar card antes da revisão final.
