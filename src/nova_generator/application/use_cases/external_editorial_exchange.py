@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import zipfile
 from dataclasses import asdict, replace
 from io import BytesIO
@@ -87,6 +88,40 @@ class _ExternalResult(BaseModel):
     suggestions: list[_ExternalSuggestion] = Field(min_length=1)
 
 
+ANKI_INPUT_CONTRACT = "nova-generator-anki-input/1.0"
+ANKI_OUTPUT_CONTRACT = "nova-generator-anki-proposal/1.0"
+ANKI_FIELDS = (
+    "cue_id", "front_en", "back_pt", "card_type", "focus_text", "meaning",
+    "marked_en", "marked_pt", "explanation_pt", "example_en", "example_pt", "tags",
+)
+
+
+class _ExternalAnkiCard(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    cue_id: UUID
+    front_en: str = Field(min_length=1)
+    back_pt: str = Field(min_length=1)
+    card_type: str = Field(min_length=1, max_length=80)
+    focus_text: str = Field(min_length=1, max_length=255)
+    meaning: str = Field(min_length=1, max_length=500)
+    marked_en: str = Field(min_length=1, max_length=255)
+    marked_pt: str = Field(min_length=1, max_length=255)
+    explanation_pt: str = Field(min_length=1, max_length=3000)
+    example_en: str = Field(min_length=1, max_length=1500)
+    example_pt: str = Field(min_length=1, max_length=1500)
+    tags: list[str] = Field(max_length=12)
+
+
+class _ExternalAnkiProposal(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    contract: Literal["nova-generator-anki-proposal/1.0"]
+    scene_id: UUID
+    input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    anki_cards: list[_ExternalAnkiCard] = Field(min_length=1, max_length=50)
+
+
 class ExternalEditorialExchange:
     _CUES_PER_CHUNK = 8
 
@@ -143,6 +178,12 @@ class ExternalEditorialExchange:
                 for index, chunk in enumerate(chunks, start=1)
             ],
         }
+        manifest["anki"] = {
+            "required": True,
+            "input_contract": ANKI_INPUT_CONTRACT,
+            "output_contract": ANKI_OUTPUT_CONTRACT,
+            "response_path": "anki/anki-ai-result.json",
+        }
         (directory / f"scene-{scene_id}-external-ai-manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
@@ -150,7 +191,7 @@ class ExternalEditorialExchange:
             archive.writestr(
                 "manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
             )
-            archive.writestr("INSTRUCOES.md", _instructions())
+            archive.writestr("INSTRUCOES.md", _instructions() + _anki_instructions())
             legacy_source = {**source, "schema_version": "nova-generator-editorial-input/1.3"}
             legacy_template = _template(scene_id, input_sha256, "", cues) | {
                 "schema_version": "nova-generator-editorial-suggestions/1.3"
@@ -162,6 +203,19 @@ class ExternalEditorialExchange:
             archive.writestr(
                 "editorial_result_template.json",
                 json.dumps(legacy_template, ensure_ascii=False, indent=2) + "\n",
+            )
+            anki_input = _anki_input(scene_id, input_sha256, cues)
+            archive.writestr(
+                "anki/anki-ai-input.json",
+                json.dumps(anki_input, ensure_ascii=False, indent=2) + "\n",
+            )
+            anki_template = _anki_template(scene_id, input_sha256, cues)
+            archive.writestr(
+                "anki/anki-ai-result-template.json",
+                json.dumps(anki_template, ensure_ascii=False, indent=2) + "\n",
+            )
+            archive.writestr(
+                "anki/anki-ai-prompt.md", _anki_prompt(anki_input, anki_template),
             )
             for item, chunk in zip(manifest["chunks"], chunks, strict=True):
                 offset = (item["index"] - 1) * self._CUES_PER_CHUNK
@@ -243,15 +297,27 @@ class ExternalEditorialExchange:
         if not uploads or len(uploads) > 24:
             raise EditorialAssistanceError("select between 1 and 24 JSON files, or one ZIP")
         expanded: list[tuple[str, bytes]] = []
+        anki_result: bytes | None = None
+        response_includes_manifest = False
         for name, payload in uploads:
             if not payload:
                 raise EditorialAssistanceError(f"{name}: empty file")
             if name.lower().endswith(".zip"):
                 try:
                     with zipfile.ZipFile(BytesIO(payload)) as archive:
+                        response_includes_manifest |= "manifest.json" in archive.namelist()
+                        anki_names = [
+                            name for name in ("anki/anki-ai-result.json", "anki-ai-result.json")
+                            if name in archive.namelist()
+                        ]
+                        if len(anki_names) > 1 or (anki_names and anki_result is not None):
+                            raise EditorialAssistanceError("duplicate Anki result")
+                        if anki_names:
+                            anki_result = archive.read(anki_names[0])
                         candidates = [
                             item for item in archive.infolist()
                             if not item.is_dir()
+                            and item.filename.startswith("chunks/")
                             and item.filename.lower().endswith("-result.json")
                             and not item.filename.startswith("__MACOSX/")
                         ]
@@ -266,6 +332,10 @@ class ExternalEditorialExchange:
                         )
                 except (zipfile.BadZipFile, OSError, RuntimeError) as error:
                     raise EditorialAssistanceError(f"{name}: invalid ZIP archive") from error
+            elif name.lower().endswith("anki-ai-result.json"):
+                if anki_result is not None:
+                    raise EditorialAssistanceError("duplicate Anki result")
+                anki_result = payload
             elif name.lower().endswith(".json"):
                 expanded.append((name, payload))
             else:
@@ -285,6 +355,14 @@ class ExternalEditorialExchange:
             raise EditorialAssistanceError(
                 "export the current external package before importing results"
             ) from error
+        if (
+            response_includes_manifest
+            and manifest.get("anki", {}).get("required")
+            and anki_result is None
+        ):
+            raise EditorialAssistanceError(
+                "Anki result is required: include anki/anki-ai-result.json in the ZIP"
+            )
         manifest_chunks = manifest.get("chunks")
         if not isinstance(manifest_chunks, list) or not manifest_chunks:
             raise EditorialAssistanceError("external package has no valid chunk manifest")
@@ -352,6 +430,38 @@ class ExternalEditorialExchange:
                 item.cue_id: [turn.model_dump() for turn in item.speaker_turns]
                 for item in document.suggestions
             })
+        prepared_anki: _ExternalAnkiProposal | None = None
+        if anki_result is not None:
+            if len(anki_result) > self._maximum_result_bytes:
+                raise EditorialAssistanceError("Anki result exceeds the allowed size")
+            try:
+                prepared_anki = _ExternalAnkiProposal.model_validate_json(anki_result)
+            except (ValidationError, ValueError) as error:
+                raise EditorialAssistanceError(
+                    f"Anki result violates the required contract: {_validation_detail(error)}"
+                ) from error
+            if prepared_anki.scene_id != scene_id or prepared_anki.input_sha256 != source_hash:
+                raise EditorialAssistanceError("Anki result belongs to another or stale scene")
+            editorial_by_id = {
+                item.cue_id: item
+                for document, _payload in documents.values()
+                for item in document.suggestions
+            }
+            seen_cards: set[str] = set()
+            for card in prepared_anki.anki_cards:
+                card_id = str(card.cue_id)
+                if card_id not in originals or card_id in seen_cards:
+                    raise EditorialAssistanceError(f"Anki cue_id missing or repeated: {card_id}")
+                seen_cards.add(card_id)
+                approved = editorial_by_id[card_id]
+                if card.front_en != approved.approved_en or card.back_pt != approved.approved_pt:
+                    raise EditorialAssistanceError(
+                        f"Anki card {card_id} must match the same batch's approved EN/PT literally"
+                    )
+                if card.marked_en.casefold() not in card.front_en.casefold():
+                    raise EditorialAssistanceError(f"Anki card {card_id} has invalid marked_en")
+                if card.marked_pt.casefold() not in card.back_pt.casefold():
+                    raise EditorialAssistanceError(f"Anki card {card_id} has invalid marked_pt")
         first = validated_chunks[0]
         combined = EditorialAssistanceResult(
             scene_id=str(scene_id),
@@ -386,6 +496,19 @@ class ExternalEditorialExchange:
             _document, content = documents[chunk["id"]]
             (manifest_path.parent / f"scene-{scene_id}-{chunk['id']}-external-result.json"
             ).write_bytes(content)
+        if prepared_anki is not None:
+            destination = (
+                self._project_root / str(project_id) / "materials"
+                / f"anki-prepared-{scene_id}.json"
+            )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            content = prepared_anki.model_dump_json(indent=2)
+            temporary = destination.with_suffix(".tmp")
+            try:
+                temporary.write_text(content + "\n", encoding="utf-8")
+                os.replace(temporary, destination)
+            finally:
+                temporary.unlink(missing_ok=True)
         return combined
 
     def _import_chunk(
@@ -476,15 +599,123 @@ def _validation_detail(error: ValidationError | ValueError) -> str:
     return str(error)
 
 
+def _anki_input(
+    scene_id: UUID, input_sha256: str, cues: tuple[EditorialCuePrompt, ...]
+) -> dict[str, object]:
+    return {
+        "contract": ANKI_INPUT_CONTRACT,
+        "scene_id": str(scene_id),
+        "input_sha256": input_sha256,
+        "cues": [
+            {
+                "cue_id": cue.id,
+                "order": cue.order,
+                "original_en": cue.original_en,
+                "current_en": cue.current_en,
+                "current_pt": cue.current_pt,
+                "speech_start_ms": cue.speech_start_ms,
+                "speech_end_ms": cue.speech_end_ms,
+            }
+            for cue in cues
+        ],
+        "instructions": {
+            "output_contract": ANKI_OUTPUT_CONTRACT,
+            "required_card_fields": list(ANKI_FIELDS),
+            "selection_policy": (
+                "Escolha apenas falas pedagogicamente relevantes: expressões, collocations, "
+                "phrasal verbs, perguntas, estruturas e vocabulário em contexto. "
+                "Não crie um card para cada palavra. Explique o foco de cada card em PT-BR."
+            ),
+            "integrity_policy": (
+                "Retorne no MESMO lote dos resultados editoriais. Use cue_ids existentes, "
+                "não invente mídia ou tempos; front_en/back_pt devem ser literalmente iguais "
+                "ao approved_en/approved_pt enviados para cada cue nos resultados editoriais. "
+                "marked_en/marked_pt devem existir literalmente na frase. "
+                "Forneça exemplos adicionais naturais em EN/PT e mini-aula contextual."
+            ),
+        },
+    }
+
+
+def _anki_template(
+    scene_id: UUID, input_sha256: str, cues: tuple[EditorialCuePrompt, ...]
+) -> dict[str, object]:
+    # Intentional blank template: not an acceptable AI result until fully filled.
+    return {
+        "contract": ANKI_OUTPUT_CONTRACT,
+        "scene_id": str(scene_id),
+        "input_sha256": input_sha256,
+        "anki_cards": [
+            {
+                "cue_id": cues[0].id,
+                "front_en": cues[0].word_by_word_en,
+                "back_pt": "",
+                "card_type": "EXPRESSION",
+                "focus_text": "",
+                "meaning": "",
+                "marked_en": "",
+                "marked_pt": "",
+                "explanation_pt": "",
+                "example_en": "",
+                "example_pt": "",
+                "tags": [],
+            }
+        ],
+    }
+
+
+def _anki_instructions() -> str:
+    return """
+## Preparação obrigatória do Anki no MESMO pacote
+
+Além dos resultados editoriais, leia `anki/anki-ai-input.json`, siga
+`anki/anki-ai-prompt.md` e devolva `anki/anki-ai-result.json` no mesmo ZIP.
+Não basta traduzir as cues ou preparar o shadowing. O Anki exige **seleção
+pedagógica** e **mini-aula** para cada card. Veja `contracts/anki-ai/v1`.
+Cada card deve conter EXATAMENTE: cue_id, front_en, back_pt, card_type,
+focus_text, meaning, marked_en, marked_pt, explanation_pt, example_en,
+example_pt e tags. A seleção deve cobrir o que é relevante para aprendizagem,
+sem fazer card para palavras triviais. A frente e o verso devem coincidir
+literalmente com approved_en/approved_pt devolvidos no editorial desta cena.
+Não invente cues, tempos, mídia ou áudio. O resultado é um RASCUNHO para
+revisão, não uma aprovação automática de Anki.
+Ao devolver um ZIP completo com manifest.json, a ausência do arquivo Anki
+é erro de contrato. Pacotes legados seguem aceitos.
+"""
+
+
+def _anki_prompt(source: dict[str, object], template: dict[str, object]) -> str:
+    return (
+        "Você é a IA pedagógica do Nova Generator. Complete o Anki com conteúdo REAL "
+        "para esta cena, preservando IDs e hashes. Responda APENAS com o JSON "
+        "nova-generator-anki-proposal/1.0, salvo em anki/anki-ai-result.json. "
+        "Escolha as cues mais relevantes; uma cue por card; elimine as triviais. "
+        "Cada card deve trazer uma mini-aula em português, expressão principal, "
+        "significado contextual, highlights EN/PT literais, exemplo NOVO EN/PT, "
+        "tipo e tags. As frases front_en/back_pt têm de ser IDÊNTICAS às versões "
+        "approved_en/approved_pt que você preparou nos chunks editoriais. "
+        "Não invente falas, IDs, mídia ou tempos.\n\n"
+        "ENTRADA:\n```json\n"
+        + json.dumps(source, ensure_ascii=False, indent=2)
+        + "\n```\n\nMODELO A PREENCHER (adicione/remova cards "
+        "conforme o mérito pedagógico):\n```json\n"
+        + json.dumps(template, ensure_ascii=False, indent=2)
+        + "\n```\n"
+    )
+
+
 def _instructions() -> str:
     return """# Assistência editorial externa em blocos
 
 Este pacote contém somente texto: não há vídeo nem áudio. Por isso, inferências de
 interlocutores e tempos devem ser conservadoras e baseadas nos word_ids e
 timestamps disponíveis. Abra cada arquivo
-`chunks/*-prompt.md`, cole-o em uma conversa nova da Groq e salve a resposta como JSON no
-arquivo `chunks/*-result.json` correspondente. Envie os retornos um a um ao Generator; cada
-bloco é validado e aplicado imediatamente. Nunca misture cues de blocos diferentes.
+`chunks/*-prompt.md`, preencha o JSON editorial correspondente e também
+`anki/anki-ai-prompt.md`. Na preparação completa, devolva TODOS os arquivos
+`chunks/*-result.json` e `anki/anki-ai-result.json` no MESMO ZIP, preservando
+`manifest.json`, e importe de uma vez pelo endpoint em lote. O envio individual
+de chunks permanece apenas para compatibilidade legada e não prepara o Anki.
+Nunca misture cues de blocos diferentes.
 
 Use o `*-input.json` como fonte canônica.
 Preencha `approved_en`, `approved_pt`, `notes`, `word_translations` e `semantic_units` no arquivo

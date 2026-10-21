@@ -146,3 +146,38 @@ def test_material_contract_cannot_use_stale_or_unapproved_editorial(tmp_path):
     repo.cue = replace(repo.cue, approved_pt="Bom dia.", revision=2)
     with pytest.raises(MaterialsAiError, match="changed"):
         exchange.import_result(PROJECT, material_result(original["source_sha256"]))
+
+
+def test_materials_package_reuses_anki_from_initial_external_export(tmp_path):
+    repo = Repository()
+    exchange = MaterialsAiExchange(repo, tmp_path)
+    prepared = {
+        "contract": "nova-generator-anki-proposal/1.0",
+        "scene_id": str(SCENE),
+        "input_sha256": "a" * 64,
+        "anki_cards": [
+            {
+                "cue_id": str(CUE),
+                "front_en": "Hello.",
+                "back_pt": "Olá.",
+                "card_type": "EXPRESSION",
+                "focus_text": "Hello.",
+                "meaning": "Olá.",
+                "marked_en": "Hello.",
+                "marked_pt": "Olá.",
+                "explanation_pt": "Saudação ao iniciar uma conversa.",
+                "example_en": "Hello, team!",
+                "example_pt": "Olá, equipe!",
+                "tags": ["greetings"],
+            }
+        ],
+    }
+    exchange._write(PROJECT, f"anki-prepared-{SCENE}.json", prepared)
+    ready = exchange.package(PROJECT)["source"]
+    assert ready["anki_prepared"] == prepared["anki_cards"]
+    assert ready["anki_prepared_needs_review"] == 0
+
+    repo.cue = replace(repo.cue, approved_en="Hi.", revision=2)
+    needs_review = exchange.package(PROJECT)["source"]
+    assert needs_review["anki_prepared"] == []
+    assert needs_review["anki_prepared_needs_review"] == 1

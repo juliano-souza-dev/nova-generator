@@ -121,6 +121,40 @@ class MaterialsAiExchange:
             "content_type": project.content_type,
             "scenes": scenes,
         }
+        # Reuse Anki prepared at first export for each scene independently.
+        # If the editorial later changes a cue, keep it out of publication
+        # and flag the prepared card for manual reconciliation.
+        available = {
+            cue["id"]: cue
+            for scene in scenes for cue in scene["cues"]
+        }
+        prepared_cards: list[dict[str, Any]] = []
+        needs_review = 0
+        found_draft = False
+        for scene in scenes:
+            prepared = self._read(project_id, f"anki-prepared-{scene['scene_id']}.json")
+            if not prepared or prepared.get("contract") != "nova-generator-anki-proposal/1.0":
+                continue
+            found_draft = True
+            candidates = prepared.get("anki_cards", [])
+            if not isinstance(candidates, list):
+                continue
+            for card in candidates:
+                if not isinstance(card, dict):
+                    needs_review += 1
+                    continue
+                approved = available.get(card.get("cue_id"))
+                if (
+                    approved is not None
+                    and card.get("front_en") == approved["approved_en"]
+                    and card.get("back_pt") == approved["approved_pt"]
+                ):
+                    prepared_cards.append(card)
+                else:
+                    needs_review += 1
+        if found_draft:
+            source["anki_prepared"] = prepared_cards
+            source["anki_prepared_needs_review"] = needs_review
         fingerprint = sha256(json.dumps(
             source, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         ).encode("utf-8")).hexdigest()
@@ -136,7 +170,10 @@ class MaterialsAiExchange:
                     "Gere texto pedagógico real para cada seção, incluindo "
                     "exercícios com respostas. "
                     "Os cards Anki devem usar cue_id existentes, e front_en/back_pt precisam "
-                    "ser idênticos ao texto EN/PT aprovado. Inclua card_type, focus_text, "
+                    "ser idênticos ao texto EN/PT aprovado. Se source.anki_prepared estiver "
+                    "presente, reutilize essas mini-aulas já preparadas no primeiro pacote "
+                    "e não as gere novamente. Cards com cue alterada exigem revisão. "
+                    "Inclua card_type, focus_text, "
                     "meaning, marked_en, marked_pt, explanation_pt, example_en e example_pt "
                     "para reproduzir a mini lesson do iHub. O marked_en/marked_pt deve existir "
                     "literalmente na frase aprovada; os exemplos devem ter EN e PT. "
