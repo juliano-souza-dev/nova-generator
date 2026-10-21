@@ -20,6 +20,10 @@ from nova_generator.api.dependencies import (
 from nova_generator.application.use_cases.editorial_publication_snapshot import (
     editorial_publication_sha256,
 )
+from nova_generator.application.use_cases.materials_ai_exchange import (
+    MaterialsAiError,
+    MaterialsAiExchange,
+)
 from nova_generator.application.use_cases.manage_jobs import EnqueueJob, GetJob
 from nova_generator.application.use_cases.manage_voice_profiles import ManageVoiceProfiles
 from nova_generator.application.use_cases.publish_anki_reel import (
@@ -390,6 +394,177 @@ def export_materials(
             "cue_ids": [str(cue.id) for cue in selected],
             "text_hashes": {str(cue.id): cue.approved_en_sha256 for cue in selected},
             "pt_hashes": {str(cue.id): utf8_sha256(cue.approved_pt) for cue in selected},
+            "audio_hashes": audio_hashes,
+            "editorial_sha256": editorial_hash,
+            "voice_snapshot": _voice_payload(voice),
+        },
+        idempotency_key=None,
+    )
+    return ExportResponse(job_id=job.id, status=job.status)
+
+
+def _didactic_exchange() -> MaterialsAiExchange:
+    return MaterialsAiExchange(_repository(), get_settings().project_root)
+
+
+def _didactic_card(project_id: UUID, card_id: UUID) -> dict:
+    try:
+        return _didactic_exchange().find_anki_card(project_id, card_id)
+    except MaterialsAiError as error:
+        raise HTTPException(409, detail=str(error)) from error
+
+
+@router.get("/anki-audio")
+def didactic_anki_audio_status(
+    project_id: UUID,
+    voices: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
+    voice_id: UUID | None = None,
+) -> dict:
+    voice = _voice(voices, voice_id) if voice_id else None
+    cache = FileSpeechCache(get_settings().media_cache_root)
+    try:
+        cards = _didactic_exchange().package(project_id)["source"].get("anki_prepared", [])
+    except MaterialsAiError as error:
+        raise HTTPException(409, detail=str(error)) from error
+    return {
+        "cards": [
+            {
+                "card_id": card["card_id"],
+                "cue_id": card["cue_id"],
+                "front_en": card["front_en"],
+                "audio_ready": (
+                    voice is not None
+                    and cache.find(cache.cache_key(
+                        text=card["front_en"], profile=voice, parameters={}
+                    )) is not None
+                ),
+                "audio_url": (
+                    f"{get_settings().api_prefix}/projects/{project_id}/materials/anki/"
+                    f"{card['card_id']}/audio?voice_id={voice.profile_id}&voice_version={voice.version}"
+                    if voice is not None
+                    and cache.find(cache.cache_key(
+                        text=card["front_en"], profile=voice, parameters={}
+                    )) is not None else None
+                ),
+            }
+            for card in cards
+        ],
+    }
+
+
+@router.get("/anki/{card_id}/audio")
+def stream_didactic_anki_audio(
+    project_id: UUID,
+    card_id: UUID,
+    voices: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
+    voice_id: UUID,
+    voice_version: int,
+) -> FileResponse:
+    card = _didactic_card(project_id, card_id)
+    voice = voices.get(voice_id, voice_version)
+    if voice is None:
+        raise HTTPException(404, detail="voice profile not found")
+    cache = FileSpeechCache(get_settings().media_cache_root)
+    speech = cache.find(cache.cache_key(
+        text=card["front_en"], profile=voice.snapshot(), parameters={}
+    ))
+    if speech is None:
+        raise HTTPException(404, detail="didactic card WAV not ready")
+    return FileResponse(
+        speech.audio_path, media_type="audio/wav", filename=f"anki-{card_id}.wav"
+    )
+
+
+@router.post(
+    "/anki/{card_id}/audio",
+    response_model=JobRefResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def prepare_didactic_anki_audio(
+    project_id: UUID,
+    card_id: UUID,
+    payload: VoiceInput,
+    voices: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
+    enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
+) -> JobRefResponse:
+    card = _didactic_card(project_id, card_id)
+    voice = _voice(voices, payload.voice_id)
+    try:
+        validate_profile_reference(
+            FileVoiceReferenceStore(get_settings().media_cache_root),
+            voice.reference_audio_sha256,
+        )
+    except ValueError as error:
+        raise HTTPException(422, detail=str(error)) from error
+    job = enqueue.execute(
+        kind="synthesize_material_audio",
+        input={
+            "project_id": str(project_id),
+            "cue_id": card["cue_id"],
+            "anki_card_id": str(card_id),
+            "approved_en": card["front_en"],
+            "voice_snapshot": _voice_payload(voice),
+        },
+        idempotency_key=None,
+    )
+    return JobRefResponse(id=job.id, status=job.status)
+
+
+@router.post(
+    "/anki-exports",
+    response_model=ExportResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def export_didactic_anki(
+    project_id: UUID,
+    payload: VoiceInput,
+    voices: Annotated[ManageVoiceProfiles, Depends(get_manage_voice_profiles)],
+    enqueue: Annotated[EnqueueJob, Depends(get_enqueue_job)],
+) -> ExportResponse:
+    exchange = _didactic_exchange()
+    try:
+        prepared = exchange.package(project_id)["source"]
+    except MaterialsAiError as error:
+        raise HTTPException(409, detail=str(error)) from error
+    cards = prepared.get("anki_prepared", [])
+    if not cards:
+        raise HTTPException(422, detail="No prepared didactic Anki cards found")
+    if prepared.get("anki_prepared_needs_review"):
+        raise HTTPException(409, detail="Review outdated Anki cards before export")
+    voice = _voice(voices, payload.voice_id)
+    cache = FileSpeechCache(get_settings().media_cache_root)
+    repo = _repository()
+    source_cues = {}
+    audio_hashes = {}
+    for card in cards:
+        cue_id = UUID(card["cue_id"])
+        cue = repo.get_cue(cue_id)
+        if cue is None or cue.provenance.get("approval") == "draft":
+            raise HTTPException(409, detail=f"Source cue for card {card['card_id']} is not approved")
+        source_cues[str(cue_id)] = cue
+        speech = cache.find(cache.cache_key(text=card["front_en"], profile=voice, parameters={}))
+        if speech is None:
+            raise HTTPException(
+                422,
+                detail=f"Didactic card {card['card_id']} needs its own WAV before export",
+            )
+        audio_hashes[card["card_id"]] = sha256(Path(speech.audio_path).read_bytes()).hexdigest()
+    project = repo.get_project(project_id)
+    if project is None:
+        raise HTTPException(404, detail="project not found")
+    editorial_hash = editorial_publication_sha256(
+        project, repo.get_project_scenes(project_id),
+        [(cue, repo.get_cue_words(cue.id)) for cue in source_cues.values()],
+    )
+    job = enqueue.execute(
+        kind="export_materials",
+        input={
+            "mode": "didactic",
+            "project_id": str(project_id),
+            "cue_ids": [card["cue_id"] for card in cards],
+            "anki_cards": cards,
+            "text_hashes": {card["card_id"]: utf8_sha256(card["front_en"]) for card in cards},
+            "pt_hashes": {card["card_id"]: utf8_sha256(card["back_pt"]) for card in cards},
             "audio_hashes": audio_hashes,
             "editorial_sha256": editorial_hash,
             "voice_snapshot": _voice_payload(voice),
