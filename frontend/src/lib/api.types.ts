@@ -307,11 +307,27 @@ export type MaterialAiDocument = {
     tags: string[];
   }>;
 };
+export type AnkiDidacticCard = MaterialAiDocument["anki_cards"][number] & {
+  card_id: string;
+  scene_id: string;
+  source_context_en: string;
+  source_context_pt: string;
+  uses_literal_scene_line: boolean;
+  card_type: string;
+  focus_text: string;
+  meaning: string;
+  marked_en: string;
+  marked_pt: string;
+  example_en: string;
+  example_pt: string;
+};
+
 export type MaterialAiReview = {
   status: "pending" | "draft" | "approved";
   source_sha256: string;
   document: MaterialAiDocument | null;
-  anki_prepared?: MaterialAiDocument["anki_cards"];
+  anki_prepared?: AnkiDidacticCard[];
+  anki_revisions?: Record<string, string>;
   anki_needs_review?: number;
   imported?: "anki";
 };
