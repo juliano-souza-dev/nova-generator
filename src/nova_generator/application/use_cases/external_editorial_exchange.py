@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import zipfile
-from dataclasses asdict, replace
+from dataclasses import asdict, replace
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
