@@ -298,6 +298,28 @@ export const studioApi = {
       method: "POST",
       body: JSON.stringify({ source_sha256 }),
     }),
+  didacticAnkiAudioStatus: (projectId: string, voiceId?: string) =>
+    apiRequest<{
+      cards: Array<{
+        card_id: string;
+        cue_id: string;
+        front_en: string;
+        audio_ready: boolean;
+        audio_url: string | null;
+      }>;
+    }>(
+      `/projects/${projectId}/materials/anki-audio${voiceId ? `?voice_id=${encodeURIComponent(voiceId)}` : ""}`,
+    ),
+  prepareDidacticAnkiAudio: (projectId: string, cardId: string, voiceId: string) =>
+    apiRequest<Job>(`/projects/${projectId}/materials/anki/${cardId}/audio`, {
+      method: "POST",
+      body: JSON.stringify({ voice_id: voiceId }),
+    }),
+  exportDidacticAnki: (projectId: string, voiceId: string) =>
+    apiRequest<MaterialExport>(`/projects/${projectId}/materials/anki-exports`, {
+      method: "POST",
+      body: JSON.stringify({ voice_id: voiceId }),
+    }),
   updateAnkiCard: (
     projectId: string,
     sceneId: string,
