@@ -243,6 +243,51 @@ describe("EditorialPage", () => {
     );
   });
 
+  it("offers re-export and AI response import even after editorial approval", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      { ...cue, provenance: { ...cue.provenance, approval: "approved" } },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const regenerate = await screen.findByRole("link", {
+      name: "Gerar novamente JSON para IA externa",
+    });
+    expect(regenerate).toHaveAttribute("href", "/api/external.zip");
+    expect(screen.getByLabelText("Importar retorno editorial")).toBeInTheDocument();
+    expect(screen.getByText(/não refaz o corte e não executa a transcrição/i)).toBeInTheDocument();
+    expect(mocks.startProjectMedia).not.toHaveBeenCalled();
+  });
+
+  it("asks for confirmation before importing over an approved editorial", async () => {
+    const cue = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      { ...cue, provenance: { ...cue.provenance, approval: "approved" } },
+    ]);
+    const confirmation = vi.spyOn(window, "confirm").mockReturnValue(false);
+    try {
+      render(
+        <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+          <EditorialPage />
+        </MemoryRouter>,
+      );
+      const file = new File(['{"chunk_id":"chunk-001"}'], "resultado.json", {
+        type: "application/json",
+      });
+      fireEvent.drop(await screen.findByLabelText("Importar retorno editorial"), {
+        dataTransfer: { files: [file] },
+      });
+      await waitFor(() => expect(confirmation).toHaveBeenCalled());
+      expect(mocks.importExternalEditorialResult).not.toHaveBeenCalled();
+      expect(mocks.startProjectMedia).not.toHaveBeenCalled();
+    } finally {
+      confirmation.mockRestore();
+    }
+  });
+
   it("links approved editorial projects to Shadowing instead of Anki materials", async () => {
     const cue = (await mocks.editorialCues())[0];
     mocks.editorialCues.mockResolvedValue([
