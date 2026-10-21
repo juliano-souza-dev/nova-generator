@@ -158,6 +158,21 @@
           "example_pt": {
             "type": "string",
             "maxLength": 1500
+          },
+          "card_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_context_en": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_context_pt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uses_literal_scene_line": {
+            "type": "boolean"
           }
         }
       }
