@@ -253,6 +253,7 @@ describe("EditorialPage", () => {
         <EditorialPage />
       </MemoryRouter>,
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Regerar JSON / importar IA" }));
     const regenerate = await screen.findByRole("link", {
       name: "Gerar novamente JSON para IA externa",
     });
@@ -277,6 +278,9 @@ describe("EditorialPage", () => {
       const file = new File(['{"chunk_id":"chunk-001"}'], "resultado.json", {
         type: "application/json",
       });
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Regerar JSON / importar IA" }),
+      );
       fireEvent.drop(await screen.findByLabelText("Importar retorno editorial"), {
         dataTransfer: { files: [file] },
       });
@@ -603,7 +607,7 @@ describe("EditorialPage", () => {
         type: "application/json",
       },
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Trocar fonte de preparação" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Regerar JSON / importar IA" }));
     fireEvent.drop(await screen.findByLabelText("Importar retorno editorial"), {
       dataTransfer: { files: [file] },
     });
@@ -633,7 +637,7 @@ describe("EditorialPage", () => {
           type: "application/json",
         }),
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Trocar fonte de preparação" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Regerar JSON / importar IA" }));
     fireEvent.drop(await screen.findByLabelText("Importar retorno editorial"), {
       dataTransfer: { files },
     });
