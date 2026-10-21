@@ -1,5 +1,6 @@
 """The APKG and published iHub cards must share all pedagogical content."""
 
+import html
 import json
 import re
 import sqlite3
@@ -86,8 +87,8 @@ def test_didactic_apkg_has_same_face_back_and_mini_lesson_as_ihub(tmp_path):
         assert field[7] == lesson["example_pt"]
         assert field[8] == lesson["card_type"]
         assert field[9] == ", ".join(lesson["tags"])
-        assert field[10] == lesson["source_context_en"]
-        assert field[11] == lesson["source_context_pt"]
+        assert html.unescape(field[10]) == lesson["source_context_en"]
+        assert html.unescape(field[11]) == lesson["source_context_pt"]
     template = next(iter(model.values()))
     assert "MINI LESSON" in template["tmpls"][0]["afmt"]
     assert "HOW TO UNDERSTAND / USE" in template["tmpls"][0]["afmt"]
