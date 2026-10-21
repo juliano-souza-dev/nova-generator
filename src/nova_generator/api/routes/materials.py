@@ -10,8 +10,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from starlette.background import BackgroundTask
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 from nova_generator.api.dependencies import (
     get_enqueue_job,
