@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   Bot,
   Check,
   ChevronLeft,
@@ -26,6 +27,7 @@ import type {
 } from "../../lib/api.types";
 import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
+import { ApiError } from "../../lib/api";
 import { CueWordTimeline, type TimelineCue } from "./CueWordTimeline";
 import { EditorialHubPreview } from "./EditorialHubPreview";
 import { reconcileCueWords } from "./reconcileCueWords";
@@ -95,14 +97,26 @@ export function cueWordTranslation(words: TimelineCue["words"]): { text: string;
 type EditorialImportDropzoneProps = {
   disabled: boolean;
   onImport: (files: File[]) => void;
+  onRejected: (message: string) => void;
 };
 
-function EditorialImportDropzone({ disabled, onImport }: EditorialImportDropzoneProps) {
+function EditorialImportDropzone({ disabled, onImport, onRejected }: EditorialImportDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
   const receiveFiles = (files: FileList | null) => {
-    if (!files || disabled || files.length === 0) return;
+    if (!files || files.length === 0) {
+      onRejected("Nenhum arquivo recebido. Selecione um JSON ou ZIP válido.");
+      return;
+    }
+    if (disabled) {
+      onRejected("A importação está indisponível: salve as alterações pendentes ou aguarde o processamento atual.");
+      return;
+    }
+    if (Array.from(files).some((file) => !/\.(json|zip)$/i.test(file.name))) {
+      onRejected("Formato não aceito. Use arquivos .json ou um pacote .zip.");
+      return;
+    }
     onImport(Array.from(files));
   };
 
@@ -267,6 +281,17 @@ export function EditorialPage() {
   const [assistance, setAssistance] = useState<EditorialAssistance>();
   const [assistantBusy, setAssistantBusy] = useState(false);
   const [assistantMessage, setAssistantMessage] = useState("");
+  const [importFeedback, setImportFeedback] = useState<{
+    kind: "working" | "error" | "success";
+    message: string;
+  } | null>(null);
+  const importFeedbackRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (importFeedback?.kind === "error" &&
+      typeof importFeedbackRef.current?.scrollIntoView === "function") {
+      importFeedbackRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [importFeedback]);
   const [hubPreviewStartMs, setHubPreviewStartMs] = useState<number | null>(null);
   const [assistantFallbackRequired, setAssistantFallbackRequired] = useState(false);
   const [assistantStatusFailed, setAssistantStatusFailed] = useState(false);
@@ -593,7 +618,7 @@ export function EditorialPage() {
   async function importExternalResult(files: File[]) {
     if (!sceneId || assistantBusy || files.length === 0) return;
     if (isDirty) {
-      setAssistantMessage("Salve ou descarte as alterações da cue antes de importar outro JSON.");
+      setImportFeedback({kind: "error", message: "Salve ou descarte as alterações da cue antes de importar outro JSON."});
       return;
     }
     if (
@@ -606,12 +631,31 @@ export function EditorialPage() {
       return;
     }
     setAssistantBusy(true);
+    setImportFeedback({kind: "working", message: `Lendo e validando ${files.length} arquivo(s)…`});
     setAssistantMessage(`Validando ${files.length} arquivo(s) da IA externa…`);
     try {
-      const result =
+      let result: EditorialAssistance;
+      try {
+        result =
         files.length === 1 && files[0].name.toLowerCase().endsWith(".json")
           ? await studioApi.importExternalEditorialResult(sceneId, files[0])
           : await studioApi.importExternalEditorialResults(sceneId, files);
+      } catch (error) {
+        if (
+          error instanceof ApiError && error.status === 409 &&
+          files.length === 1 && files[0].name.toLowerCase().endsWith(".zip")
+        ) {
+          setImportFeedback({kind: "working", message: "Pacote com nova divisão de cues detectado; aguardando sua confirmação."});
+          if (!window.confirm(error.message)) {
+            setImportFeedback({kind: "error", message: "Importação cancelada. A cena não foi alterada."});
+            return;
+          }
+          setImportFeedback({kind: "working", message: "Aplicando nova divisão das cues e validando os materiais…"});
+          result = await studioApi.importExternalEditorialResults(sceneId, files, true);
+        } else {
+          throw error;
+        }
+      }
       setAssistance(result);
       const refreshed = await refreshCues();
       const remaining = refreshed.filter(cueNeedsEditorialTreatment).length;
@@ -621,10 +665,14 @@ export function EditorialPage() {
           ? `${result.suggestions.length} cues processadas. Restam ${remaining}; envie os blocos que faltam.`
           : "Todos os blocos foram validados. A revisão editorial está liberada.",
       );
+      setImportFeedback({kind: "success", message: `${result.suggestions.length} cues importadas. A nova organização e os materiais foram salvos.`});
     } catch (error) {
-      setAssistantMessage(
-        error instanceof Error ? error.message : "O retorno externo não passou na validação.",
-      );
+      const detail = error instanceof Error ? error.message : "O retorno externo não passou na validação.";
+      const guidance = /stale scene|scene changed|outra cena|another scene/i.test(detail)
+        ? " Este arquivo corresponde a outra versão da cena. Exporte um pacote atualizado ou use um ZIP de resegmentação com mapa validado."
+        : "";
+      setAssistantMessage(detail + guidance);
+      setImportFeedback({kind: "error", message: detail + guidance});
     } finally {
       setAssistantBusy(false);
     }
@@ -1551,8 +1599,16 @@ export function EditorialPage() {
                     <EditorialImportDropzone
                       disabled={assistantBusy || saving || isDirty}
                       onImport={(files) => void importExternalResult(files)}
+                      onRejected={(message) => setImportFeedback({kind: "error", message})}
                     />
                   </div>
+                  {importFeedback && (
+                    <p ref={importFeedbackRef} className={`editorial-import-feedback is-${importFeedback.kind}`}
+                      role={importFeedback.kind === "error" ? "alert" : "status"}>
+                      {importFeedback.kind === "error" && <AlertCircle aria-hidden="true" />}
+                      {importFeedback.message}
+                    </p>
+                  )}
                   {assistantMessage && (
                     <p className="assistant-message" role="status">{assistantMessage}</p>
                   )}
@@ -1737,7 +1793,14 @@ export function EditorialPage() {
                 <EditorialImportDropzone
                   disabled={assistantBusy}
                   onImport={(files) => void importExternalResult(files)}
+                  onRejected={(message) => setImportFeedback({kind: "error", message})}
                 />
+                {importFeedback && (
+                  <p ref={importFeedbackRef} className={`editorial-import-feedback is-${importFeedback.kind}`}
+                    role={importFeedback.kind === "error" ? "alert" : "status"}>
+                    {importFeedback.message}
+                  </p>
+                )}
               </div>
             )}
           </div>

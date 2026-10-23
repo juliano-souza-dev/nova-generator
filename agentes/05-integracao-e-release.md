@@ -10,6 +10,9 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Versionar schemas, exemplos válidos/inválidos e fixtures compartilhadas.
 - Validar pacotes de ida e volta para IA editorial externa por versão, hash da entrada, IDs e ordem
   dos cues; rejeitar resultado obsoleto ou pertencente a outra cena.
+- Tratar ZIP com `cue-resegmentation-map.json` como operação excepcional autorizada pelo dono:
+  validar correspondência integral dos IDs/tempos de palavras da cena atual, confirmar por `409`,
+  aplicar uma única revisão auditável e manter inalterado o importador ordinário 1.5.
 - Manter compatibilidade de leitura com sugestões editoriais 1.0 sem unidades, 1.1 com
   `semantic_units` e 1.2 com traduções. O contrato 1.3 reconcilia cada superfície e timing com o
   inglês aprovado; somente um retorno 1.3 completo pode liberar a bancada.

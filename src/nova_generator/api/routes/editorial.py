@@ -56,6 +56,7 @@ from nova_generator.application.use_cases.editorial_commands import (
 )
 from nova_generator.application.use_cases.external_editorial_exchange import (
     ExternalEditorialExchange,
+    ResegmentationConfirmationRequired,
 )
 from nova_generator.application.use_cases.manage_jobs import EnqueueJob, RetryJob
 from nova_generator.application.use_cases.review_asr_candidate import (
@@ -379,6 +380,7 @@ async def import_external_editorial_results(
     scene_id: UUID,
     exchange: Annotated[ExternalEditorialExchange, Depends(get_external_editorial_exchange)],
     files: Annotated[list[UploadFile], File()],
+    allow_resegmentation: bool = False,
 ) -> EditorialAssistanceResponse:
     """Upload JSON results together (or ZIP), with all-or-nothing scene persistence."""
     if not files or len(files) > 24:
@@ -390,7 +392,11 @@ async def import_external_editorial_results(
             raise HTTPException(413, detail=f"{file.filename}: upload exceeds 10 MB")
         uploads.append((file.filename or "unnamed", payload))
     try:
-        result = exchange.import_batch(scene_id, uploads)
+        result = exchange.import_batch(
+            scene_id, uploads, allow_resegmentation=allow_resegmentation
+        )
+    except ResegmentationConfirmationRequired as error:
+        raise HTTPException(409, detail=str(error)) from error
     except EditorialAssistanceError as error:
         raise HTTPException(422, detail=str(error)) from error
     return EditorialAssistanceResponse(

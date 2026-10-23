@@ -1,6 +1,7 @@
 import json
 import zipfile
-from dataclasses import replace
+from dataclasses import asdict, replace
+from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -21,6 +22,7 @@ from nova_generator.application.use_cases.editorial_assistance import (
 )
 from nova_generator.application.use_cases.external_editorial_exchange import (
     ExternalEditorialExchange,
+    ResegmentationConfirmationRequired,
 )
 from nova_generator.application.use_cases.import_legacy_editorial_project import (
     ImportLegacyEditorialProject,
@@ -33,6 +35,171 @@ from nova_generator.infrastructure.database.session import (
     create_database_engine,
     create_session_factory,
 )
+
+
+def _resegmented_fixture_zip(repository, scene_id) -> bytes:
+    """A two-cue package for a one-cue scene, retaining all source word IDs."""
+    from nova_generator.application.use_cases.editorial_assistance import build_editorial_prompt
+
+    _old_hash, cues = build_editorial_prompt(repository, scene_id)
+    original = asdict(cues[0])
+    head = original["words"][:1]
+    tail = original["words"][1:]
+    assert head and tail
+    second_id = str(uuid4())
+    first = {
+        **original, "words": head, "order": 1,
+        "speech_end_ms": head[-1]["end_ms"],
+        "subtitle_end_ms": head[-1]["end_ms"],
+        "original_en": head[0]["surface"], "current_en": "", "current_pt": "",
+        "trailing": "", "word_by_word_en": head[0]["surface"],
+        "requires_reconciliation": False,
+    }
+    second = {
+        **original, "id": second_id, "words": [
+            {**word, "order": index} for index, word in enumerate(tail, 1)
+        ], "order": 2,
+        "speech_start_ms": tail[0]["start_ms"],
+        "subtitle_start_ms": tail[0]["start_ms"],
+        "original_en": " ".join(word["surface"] for word in tail),
+        "current_en": "", "current_pt": "", "trailing": "",
+        "word_by_word_en": "".join(f'{word["leading"]}{word["surface"]}' for word in tail),
+        "requires_reconciliation": False,
+    }
+    source_cues = [first, second]
+    source_hash = sha256(json.dumps(
+        source_cues, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    ).encode()).hexdigest()
+    suggestions = []
+    for cue in source_cues:
+        words = cue["words"]
+        suggestions.append({
+            "cue_id": cue["id"], "order": cue["order"],
+            "approved_en": "".join(
+                f'{word["leading"]}{word["surface"]}' for word in words
+            ),
+            "approved_pt": "Tradução editorial.",
+            "word_translations": [{
+                "word_id": word["id"], "order": word["order"],
+                "leading": word["leading"], "surface": word["surface"],
+                "start_ms": word["start_ms"], "end_ms": word["end_ms"],
+                "pt": "tradução",
+            } for word in words],
+            "context_practices": [], "semantic_units": [], "speaker_turns": [],
+            "trailing": "", "notes": "",
+        })
+    manifest = {
+        "schema_version": "nova-generator-editorial-exchange/1.5",
+        "scene_id": str(scene_id), "input_sha256": source_hash,
+        "chunks": [{
+            "id": "chunk-001", "index": 1,
+            "cue_ids": [cue["id"] for cue in source_cues],
+            "cue_orders": [1, 2],
+        }],
+    }
+    mapping = {
+        "schema_version": "nova-generator-cue-resegmentation/1.0",
+        "scene_id": str(scene_id), "resegmented_input_sha256": source_hash,
+        "cues": [{
+            "cue_id": cue["id"], "order": cue["order"],
+            "speaker": "A", "start_ms": cue["speech_start_ms"],
+            "end_ms": cue["speech_end_ms"],
+            "source_spans": [{"word_ids": [word["id"] for word in cue["words"]]}],
+        } for cue in source_cues],
+    }
+    first_en = suggestions[0]["approved_en"]
+    card = {
+        "card_id": str(uuid4()), "cue_id": first["id"],
+        "source_context_en": first_en, "source_context_pt": "Tradução editorial.",
+        "front_en": "I study English.", "back_pt": "Eu estudo inglês.",
+        "uses_literal_scene_line": False, "card_type": "VOCABULARY",
+        "focus_text": head[0]["surface"], "meaning": "eu", "marked_en": "I",
+        "marked_pt": "Eu", "explanation_pt": "Pronome pessoal.",
+        "example_en": "I learn every day.", "example_pt": "Eu aprendo todo dia.",
+        "tags": ["study"],
+    }
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, item in {
+            "manifest.json": manifest,
+            "editorial_input.json": {"scene_id": str(scene_id),
+                                     "input_sha256": source_hash, "cues": source_cues},
+            "cue-resegmentation-map.json": mapping,
+            "chunks/001-chunk-001-result.json": {
+                "schema_version": "nova-generator-editorial-suggestions/1.5",
+                "scene_id": str(scene_id), "input_sha256": source_hash,
+                "chunk_id": "chunk-001", "suggestions": suggestions,
+            },
+            "anki/anki-ai-result.json": {
+                "contract": "nova-generator-anki-proposal/2.0", "scene_id": str(scene_id),
+                "input_sha256": source_hash, "anki_cards": [card],
+            },
+        }.items():
+            archive.writestr(name, json.dumps(item, ensure_ascii=False))
+    return buffer.getvalue()
+
+
+def test_resegmented_zip_requires_owner_confirmation_and_imports_atomically(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'resegmentation.db'}")
+    Base.metadata.create_all(engine)
+    repo = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repo).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="resegmentation-test", imported_by="test",
+    )
+    scene_id = repo.get_project_scenes(project_id)[0].id
+    exchange = ExternalEditorialExchange(repo, tmp_path)
+    payload = _resegmented_fixture_zip(repo, scene_id)
+    original_words = [word.id for cue in repo.get_scene_cues(scene_id)
+                      for word in repo.get_cue_words(cue.id)]
+    original_revisions = len(repo.list_revisions(scene_id))
+    with pytest.raises(ResegmentationConfirmationRequired, match="reorganiza 1 cues em 2"):
+        exchange.import_batch(scene_id, [("proposta.zip", payload)])
+    assert len(repo.get_scene_cues(scene_id)) == 1
+    assert len(repo.list_revisions(scene_id)) == original_revisions
+
+    result = exchange.import_batch(
+        scene_id, [("proposta.zip", payload)], allow_resegmentation=True
+    )
+    assert len(result.suggestions) == 2
+    assert len(repo.get_scene_cues(scene_id)) == 2
+    assert [word.id for cue in repo.get_scene_cues(scene_id)
+            for word in repo.get_cue_words(cue.id)] == original_words
+    assert (tmp_path / str(project_id) / "materials" /
+            f"anki-prepared-{scene_id}.json").exists()
+    assert len(repo.list_revisions(scene_id)) == original_revisions + 1
+    exchange.import_batch(scene_id, [("proposta.zip", payload)])
+    assert len(repo.list_revisions(scene_id)) == original_revisions + 1
+
+
+def test_resegmented_zip_rejects_changed_words_without_mutation(tmp_path: Path) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'stale_resegmentation.db'}")
+    Base.metadata.create_all(engine)
+    repo = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repo).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="stale-resegmentation", imported_by="test",
+    )
+    scene_id = repo.get_project_scenes(project_id)[0].id
+    revision_count = len(repo.list_revisions(scene_id))
+    payload = _resegmented_fixture_zip(repo, scene_id)
+    with zipfile.ZipFile(BytesIO(payload)) as old:
+        files = {name: old.read(name) for name in old.namelist()}
+    changed = json.loads(files["cue-resegmentation-map.json"])
+    changed["cues"][1]["source_spans"][0]["word_ids"] = [str(uuid4())]
+    files["cue-resegmentation-map.json"] = json.dumps(changed).encode()
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    exchange = ExternalEditorialExchange(repo, tmp_path)
+    with pytest.raises(EditorialAssistanceError, match="map and source word spans"):
+        exchange.import_batch(scene_id, [("tampered.zip", buffer.getvalue())],
+                              allow_resegmentation=True)
+    assert len(repo.get_scene_cues(scene_id)) == 1
+    assert len(repo.list_revisions(scene_id)) == revision_count
 
 
 def test_external_package_round_trip_is_versioned_and_stale_safe(tmp_path: Path) -> None:

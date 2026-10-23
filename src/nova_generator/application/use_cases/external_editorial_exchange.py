@@ -4,10 +4,12 @@ import json
 import os
 import zipfile
 from dataclasses import asdict, replace
+from datetime import UTC, datetime
+from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -16,6 +18,7 @@ from nova_generator.application.ports.editorial_assistant import (
     EditorialCuePrompt,
     EditorialSemanticUnit,
     EditorialSuggestion,
+    EditorialWordPrompt,
     EditorialWordTranslation,
 )
 from nova_generator.application.ports.editorial_project_repository import EditorialProjectRepository
@@ -29,6 +32,9 @@ from nova_generator.application.use_cases.anki_proposal import (
 )
 from nova_generator.application.use_cases.editorial_assistance import (
     EditorialAssistanceError,
+    _entries_snapshot,
+    _prepared_words,
+    _scene_snapshot,
     build_editorial_prompt,
     persist_editorial_chunk_preparation,
     persist_editorial_chunk_with_speaker_turns,
@@ -43,6 +49,7 @@ from nova_generator.application.use_cases.structures_in_context import (
     prepare_external_structures,
     write_external_structures,
 )
+from nova_generator.domain.projects.entities import Cue, EditorialRevision
 
 
 class _ExternalSemanticUnit(BaseModel):
@@ -121,6 +128,10 @@ class _ExternalResult(BaseModel):
     input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     chunk_id: str | None = None
     suggestions: list[_ExternalSuggestion] = Field(min_length=1)
+
+
+class ResegmentationConfirmationRequired(EditorialAssistanceError):
+    """A valid package requests an explicit, potentially structural scene replacement."""
 
 
 ANKI_INPUT_CONTRACT = "nova-generator-anki-input/2.0"
@@ -335,11 +346,31 @@ class ExternalEditorialExchange:
         return validated
 
     def import_batch(
-        self, scene_id: UUID, uploads: list[tuple[str, bytes]]
+        self, scene_id: UUID, uploads: list[tuple[str, bytes]], *,
+        allow_resegmentation: bool = False,
     ) -> EditorialAssistanceResult:
         """Preflight every external chunk, then persist one atomic scene revision."""
         if not uploads or len(uploads) > 24:
             raise EditorialAssistanceError("select between 1 and 24 JSON files, or one ZIP")
+        # An explicitly authored cue map is a separate, user-confirmed operation.
+        # Do not weaken normal 1.5 hash/manifest validation to support it.
+        mapped_zip = []
+        for name, payload in uploads:
+            if name.lower().endswith(".zip"):
+                try:
+                    with zipfile.ZipFile(BytesIO(payload)) as archive:
+                        if "cue-resegmentation-map.json" in archive.namelist():
+                            mapped_zip.append((name, payload))
+                except (zipfile.BadZipFile, OSError, RuntimeError) as error:
+                    raise EditorialAssistanceError(f"{name}: invalid ZIP archive") from error
+        if mapped_zip:
+            if len(uploads) != 1:
+                raise EditorialAssistanceError(
+                    "import a cue-resegmentation ZIP by itself, not with other files"
+                )
+            return self._import_resegmented_package(
+                scene_id, mapped_zip[0][1], allow_resegmentation=allow_resegmentation
+            )
         expanded: list[tuple[str, bytes]] = []
         anki_result: bytes | None = None
         response_includes_manifest = False
@@ -596,6 +627,279 @@ class ExternalEditorialExchange:
                 os.replace(temporary, destination)
             finally:
                 temporary.unlink(missing_ok=True)
+        write_external_structures(
+            self._project_root, project_id, scene_id, source_hash, all_suggestions
+        )
+        return combined
+
+    def _import_resegmented_package(
+        self, scene_id: UUID, payload: bytes, *, allow_resegmentation: bool
+    ) -> EditorialAssistanceResult:
+        """Apply an authorized word-preserving cue resegmentation, atomically.
+
+        This does not trust historical cue IDs or relax the regular chunk contract:
+        every word ID and its timing must still match the *live* scene in order.
+        All educational material is checked before the scene is modified.
+        """
+        if not payload or len(payload) > 10_000_000:
+            raise EditorialAssistanceError("resegmentation ZIP is empty or exceeds 10 MB")
+        try:
+            with zipfile.ZipFile(BytesIO(payload)) as archive:
+                names = archive.namelist()
+                if len(names) != len(set(names)):
+                    raise EditorialAssistanceError("resegmentation ZIP has duplicate filenames")
+                required = {
+                    "manifest.json", "editorial_input.json", "cue-resegmentation-map.json",
+                    "anki/anki-ai-result.json",
+                }
+                if not required.issubset(names):
+                    raise EditorialAssistanceError(
+                        "resegmentation ZIP needs manifest, editorial input, map and Anki result"
+                    )
+                json_members = [
+                    item for item in archive.infolist() if item.filename.endswith(".json")
+                ]
+                if sum(item.file_size for item in json_members) > 8_000_000:
+                    raise EditorialAssistanceError("resegmentation ZIP JSON exceeds 8 MB")
+                manifest = json.loads(archive.read("manifest.json"))
+                source = json.loads(archive.read("editorial_input.json"))
+                mapping = json.loads(archive.read("cue-resegmentation-map.json"))
+                anki_content = archive.read("anki/anki-ai-result.json")
+                chunks = manifest.get("chunks", [])
+                if not isinstance(chunks, list) or not 1 <= len(chunks) <= 24:
+                    raise EditorialAssistanceError("invalid resegmentation chunk manifest")
+                expanded = []
+                for chunk in chunks:
+                    index, chunk_id = chunk["index"], chunk["id"]
+                    filename = f"chunks/{index:03d}-{chunk_id}-result.json"
+                    if filename not in names:
+                        raise EditorialAssistanceError(f"missing {filename}")
+                    expanded.append((filename, archive.read(filename)))
+        except (
+            zipfile.BadZipFile, OSError, RuntimeError, KeyError, TypeError, ValueError,
+        ) as error:
+            if isinstance(error, EditorialAssistanceError):
+                raise
+            raise EditorialAssistanceError(
+                "resegmentation ZIP has invalid or missing JSON"
+            ) from error
+
+        if not all(isinstance(item, dict) for item in (manifest, source, mapping)):
+            raise EditorialAssistanceError("resegmentation ZIP JSON roots must be objects")
+        expected_scene = str(scene_id)
+        source_hash = manifest.get("input_sha256")
+        if any(item.get("scene_id") != expected_scene for item in (manifest, source, mapping)):
+            raise EditorialAssistanceError("resegmentation ZIP belongs to another scene")
+        if (
+            mapping.get("schema_version") != "nova-generator-cue-resegmentation/1.0"
+            or source.get("input_sha256") != source_hash
+            or mapping.get("resegmented_input_sha256") != source_hash
+        ):
+            raise EditorialAssistanceError("resegmentation manifest and input hashes disagree")
+        try:
+            prompts = tuple(
+                EditorialCuePrompt(
+                    **{key: value for key, value in item.items() if key != "words"},
+                    words=tuple(EditorialWordPrompt(**word) for word in item["words"]),
+                )
+                for item in source["cues"]
+            )
+            canonical = json.dumps(
+                [asdict(cue) for cue in prompts], ensure_ascii=False,
+                separators=(",", ":"), sort_keys=True,
+            )
+            actual_hash = sha256(canonical.encode("utf-8")).hexdigest()
+        except (KeyError, TypeError, ValueError) as error:
+            raise EditorialAssistanceError("invalid resegmented editorial source") from error
+        if actual_hash != source_hash:
+            raise EditorialAssistanceError("resegmentation source integrity check failed")
+        if not prompts or [(cue.id, cue.order) for cue in prompts] != [
+            (cue.id, index) for index, cue in enumerate(prompts, 1)
+        ] or len({cue.id for cue in prompts}) != len(prompts):
+            raise EditorialAssistanceError("resegmented cues must have unique sequential IDs")
+        ordered_ids = [cue.id for cue in prompts]
+        if [cue_id for chunk in chunks for cue_id in chunk.get("cue_ids", [])] != ordered_ids:
+            raise EditorialAssistanceError("resegmentation chunks do not match editorial input")
+        if [order for chunk in chunks for order in chunk.get("cue_orders", [])] != list(
+            range(1, len(prompts) + 1)
+        ):
+            raise EditorialAssistanceError("resegmentation chunk orders are invalid")
+        map_cues = mapping.get("cues")
+        if (
+            not isinstance(map_cues, list)
+            or len(map_cues) != len(prompts)
+            or not all(isinstance(item, dict) for item in map_cues)
+        ):
+            raise EditorialAssistanceError("cue resegmentation map is incomplete")
+        for prompt, item in zip(prompts, map_cues, strict=True):
+            spans = item.get("source_spans", [])
+            if (
+                item.get("cue_id") != prompt.id or item.get("order") != prompt.order
+                or not isinstance(item.get("speaker"), str)
+                or not item["speaker"].strip()
+                or item.get("start_ms") != prompt.speech_start_ms
+                or item.get("end_ms") != prompt.speech_end_ms
+                or not isinstance(spans, list)
+                or not all(isinstance(span, dict) for span in spans)
+                or [word_id for span in spans for word_id in span.get("word_ids", [])]
+                != [word.id for word in prompt.words]
+            ):
+                raise EditorialAssistanceError("resegmentation map and source word spans disagree")
+
+        live_cues = self._repository.get_scene_cues(scene_id)
+        if not live_cues:
+            raise EditorialAssistanceError("scene not found or has no cues")
+        live_words = [
+            word for cue in live_cues for word in self._repository.get_cue_words(cue.id)
+        ]
+        new_words = [word for cue in prompts for word in cue.words]
+        if (
+            len(live_words) != len(new_words)
+            or [str(word.id) for word in live_words] != [word.id for word in new_words]
+        ):
+            raise EditorialAssistanceError(
+                "this ZIP changes or reorders scene words; re-export from the current scene"
+            )
+        if any(
+            (old.start_ms, old.end_ms, old.original_start_ms, old.original_end_ms)
+            != (new.start_ms, new.end_ms, new.original_start_ms, new.original_end_ms)
+            for old, new in zip(live_words, new_words, strict=True)
+        ):
+            raise EditorialAssistanceError(
+                "word timing changed since this ZIP was created; re-export before importing"
+            )
+
+        documents = []
+        for (filename, content), chunk in zip(expanded, chunks, strict=True):
+            if len(content) > self._maximum_result_bytes:
+                raise EditorialAssistanceError(f"{filename}: result is too large")
+            try:
+                document = _ExternalResult.model_validate_json(content)
+            except (ValidationError, ValueError) as error:
+                raise EditorialAssistanceError(
+                    f"{filename}: {_validation_detail(error)}"
+                ) from error
+            if (
+                document.schema_version != "nova-generator-editorial-suggestions/1.5"
+                or str(document.scene_id) != expected_scene
+                or document.input_sha256 != source_hash
+                or document.chunk_id != chunk["id"]
+            ):
+                raise EditorialAssistanceError(f"{filename}: invalid scene, hash or chunk_id")
+            documents.append(document)
+        combined = EditorialAssistanceResult(
+            scene_id=expected_scene, input_sha256=source_hash,
+            provider="external", model="external-ai",
+            suggestions=tuple(
+                item for document in documents for item in _as_result(document).suggestions
+            ),
+            rate_limits={}, contract_version="nova-generator-editorial-suggestions/1.5",
+        )
+        validate_editorial_result(
+            combined, scene_id=scene_id, input_sha256=source_hash,
+            cues=prompts, require_word_translations=True, require_word_revisions=True,
+        )
+        all_suggestions = [
+            suggestion.model_dump() for document in documents for suggestion in document.suggestions
+        ]
+        if any("context_practices" not in item.model_fields_set for doc in documents
+               for item in doc.suggestions) or any(
+            practice.highlight is None for doc in documents for item in doc.suggestions
+            for practice in item.context_practices
+        ):
+            raise EditorialAssistanceError(
+                "English in Context needs context_practices and highlights"
+            )
+        try:
+            prepare_external_structures(all_suggestions)
+            anki = DidacticAnkiProposal.model_validate_json(anki_content)
+            if anki.scene_id != scene_id or anki.input_sha256 != source_hash:
+                raise EditorialAssistanceError("Anki result belongs to another scene")
+            validate_didactic_cards(
+                anki,
+                {item.cue_id: (item.approved_en, item.approved_pt)
+                 for item in combined.suggestions},
+            )
+        except (StructuresInContextError, ValidationError, ValueError) as error:
+            raise EditorialAssistanceError(f"invalid pedagogical material: {error}") from error
+
+        # Import is idempotent: retrying the same ZIP must not create another revision.
+        target_ids = [cue.id for cue in prompts]
+        live_by_id = {str(cue.id): cue for cue in live_cues}
+        if [str(cue.id) for cue in live_cues] == target_ids and all(
+            live_by_id[prompt.id].approved_en == suggestion.approved_en
+            and live_by_id[prompt.id].approved_pt == suggestion.approved_pt
+            and live_by_id[prompt.id].speaker == map_cues[index]["speaker"]
+            for index, (prompt, suggestion) in enumerate(
+                zip(prompts, combined.suggestions, strict=True)
+            )
+        ):
+            return combined
+        if not allow_resegmentation:
+            raise ResegmentationConfirmationRequired(
+                f"Este ZIP reorganiza {len(live_cues)} cues em {len(prompts)} cues. "
+                "O texto editorial atual será substituído; palavras e tempos originais "
+                "serão preservados. Deseja continuar?"
+            )
+
+        project_id = self._repository.get_scene_project_id(scene_id)
+        assert project_id is not None
+        before = _scene_snapshot(self._repository, scene_id)
+        live_words_by_id = {str(word.id): word for word in live_words}
+        entries = []
+        for index, (prompt, suggestion) in enumerate(
+            zip(prompts, combined.suggestions, strict=True)
+        ):
+            previous = live_by_id.get(prompt.id)
+            translated = _prepared_words(
+                [live_words_by_id[word.id] for word in prompt.words], suggestion, source_hash
+            )
+            cue_id = UUID(prompt.id)
+            moved = [replace(word, cue_id=cue_id, order=order)
+                     for order, word in enumerate(translated, 1)]
+            provenance = {
+                **(previous.provenance if previous is not None else {}),
+                "approval": "draft", "editorial_preparation": "complete",
+                "editorial_preparation_provider": "external",
+                "editorial_preparation_model": "external-ai",
+                "editorial_preparation_sha256": source_hash,
+                "editorial_preparation_notes": suggestion.notes,
+                "editorial_preparation_trailing": suggestion.trailing,
+                "editorial_preparation_contract": combined.contract_version,
+                "cue_resegmentation": "nova-generator-cue-resegmentation/1.0",
+                "speaker_confidence": map_cues[index].get("confidence", "uncertain"),
+            }
+            entries.append((Cue(
+                cue_id, scene_id, index + 1,
+                prompt.speech_start_ms, prompt.speech_end_ms,
+                prompt.subtitle_start_ms, prompt.subtitle_end_ms,
+                map_cues[index]["speaker"], prompt.original_en,
+                suggestion.approved_en, suggestion.approved_pt,
+                (previous.revision if previous is not None else 0) + 1,
+                provenance,
+            ), moved))
+        after = _entries_snapshot(entries)
+        revision = EditorialRevision(
+            uuid4(), project_id, scene_id, None,
+            max((item.sequence for item in self._repository.list_revisions(scene_id)), default=0)
+            + 1,
+            "import_external_cue_resegmentation", "project-owner", "external",
+            before, after, datetime.now(UTC),
+        )
+        if not self._repository.replace_scene_cues_with_revision(
+            scene_id, before, entries, revision
+        ):
+            raise EditorialAssistanceError("scene changed during cue resegmentation")
+
+        directory = self._project_root / str(project_id)
+        destination = directory / "materials" / f"anki-prepared-{scene_id}.json"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temp = destination.with_suffix(".tmp")
+        try:
+            temp.write_text(anki.model_dump_json(indent=2) + "\n", encoding="utf-8")
+            os.replace(temp, destination)
+        finally:
+            temp.unlink(missing_ok=True)
         write_external_structures(
             self._project_root, project_id, scene_id, source_hash, all_suggestions
         )

@@ -31,6 +31,9 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   Salvamento e aprovação continuam explícitos pelo operador.
 - Oferecer o fallback externo como fluxo físico simples: baixar o pacote, arrastar ou escolher o
   retorno JSON e receber a validação na mesma tela, sem exigir navegação por arquivos técnicos.
+- Em ZIPs com mapa explícito de resegmentação, mostrar ao operador a quantidade de cues antes e
+  depois, pedir confirmação e exibir sucesso ou falha junto à área de importação. Um drop bloqueado
+  por edição pendente ou arquivo incompatível deve informar a razão.
 - No contrato editorial 1.3, exigir que `approved_en` seja reconstruído byte a byte por
   `leading + surface` de todas as palavras e pelo `trailing` final. A revisão automática pode
   corrigir superfície e timing mantendo IDs, ordem e tempos originais; mudança de cardinalidade

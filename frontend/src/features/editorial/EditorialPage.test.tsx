@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../lib/api";
 import { EditorialPage, cueWordTranslation } from "./EditorialPage";
 
 const mocks = vi.hoisted(() => ({
@@ -646,6 +647,50 @@ describe("EditorialPage", () => {
       expect(mocks.importExternalEditorialResult).not.toHaveBeenCalled();
     });
     expect(await screen.findByText(/Todos os blocos foram validados/)).toBeInTheDocument();
+  });
+
+  it("shows stale ZIP errors directly under the dropzone", async () => {
+    mocks.importExternalEditorialResults.mockRejectedValueOnce(
+      new ApiError("chunks/001: result is for another or stale scene", 422),
+    );
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Regerar JSON / importar IA" }));
+    fireEvent.drop(screen.getByLabelText("Importar retorno editorial"), {
+      dataTransfer: { files: [new File(["zip"], "outdated.zip")] },
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(/outra versão da cena/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/stale scene/);
+  });
+
+  it("asks the owner before applying a ZIP that changes cue boundaries", async () => {
+    const confirmation = vi.spyOn(window, "confirm").mockReturnValue(true);
+    mocks.importExternalEditorialResults
+      .mockRejectedValueOnce(new ApiError("Este ZIP reorganiza 30 cues em 32 cues.", 409))
+      .mockResolvedValueOnce({
+        scene_id: "s1", input_sha256: "a".repeat(64),
+        provider: "external", model: "external-ai", rate_limits: {}, suggestions: [],
+      });
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const file = new File(["zip"], "reorganized.zip", { type: "application/zip" });
+    fireEvent.click(await screen.findByRole("button", { name: "Regerar JSON / importar IA" }));
+    fireEvent.drop(screen.getByLabelText("Importar retorno editorial"), {
+      dataTransfer: { files: [file] },
+    });
+    await waitFor(() => {
+      expect(confirmation).toHaveBeenCalledWith("Este ZIP reorganiza 30 cues em 32 cues.");
+      expect(mocks.importExternalEditorialResults).toHaveBeenNthCalledWith(1, "s1", [file]);
+      expect(mocks.importExternalEditorialResults).toHaveBeenNthCalledWith(2, "s1", [file], true);
+    });
+    expect(await screen.findByText(/cues importadas/)).toBeInTheDocument();
+    confirmation.mockRestore();
   });
 
   it("joins adjacent cues from the editor without changing their individual word timings", async () => {

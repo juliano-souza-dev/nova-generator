@@ -766,6 +766,39 @@
   font-size: 0.78rem;
 }
 
+.editorial-import-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgb(56 189 248 / 40%);
+  border-radius: 8px;
+  color: var(--text);
+  background: rgb(56 189 248 / 12%);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.editorial-import-feedback svg {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+}
+
+.editorial-import-feedback.is-error {
+  border-color: rgb(248 113 113 / 60%);
+  color: #fecaca;
+  background: rgb(127 29 29 / 45%);
+}
+
+.editorial-import-feedback.is-success {
+  border-color: rgb(74 222 128 / 55%);
+  color: #bbf7d0;
+  background: rgb(20 83 45 / 38%);
+}
+
 .assistant-suggestion {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
