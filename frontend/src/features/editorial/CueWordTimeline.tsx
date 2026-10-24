@@ -15,6 +15,7 @@ type Props = {
   focusRequest?: number;
   selectedCueId?: string;
   selectedWordId?: string;
+  editingWordTiming?: boolean;
   onPlayToggle: () => void;
   onPlayContext: () => void;
   onPreviousWord: () => void;
@@ -40,7 +41,9 @@ export function CueWordTimeline(props: Props) {
   const viewport = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
   const draggingEdgeRef = useRef<"start" | "end" | null>(null);
-  const errors = useMemo(() => validateTimeline(props.cues), [props.cues]);
+  const errors = useMemo(() => validateTimeline(props.cues, {
+    ignoreDraftWordOutsideCueId: props.editingWordTiming ? props.selectedWordId : undefined,
+  }), [props.cues, props.editingWordTiming, props.selectedWordId]);
   const [viewStart, setViewStart] = useState(0);
   const [focusActive, setFocusActive] = useState(false);
   const [draggingEdge, setDraggingEdge] = useState<"start" | "end" | null>(null);
@@ -200,7 +203,7 @@ export function CueWordTimeline(props: Props) {
               </span>
               <strong>{selectedWord.surface.trim()}</strong>
               <small>O destaque no iHub ficará ativo apenas entre IN e OUT. As pausas ficam sem destaque.</small>
-              <small>Ao posicionar IN e OUT por completo na cue vizinha, solte o marcador para transferir a palavra automaticamente.</small>
+              <small>Leve IN e OUT para a cue vizinha ou o espaço entre as duas: o sistema transfere a palavra e reajusta os limites automaticamente.</small>
               {selectedWord.end_ms <= selectedWord.start_ms && (
                 <small className="word-invalid-range" role="alert">
                   Palavra sem duração: ajuste o início e o fim antes de reproduzir.
@@ -338,9 +341,14 @@ export function CueWordTimeline(props: Props) {
           <div className="timeline-word-rail-items">
             {selectedCue.words.map((word, index) => {
               const span = word.end_ms - word.start_ms;
+              const transferringDraft = props.editingWordTiming && word.id === props.selectedWordId &&
+                (word.start_ms < selectedCue.speech_timing.start_ms ||
+                 word.end_ms > selectedCue.speech_timing.end_ms);
               const invalid = span <= 0 ||
-                word.start_ms < selectedCue.speech_timing.start_ms ||
-                word.end_ms > selectedCue.speech_timing.end_ms ||
+                (!transferringDraft && (
+                  word.start_ms < selectedCue.speech_timing.start_ms ||
+                  word.end_ms > selectedCue.speech_timing.end_ms
+                )) ||
                 (index > 0 && word.start_ms < selectedCue.words[index - 1].end_ms);
               return (
                 <button
@@ -354,7 +362,7 @@ export function CueWordTimeline(props: Props) {
                 >
                   <span className="timeline-word-chip-number">{index + 1}</span>
                   <strong>{word.surface.trim() || "Palavra sem texto"}</strong>
-                  <small>{invalid ? "Revisar tempo" : `${span} ms`}</small>
+                    <small>{transferringDraft ? "Movendo de cue" : invalid ? "Revisar tempo" : `${span} ms`}</small>
                 </button>
               );
             })}

@@ -67,7 +67,14 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Sugestões semânticas inválidas, sobrepostas, não contíguas ou obsoletas são bloqueadas; salvar o
   conjunto válido é atômico e deixa o cue em rascunho.
 - A prévia do iHub preserva pontuação e Unicode, usa a primeira e a última word como janela visual,
-  não mantém uma word destacada durante gaps reais e interrompe a mídia ao fechar.
+  não mantém uma word destacada durante gaps reais e interrompe a mídia ao fechar. `Ctrl+Enter`
+  aguarda metadados e seek da mídia antes de reproduzir a partir da cue selecionada; somente
+  `Ctrl+Shift+Enter` inicia em zero intencionalmente.
+- Ao mover integralmente a primeira/última palavra para a cue adjacente ou o intervalo vazio entre
+  as duas, soltar o marcador ou salvar transfere o mesmo ID atomicamente, expande a cue de destino,
+  retrai a de origem e sinaliza a revisão das traduções. Enquanto o operador ajusta IN/OUT,
+  a palavra em trânsito não deve produzir um falso erro de validação da cue antiga. Sobreposições
+  reais e palavras interiores continuam bloqueadas.
 - A bancada e a prévia nunca abrem com EN, PT ou word-by-word incompletos; falha da Groq mostra o
   pacote externo e só um retorno completo, atual e validado libera a revisão.
 - O gate rejeita qualquer retorno cujo inglês aprovado divirja das palavras, cujos intervalos se

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { nudgeTiming, remapWordsToCue, setTimingEdge, snapTime, validateTimeline } from "./timeline";
+import {
+  adjacentWordDestination, nudgeTiming, remapWordsToCue, setTimingEdge, snapTime,
+  validateTimeline,
+} from "./timeline";
 
 describe("timeline helpers", () => {
   it("snaps time and keeps timing valid", () => {
@@ -29,6 +32,21 @@ describe("timeline helpers", () => {
         } as never,
       ]),
     ).toContain("Palavra “Hi”: fora do cue.");
+  });
+  it("recognizes the adjacent-cue gap as a transfer destination", () => {
+    const cues = [
+      { id: "left", speech_timing: { start_ms: 100, end_ms: 350 }, words: [
+        { id: "a", start_ms: 100, end_ms: 250 },
+      ] },
+      { id: "right", speech_timing: { start_ms: 1100, end_ms: 2000 }, words: [
+        { id: "b", start_ms: 1200, end_ms: 1400 },
+        { id: "c", start_ms: 1500, end_ms: 1900 },
+      ] },
+    ] as unknown as Parameters<typeof adjacentWordDestination>[0];
+    expect(adjacentWordDestination(cues, "right", "b", 400, 650)?.id).toBe("left");
+    expect(adjacentWordDestination(cues, "right", "c", 400, 650)).toBeUndefined();
+    expect(adjacentWordDestination(cues, "right", "b", 400, 1200)).toBeUndefined();
+    expect(adjacentWordDestination(cues, "left", "a", 850, 1000)).toBeUndefined();
   });
   it("rescales word highlights when the parent cue is shortened from 20s to 30s", () => {
     const words = [

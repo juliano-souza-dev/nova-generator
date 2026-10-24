@@ -295,6 +295,94 @@ def test_dragging_word_into_previous_cue_transfers_it_atomically(client: TestCli
     assert [word.id for word in repository.get_cue_words(right_id)] == [words[1].id, words[2].id]
 
 
+def test_dragging_word_into_gap_expands_previous_cue_and_shrinks_source(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    next_id = uuid5(NAMESPACE_URL, "test-transfer-gap-next")
+    previous = replace(
+        cue, approved_en="I", original_en="I", approved_pt="Eu",
+        speech_start_ms=100, speech_end_ms=300,
+        subtitle_start_ms=100, subtitle_end_ms=300,
+    )
+    following = replace(
+        cue, id=next_id, order=2, approved_en="look now", original_en="look now",
+        approved_pt="Olha agora", speech_start_ms=700, speech_end_ms=1500,
+        subtitle_start_ms=700, subtitle_end_ms=1500,
+    )
+    repository.replace_scene_cues(scene_id, [
+        (previous, [replace(words[0], surface="I", start_ms=100, end_ms=200)]),
+        (following, [
+            replace(words[1], cue_id=next_id, order=1, surface="look",
+                    start_ms=780, end_ms=920,
+                    provenance={**words[1].provenance, "pt": "Olha"}),
+            replace(words[2], cue_id=next_id, order=2, surface=" now",
+                    start_ms=1100, end_ms=1350),
+        ]),
+    ])
+    response = client.post(
+        f"/api/editorial/cues/{next_id}/words/transfer",
+        json={
+            "author": "editor", "word_id": str(words[1].id),
+            "start_ms": 400, "end_ms": 550, "expected_revision": following.revision,
+        },
+    )
+    assert response.status_code == 200, response.text
+    previous_after, following_after = repository.get_scene_cues(scene_id)
+    assert (previous_after.speech_start_ms, previous_after.speech_end_ms) == (100, 550)
+    assert previous_after.subtitle_end_ms == 550
+    assert (following_after.speech_start_ms, following_after.speech_end_ms) == (1100, 1500)
+    assert following_after.subtitle_start_ms == 1100
+    assert previous_after.approved_en == "I look"
+    assert following_after.approved_en == "now"
+    assert repository.get_cue_words(previous.id)[-1].id == words[1].id
+    assert repository.get_cue_words(next_id)[0].id == words[2].id
+    assert repository.list_revisions(scene_id)[-1].command == "transfer_word_to_adjacent_cue"
+
+
+def test_dragging_word_into_gap_expands_following_cue_and_shrinks_source(
+    client: TestClient,
+) -> None:
+    repository, scene_id, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    next_id = uuid5(NAMESPACE_URL, "test-transfer-gap-forward")
+    earlier = replace(
+        cue, approved_en="I can't", original_en="I can't", approved_pt="Eu não posso",
+        speech_start_ms=100, speech_end_ms=700,
+        subtitle_start_ms=100, subtitle_end_ms=700,
+    )
+    following = replace(
+        cue, id=next_id, order=2, approved_en="go", original_en="go",
+        approved_pt="ir", speech_start_ms=1100, speech_end_ms=1800,
+        subtitle_start_ms=1100, subtitle_end_ms=1800,
+    )
+    repository.replace_scene_cues(scene_id, [
+        (earlier, [
+            replace(words[0], surface="I", start_ms=100, end_ms=200),
+            replace(words[1], order=2, surface=" can't", start_ms=300, end_ms=450),
+        ]),
+        (following, [replace(words[2], cue_id=next_id, order=1, surface="go",
+                             start_ms=1200, end_ms=1400)]),
+    ])
+    response = client.post(
+        f"/api/editorial/cues/{cue.id}/words/transfer",
+        json={
+            "author": "editor", "word_id": str(words[1].id),
+            "start_ms": 850, "end_ms": 1000, "expected_revision": earlier.revision,
+        },
+    )
+    assert response.status_code == 200, response.text
+    earlier_after, following_after = repository.get_scene_cues(scene_id)
+    assert earlier_after.speech_end_ms == 200
+    assert earlier_after.subtitle_end_ms == 200
+    assert following_after.speech_start_ms == 850
+    assert following_after.subtitle_start_ms == 850
+    assert earlier_after.approved_en == "I"
+    assert following_after.approved_en == "can't go"
+    assert repository.get_cue_words(next_id)[0].id == words[1].id
+
+
 def test_merge_requires_adjacent_cues(client: TestClient) -> None:
     _, _, cue = _seed(client)
     response = client.post(

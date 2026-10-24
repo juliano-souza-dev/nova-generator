@@ -1801,15 +1801,15 @@ describe("EditorialPage", () => {
       .toBe(0);
   });
 
-  it("transfers a word when both dragged edges enter the previous cue", async () => {
+  it("transfers a word in the gap before the previous cue's old end, recalculating bounds", async () => {
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     const first = (await mocks.editorialCues())[0];
     const previous = {
       ...first,
       approved_en: "Hello",
       original_en: "Hello",
-      speech_timing: { start_ms: 100, end_ms: 1000 },
-      subtitle_timing: { start_ms: 100, end_ms: 1000 },
+      speech_timing: { start_ms: 100, end_ms: 350 },
+      subtitle_timing: { start_ms: 100, end_ms: 350 },
       words: [{ id: "w1", order: 1, surface: "Hello", start_ms: 100, end_ms: 250, pt: "Olá" }],
     };
     const current = {
@@ -1827,8 +1827,10 @@ describe("EditorialPage", () => {
       ],
     };
     mocks.editorialCues.mockResolvedValueOnce([previous, current]).mockResolvedValue([
-      { ...previous, approved_en: "Hello look", words: [...previous.words, { ...current.words[0], start_ms: 400, end_ms: 650 }] },
-      { ...current, approved_en: "now", words: [{ ...current.words[1], surface: "now", order: 1 }] },
+      { ...previous, approved_en: "Hello look", speech_timing: { start_ms: 100, end_ms: 650 },
+        words: [...previous.words, { ...current.words[0], start_ms: 400, end_ms: 650 }] },
+      { ...current, approved_en: "now", speech_timing: { start_ms: 1500, end_ms: 2000 },
+        words: [{ ...current.words[1], surface: "now", order: 1 }] },
     ]);
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1"]}>
@@ -1860,6 +1862,59 @@ describe("EditorialPage", () => {
       "c2", "w2", 400, 650, 1, "local-editor",
     ));
     await waitFor(() => expect(screen.getByText("Cue 1 de 2")).toBeInTheDocument());
+  });
+
+  it("saves a moved word in the gap by transferring it instead of rejecting its old cue timing", async () => {
+    const first = (await mocks.editorialCues())[0];
+    const previous = {
+      ...first,
+      approved_en: "Hello", original_en: "Hello", approved_pt: "Olá",
+      speech_timing: { start_ms: 100, end_ms: 350 },
+      words: [{ id: "w1", order: 1, surface: "Hello", start_ms: 100, end_ms: 250, pt: "Olá" }],
+    };
+    const current = {
+      ...first, id: "c2", order: 2,
+      approved_en: "look now", original_en: "look now", approved_pt: "Olha agora",
+      speech_timing: { start_ms: 1100, end_ms: 2000 },
+      words: [
+        { id: "w2", order: 1, surface: "look", start_ms: 1200, end_ms: 1400, pt: "olha" },
+        { id: "w3", order: 2, surface: " now", start_ms: 1500, end_ms: 1900, pt: "agora" },
+      ],
+    };
+    mocks.editorialCues.mockResolvedValueOnce([previous, current]).mockResolvedValue([
+      { ...previous, approved_en: "Hello look", speech_timing: { start_ms: 100, end_ms: 650 },
+        words: [...previous.words, { ...current.words[0], start_ms: 400, end_ms: 650 }] },
+      { ...current, approved_en: "now", speech_timing: { start_ms: 1500, end_ms: 2000 },
+        words: [{ ...current.words[1], surface: "now", order: 1 }] },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Cue 1 de 2");
+    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    await screen.findByText("Cue 2 de 2");
+    fireEvent.click(screen.getByRole("button", { name: /Palavra 1: look,/ }));
+    fireEvent.click(screen.getByText("Zoom, ajuste em milissegundos e outros controles"));
+    fireEvent.click(screen.getByRole("button", { name: "Ver cena toda" }));
+    const svg = screen.getByRole("img", { name: "Waveform, cues e tempos das palavras" });
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      left: 0, width: 1000, top: 0, height: 210, right: 1000, bottom: 210, x: 0, y: 0,
+      toJSON: () => ({}),
+    });
+    fireEvent.click(svg, { clientX: 200 });
+    fireEvent.click(screen.getByRole("button", { name: /Marcar início/ }));
+    fireEvent.click(svg, { clientX: 325 });
+    fireEvent.click(screen.getByRole("button", { name: /Marcar fim/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar palavra/i }));
+    await waitFor(() => expect(mocks.transferWordToAdjacentCue).toHaveBeenCalledWith(
+      "c2", "w2", 400, 650, 1, "local-editor",
+    ));
+    expect(mocks.updateWordTiming).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.queryByText(/Palavra “look”: fora do cue/)).not.toBeInTheDocument(),
+    );
   });
 
   it("returns from the iHub preview to the exact cue in editable Cue mode", async () => {

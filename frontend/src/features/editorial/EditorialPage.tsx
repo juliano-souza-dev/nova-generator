@@ -31,7 +31,9 @@ import { ApiError } from "../../lib/api";
 import { CueWordTimeline, type TimelineCue } from "./CueWordTimeline";
 import { EditorialHubPreview } from "./EditorialHubPreview";
 import { reconcileCueWords } from "./reconcileCueWords";
-import { nudgeTiming, remapWordsToCue, setTimingEdge, validateTimeline } from "./timeline";
+import {
+  adjacentWordDestination, nudgeTiming, remapWordsToCue, setTimingEdge, validateTimeline,
+} from "./timeline";
 import "./timeline.css";
 import "./editorial-workspace.css";
 
@@ -985,8 +987,8 @@ export function EditorialPage() {
       setMessage(error instanceof Error ? error.message : "Não foi possível ajustar as palavras.");
     }
   }
-  // Let a word cross a cue boundary as a local draft. The atomic transfer only
-  // happens when its entire final range fits the adjacent cue.
+  // Let a word cross a cue boundary as a local draft. Once the whole word
+  // reaches the adjacent cue (or the gap before it), reparent it atomically.
   function changeSelectedWordEdge(edge: "start" | "end", targetMs: number) {
     if (!selectedCue || !selectedWord || saving) return;
     const time = Math.round(targetMs);
@@ -996,26 +998,11 @@ export function EditorialPage() {
       setWordEnd(Math.min(durationMs, Math.max(time, activeWordStart + 1)));
     }
   }
-  async function finishWordEdgeDrag(edge: "start" | "end", targetMs: number) {
-    if (!selectedCue || !selectedWord || saving || hasInsertedWords) return;
-    const time = Math.round(targetMs);
-    const start = edge === "start"
-      ? Math.max(0, Math.min(time, activeWordEnd - 1)) : activeWordStart;
-    const end = edge === "end"
-      ? Math.min(durationMs, Math.max(time, start + 1)) : activeWordEnd;
-    const previous = cues[selectedCueIndex - 1];
-    const next = cues[selectedCueIndex + 1];
-    const destination =
-      selectedWordIndex === 0 && previous &&
-      start >= previous.speech_timing.start_ms && end <= previous.speech_timing.end_ms
-        ? previous
-        : selectedWordIndex === visibleWords.length - 1 && next &&
-            start >= next.speech_timing.start_ms && end <= next.speech_timing.end_ms
-          ? next : undefined;
-    if (!destination) return;
+  async function transferSelectedWord(destination: TimelineCue, start: number, end: number): Promise<boolean> {
+    if (!selectedCue || !selectedWord || saving || hasInsertedWords) return false;
     if (textDirty || wordSurfaceDirty || wordTranslationDirty || semanticUnitsDirty || timingDirty) {
       setMessage("Salve os outros ajustes pendentes antes de transferir esta palavra.");
-      return;
+      return false;
     }
     setSaving(true);
     try {
@@ -1031,13 +1018,25 @@ export function EditorialPage() {
       seek(start);
       setMessage(
         `“${selectedWord.surface.trim()}” transferida para a cue ${destination.order}. ` +
-        "IDs e tempos preservados; revise o português contextual das duas cues antes de aprovar.",
+        "Limites recalculados automaticamente; revise o português das duas cues antes de aprovar.",
       );
+      return true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível transferir a palavra.");
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+  async function finishWordEdgeDrag(edge: "start" | "end", targetMs: number) {
+    if (!selectedCue || !selectedWord || saving || hasInsertedWords) return;
+    const time = Math.round(targetMs);
+    const start = edge === "start"
+      ? Math.max(0, Math.min(time, activeWordEnd - 1)) : activeWordStart;
+    const end = edge === "end"
+      ? Math.min(durationMs, Math.max(time, start + 1)) : activeWordEnd;
+    const destination = adjacentWordDestination(cues, selectedCue.id, selectedWord.id, start, end);
+    if (destination) await transferSelectedWord(destination, start, end);
   }
   function nudge(edge: "start" | "end", deltaMs: number) {
     if (!selectedCue || saving) return;
@@ -1204,6 +1203,17 @@ export function EditorialPage() {
       return false;
     }
     const candidate = previewCues.find((cue) => cue.id === selectedCue.id) ?? selectedCue;
+    // Keyboard/numeric edits and a failed pointer-up can leave a valid transfer
+    // pending. Saving must complete that transfer rather than report that the
+    // word is outside its *old* cue.
+    const transferTarget = selectedWord && wordDirty && !hasInsertedWords
+      ? adjacentWordDestination(
+          cues, selectedCue.id, selectedWord.id, activeWordStart, activeWordEnd,
+        )
+      : undefined;
+    if (transferTarget) {
+      return transferSelectedWord(transferTarget, activeWordStart, activeWordEnd);
+    }
     // A translation-only draft must remain savable even when historical
     // audio timing needs review. Validate timing whenever we edit it or approve.
     const errors =
@@ -2003,6 +2013,7 @@ export function EditorialPage() {
                 focusRequest={timelineFocusRequest}
                 selectedCueId={selectedCueId}
                 selectedWordId={selectedWordId}
+                editingWordTiming={wordDirty}
                 onPlayToggle={togglePlayback}
                 onPlayContext={() => {
                   if (!selectedCue || !selectedWord) return;

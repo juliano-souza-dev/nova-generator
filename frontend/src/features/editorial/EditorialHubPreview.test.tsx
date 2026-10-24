@@ -49,6 +49,43 @@ describe("EditorialHubPreview", () => {
     expect(getComputedStyle(timedWords[0]).marginRight).not.toBe("0px");
   });
 
+  it("waits for the requested cue seek before starting playback", () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const nextCue: TimelineCue = {
+      ...cue, id: "c2", order: 2,
+      speech_timing: { start_ms: 1900, end_ms: 2300 },
+      subtitle_timing: { start_ms: 1900, end_ms: 2300 },
+      words: [{ id: "w4", order: 1, surface: "Later", start_ms: 1900, end_ms: 2300, pt: "Depois" }],
+    };
+    render(
+      <EditorialHubPreview
+        mediaUrl="/cut.mp4"
+        cues={[cue, nextCue]}
+        initialTimeMs={1900}
+        onClose={vi.fn()}
+        onEditCue={vi.fn()}
+      />,
+    );
+    const video = screen.getByLabelText("Prévia do vídeo no iHub") as HTMLVideoElement;
+    let readyState = HTMLMediaElement.HAVE_NOTHING;
+    Object.defineProperty(video, "readyState", { configurable: true, get: () => readyState });
+    expect(video.currentTime).toBe(1.9);
+    expect(play).not.toHaveBeenCalled();
+
+    // Browsers may reset a pre-metadata seek to zero as the media initializes.
+    video.currentTime = 0;
+    readyState = HTMLMediaElement.HAVE_METADATA;
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(1.9);
+    expect(play).not.toHaveBeenCalled();
+
+    readyState = HTMLMediaElement.HAVE_ENOUGH_DATA;
+    fireEvent.seeked(video);
+    expect(play).toHaveBeenCalledOnce();
+    expect(video.currentTime).toBe(1.9);
+    expect(screen.getByRole("button", { name: "Editar cue" })).toBeEnabled();
+  });
+
   it("uses reviewed word bounds and leaves real gaps outside any active word", () => {
     expect(cuePreviewBounds(cue)).toEqual({ startMs: 100, endMs: 800 });
     expect(activePreviewCue([cue], 99)).toBeUndefined();

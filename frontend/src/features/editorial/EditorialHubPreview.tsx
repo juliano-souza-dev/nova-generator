@@ -1,5 +1,5 @@
 import { Pause, Pencil, Play, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WordTiming } from "../../lib/api.types";
 import type { TimelineCue } from "./CueWordTimeline";
 import { activePreviewCue, timedLiteralPieces } from "./hub-preview-timeline";
@@ -67,17 +67,40 @@ function CaptionLine({
 export function EditorialHubPreview({ mediaUrl, cues, initialTimeMs, onClose, onEditCue }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameRef = useRef<number | undefined>(undefined);
+  const initialPlaybackStarted = useRef(false);
   const [currentMs, setCurrentMs] = useState(initialTimeMs);
   const [playing, setPlaying] = useState(false);
   const [mode, setMode] = useState<SubtitleMode>("dual");
   const cue = activePreviewCue(cues, currentMs);
 
+  const startAtCue = useCallback((video: HTMLVideoElement) => {
+    if (initialPlaybackStarted.current || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+        video.seeking) return;
+    const targetSeconds = Math.max(0, Math.min(
+      initialTimeMs / 1000,
+      Number.isFinite(video.duration) && video.duration > 0 ? video.duration : Infinity,
+    ));
+    if (Math.abs(video.currentTime - targetSeconds) > 0.05) {
+      video.currentTime = targetSeconds;
+      return;
+    }
+    initialPlaybackStarted.current = true;
+    setCurrentMs(Math.round(video.currentTime * 1000));
+    void video.play().catch(() => setPlaying(false));
+  }, [initialTimeMs]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    video.currentTime = initialTimeMs / 1000;
-    void video.play().catch(() => setPlaying(false));
-  }, [initialTimeMs]);
+    initialPlaybackStarted.current = false;
+    video.pause();
+    // Stage the requested position immediately, then seek again after the
+    // browser knows the metadata. Autoplay before metadata resets some videos
+    // to zero, even though the initial currentTime assignment succeeded.
+    video.currentTime = Math.max(0, initialTimeMs) / 1000;
+    setCurrentMs(initialTimeMs);
+    startAtCue(video);
+  }, [initialTimeMs, mediaUrl, startAtCue]);
 
   useEffect(() => {
     if (!playing) return;
@@ -160,9 +183,18 @@ export function EditorialHubPreview({ mediaUrl, cues, initialTimeMs, onClose, on
             ref={videoRef}
             src={mediaUrl}
             controls
-            autoPlay
             preload="auto"
             aria-label="Prévia do vídeo no iHub"
+            onLoadedMetadata={(event) => {
+              const video = event.currentTarget;
+              video.currentTime = Math.max(0, Math.min(
+                initialTimeMs / 1000,
+                Number.isFinite(video.duration) && video.duration > 0 ? video.duration : Infinity,
+              ));
+              startAtCue(video);
+            }}
+            onCanPlay={(event) => startAtCue(event.currentTarget)}
+            onSeeked={(event) => startAtCue(event.currentTarget)}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
             onTimeUpdate={(event) =>

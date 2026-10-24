@@ -1044,13 +1044,22 @@ class TransferWordToAdjacentCue:
             candidates.append((all_cues[source_index - 1], True))
         if word_index == len(source_words) - 1 and source_index + 1 < len(all_cues):
             candidates.append((all_cues[source_index + 1], False))
-        target_choice = next(
-            ((cue, to_previous) for cue, to_previous in candidates
-             if cue.speech_start_ms <= start_ms and end_ms <= cue.speech_end_ms),
-            None,
-        )
+        target_choice = None
+        for cue, to_previous in candidates:
+            fits = (
+                cue.speech_start_ms <= start_ms
+                and end_ms <= max(cue.speech_end_ms, source.speech_start_ms)
+            ) if to_previous else (
+                min(cue.speech_start_ms, source.speech_end_ms) <= start_ms
+                and end_ms <= cue.speech_end_ms
+            )
+            if fits:
+                target_choice = (cue, to_previous)
+                break
         if target_choice is None:
-            raise EditorialCommandError("move the entire first/last word inside an adjacent cue")
+            raise EditorialCommandError(
+                "move the entire first/last word into the adjacent cue or the gap before it"
+            )
         target, to_previous = target_choice
         target_words = self._repository.get_cue_words(target.id)
         if to_previous and target_words and target_words[-1].end_ms > start_ms:
@@ -1141,6 +1150,22 @@ class TransferWordToAdjacentCue:
 
         edited_source = edited_cue(source, remaining, shrink=True, approved_pt=source_pt)
         edited_target = edited_cue(target, destination, shrink=False, approved_pt=target_pt)
+        # When the word lands in the silence between consecutive cues, the old
+        # destination bounds must not prevent the move. Expand the destination
+        # to cover the transferred word, keeping its existing words untouched.
+        new_target_start = min(edited_target.speech_start_ms, start_ms)
+        new_target_end = max(edited_target.speech_end_ms, end_ms)
+        edited_target = replace(
+            edited_target,
+            speech_start_ms=new_target_start,
+            speech_end_ms=new_target_end,
+            subtitle_start_ms=min(edited_target.subtitle_start_ms, start_ms),
+            subtitle_end_ms=max(edited_target.subtitle_end_ms, end_ms),
+        )
+        if (to_previous and edited_target.speech_end_ms > edited_source.speech_start_ms) or (
+            not to_previous and edited_source.speech_end_ms > edited_target.speech_start_ms
+        ):
+            raise EditorialCommandError("transferred word overlaps the adjacent cue")
         replacement = [
             (edited_source, remaining) if cue.id == source.id else
             (edited_target, destination) if cue.id == target.id else

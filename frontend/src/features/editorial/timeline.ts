@@ -70,7 +70,39 @@ export function remapWordsToCue(
   });
 }
 
-export function validateTimeline(cues: Array<Cue & { words: WordTiming[] }>): string[] {
+/**
+ * A boundary word may be moved into the silence between two cues. The target
+ * cue will expand atomically on the server, so use its neighbor's boundary as
+ * the outer limit of that drop zone, not only its current speech interval.
+ */
+export function adjacentWordDestination<T extends Cue & { words: WordTiming[] }>(
+  cues: T[], cueId: string, wordId: string, startMs: number, endMs: number,
+): T | undefined {
+  if (startMs < 0 || endMs <= startMs) return undefined;
+  const index = cues.findIndex((cue) => cue.id === cueId);
+  if (index < 0) return undefined;
+  const source = cues[index];
+  const wordIndex = source.words.findIndex((word) => word.id === wordId);
+  if (wordIndex < 0 || source.words.length <= 1) return undefined;
+  const previous = cues[index - 1];
+  if (wordIndex === 0 && previous &&
+      startMs >= previous.speech_timing.start_ms &&
+      endMs <= Math.max(previous.speech_timing.end_ms, source.speech_timing.start_ms)) {
+    return previous;
+  }
+  const next = cues[index + 1];
+  if (wordIndex === source.words.length - 1 && next &&
+      startMs >= Math.min(next.speech_timing.start_ms, source.speech_timing.end_ms) &&
+      endMs <= next.speech_timing.end_ms) {
+    return next;
+  }
+  return undefined;
+}
+
+export function validateTimeline(
+  cues: Array<Cue & { words: WordTiming[] }>,
+  options: { ignoreDraftWordOutsideCueId?: string } = {},
+): string[] {
   return cues.flatMap((cue) => {
     const errors: string[] = [];
     if (cue.speech_timing.start_ms >= cue.speech_timing.end_ms)
@@ -81,7 +113,8 @@ export function validateTimeline(cues: Array<Cue & { words: WordTiming[] }>): st
         errors.push(`Palavra “${word.surface}”: intervalo inválido.`);
       if (prior && word.start_ms < prior.end_ms)
         errors.push(`Palavra “${word.surface}”: sobrepõe a anterior.`);
-      if (word.start_ms < cue.speech_timing.start_ms || word.end_ms > cue.speech_timing.end_ms)
+      if ((word.start_ms < cue.speech_timing.start_ms || word.end_ms > cue.speech_timing.end_ms) &&
+          (!options.ignoreDraftWordOutsideCueId || word.id !== options.ignoreDraftWordOutsideCueId))
         errors.push(`Palavra “${word.surface}”: fora do cue.`);
     });
     return errors;
