@@ -278,6 +278,7 @@ export function EditorialPage() {
   const [showCompactVideo, setShowCompactVideo] = useState(true);
   const [inlineTextEditing, setInlineTextEditing] = useState(false);
   const cueDragBaseline = useRef<TimelineCue | null>(null);
+  const saveShortcutInFlight = useRef(false);
   const [structureDraft, setStructureDraft] = useState<StructureDraft | null>(null);
   const [startingMedia, setStartingMedia] = useState(false);
   const [mediaReload, setMediaReload] = useState(0);
@@ -896,6 +897,21 @@ export function EditorialPage() {
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [playing]);
+  // Capture Ctrl/Cmd+S before text inputs or browser save handlers can consume it.
+  useEffect(() => {
+    const onSaveKey = (event: KeyboardEvent) => {
+      if (
+        event.key.toLowerCase() !== "s" ||
+        !(event.ctrlKey || event.metaKey) ||
+        event.altKey
+      ) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) void saveCueAndGoToNext();
+    };
+    window.addEventListener("keydown", onSaveKey, true);
+    return () => window.removeEventListener("keydown", onSaveKey, true);
+  });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (
@@ -916,11 +932,6 @@ export function EditorialPage() {
           void leaveWordMode();
           return;
         }
-      }
-      if (event.key.toLowerCase() === "s" && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        if (isDirty) void saveChanges();
-        return;
       }
       const target = event.target;
       if (
@@ -1214,6 +1225,31 @@ export function EditorialPage() {
     }
   }
 
+  async function saveCueAndGoToNext(): Promise<void> {
+    if (!selectedCue || saving || saveShortcutInFlight.current) return;
+    saveShortcutInFlight.current = true;
+    const currentOrder = selectedCue.order;
+    const nextCue = cues[selectedCueIndex + 1];
+    try {
+      // Always call the canonical save path, including when only word fields
+      // changed. A failed validation or request must never advance the editor.
+      const saved = await saveChanges(false, false);
+      if (!saved) return;
+      if (!nextCue) {
+        setMessage(`Cue ${currentOrder} salva. Você está na última cue.`);
+        return;
+      }
+      playbackEnd.current = null;
+      mediaRef.current?.pause();
+      setSelectedCueId(nextCue.id);
+      setSelectedWordId(undefined);
+      setTimelineFocusRequest((value) => value + 1);
+      seek(nextCue.speech_timing.start_ms);
+      setMessage(`Cue ${currentOrder} salva. Próxima cue aberta.`);
+    } finally {
+      saveShortcutInFlight.current = false;
+    }
+  }
   async function saveChanges(
     approve = false,
     advance = false,
@@ -2034,7 +2070,7 @@ export function EditorialPage() {
               <details className="editorial-dock-shortcuts">
                 <summary>Atalhos</summary>
                 <p>Alt + ←/→: navegar entre cues · Esc: modo Cue · Ctrl + Enter: prévia na cue atual ·
-                   Ctrl + Shift + Enter: prévia desde o início · Espaço: ouvir · A/S: IN/OUT · G: salvar e próxima</p>
+                   Ctrl + Shift + Enter: prévia desde o início · Ctrl + S: salvar e próxima cue · Espaço: ouvir · A/S: IN/OUT · G: salvar e próxima</p>
               </details>
             </nav>
             <section className={`editorial-station-stage${showCompactVideo ? "" : " is-video-hidden"}`} aria-label="Área principal da waveform">

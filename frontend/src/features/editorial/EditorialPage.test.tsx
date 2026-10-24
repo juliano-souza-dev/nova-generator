@@ -1957,4 +1957,95 @@ describe("EditorialPage", () => {
     expect(within(screen.getByRole("group", { name: "Modo de edição" }))
       .getByRole("button", { name: "Cue" })).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("saves Portuguese text with Ctrl+S from a focused input and opens the next cue", async () => {
+    const first = (await mocks.editorialCues())[0];
+    const second = {
+      ...first, id: "c2", order: 2, original_en: "Later", approved_en: "Later",
+      approved_pt: "Depois",
+      speech_timing: { start_ms: 1900, end_ms: 2000 },
+      subtitle_timing: { start_ms: 1900, end_ms: 2000 },
+      words: [{ id: "w2", order: 1, surface: "Later", start_ms: 1900, end_ms: 2000, pt: "Depois" }],
+    };
+    mocks.editorialCues.mockResolvedValue([first, second]);
+    render(<MemoryRouter initialEntries={["/editorial?project=p1"]}><EditorialPage /></MemoryRouter>);
+    const portuguese = await screen.findByRole("textbox", { name: "Português aprovado" });
+    await waitFor(() => expect(portuguese).toHaveValue(first.approved_pt));
+    fireEvent.change(portuguese, { target: { value: "Não posso ir." } });
+    fireEvent.keyDown(portuguese, { key: "s", code: "KeyS", ctrlKey: true });
+    await waitFor(() => expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
+      author: "local-editor", approved_en: first.approved_en,
+      approved_pt: "Não posso ir.", approve: false,
+    }));
+    await waitFor(() => expect(screen.getByText("Cue 2 de 2")).toBeInTheDocument());
+    expect(mocks.updateCueText).toHaveBeenCalledTimes(1);
+    expect(mocks.completeWordTimingReview).not.toHaveBeenCalled();
+  });
+
+  it("Ctrl+S saves the selected word without approving it and jumps to the next cue", async () => {
+    const first = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      first,
+      {
+        ...first, id: "c2", order: 2, approved_en: "Later", original_en: "Later",
+        approved_pt: "Depois",
+        speech_timing: { start_ms: 1900, end_ms: 2000 },
+        subtitle_timing: { start_ms: 1900, end_ms: 2000 },
+        words: [{ id: "w2", order: 1, surface: "Later", start_ms: 1900, end_ms: 2000, pt: "Depois" }],
+      },
+    ]);
+    render(<MemoryRouter initialEntries={["/editorial?project=p1"]}><EditorialPage /></MemoryRouter>);
+    const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
+    fireEvent.click(within(list).getByRole("button", { name: /can't/ }));
+    const input = await screen.findByRole("textbox", { name: "Tradução natural da unidade" });
+    fireEvent.change(input, { target: { value: "não posso" } });
+    fireEvent.keyDown(input, { key: "s", ctrlKey: true });
+    await waitFor(() => expect(mocks.updateWordTranslation).toHaveBeenCalledWith(
+      "c1", "w1", "não posso", "local-editor",
+    ));
+    await waitFor(() => expect(screen.getByText("Cue 2 de 2")).toBeInTheDocument());
+    expect(within(screen.getByRole("group", { name: "Modo de edição" }))
+      .getByRole("button", { name: "Cue" })).toHaveAttribute("aria-pressed", "true");
+    expect(mocks.completeWordTimingReview).not.toHaveBeenCalled();
+  });
+
+  it("Ctrl+S advances even when no changes are pending", async () => {
+    const first = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      first,
+      {
+        ...first, id: "c2", order: 2,
+        speech_timing: { start_ms: 1900, end_ms: 2000 },
+        subtitle_timing: { start_ms: 1900, end_ms: 2000 },
+        words: [{ id: "w2", order: 1, surface: "Later", start_ms: 1900, end_ms: 2000, pt: "Depois" }],
+      },
+    ]);
+    render(<MemoryRouter initialEntries={["/editorial?project=p1"]}><EditorialPage /></MemoryRouter>);
+    await screen.findByText("Cue 1 de 2");
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    await waitFor(() => expect(screen.getByText("Cue 2 de 2")).toBeInTheDocument());
+    expect(mocks.updateCueText).not.toHaveBeenCalled();
+  });
+
+  it("Ctrl+S stays on the current cue if persistence fails", async () => {
+    const first = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      first,
+      {
+        ...first, id: "c2", order: 2,
+        speech_timing: { start_ms: 1900, end_ms: 2000 },
+        subtitle_timing: { start_ms: 1900, end_ms: 2000 },
+        words: [{ id: "w2", order: 1, surface: "Later", start_ms: 1900, end_ms: 2000, pt: "Depois" }],
+      },
+    ]);
+    mocks.updateCueText.mockRejectedValueOnce(new Error("Falha de rede"));
+    render(<MemoryRouter initialEntries={["/editorial?project=p1"]}><EditorialPage /></MemoryRouter>);
+    const portuguese = await screen.findByRole("textbox", { name: "Português aprovado" });
+    fireEvent.change(portuguese, { target: { value: "Não posso ir." } });
+    fireEvent.keyDown(portuguese, { key: "s", ctrlKey: true });
+    expect(await screen.findByText("Falha de rede", { selector: ".review-message" })).toBeInTheDocument();
+    expect(screen.getByText("Cue 1 de 2")).toBeInTheDocument();
+    expect(mocks.editorialCues).toHaveBeenCalledTimes(1);
+  });
+
 });
