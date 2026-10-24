@@ -1036,7 +1036,43 @@ export function EditorialPage() {
     const end = edge === "end"
       ? Math.min(durationMs, Math.max(time, start + 1)) : activeWordEnd;
     const destination = adjacentWordDestination(cues, selectedCue.id, selectedWord.id, start, end);
-    if (destination) await transferSelectedWord(destination, start, end);
+    if (destination) {
+      await transferSelectedWord(destination, start, end);
+      return;
+    }
+    // Pointer release is the commit point. Keep the source of truth on the
+    // server, even when the word was only retimed within its current cue.
+    if (start === selectedWord.start_ms && end === selectedWord.end_ms) return;
+    if (start < selectedCue.speech_timing.start_ms || end > selectedCue.speech_timing.end_ms) {
+      setMessage("Complete o movimento para a cue vizinha antes de soltar a palavra.");
+      return;
+    }
+    if (textDirty || wordSurfaceDirty || wordTranslationDirty || semanticUnitsDirty || timingDirty) {
+      setMessage("Há outras edições pendentes. Salve-as antes de mover a palavra.");
+      return;
+    }
+    const timings = selectedCue.words.map((word) => ({
+      id: word.id,
+      start_ms: word.id === selectedWord.id ? start : word.start_ms,
+      end_ms: word.id === selectedWord.id ? end : word.end_ms,
+    }));
+    if (timings.some((word, index) => word.start_ms >= word.end_ms ||
+      (index > 0 && timings[index - 1].end_ms > word.start_ms))) {
+      setMessage("O ajuste sobrepõe outra palavra; corrija os limites antes de soltar.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await studioApi.updateWordTiming(selectedCue.id, { author, timings });
+      pendingWordDrafts.current.delete(selectedWord.id);
+      setPendingDraftVersion((value) => value + 1);
+      await refreshCues();
+      setMessage("Tempos da palavra salvos automaticamente e sincronizados com a cena.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Falha no salvamento automático; tente novamente.");
+    } finally {
+      setSaving(false);
+    }
   }
   function nudge(edge: "start" | "end", deltaMs: number) {
     if (!selectedCue || saving) return;
