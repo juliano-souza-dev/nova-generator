@@ -979,6 +979,181 @@ def _replace_structure(
         raise EditorialCommandError("scene changed during structural edit; reload and retry")
 
 
+def _transfer_literal_pt(
+    source_pt: str, target_pt: str, word_pt: str, *, to_previous: bool
+) -> tuple[str, str]:
+    """Move PT only when the word's existing translation matches a literal edge."""
+    token = word_pt.strip()
+    if not token:
+        return source_pt, target_pt
+    escaped = re.escape(token)
+    if to_previous:
+        match = re.match(rf"^\s*{escaped}(?=\W|$)[,!?…;:]*\s*", source_pt, re.IGNORECASE)
+        if match:
+            remainder = source_pt[match.end():].lstrip()
+            if remainder:
+                return remainder, f"{target_pt.rstrip()} {match.group().strip()}".strip()
+    else:
+        match = re.search(rf"\s*{escaped}(?=\W|$)[,!?…;:]*\s*$", source_pt, re.IGNORECASE)
+        if match:
+            remainder = source_pt[:match.start()].rstrip()
+            if remainder:
+                return remainder, f"{match.group().strip()} {target_pt.lstrip()}".strip()
+    return source_pt, target_pt
+
+
+class TransferWordToAdjacentCue:
+    """Atomically reparent a boundary word without regenerating its identity or timing history."""
+
+    def __init__(self, repository: EditorialProjectRepository) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        cue_id: UUID,
+        *,
+        word_id: UUID,
+        start_ms: int,
+        end_ms: int,
+        expected_revision: int,
+        author: str,
+    ) -> list[Cue]:
+        start_ms, end_ms = _range(start_ms, end_ms, "transferred_word")
+        source_cue, _ = _cue_with_words(self._repository, cue_id)
+        # Capture before reading the affected rows: a concurrent edit after this
+        # point must fail the final compare-and-swap instead of being overwritten.
+        before = _scene_snapshot(self._repository, source_cue.scene_id)
+        all_cues = self._repository.get_scene_cues(source_cue.scene_id)
+        source_index = next((i for i, cue in enumerate(all_cues) if cue.id == cue_id), None)
+        if source_index is None:
+            raise EditorialCommandError("source cue not found")
+        source = all_cues[source_index]
+        if source.revision != expected_revision:
+            raise EditorialCommandError("cue changed during word adjustment; reload and retry")
+        source_words = self._repository.get_cue_words(cue_id)
+        word_index = next((i for i, word in enumerate(source_words) if word.id == word_id), None)
+        if word_index is None:
+            raise EditorialCommandError("word no longer belongs to this cue")
+        if len(source_words) < 2:
+            raise EditorialCommandError("cannot transfer the only word of a cue")
+        if _semantic_group_id(source_words[word_index]):
+            raise EditorialCommandError("ungroup this semantic expression before moving its word")
+
+        candidates: list[tuple[Cue, bool]] = []
+        if word_index == 0 and source_index > 0:
+            candidates.append((all_cues[source_index - 1], True))
+        if word_index == len(source_words) - 1 and source_index + 1 < len(all_cues):
+            candidates.append((all_cues[source_index + 1], False))
+        target_choice = next(
+            ((cue, to_previous) for cue, to_previous in candidates
+             if cue.speech_start_ms <= start_ms and end_ms <= cue.speech_end_ms),
+            None,
+        )
+        if target_choice is None:
+            raise EditorialCommandError("move the entire first/last word inside an adjacent cue")
+        target, to_previous = target_choice
+        target_words = self._repository.get_cue_words(target.id)
+        if to_previous and target_words and target_words[-1].end_ms > start_ms:
+            raise EditorialCommandError("transferred word overlaps the preceding cue's last word")
+        if not to_previous and target_words and end_ms > target_words[0].start_ms:
+            raise EditorialCommandError("transferred word overlaps the following cue's first word")
+
+        # Never silently rebuild legacy text that does not match its word rows.
+        for cue, words in ((source, source_words), (target, target_words)):
+            literal = "".join(word.surface for word in words) + str(
+                cue.provenance.get("editorial_preparation_trailing", "")
+            )
+            if literal != cue.approved_en:
+                raise EditorialCommandError(
+                    f"cue {cue.order} text differs from its words; reconcile it before transfer"
+                )
+
+        moving = source_words[word_index]
+        source_pt, target_pt = _transfer_literal_pt(
+            source.approved_pt, target.approved_pt,
+            str(moving.provenance.get("pt") or ""), to_previous=to_previous,
+        )
+        moved = replace(
+            moving,
+            start_ms=start_ms,
+            end_ms=end_ms,
+            surface=(" " if to_previous and target_words else "") + moving.surface.strip(),
+            cue_id=target.id,
+            provenance={
+                **moving.provenance,
+                "moved_from_cue": str(source.id),
+                "word_timing_reviewed": True,
+                "editorial_timing_estimated": False,
+                "translation_review_required": True,
+            },
+        )
+        remaining = [word for word in source_words if word.id != word_id]
+        if word_index == 0:
+            remaining[0] = replace(remaining[0], surface=remaining[0].surface.lstrip())
+        destination = [*target_words, moved] if to_previous else [moved, *target_words]
+        if not to_previous and target_words:
+            destination[1] = replace(
+                destination[1], surface=" " + destination[1].surface.lstrip()
+            )
+
+        def revision_words(words: list[WordTiming], owner: UUID) -> list[WordTiming]:
+            return [
+                replace(
+                    word, cue_id=owner, order=index,
+                    provenance={**word.provenance, "translation_review_required": True},
+                )
+                for index, word in enumerate(words, 1)
+            ]
+
+        remaining = revision_words(remaining, source.id)
+        destination = revision_words(destination, target.id)
+
+        def edited_cue(
+            cue: Cue, words: list[WordTiming], *, shrink: bool, approved_pt: str
+        ) -> Cue:
+            approved_en = "".join(word.surface for word in words) + str(
+                cue.provenance.get("editorial_preparation_trailing", "")
+            )
+            if not approved_en.strip():
+                raise EditorialCommandError("transferring this word would leave an empty cue")
+            start = words[0].start_ms if shrink and word_index == 0 else cue.speech_start_ms
+            end = words[-1].end_ms if shrink and word_index > 0 else cue.speech_end_ms
+            return replace(
+                cue,
+                speech_start_ms=start,
+                speech_end_ms=end,
+                subtitle_start_ms=start if shrink and word_index == 0 else cue.subtitle_start_ms,
+                subtitle_end_ms=end if shrink and word_index > 0 else cue.subtitle_end_ms,
+                original_en=approved_en,
+                approved_en=approved_en,
+                approved_pt=approved_pt,
+                revision=cue.revision + 1,
+                provenance={
+                    **cue.provenance,
+                    "approval": "draft",
+                    "structural_edit": "word_transfer",
+                    "translation_review_required": True,
+                    "original_en_before_word_transfer": cue.original_en,
+                    "approved_pt_before_word_transfer": cue.approved_pt,
+                    "word_transfer_counterpart": str(target.id if shrink else source.id),
+                },
+            )
+
+        edited_source = edited_cue(source, remaining, shrink=True, approved_pt=source_pt)
+        edited_target = edited_cue(target, destination, shrink=False, approved_pt=target_pt)
+        replacement = [
+            (edited_source, remaining) if cue.id == source.id else
+            (edited_target, destination) if cue.id == target.id else
+            (cue, self._repository.get_cue_words(cue.id))
+            for cue in all_cues
+        ]
+        _replace_structure(
+            self._repository, source.scene_id, before, replacement,
+            command="transfer_word_to_adjacent_cue", author=author,
+        )
+        return [edited_source, edited_target]
+
+
 class SplitCue:
     def __init__(self, repository: EditorialProjectRepository) -> None:
         self._repository = repository

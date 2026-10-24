@@ -329,6 +329,19 @@
   font-size: 1.2rem;
 }
 
+.hub-preview-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.hub-preview-header-actions .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .hub-preview-close {
   display: grid;
   width: 38px;

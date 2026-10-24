@@ -240,6 +240,8 @@ export function EditorialPage() {
   const [selectedCueId, setSelectedCueId] = useState("");
   const [selectedWordId, setSelectedWordId] = useState<string>();
   const [timelineFocusRequest, setTimelineFocusRequest] = useState(0);
+  const quickCueEditorRef = useRef<HTMLTextAreaElement>(null);
+  const [quickCueFocusRequest, setQuickCueFocusRequest] = useState(0);
   const [playheadMs, setPlayheadMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -547,6 +549,15 @@ export function EditorialPage() {
     setApprovedPt(selectedCue?.approved_pt ?? "");
   }, [selectedCue?.id, selectedCue?.approved_en, selectedCue?.approved_pt]);
   useEffect(() => {
+    if (!quickCueFocusRequest || !inlineTextEditing || hubPreviewStartMs !== null) return;
+    const editor = quickCueEditorRef.current;
+    if (!editor) return;
+    if (typeof editor.scrollIntoView === "function") {
+      editor.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+    editor.focus({ preventScroll: true });
+  }, [quickCueFocusRequest, inlineTextEditing, hubPreviewStartMs]);
+  useEffect(() => {
     if (!selectedCue || !selectedSuggestion || !assistanceComplete) return;
     setApprovedEn(selectedCue.approved_en || selectedSuggestion.approved_en);
     setApprovedPt(selectedCue.approved_pt || selectedSuggestion.approved_pt);
@@ -732,16 +743,16 @@ export function EditorialPage() {
     return null;
   }
 
-  async function selectCue(id: string, focusWordId?: string) {
-    if (saving || cueNavigationLock.current || wordNavigationLock.current) return;
+  async function selectCue(id: string, focusWordId?: string): Promise<boolean> {
+    if (saving || cueNavigationLock.current || wordNavigationLock.current) return false;
     const destination = cues.find((item) => item.id === id);
-    if (!destination) return;
+    if (!destination) return false;
     cueNavigationLock.current = true;
     try {
       // Cue-wide drafts cannot silently disappear when moving between cues.
       if (textDirty || timingDirty || semanticUnitsDirty) {
         const saved = await saveChanges(false, false);
-        if (!saved) return;
+        if (!saved) return false;
       }
       const warning = selectedWord ? await finishCurrentWordForNavigation() : null;
       playbackEnd.current = null;
@@ -752,11 +763,21 @@ export function EditorialPage() {
       const focusWord = destination.words.find((word) => word.id === focusWordId);
       seek(focusWord?.start_ms ?? destination.speech_timing.start_ms);
       if (warning) setMessage(warning);
+      return true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível mudar de cue.");
+      return false;
     } finally {
       cueNavigationLock.current = false;
     }
+  }
+  async function editCueFromHubPreview(cueId: string) {
+    const selected = await selectCue(cueId);
+    setHubPreviewStartMs(null);
+    if (!selected) return;
+    setShowSupportingPanels(true);
+    setInlineTextEditing(true);
+    setQuickCueFocusRequest((value) => value + 1);
   }
   async function selectWord(id: string, targetCueId?: string) {
     if (targetCueId && targetCueId !== selectedCueId) {
@@ -883,8 +904,7 @@ export function EditorialPage() {
       ) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (event.shiftKey) openHubPreview(true);
-        else if (selectedCue && !saving) void saveChanges(true, true);
+        if (hubPreviewStartMs === null) openHubPreview(event.shiftKey);
         return;
       }
       if (event.key === "Escape" && selectedWord) {
@@ -929,13 +949,13 @@ export function EditorialPage() {
     return () => window.removeEventListener("keydown", onKey);
   });
   function openHubPreview(fromStart = false) {
-    if (!selectedCue || !matchingMedia || !media?.cut_url) {
+    if (!matchingMedia || !media?.cut_url) {
       setMessage("A prévia do iHub será liberada quando o corte da cena estiver disponível.");
       return;
     }
     mediaRef.current?.pause();
     playbackEnd.current = null;
-    setHubPreviewStartMs(fromStart ? 0 : selectedCue.speech_timing.start_ms);
+    setHubPreviewStartMs(fromStart ? 0 : (selectedCue?.speech_timing.start_ms ?? 0));
   }
   function replaceCues(next: TimelineCue[]) {
     setHistory((value) => [...value, cues]);
@@ -965,17 +985,58 @@ export function EditorialPage() {
       setMessage(error instanceof Error ? error.message : "Não foi possível ajustar as palavras.");
     }
   }
-  // Individual word boundaries are editable independently of semantic groups.
-  // Neighbor conflicts are validated at save time, not allowed to freeze a handle.
+  // Let a word cross a cue boundary as a local draft. The atomic transfer only
+  // happens when its entire final range fits the adjacent cue.
   function changeSelectedWordEdge(edge: "start" | "end", targetMs: number) {
     if (!selectedCue || !selectedWord || saving) return;
-    const cueStart = hasInsertedWords ? activeCueTiming.start_ms : selectedCue.speech_timing.start_ms;
-    const cueEnd = hasInsertedWords ? activeCueTiming.end_ms : selectedCue.speech_timing.end_ms;
     const time = Math.round(targetMs);
     if (edge === "start") {
-      setWordStart(Math.max(cueStart, Math.min(time, activeWordEnd - 1)));
+      setWordStart(Math.max(0, Math.min(time, activeWordEnd - 1)));
     } else {
-      setWordEnd(Math.min(cueEnd, Math.max(time, activeWordStart + 1)));
+      setWordEnd(Math.min(durationMs, Math.max(time, activeWordStart + 1)));
+    }
+  }
+  async function finishWordEdgeDrag(edge: "start" | "end", targetMs: number) {
+    if (!selectedCue || !selectedWord || saving || hasInsertedWords) return;
+    const time = Math.round(targetMs);
+    const start = edge === "start"
+      ? Math.max(0, Math.min(time, activeWordEnd - 1)) : activeWordStart;
+    const end = edge === "end"
+      ? Math.min(durationMs, Math.max(time, start + 1)) : activeWordEnd;
+    const previous = cues[selectedCueIndex - 1];
+    const next = cues[selectedCueIndex + 1];
+    const destination =
+      selectedWordIndex === 0 && previous &&
+      start >= previous.speech_timing.start_ms && end <= previous.speech_timing.end_ms
+        ? previous
+        : selectedWordIndex === visibleWords.length - 1 && next &&
+            start >= next.speech_timing.start_ms && end <= next.speech_timing.end_ms
+          ? next : undefined;
+    if (!destination) return;
+    if (textDirty || wordSurfaceDirty || wordTranslationDirty || semanticUnitsDirty || timingDirty) {
+      setMessage("Salve os outros ajustes pendentes antes de transferir esta palavra.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await studioApi.transferWordToAdjacentCue(
+        selectedCue.id, selectedWord.id, start, end, selectedCue.revision, author,
+      );
+      pendingWordDrafts.current.delete(selectedWord.id);
+      setPendingDraftVersion((value) => value + 1);
+      await refreshCues();
+      setSelectedCueId(destination.id);
+      setSelectedWordId(selectedWord.id);
+      setTimelineFocusRequest((value) => value + 1);
+      seek(start);
+      setMessage(
+        `“${selectedWord.surface.trim()}” transferida para a cue ${destination.order}. ` +
+        "IDs e tempos preservados; revise o português contextual das duas cues antes de aprovar.",
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível transferir a palavra.");
+    } finally {
+      setSaving(false);
     }
   }
   function nudge(edge: "start" | "end", deltaMs: number) {
@@ -1926,8 +1987,8 @@ export function EditorialPage() {
               )}
               <details className="editorial-dock-shortcuts">
                 <summary>Atalhos</summary>
-                <p>Alt + ←/→: navegar entre cues · Esc: modo Cue · Ctrl + Enter: aprovar e avançar ·
-                   Ctrl + Shift + Enter: prévia iHub · Espaço: ouvir · A/S: IN/OUT · G: salvar e próxima</p>
+                <p>Alt + ←/→: navegar entre cues · Esc: modo Cue · Ctrl + Enter: prévia na cue atual ·
+                   Ctrl + Shift + Enter: prévia desde o início · Espaço: ouvir · A/S: IN/OUT · G: salvar e próxima</p>
               </details>
             </nav>
             <section className={`editorial-station-stage${showCompactVideo ? "" : " is-video-hidden"}`} aria-label="Área principal da waveform">
@@ -1960,6 +2021,7 @@ export function EditorialPage() {
                 onSetEdge={markActiveEdge}
                 onEdgeDragStart={beginEdgeDrag}
                 onEdgeChange={(edge, timeMs) => setActiveEdgeAt(edge, timeMs, false)}
+                onEdgeDragEnd={(edge, timeMs) => void finishWordEdgeDrag(edge, timeMs)}
                 onNudge={nudge}
                 onUndo={undo}
               />
@@ -1969,7 +2031,7 @@ export function EditorialPage() {
                     <>
                       <label>
                         <span className="eyebrow">Inglês aprovado</span>
-                        <textarea aria-label="Inglês rápido" value={approvedEn}
+                        <textarea ref={quickCueEditorRef} aria-label="Inglês rápido" value={approvedEn}
                           onChange={(event) => {
                             setTextDraftCueId(selectedCue.id);
                             setApprovedEn(event.target.value);
@@ -2772,16 +2834,17 @@ export function EditorialPage() {
 
 
             </div>
-          {hubPreviewStartMs !== null && matchingMedia && media?.cut_url && (
-            <EditorialHubPreview
-              mediaUrl={media.cut_url}
-              cues={hubPreviewCues}
-              initialTimeMs={hubPreviewStartMs}
-              onClose={() => setHubPreviewStartMs(null)}
-            />
-          )}
           </div>
         </>
+      )}
+      {hubPreviewStartMs !== null && matchingMedia && media?.cut_url && (
+        <EditorialHubPreview
+          mediaUrl={media.cut_url}
+          cues={hubPreviewCues}
+          initialTimeMs={hubPreviewStartMs}
+          onClose={() => setHubPreviewStartMs(null)}
+          onEditCue={(cueId) => void editCueFromHubPreview(cueId)}
+        />
       )}
     </section>
   );

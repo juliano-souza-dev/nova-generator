@@ -144,6 +144,24 @@ export const studioApi = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  transferWordToAdjacentCue: (
+    cueId: string,
+    wordId: string,
+    startMs: number,
+    endMs: number,
+    expectedRevision: number,
+    author: string,
+  ) =>
+    apiRequest<Cue[]>(`/editorial/cues/${cueId}/words/transfer`, {
+      method: "POST",
+      body: JSON.stringify({
+        author,
+        word_id: wordId,
+        start_ms: startMs,
+        end_ms: endMs,
+        expected_revision: expectedRevision,
+      }),
+    }),
   mergeEditorialCues: (
     cueIds: string[],
     input: {

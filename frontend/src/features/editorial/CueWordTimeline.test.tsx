@@ -18,6 +18,46 @@ const cue: TimelineCue = {
 };
 
 describe("CueWordTimeline", () => {
+  it("reports the completed word-edge drag for an automatic adjacent-cue transfer", () => {
+    const onEdgeDragEnd = vi.fn();
+    const { container } = render(
+      <CueWordTimeline
+        cues={[cue]}
+        durationMs={10000}
+        playheadMs={1200}
+        playing={false}
+        zoom={1}
+        selectedCueId="cue-1"
+        selectedWordId="word-1"
+        onPlayToggle={vi.fn()}
+        onPlayContext={vi.fn()}
+        onPreviousWord={vi.fn()}
+        onContinuousPlayToggle={vi.fn()}
+        onSaveAndNext={vi.fn()}
+        onPlayheadChange={vi.fn()}
+        onZoomChange={vi.fn()}
+        onSelectCue={vi.fn()}
+        onSelectWord={vi.fn()}
+        onSetEdge={vi.fn()}
+        onEdgeDragStart={vi.fn()}
+        onEdgeChange={vi.fn()}
+        onEdgeDragEnd={onEdgeDragEnd}
+        onNudge={vi.fn()}
+        onUndo={vi.fn()}
+      />,
+    );
+    const svg = screen.getByRole("img", { name: "Waveform, cues e tempos das palavras" });
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      left: 0, width: 1000, top: 0, height: 210, right: 1000, bottom: 210, x: 0, y: 0,
+      toJSON: () => ({}),
+    });
+    const endHandle = container.querySelectorAll(".timeline-edge-hit")[1] as SVGElement;
+    endHandle.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(endHandle, { pointerId: 1, clientX: 180 });
+    fireEvent(svg, new MouseEvent("pointerup", { bubbles: true, clientX: 210 }));
+    expect(onEdgeDragEnd).toHaveBeenCalledWith("end", 2100);
+  });
+
   it("pans the visible audio window with the mouse wheel over the waveform", () => {
     render(
       <CueWordTimeline
@@ -40,6 +80,7 @@ describe("CueWordTimeline", () => {
         onSetEdge={vi.fn()}
         onEdgeDragStart={vi.fn()}
         onEdgeChange={vi.fn()}
+        onEdgeDragEnd={vi.fn()}
         onNudge={vi.fn()}
         onUndo={vi.fn()}
       />,
@@ -80,6 +121,7 @@ describe("CueWordTimeline", () => {
         onSetEdge={mark}
         onEdgeDragStart={vi.fn()}
         onEdgeChange={vi.fn()}
+        onEdgeDragEnd={vi.fn()}
         onNudge={vi.fn()}
         onUndo={vi.fn()}
       />,
@@ -133,6 +175,7 @@ describe("CueWordTimeline", () => {
         onSetEdge={vi.fn()}
         onEdgeDragStart={vi.fn()}
         onEdgeChange={vi.fn()}
+        onEdgeDragEnd={vi.fn()}
         onNudge={vi.fn()}
         onUndo={vi.fn()}
       />,
@@ -185,6 +228,7 @@ describe("CueWordTimeline", () => {
         onSetEdge={vi.fn()}
         onEdgeDragStart={vi.fn()}
         onEdgeChange={vi.fn()}
+        onEdgeDragEnd={vi.fn()}
         onNudge={vi.fn()}
         onUndo={vi.fn()}
       />,

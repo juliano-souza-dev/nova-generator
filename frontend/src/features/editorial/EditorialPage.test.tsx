@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   importExternalEditorialResults: vi.fn(),
   mergeEditorialCues: vi.fn(),
   splitEditorialCue: vi.fn(),
+  transferWordToAdjacentCue: vi.fn().mockResolvedValue([]),
   job: vi.fn(),
   editorialCues: vi.fn().mockResolvedValue([
     {
@@ -97,6 +98,7 @@ vi.mock("../../lib/studio-api", () => ({
     importExternalEditorialResults: mocks.importExternalEditorialResults,
     mergeEditorialCues: mocks.mergeEditorialCues,
     splitEditorialCue: mocks.splitEditorialCue,
+    transferWordToAdjacentCue: mocks.transferWordToAdjacentCue,
     job: mocks.job,
   },
 }));
@@ -1728,7 +1730,21 @@ describe("EditorialPage", () => {
     expect(within(stage).getByText("Eu não posso ir?")).toBeInTheDocument();
   });
 
-  it("approves and advances directly from the sticky dock using Ctrl+Enter", async () => {
+  it("opens the iHub preview at the focused cue with Ctrl+Enter without approving it", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    const first = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      first,
+      {
+        ...first,
+        id: "c2",
+        order: 2,
+        speech_timing: { start_ms: 1900, end_ms: 2000 },
+        subtitle_timing: { start_ms: 1900, end_ms: 2000 },
+        words: [{ id: "w2", order: 1, surface: "Later", start_ms: 1900, end_ms: 2000, pt: "Depois" }],
+      },
+    ]);
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1"]}>
         <EditorialPage />
@@ -1739,18 +1755,16 @@ describe("EditorialPage", () => {
       expect(screen.getByRole("textbox", { name: "Inglês aprovado" }))
         .toHaveValue("“I can't… go?”"),
     );
+    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    await waitFor(() => expect(screen.getByText("Cue 2 de 2")).toBeInTheDocument());
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
-    await waitFor(() =>
-      expect(mocks.updateCueText).toHaveBeenCalledWith("c1", {
-        author: "local-editor",
-        approved_en: "“I can't… go?”",
-        approved_pt: "“Eu não consigo… ir?”",
-        approve: true,
-      }),
-    );
+    const preview = await screen.findByRole("dialog", { name: "Vídeo e legendas sincronizadas" });
+    const video = within(preview).getByLabelText("Prévia do vídeo no iHub") as HTMLVideoElement;
+    expect(video.currentTime).toBeCloseTo(1.9);
+    expect(mocks.updateCueText).not.toHaveBeenCalled();
   });
 
-  it("opens the synchronized iHub preview from the current cue with Ctrl+Shift+Enter", async () => {
+  it("opens the synchronized iHub preview from zero with Ctrl+Shift+Enter", async () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     render(
@@ -1765,7 +1779,127 @@ describe("EditorialPage", () => {
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true, shiftKey: true });
     const preview = await screen.findByRole("dialog", { name: "Vídeo e legendas sincronizadas" });
     expect(preview).toBeInTheDocument();
-    expect(screen.getByLabelText("Prévia do vídeo no iHub")).toHaveAttribute("src", "/api/cut.wav");
+    const video = screen.getByLabelText("Prévia do vídeo no iHub") as HTMLVideoElement;
+    expect(video).toHaveAttribute("src", "/api/cut.wav");
+    expect(video.currentTime).toBe(0);
     expect(screen.getByRole("button", { name: "Dual" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("opens Ctrl+Enter preview at zero when there is no focused cue", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    mocks.editorialCues.mockResolvedValue([]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(mocks.editorialCues).toHaveBeenCalledWith("s1"));
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    const preview = await screen.findByRole("dialog", { name: "Vídeo e legendas sincronizadas" });
+    expect((within(preview).getByLabelText("Prévia do vídeo no iHub") as HTMLVideoElement).currentTime)
+      .toBe(0);
+  });
+
+  it("transfers a word when both dragged edges enter the previous cue", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    const first = (await mocks.editorialCues())[0];
+    const previous = {
+      ...first,
+      approved_en: "Hello",
+      original_en: "Hello",
+      speech_timing: { start_ms: 100, end_ms: 1000 },
+      subtitle_timing: { start_ms: 100, end_ms: 1000 },
+      words: [{ id: "w1", order: 1, surface: "Hello", start_ms: 100, end_ms: 250, pt: "Olá" }],
+    };
+    const current = {
+      ...first,
+      id: "c2",
+      order: 2,
+      original_en: "look now",
+      approved_en: "look now",
+      approved_pt: "Olha agora",
+      speech_timing: { start_ms: 1100, end_ms: 2000 },
+      subtitle_timing: { start_ms: 1100, end_ms: 2000 },
+      words: [
+        { id: "w2", order: 1, surface: "look", start_ms: 1200, end_ms: 1400, pt: "olha" },
+        { id: "w3", order: 2, surface: " now", start_ms: 1500, end_ms: 1900, pt: "agora" },
+      ],
+    };
+    mocks.editorialCues.mockResolvedValueOnce([previous, current]).mockResolvedValue([
+      { ...previous, approved_en: "Hello look", words: [...previous.words, { ...current.words[0], start_ms: 400, end_ms: 650 }] },
+      { ...current, approved_en: "now", words: [{ ...current.words[1], surface: "now", order: 1 }] },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Cue 1 de 2");
+    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    await screen.findByText("Cue 2 de 2");
+    fireEvent.click(screen.getByRole("button", { name: /Palavra 1: look,/ }));
+    fireEvent.click(screen.getByText("Zoom, ajuste em milissegundos e outros controles"));
+    fireEvent.click(screen.getByRole("button", { name: "Ver cena toda" }));
+    const svg = screen.getByRole("img", { name: "Waveform, cues e tempos das palavras" });
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      left: 0, width: 1000, top: 0, height: 210, right: 1000, bottom: 210, x: 0, y: 0,
+      toJSON: () => ({}),
+    });
+    function dragEdge(index: number, clientX: number) {
+      const handle = document.querySelectorAll(".timeline-edge-hit")[index] as SVGElement;
+      handle.setPointerCapture = vi.fn();
+      fireEvent(handle, new MouseEvent("pointerdown", { bubbles: true, clientX }));
+      fireEvent(svg, new MouseEvent("pointermove", { bubbles: true, clientX }));
+      fireEvent(svg, new MouseEvent("pointerup", { bubbles: true, clientX }));
+    }
+    dragEdge(0, 200);
+    expect(mocks.transferWordToAdjacentCue).not.toHaveBeenCalled();
+    dragEdge(1, 325);
+    await waitFor(() => expect(mocks.transferWordToAdjacentCue).toHaveBeenCalledWith(
+      "c2", "w2", 400, 650, 1, "local-editor",
+    ));
+    await waitFor(() => expect(screen.getByText("Cue 1 de 2")).toBeInTheDocument());
+  });
+
+  it("returns from the iHub preview to the exact cue in editable Cue mode", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    const first = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      first,
+      {
+        ...first,
+        id: "c2",
+        order: 2,
+        original_en: "Next cue!",
+        approved_en: "Next cue!",
+        approved_pt: "Próxima fala!",
+        speech_timing: { start_ms: 1900, end_ms: 2000 },
+        subtitle_timing: { start_ms: 1900, end_ms: 2000 },
+        words: [{ id: "w2", order: 1, surface: "Next cue!", start_ms: 1900, end_ms: 2000, pt: "Próxima fala!" }],
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const openPreview = await screen.findByRole("button", { name: "Prévia no iHub" });
+    await waitFor(() => expect(openPreview).toBeEnabled());
+    fireEvent.click(openPreview);
+    const preview = await screen.findByRole("dialog", { name: "Vídeo e legendas sincronizadas" });
+    const video = within(preview).getByLabelText("Prévia do vídeo no iHub") as HTMLVideoElement;
+    video.currentTime = 1.95;
+    fireEvent.timeUpdate(video);
+    fireEvent.click(within(preview).getByRole("button", { name: "Editar cue" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const quickEditor = await screen.findByRole("textbox", { name: "Inglês rápido" });
+    await waitFor(() => expect(quickEditor).toHaveFocus());
+    expect(quickEditor).toHaveValue("Next cue!");
+    expect(screen.getByText("Cue 2 de 2")).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Modo de edição" }))
+      .getByRole("button", { name: "Cue" })).toHaveAttribute("aria-pressed", "true");
   });
 });

@@ -1,4 +1,4 @@
-import { Pause, Play, X } from "lucide-react";
+import { Pause, Pencil, Play, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WordTiming } from "../../lib/api.types";
 import type { TimelineCue } from "./CueWordTimeline";
@@ -11,6 +11,7 @@ type Props = {
   cues: TimelineCue[];
   initialTimeMs: number;
   onClose: () => void;
+  onEditCue: (cueId: string) => void;
 };
 
 function portugueseTimings(cue: TimelineCue): WordTiming[] {
@@ -63,7 +64,7 @@ function CaptionLine({
   });
 }
 
-export function EditorialHubPreview({ mediaUrl, cues, initialTimeMs, onClose }: Props) {
+export function EditorialHubPreview({ mediaUrl, cues, initialTimeMs, onClose, onEditCue }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameRef = useRef<number | undefined>(undefined);
   const [currentMs, setCurrentMs] = useState(initialTimeMs);
@@ -130,14 +131,29 @@ export function EditorialHubPreview({ mediaUrl, cues, initialTimeMs, onClose }: 
             <span className="eyebrow">Prévia fiel do iHub</span>
             <h2 id="hub-preview-title">Vídeo e legendas sincronizadas</h2>
           </div>
-          <button
-            type="button"
-            className="hub-preview-close"
-            aria-label="Fechar prévia"
-            onClick={close}
-          >
-            <X aria-hidden="true" />
-          </button>
+          <div className="hub-preview-header-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!cue}
+              title={cue ? `Abrir cue ${cue.order} na bancada` : "Nenhuma cue neste instante do vídeo"}
+              onClick={() => {
+                if (!cue) return;
+                videoRef.current?.pause();
+                onEditCue(cue.id);
+              }}
+            >
+              <Pencil aria-hidden="true" /> Editar cue
+            </button>
+            <button
+              type="button"
+              className="hub-preview-close"
+              aria-label="Fechar prévia"
+              onClick={close}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </div>
         </header>
         <div className="hub-preview-stage">
           <video

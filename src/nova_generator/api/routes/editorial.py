@@ -28,6 +28,7 @@ from nova_generator.api.dependencies import (
     get_review_asr_candidate,
     get_session_factory,
     get_split_cue,
+    get_transfer_word_to_adjacent_cue,
     get_undo_editorial_revision,
     get_ungroup_word_translation,
 )
@@ -51,6 +52,7 @@ from nova_generator.application.use_cases.editorial_commands import (
     RealignCue,
     ReplaceSemanticWordUnits,
     SplitCue,
+    TransferWordToAdjacentCue,
     UndoEditorialRevision,
     UngroupWordTranslation,
 )
@@ -107,6 +109,13 @@ class WordTimingInput(Timing):
 
 class WordTimingRequest(ActorRequest):
     timings: list[WordTimingInput] = Field(min_length=1)
+
+
+class TransferWordRequest(ActorRequest):
+    word_id: UUID
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+    expected_revision: int = Field(ge=1)
 
 
 class RealignCueRequest(ActorRequest):
@@ -575,6 +584,20 @@ def edit_word_timing(
         )
     )
     return [_word_response(word) for word in words]
+
+
+@router.post("/cues/{cue_id}/words/transfer", response_model=list[CueResponse])
+def transfer_word_to_adjacent_cue(
+    cue_id: UUID,
+    payload: TransferWordRequest,
+    use_case: Annotated[
+        TransferWordToAdjacentCue, Depends(get_transfer_word_to_adjacent_cue)
+    ],
+    repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+) -> list[dict[str, Any]]:
+    _require_prepared_cue(repository, cue_id)
+    cues = _command(lambda: use_case.execute(cue_id, **payload.model_dump()))
+    return [_cue_response(cue) for cue in cues]
 
 
 @router.post("/cues/{cue_id}/words/complete", response_model=WordResponse)

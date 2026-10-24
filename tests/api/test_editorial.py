@@ -220,6 +220,81 @@ def test_split_merge_and_undo_keep_word_provenance_and_revision_history(client: 
     assert left_id != right_id
 
 
+def test_dragging_word_into_previous_cue_transfers_it_atomically(client: TestClient) -> None:
+    repository, scene_id, cue = _seed(client)
+    words = repository.get_cue_words(cue.id)
+    right_id = uuid5(NAMESPACE_URL, "test-transfer-right")
+    left = replace(
+        cue, original_en="I", approved_en="I", approved_pt="Eu",
+        speech_end_ms=1000, subtitle_end_ms=1000,
+    )
+    right = replace(
+        cue, id=right_id, order=2, original_en="can't go", approved_en="can't go",
+        approved_pt="Não posso ir",
+        speech_start_ms=1100, speech_end_ms=2100,
+        subtitle_start_ms=1100, subtitle_end_ms=2100,
+    )
+    right_words = [
+        replace(
+            words[1], cue_id=right_id, order=1, surface="can't",
+            start_ms=1200, end_ms=1350,
+            provenance={**words[1].provenance, "pt": "Não posso"},
+        ),
+        replace(words[2], cue_id=right_id, order=2, surface=" go", start_ms=1400, end_ms=1550),
+    ]
+    repository.replace_scene_cues(
+        scene_id,
+        [(left, [replace(words[0], surface="I", order=1)]), (right, right_words)],
+    )
+    overlap = client.post(
+        f"/api/editorial/cues/{right_id}/words/transfer",
+        json={
+            "author": "editor", "word_id": str(words[1].id),
+            "start_ms": 150, "end_ms": 400, "expected_revision": right.revision,
+        },
+    )
+    assert overlap.status_code == 422
+    assert [word.id for word in repository.get_cue_words(right_id)] == [words[1].id, words[2].id]
+    response = client.post(
+        f"/api/editorial/cues/{right_id}/words/transfer",
+        json={
+            "author": "editor",
+            "word_id": str(words[1].id),
+            "start_ms": 400,
+            "end_ms": 600,
+            "expected_revision": right.revision,
+        },
+    )
+    assert response.status_code == 200, response.text
+    changed_left, changed_right = repository.get_scene_cues(scene_id)
+    left_words = repository.get_cue_words(left.id)
+    remaining_right = repository.get_cue_words(right.id)
+    assert [word.id for word in left_words] == [words[0].id, words[1].id]
+    assert (left_words[-1].start_ms, left_words[-1].end_ms) == (400, 600)
+    assert left_words[-1].original_start_ms == words[1].original_start_ms
+    assert left_words[-1].provenance["moved_from_cue"] == str(right_id)
+    assert changed_left.approved_en == "I can't"
+    assert changed_right.approved_en == "go"
+    assert changed_left.approved_pt == "Eu Não posso"
+    assert changed_right.approved_pt == "ir"
+    assert changed_right.speech_start_ms == 1400
+    assert [word.id for word in remaining_right] == [words[2].id]
+    assert changed_left.provenance["approval"] == "draft"
+    assert changed_right.provenance["approval"] == "draft"
+    assert all(
+        word.provenance["translation_review_required"]
+        for word in left_words + remaining_right
+    )
+    revision = repository.list_revisions(scene_id)[-1]
+    assert revision.command == "transfer_word_to_adjacent_cue"
+    undo = client.post(
+        f"/api/editorial/scenes/{scene_id}/undo",
+        json={"author": "editor", "revision_id": str(revision.id)},
+    )
+    assert undo.status_code == 200, undo.text
+    assert [word.id for word in repository.get_cue_words(right_id)] == [words[1].id, words[2].id]
+
+
 def test_merge_requires_adjacent_cues(client: TestClient) -> None:
     _, _, cue = _seed(client)
     response = client.post(

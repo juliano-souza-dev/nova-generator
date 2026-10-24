@@ -27,6 +27,7 @@ type Props = {
   onSetEdge: (edge: "start" | "end") => void;
   onEdgeDragStart: () => void;
   onEdgeChange: (edge: "start" | "end", timeMs: number) => void;
+  onEdgeDragEnd: (edge: "start" | "end", timeMs: number) => void;
   onNudge: (edge: "start" | "end", deltaMs: number) => void;
   onUndo: () => void;
 };
@@ -142,6 +143,7 @@ export function CueWordTimeline(props: Props) {
     );
   }
   function pointerTime(clientX: number) {
+    if (!Number.isFinite(clientX)) return props.playheadMs;
     const bounds = svg.current?.getBoundingClientRect();
     if (!bounds?.width) return windowStart;
     return Math.max(
@@ -198,6 +200,7 @@ export function CueWordTimeline(props: Props) {
               </span>
               <strong>{selectedWord.surface.trim()}</strong>
               <small>O destaque no iHub ficará ativo apenas entre IN e OUT. As pausas ficam sem destaque.</small>
+              <small>Ao posicionar IN e OUT por completo na cue vizinha, solte o marcador para transferir a palavra automaticamente.</small>
               {selectedWord.end_ms <= selectedWord.start_ms && (
                 <small className="word-invalid-range" role="alert">
                   Palavra sem duração: ajuste o início e o fim antes de reproduzir.
@@ -381,7 +384,9 @@ export function CueWordTimeline(props: Props) {
             props.onPlayheadChange(time);
             props.onEdgeChange(edge, time);
           }}
-          onPointerUp={() => {
+          onPointerUp={(event) => {
+            const edge = draggingEdgeRef.current;
+            if (edge) props.onEdgeDragEnd(edge, pointerTime(event.clientX));
             draggingEdgeRef.current = null;
             setDraggingEdge(null);
           }}

@@ -18,6 +18,7 @@ from nova_generator.application.use_cases.editorial_commands import (
     RealignCue,
     ReplaceSemanticWordUnits,
     SplitCue,
+    TransferWordToAdjacentCue,
     UndoEditorialRevision,
     UngroupWordTranslation,
 )
@@ -161,6 +162,10 @@ def get_replace_semantic_word_units() -> ReplaceSemanticWordUnits:
 
 def get_split_cue() -> SplitCue:
     return SplitCue(_editorial_repository())
+
+
+def get_transfer_word_to_adjacent_cue() -> TransferWordToAdjacentCue:
+    return TransferWordToAdjacentCue(_editorial_repository())
 
 
 def get_merge_cues() -> MergeCues:

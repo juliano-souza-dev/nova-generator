@@ -41,6 +41,7 @@ describe("EditorialHubPreview", () => {
         cues={[cue]}
         initialTimeMs={100}
         onClose={vi.fn()}
+        onEditCue={vi.fn()}
       />,
     );
     const timedWords = document.querySelectorAll(".hub-preview-en span");
@@ -68,6 +69,7 @@ describe("EditorialHubPreview", () => {
         cues={[cue]}
         initialTimeMs={100}
         onClose={onClose}
+        onEditCue={vi.fn()}
       />,
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -79,5 +81,42 @@ describe("EditorialHubPreview", () => {
     expect(screen.getByRole("button", { name: "EN" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("edits the cue playing now, including after seeking to another cue", () => {
+    const onEditCue = vi.fn();
+    const nextCue: TimelineCue = {
+      ...cue,
+      id: "c2",
+      order: 2,
+      approved_en: "Next cue!",
+      speech_timing: { start_ms: 1200, end_ms: 1900 },
+      subtitle_timing: { start_ms: 1200, end_ms: 1900 },
+      words: [{ id: "w4", order: 1, surface: "Next cue!", start_ms: 1200, end_ms: 1900, pt: "Próxima cue!" }],
+    };
+    render(
+      <EditorialHubPreview
+        mediaUrl="/cut.mp4"
+        cues={[cue, nextCue]}
+        initialTimeMs={100}
+        onClose={vi.fn()}
+        onEditCue={onEditCue}
+      />,
+    );
+
+    const edit = screen.getByRole("button", { name: "Editar cue" });
+    expect(edit).toBeEnabled();
+    fireEvent.click(edit);
+    expect(onEditCue).toHaveBeenCalledWith("c1");
+
+    const video = screen.getByLabelText("Prévia do vídeo no iHub") as HTMLVideoElement;
+    video.currentTime = 1.5;
+    fireEvent.timeUpdate(video);
+    fireEvent.click(edit);
+    expect(onEditCue).toHaveBeenLastCalledWith("c2");
+
+    video.currentTime = 1.05;
+    fireEvent.timeUpdate(video);
+    expect(edit).toBeDisabled();
   });
 });
