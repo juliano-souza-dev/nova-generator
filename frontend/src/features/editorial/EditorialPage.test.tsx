@@ -1967,7 +1967,9 @@ describe("EditorialPage", () => {
       subtitle_timing: { start_ms: 1900, end_ms: 2000 },
       words: [{ id: "w2", order: 1, surface: "Later", start_ms: 1900, end_ms: 2000, pt: "Depois" }],
     };
-    mocks.editorialCues.mockResolvedValue([first, second]);
+    mocks.editorialCues.mockResolvedValueOnce([first, second]).mockResolvedValue([
+      { ...first, approved_pt: "Não posso ir." }, second,
+    ]);
     render(<MemoryRouter initialEntries={["/editorial?project=p1"]}><EditorialPage /></MemoryRouter>);
     const portuguese = await screen.findByRole("textbox", { name: "Português aprovado" });
     await waitFor(() => expect(portuguese).toHaveValue(first.approved_pt));
@@ -1984,15 +1986,15 @@ describe("EditorialPage", () => {
 
   it("Ctrl+S saves the selected word without approving it and jumps to the next cue", async () => {
     const first = (await mocks.editorialCues())[0];
-    mocks.editorialCues.mockResolvedValue([
-      first,
-      {
-        ...first, id: "c2", order: 2, approved_en: "Later", original_en: "Later",
-        approved_pt: "Depois",
-        speech_timing: { start_ms: 1900, end_ms: 2000 },
-        subtitle_timing: { start_ms: 1900, end_ms: 2000 },
-        words: [{ id: "w2", order: 1, surface: "Later", start_ms: 1900, end_ms: 2000, pt: "Depois" }],
-      },
+    const second = {
+      ...first, id: "c2", order: 2, approved_en: "Later", original_en: "Later",
+      approved_pt: "Depois",
+      speech_timing: { start_ms: 1900, end_ms: 2000 },
+      subtitle_timing: { start_ms: 1900, end_ms: 2000 },
+      words: [{ id: "w2", order: 1, surface: "Later", start_ms: 1900, end_ms: 2000, pt: "Depois" }],
+    };
+    mocks.editorialCues.mockResolvedValueOnce([first, second]).mockResolvedValue([
+      { ...first, words: [{ ...first.words[0], pt: "não posso" }] }, second,
     ]);
     render(<MemoryRouter initialEntries={["/editorial?project=p1"]}><EditorialPage /></MemoryRouter>);
     const list = await screen.findByRole("list", { name: "Palavras do cue selecionado" });
@@ -2047,6 +2049,30 @@ describe("EditorialPage", () => {
     expect(screen.getByText("Cue 1 de 2")).toBeInTheDocument();
     // One fixture lookup and one initial page load; a failed save must not refresh.
     expect(mocks.editorialCues).toHaveBeenCalledTimes(2);
+  });
+
+
+  it("Ctrl+S refuses to advance when the API responds but canonical changes are absent", async () => {
+    const first = (await mocks.editorialCues())[0];
+    mocks.editorialCues.mockResolvedValue([
+      first,
+      {
+        ...first, id: "c2", order: 2,
+        speech_timing: { start_ms: 1900, end_ms: 2000 },
+        subtitle_timing: { start_ms: 1900, end_ms: 2000 },
+        words: [{ id: "w2", order: 1, surface: "Later", start_ms: 1900, end_ms: 2000, pt: "Depois" }],
+      },
+    ]);
+    render(<MemoryRouter initialEntries={["/editorial?project=p1"]}><EditorialPage /></MemoryRouter>);
+    const portuguese = await screen.findByRole("textbox", { name: "Português aprovado" });
+    fireEvent.change(portuguese, { target: { value: "Não posso ir." } });
+    fireEvent.keyDown(portuguese, { key: "s", ctrlKey: true });
+    await waitFor(() => expect(mocks.updateCueText).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/O servidor não confirmou o salvamento de inglês\/português/))
+      .toBeInTheDocument();
+    expect(screen.getByText("Cue 1 de 2")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Português aprovado" }))
+      .toHaveValue("Não posso ir.");
   });
 
 });

@@ -1228,15 +1228,100 @@ export function EditorialPage() {
   async function saveCueAndGoToNext(): Promise<void> {
     if (!selectedCue || saving || saveShortcutInFlight.current) return;
     saveShortcutInFlight.current = true;
+    const cueId = selectedCue.id;
     const currentOrder = selectedCue.order;
-    const nextCue = cues[selectedCueIndex + 1];
+    const hadChanges = isDirty || pendingTimingChanges;
+    const expectedText = textDirty
+      ? { en: approvedEn, pt: approvedPt }
+      : null;
+    const expectedWord = selectedWord && (wordSurfaceDirty || wordTranslationDirty || wordDirty)
+      ? {
+          id: selectedWord.id,
+          surface: wordSurfaceDirty ? activeWordSurface.trim() : null,
+          pt: wordTranslationDirty ? activeWordPt : null,
+          start: wordDirty ? activeWordStart : null,
+          end: wordDirty ? activeWordEnd : null,
+        }
+      : null;
+    const expectedTimings = (wordDirty || pendingTimingChanges) && !hasInsertedWords
+      ? (previewCues.find((item) => item.id === cueId)?.words ?? []).map((word) => ({
+          id: word.id, start: word.start_ms, end: word.end_ms,
+        }))
+      : null;
+    const expectedCueTiming = timingDirty
+      ? { ...selectedCue.speech_timing }
+      : null;
     try {
-      // Always call the canonical save path, including when only word fields
-      // changed. A failed validation or request must never advance the editor.
       const saved = await saveChanges(false, false);
       if (!saved) return;
+      // An HTTP 200 is not proof that the data subsequently read by the editor
+      // matches the user's draft. Verify the canonical scene before navigating.
+      const refreshed = sceneId ? await studioApi.editorialCues(sceneId) : [];
+      const savedCue = refreshed.find((item) => item.id === cueId);
+      if (!savedCue) {
+        throw new Error("A cue salva não foi encontrada ao confirmar o resultado.");
+      }
+      const assertPersisted = (ok: boolean, field: string) => {
+        if (!ok) throw new Error(
+          `O servidor não confirmou o salvamento de ${field}. A cue foi mantida aberta para revisão.`,
+        );
+      };
+      if (expectedText) {
+        assertPersisted(
+          savedCue.approved_en === expectedText.en && savedCue.approved_pt === expectedText.pt,
+          "inglês/português",
+        );
+      }
+      if (expectedCueTiming) {
+        assertPersisted(
+          savedCue.speech_timing.start_ms === expectedCueTiming.start_ms &&
+            savedCue.speech_timing.end_ms === expectedCueTiming.end_ms,
+          "tempos da cue",
+        );
+      }
+      if (expectedWord) {
+        const word = savedCue.words.find((item) => item.id === expectedWord.id);
+        // A word transferred to a neighbor no longer belongs to the old cue.
+        const relocated = !word && refreshed.some((item) =>
+          item.id !== cueId && item.words.some((w) => w.id === expectedWord.id),
+        );
+        assertPersisted(Boolean(word || relocated), "palavra");
+        if (word) {
+          if (expectedWord.surface !== null)
+            assertPersisted(word.surface.trim() === expectedWord.surface, "texto da palavra");
+          if (expectedWord.start !== null && expectedWord.end !== null)
+            assertPersisted(
+              word.start_ms === expectedWord.start && word.end_ms === expectedWord.end,
+              "tempos da palavra",
+            );
+          if (expectedWord.pt !== null) {
+            const lead = word.semantic_group_id
+              ? savedCue.words.find((item) =>
+                  item.semantic_group_id === word.semantic_group_id &&
+                  item.semantic_group_role === "lead")
+              : word;
+            assertPersisted((lead?.pt ?? "") === expectedWord.pt, "tradução da palavra");
+          }
+        }
+      }
+      if (expectedTimings) {
+        const changedWordIds = new Set(savedCue.words.map((word) => word.id));
+        for (const timing of expectedTimings) {
+          if (!changedWordIds.has(timing.id)) continue;
+          const word = savedCue.words.find((item) => item.id === timing.id);
+          assertPersisted(
+            word?.start_ms === timing.start && word?.end_ms === timing.end,
+            "alinhamento de palavras",
+          );
+        }
+      }
+      setCues(refreshed);
+      const currentIndex = refreshed.findIndex((item) => item.id === cueId);
+      const nextCue = refreshed[currentIndex + 1];
       if (!nextCue) {
-        setMessage(`Cue ${currentOrder} salva. Você está na última cue.`);
+        setMessage(hadChanges
+          ? `Cue ${currentOrder} salva e confirmada. Última cue da cena.`
+          : "Sem alterações pendentes. Última cue da cena.");
         return;
       }
       playbackEnd.current = null;
@@ -1245,7 +1330,14 @@ export function EditorialPage() {
       setSelectedWordId(undefined);
       setTimelineFocusRequest((value) => value + 1);
       seek(nextCue.speech_timing.start_ms);
-      setMessage(`Cue ${currentOrder} salva. Próxima cue aberta.`);
+      setSaveFeedback("");
+      setMessage(hadChanges
+        ? `Cue ${currentOrder} salva e confirmada. Cue ${nextCue.order} aberta.`
+        : `Nenhuma alteração pendente. Cue ${nextCue.order} aberta.`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Não foi possível confirmar o salvamento.";
+      setSaveFeedback(detail);
+      setMessage(detail);
     } finally {
       saveShortcutInFlight.current = false;
     }
