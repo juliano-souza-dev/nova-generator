@@ -2045,7 +2045,8 @@ describe("EditorialPage", () => {
     fireEvent.keyDown(portuguese, { key: "s", ctrlKey: true });
     expect(await screen.findByText("Falha de rede", { selector: ".review-message" })).toBeInTheDocument();
     expect(screen.getByText("Cue 1 de 2")).toBeInTheDocument();
-    expect(mocks.editorialCues).toHaveBeenCalledTimes(1);
+    // One fixture lookup and one initial page load; a failed save must not refresh.
+    expect(mocks.editorialCues).toHaveBeenCalledTimes(2);
   });
 
 });
