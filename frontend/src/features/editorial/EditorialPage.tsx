@@ -7,6 +7,7 @@ import {
   Clock3,
   Download,
   Film,
+  LoaderCircle,
   MonitorPlay,
   Merge,
   Split,
@@ -97,12 +98,12 @@ export function cueWordTranslation(words: TimelineCue["words"]): { text: string;
 }
 
 type EditorialImportDropzoneProps = {
-  disabled: boolean;
+  disabledReason?: string;
   onImport: (files: File[]) => void;
   onRejected: (message: string) => void;
 };
 
-function EditorialImportDropzone({ disabled, onImport, onRejected }: EditorialImportDropzoneProps) {
+function EditorialImportDropzone({ disabledReason, onImport, onRejected }: EditorialImportDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -111,8 +112,8 @@ function EditorialImportDropzone({ disabled, onImport, onRejected }: EditorialIm
       onRejected("Nenhum arquivo recebido. Selecione um JSON ou ZIP válido.");
       return;
     }
-    if (disabled) {
-      onRejected("A importação está indisponível: salve as alterações pendentes ou aguarde o processamento atual.");
+    if (disabledReason) {
+      onRejected(disabledReason);
       return;
     }
     if (Array.from(files).some((file) => !/\.(json|zip)$/i.test(file.name))) {
@@ -123,22 +124,20 @@ function EditorialImportDropzone({ disabled, onImport, onRejected }: EditorialIm
   };
 
   return (
-    <label
+    <div
       className={`editorial-import-dropzone${dragging ? " is-dragging" : ""}`}
       aria-label="Importar retorno editorial"
-      aria-disabled={disabled}
-      tabIndex={disabled ? -1 : 0}
-      onKeyDown={(event) => {
-        if ((event.key === "Enter" || event.key === " ") && !disabled) {
-          event.preventDefault();
-          inputRef.current?.click();
-        }
-      }}
+      role="group"
+      aria-disabled={Boolean(disabledReason)}
       onDragEnter={(event) => {
         event.preventDefault();
-        if (!disabled) setDragging(true);
+        setDragging(true);
       }}
-      onDragOver={(event) => event.preventDefault()}
+      onDragOver={(event) => {
+        event.preventDefault();
+        // Always accept the drop event so even a blocked import can explain why.
+        event.dataTransfer.dropEffect = "copy";
+      }}
       onDragLeave={(event) => {
         event.preventDefault();
         setDragging(false);
@@ -151,22 +150,35 @@ function EditorialImportDropzone({ disabled, onImport, onRejected }: EditorialIm
     >
       <Upload aria-hidden="true" />
       <span>
-        <strong>Arraste os JSONs ou um ZIP aqui</strong>
-        <small>Selecione todos os blocos juntos para validar e importar em uma só etapa.</small>
+        <strong>Arraste seu material aqui</strong>
+        <small>Ou escolha um arquivo. Se houver vários blocos, selecione todos juntos.</small>
       </span>
+      <button
+        type="button"
+        className="secondary-button editorial-import-select"
+        onClick={() => {
+          if (disabledReason) {
+            onRejected(disabledReason);
+            return;
+          }
+          inputRef.current?.click();
+        }}
+      >
+        Selecionar arquivo
+      </button>
       <input
         ref={inputRef}
         type="file"
         accept="application/json,.json,application/zip,.zip"
         multiple
-        disabled={disabled}
+        disabled={Boolean(disabledReason)}
         tabIndex={-1}
         onChange={(event) => {
           receiveFiles(event.target.files);
           event.target.value = "";
         }}
       />
-    </label>
+    </div>
   );
 }
 
@@ -290,9 +302,10 @@ export function EditorialPage() {
     kind: "working" | "error" | "success";
     message: string;
   } | null>(null);
+  const importInFlightRef = useRef(false);
   const importFeedbackRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
-    if (importFeedback?.kind === "error" &&
+    if (importFeedback &&
       typeof importFeedbackRef.current?.scrollIntoView === "function") {
       importFeedbackRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
@@ -446,6 +459,13 @@ export function EditorialPage() {
   const isDirty =
     textDirty || wordDirty || wordTranslationDirty || wordSurfaceDirty || semanticUnitsDirty || timingDirty ||
     Boolean(draftCueTiming);
+  const importDisabledReason = assistantBusy
+    ? "Aguarde a preparação ou importação atual terminar antes de enviar outro material."
+    : saving
+      ? "Aguarde o salvamento atual terminar antes de importar."
+      : isDirty
+        ? "Salve ou descarte as alterações da cue antes de importar outro material."
+        : undefined;
   const pendingTimingReview = visibleWords.some(
     (word) => word.provenance?.editorial_timing_estimated === true &&
       word.provenance?.word_timing_reviewed !== true,
@@ -630,7 +650,22 @@ export function EditorialPage() {
     }
   }, [assistantBusy, cues, refreshCues, sceneId]);
   async function importExternalResult(files: File[]) {
-    if (!sceneId || assistantBusy || files.length === 0) return;
+    if (!sceneId) {
+      setImportFeedback({kind: "error", message: "Selecione uma cena antes de importar o material."});
+      return;
+    }
+    if (files.length === 0) {
+      setImportFeedback({kind: "error", message: "Nenhum arquivo recebido. Selecione um arquivo válido."});
+      return;
+    }
+    if (importInFlightRef.current || assistantBusy) {
+      setImportFeedback({kind: "error", message: "Já existe uma importação ou preparação em andamento. Aguarde a conclusão."});
+      return;
+    }
+    if (saving) {
+      setImportFeedback({kind: "error", message: "Aguarde o salvamento atual terminar antes de importar."});
+      return;
+    }
     if (isDirty) {
       setImportFeedback({kind: "error", message: "Salve ou descarte as alterações da cue antes de importar outro JSON."});
       return;
@@ -642,11 +677,26 @@ export function EditorialPage() {
         "afetadas para revisão. A mídia e a transcrição original serão preservadas. Continuar?",
       )
     ) {
+      setImportFeedback({kind: "error", message: "Importação cancelada. A cena não foi alterada."});
       return;
     }
+    importInFlightRef.current = true;
     setAssistantBusy(true);
-    setImportFeedback({kind: "working", message: `Lendo e validando ${files.length} arquivo(s)…`});
+    setImportFeedback({
+      kind: "working",
+      message: files.length === 1
+        ? `Arquivo recebido: ${files[0].name}. Validando e importando o material…`
+        : `${files.length} arquivos recebidos. Validando e importando o material…`,
+    });
     setAssistantMessage(`Validando ${files.length} arquivo(s) da IA externa…`);
+    // Do not abort a mutating POST on a client-side timer. The backend may still
+    // commit the scene, so an automatic retry could apply the same import twice.
+    const slowWarning = window.setTimeout(() => {
+      setImportFeedback({kind: "working", message: "A importação ainda está em andamento. Aguarde; não envie o material novamente."});
+    }, 15_000);
+    const longWarning = window.setTimeout(() => {
+      setImportFeedback({kind: "working", message: "O processamento está demorando. Aguarde a resposta; se precisar recarregar, confira a cena antes de tentar novamente."});
+    }, 60_000);
     try {
       let result: EditorialAssistance;
       try {
@@ -688,6 +738,9 @@ export function EditorialPage() {
       setAssistantMessage(detail + guidance);
       setImportFeedback({kind: "error", message: detail + guidance});
     } finally {
+      window.clearTimeout(slowWarning);
+      window.clearTimeout(longWarning);
+      importInFlightRef.current = false;
       setAssistantBusy(false);
     }
   }
@@ -1832,7 +1885,7 @@ export function EditorialPage() {
                       </a>
                     )}
                     <EditorialImportDropzone
-                      disabled={assistantBusy || saving || isDirty}
+                      disabledReason={importDisabledReason}
                       onImport={(files) => void importExternalResult(files)}
                       onRejected={(message) => setImportFeedback({kind: "error", message})}
                     />
@@ -1841,6 +1894,7 @@ export function EditorialPage() {
                     <p ref={importFeedbackRef} className={`editorial-import-feedback is-${importFeedback.kind}`}
                       role={importFeedback.kind === "error" ? "alert" : "status"}>
                       {importFeedback.kind === "error" && <AlertCircle aria-hidden="true" />}
+                      {importFeedback.kind === "working" && <LoaderCircle className="editorial-import-spinner" aria-hidden="true" />}
                       {importFeedback.message}
                     </p>
                   )}
@@ -2026,13 +2080,14 @@ export function EditorialPage() {
                   <Download aria-hidden="true" /> Baixar blocos de texto para IA externa
                 </a>
                 <EditorialImportDropzone
-                  disabled={assistantBusy}
+                  disabledReason={importDisabledReason}
                   onImport={(files) => void importExternalResult(files)}
                   onRejected={(message) => setImportFeedback({kind: "error", message})}
                 />
                 {importFeedback && (
                   <p ref={importFeedbackRef} className={`editorial-import-feedback is-${importFeedback.kind}`}
                     role={importFeedback.kind === "error" ? "alert" : "status"}>
+                    {importFeedback.kind === "working" && <LoaderCircle className="editorial-import-spinner" aria-hidden="true" />}
                     {importFeedback.message}
                   </p>
                 )}

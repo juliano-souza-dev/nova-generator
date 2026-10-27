@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../lib/api";
@@ -289,6 +289,7 @@ describe("EditorialPage", () => {
       });
       await waitFor(() => expect(confirmation).toHaveBeenCalled());
       expect(mocks.importExternalEditorialResult).not.toHaveBeenCalled();
+      expect(screen.getByRole("alert")).toHaveTextContent("Importação cancelada");
       expect(mocks.startProjectMedia).not.toHaveBeenCalled();
     } finally {
       confirmation.mockRestore();
@@ -618,6 +619,88 @@ describe("EditorialPage", () => {
       expect(mocks.importExternalEditorialResult).toHaveBeenCalledWith("s1", file),
     );
     expect(await screen.findByText(/Todos os blocos foram validados/)).toBeInTheDocument();
+  });
+
+  it("opens an explicit file chooser instead of relying on a hidden label click", async () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Regerar JSON / importar IA" }));
+    const input = container.querySelector<HTMLInputElement>(
+      '.editorial-ai-reexport input[type="file"]',
+    );
+    expect(input).not.toBeNull();
+    const clickSpy = vi.spyOn(input!, "click").mockImplementation(() => {});
+
+    fireEvent.click(screen.getByRole("button", { name: "Selecionar arquivo" }));
+
+    expect(clickSpy).toHaveBeenCalledOnce();
+    expect(input).not.toBeDisabled();
+  });
+
+  it("imports a ZIP chosen through the file picker", async () => {
+    mocks.importExternalEditorialResults.mockResolvedValueOnce({
+      scene_id: "s1", input_sha256: "a".repeat(64),
+      provider: "external", model: "external-ai", rate_limits: {}, suggestions: [],
+    });
+    const { container } = render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Regerar JSON / importar IA" }));
+    const file = new File(["zip"], "meu-material.zip", { type: "application/zip" });
+    const input = container.querySelector<HTMLInputElement>(
+      '.editorial-ai-reexport input[type="file"]',
+    );
+    expect(input).not.toBeNull();
+    fireEvent.change(input!, { target: { files: [file] } });
+
+    await waitFor(() =>
+      expect(mocks.importExternalEditorialResults).toHaveBeenCalledWith("s1", [file]),
+    );
+    expect(await screen.findByText(/cues importadas/)).toBeInTheDocument();
+  });
+
+  it("acknowledges an upload immediately and warns when processing takes longer", async () => {
+    mocks.importExternalEditorialResults.mockImplementationOnce(() => new Promise(() => {}));
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Regerar JSON / importar IA" }));
+    vi.useFakeTimers();
+    try {
+      fireEvent.drop(screen.getByLabelText("Importar retorno editorial"), {
+        dataTransfer: { files: [new File(["zip"], "retorno.zip")] },
+      });
+      expect(screen.getByText(/Arquivo recebido: retorno\.zip/)).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(15_000));
+      expect(screen.getByText(/A importação ainda está em andamento/)).toBeInTheDocument();
+      expect(mocks.importExternalEditorialResults).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("explains why selection is blocked when cue edits are unsaved", async () => {
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    await screen.findByLabelText("Português aprovado");
+    fireEvent.change(screen.getByLabelText("Português aprovado"), {
+      target: { value: "Uma tradução ainda não salva" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Regerar JSON / importar IA" }));
+    fireEvent.click(screen.getByRole("button", { name: "Selecionar arquivo" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/Salve ou descarte as alterações/);
+    expect(mocks.importExternalEditorialResults).not.toHaveBeenCalled();
   });
 
   it("imports three external editorial chunks with one drop and one request", async () => {
