@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from hashlib import sha256
+from hashlib import file_digest, sha256
 from typing import Any
 from uuid import UUID
 
@@ -119,6 +119,8 @@ def make_media_render_handler(speech: SynthesizeSpeech):
             os.replace(joined, final)
         if not final.is_file() or final.stat().st_size == 0:
             raise RuntimeError("A exportação gerou um arquivo vazio.")
+        with final.open("rb") as output_stream:
+            video_sha256 = file_digest(output_stream, "sha256").hexdigest()
         manifest = {
             "contract": "nova-tiktok-media-render/1",
             "project_id": str(project_id),
@@ -128,7 +130,7 @@ def make_media_render_handler(speech: SynthesizeSpeech):
             "voice_sha256": voice.sha256 if voice else None,
             "duration_ms": sum(durations),
             "slide_durations_ms": durations,
-            "video_sha256": sha256(final.read_bytes()).hexdigest(),
+            "video_sha256": video_sha256,
             "source_snapshot_sha256": job.input["snapshot_sha256"],
         }
         temporary = snapshot_dir / "manifest.tmp"

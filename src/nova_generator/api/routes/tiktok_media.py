@@ -237,6 +237,7 @@ async def render_media_project(
             "render_id": str(render_id),
             "snapshot_sha256": sha256(content).hexdigest(),
         },
+        idempotency_key=f"tiktok.render:{render_id}",
         max_attempts=2,
     )
     return {"job_id": str(job.id), "render_id": str(render_id), "status": job.status}

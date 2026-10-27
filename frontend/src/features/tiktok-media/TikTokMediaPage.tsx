@@ -261,20 +261,18 @@ export function TikTokMediaPage() {
           cue.approved_en.trim() && cue.approved_pt.trim() && cue.provenance?.approval !== "draft",
       );
       if (!approved.length) throw new Error("A cena não possui falas aprovadas.");
-      return approved.slice(0, 30).map(
-        (cue): MediaSlide => ({
-          ...blankSlide("lesson"),
-          heading: cue.speaker || "ENGLISH IN CONTEXT",
-          en: cue.approved_en,
-          pt: cue.approved_pt,
-          note: "Da cena para a vida real",
-          speaker: cue.speaker,
-          duration_ms: Math.min(
-            20000,
-            Math.max(2000, cue.speech_timing.end_ms - cue.speech_timing.start_ms),
-          ),
-        }),
-      );
+      return approved.slice(0, 30).map((cue): MediaSlide => ({
+        ...blankSlide("lesson"),
+        heading: cue.speaker || "ENGLISH IN CONTEXT",
+        en: cue.approved_en,
+        pt: cue.approved_pt,
+        note: "Da cena para a vida real",
+        speaker: cue.speaker,
+        duration_ms: Math.min(
+          20000,
+          Math.max(2000, cue.speech_timing.end_ms - cue.speech_timing.start_ms),
+        ),
+      }));
     },
     onSuccess: (slides) => {
       edit((current) => ({ ...current, source_project_id: sourceId, slides }));
