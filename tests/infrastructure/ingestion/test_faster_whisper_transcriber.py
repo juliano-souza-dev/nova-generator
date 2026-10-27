@@ -1,7 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-from types import SimpleNamespace
 
 from nova_generator.infrastructure.ingestion.faster_whisper_transcriber import (
     FasterWhisperTranscriber,

@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 import re
 import time
-from pathlib import Path
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from threading import Event
 from typing import Any
 
