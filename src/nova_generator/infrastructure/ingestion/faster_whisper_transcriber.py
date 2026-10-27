@@ -86,9 +86,14 @@ class FasterWhisperTranscriber:
             surface = getattr(word, "word", "")
             if not surface:
                 continue
+            raw_start = getattr(word, "start", None)
+            raw_end = getattr(word, "end", None)
+            if raw_start is None or raw_end is None:
+                skipped += 1
+                continue
             try:
-                start = float(getattr(word, "start", None))
-                end = float(getattr(word, "end", None))
+                start = float(raw_start)
+                end = float(raw_end)
             except (TypeError, ValueError):
                 skipped += 1
                 continue
