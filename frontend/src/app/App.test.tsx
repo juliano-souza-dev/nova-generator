@@ -19,6 +19,10 @@ describe("Studio shell", () => {
     expect(screen.getByRole("navigation", { name: "Navegação principal" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Projetos" })).toBeInTheDocument();
   });
+  it("renders the TikTok Media studio", () => {
+    renderApp("/tiktok-media");
+    expect(screen.getByRole("heading", { name: "TikTok Mídia" })).toBeInTheDocument();
+  });
   it("renders the independent story route", () => {
     renderApp("/story");
     expect(screen.getByRole("heading", { name: "Modo História" })).toBeInTheDocument();

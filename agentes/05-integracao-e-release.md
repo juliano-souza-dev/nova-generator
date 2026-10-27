@@ -16,6 +16,7 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Manter compatibilidade de leitura com sugestões editoriais 1.0 sem unidades, 1.1 com
   `semantic_units` e 1.2 com traduções. O contrato 1.3 reconcilia cada superfície e timing com o
   inglês aprovado; somente um retorno 1.3 completo pode liberar a bancada.
+- Validar que o novo contrato independente `nova-tiktok-media/1` não altera esquemas de cue, hub_final nem importação iHub.
 - Manter os contratos de reel Anki (`hub_final.json` e `ankiAudio`) e História (`immersionhub-text-audio` 1.1).
 - Publicar `hub_final.json` por projeto/exportação somente após APKG e reel concluídos e upload manual do reel; incluir cues, texto EN/PT aprovado, itens Anki, palavras revisadas e timeline do reel com ID validado do YouTube.
 - Exigir compatibilidade retroativa, migration ou janela de transição para mudanças públicas.
