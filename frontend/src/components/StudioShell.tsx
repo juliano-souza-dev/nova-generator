@@ -7,6 +7,7 @@ import {
   Menu,
   Mic2,
   Sparkles,
+  Video,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { NavLink } from "react-router-dom";
@@ -19,6 +20,7 @@ const links = [
   { to: "/voices", label: "Vozes", icon: Mic2 },
   { to: "/jobs", label: "Jobs", icon: ListChecks },
   { to: "/story", label: "História", icon: Clapperboard },
+  { to: "/tiktok-media", label: "TikTok Mídia", icon: Video },
 ];
 
 export function StudioShell({ children }: { children: ReactNode }) {

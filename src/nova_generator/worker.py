@@ -53,6 +53,7 @@ from nova_generator.infrastructure.worker.materials_handler import MaterialsJobH
 from nova_generator.infrastructure.worker.persistent_worker import PersistentWorker
 from nova_generator.infrastructure.worker.project_media_handler import ProjectMediaJobHandler
 from nova_generator.infrastructure.worker.story_render_handler import make_story_render_handler
+from nova_generator.infrastructure.worker.tiktok_media_handler import make_media_render_handler
 from nova_generator.infrastructure.worker.voice_preview_handler import make_voice_preview_handler
 
 
@@ -101,6 +102,7 @@ def main() -> None:
         worker_id=f"local-{os.getpid()}",
         handlers={
             "synthesize_voice_preview": make_voice_preview_handler(speech),
+            "tiktok.render": make_media_render_handler(speech),
             "story.render": make_story_render_handler(
                 settings.media_cache_root, RenderStory(speech, FfmpegStoryVideoRenderer())
             ),

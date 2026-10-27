@@ -1,0 +1,23 @@
+{
+  "contract": "nova-tiktok-media/1",
+  "id": "71c21b8b-78c7-4b8e-8f3e-f2020b281cf9",
+  "title": "English in context / Friends",
+  "format": "carousel",
+  "theme": "ihub",
+  "source_project_id": null,
+  "revision": 1,
+  "slides": [
+    {
+      "id": "slide-one",
+      "kind": "lesson",
+      "heading": "Entenda o padrão",
+      "en": "While you're at it",
+      "pt": "Já que você está nisso",
+      "note": "Um pedido relacionado",
+      "highlight": "While you're at it + pedido",
+      "speaker": "Joey",
+      "duration_ms": 4500
+    }
+  ],
+  "audio_filename": null
+}
