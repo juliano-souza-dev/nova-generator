@@ -53,27 +53,13 @@ function titleOf(kind: MediaKind): string {
   }[kind];
 }
 
-function SlideThumb({
-  project,
-  index,
-}: {
-  project: MediaProject;
-  index: number;
-}) {
+function SlideThumb({ project, index }: { project: MediaProject; index: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const ctx = ref.current?.getContext("2d");
     if (ctx) paintSlide(ctx, project.slides[index], project, index);
   }, [project, index]);
-  return (
-    <canvas
-      className="tm-thumb"
-      ref={ref}
-      width={1080}
-      height={1920}
-      aria-hidden="true"
-    />
-  );
+  return <canvas className="tm-thumb" ref={ref} width={1080} height={1920} aria-hidden="true" />;
 }
 
 function EditField({
@@ -156,9 +142,7 @@ export function TikTokMediaPage() {
   const [externalJson, setExternalJson] = useState("");
   const [proposed, setProposed] = useState<MediaSlide[] | null>(null);
   const [notice, setNotice] = useState("");
-  const [audioMode, setAudioMode] = useState<"silent" | "uploaded" | "voice">(
-    "silent",
-  );
+  const [audioMode, setAudioMode] = useState<"silent" | "uploaded" | "voice">("silent");
   const [voiceId, setVoiceId] = useState("");
   const [jobId, setJobId] = useState("");
   const [renderId, setRenderId] = useState("");
@@ -167,8 +151,7 @@ export function TikTokMediaPage() {
   const previewRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (!selectedId && projects.data?.length)
-      selectProject(projects.data[0].id);
+    if (!selectedId && projects.data?.length) selectProject(projects.data[0].id);
   }, [projects.data, selectedId]);
 
   useEffect(() => {
@@ -191,8 +174,7 @@ export function TikTokMediaPage() {
   }
 
   const create = useMutation({
-    mutationFn: () =>
-      mediaApi.create(newTitle.trim() || "Nova publicação", newFormat),
+    mutationFn: () => mediaApi.create(newTitle.trim() || "Nova publicação", newFormat),
     onSuccess: (project) => {
       queryClient.setQueryData(["tiktok-project", project.id], project);
       void queryClient.invalidateQueries({ queryKey: ["tiktok-projects"] });
@@ -214,16 +196,10 @@ export function TikTokMediaPage() {
     onSuccess: (updated, variables) => {
       queryClient.setQueryData(["tiktok-project", updated.id], updated);
       setDraft((current) =>
-        current && current.id === updated.id
-          ? { ...current, revision: updated.revision }
-          : current,
+        current && current.id === updated.id ? { ...current, revision: updated.revision } : current,
       );
       setDirty(editVersion.current !== variables.version);
-      setNotice(
-        editVersion.current === variables.version
-          ? "Tudo salvo"
-          : "Salvando alterações…",
-      );
+      setNotice(editVersion.current === variables.version ? "Tudo salvo" : "Salvando alterações…");
       void queryClient.invalidateQueries({ queryKey: ["tiktok-projects"] });
     },
     onError: (error) => {
@@ -256,15 +232,13 @@ export function TikTokMediaPage() {
   const active = draft?.slides[activeIndex] ?? null;
   useEffect(() => {
     const context = previewRef.current?.getContext("2d");
-    if (context && active && draft)
-      paintSlide(context, active, draft, activeIndex);
+    if (context && active && draft) paintSlide(context, active, draft, activeIndex);
   }, [draft, active, activeIndex]);
 
   useEffect(() => {
     if (!playing || !active || !draft) return;
     const timeout = window.setTimeout(() => {
-      if (activeIndex < draft.slides.length - 1)
-        setActiveIndex(activeIndex + 1);
+      if (activeIndex < draft.slides.length - 1) setActiveIndex(activeIndex + 1);
       else setPlaying(false);
     }, active.duration_ms);
     return () => window.clearTimeout(timeout);
@@ -273,15 +247,10 @@ export function TikTokMediaPage() {
   const ai = useMutation({
     mutationFn: () => mediaApi.ideas(aiPrompt.trim(), draft!.format, aiCount),
     onSuccess: (data) => {
-      setProposed(
-        data.slides.map((slide) => ({ ...slide, id: crypto.randomUUID() })),
-      );
-      setNotice(
-        "A proposta da IA está pronta. Revise os textos antes de aplicar.",
-      );
+      setProposed(data.slides.map((slide) => ({ ...slide, id: crypto.randomUUID() })));
+      setNotice("A proposta da IA está pronta. Revise os textos antes de aplicar.");
     },
-    onError: (error) =>
-      setNotice(`${error.message} Use o campo de JSON externo abaixo.`),
+    onError: (error) => setNotice(`${error.message} Use o campo de JSON externo abaixo.`),
   });
   const importCues = useMutation({
     mutationFn: async () => {
@@ -289,12 +258,9 @@ export function TikTokMediaPage() {
       const cues = await studioApi.editorialCues(sceneId);
       const approved = cues.filter(
         (cue) =>
-          cue.approved_en.trim() &&
-          cue.approved_pt.trim() &&
-          cue.provenance?.approval !== "draft",
+          cue.approved_en.trim() && cue.approved_pt.trim() && cue.provenance?.approval !== "draft",
       );
-      if (!approved.length)
-        throw new Error("A cena não possui falas aprovadas.");
+      if (!approved.length) throw new Error("A cena não possui falas aprovadas.");
       return approved.slice(0, 30).map(
         (cue): MediaSlide => ({
           ...blankSlide("lesson"),
@@ -305,10 +271,7 @@ export function TikTokMediaPage() {
           speaker: cue.speaker,
           duration_ms: Math.min(
             20000,
-            Math.max(
-              2000,
-              cue.speech_timing.end_ms - cue.speech_timing.start_ms,
-            ),
+            Math.max(2000, cue.speech_timing.end_ms - cue.speech_timing.start_ms),
           ),
         }),
       );
@@ -316,9 +279,7 @@ export function TikTokMediaPage() {
     onSuccess: (slides) => {
       edit((current) => ({ ...current, source_project_id: sourceId, slides }));
       setActiveIndex(0);
-      setNotice(
-        `${slides.length} falas importadas. Revise o enquadramento e a tradução.`,
-      );
+      setNotice(`${slides.length} falas importadas. Revise o enquadramento e a tradução.`);
     },
     onError: (error) => setNotice(error.message),
   });
@@ -336,11 +297,8 @@ export function TikTokMediaPage() {
   const exportSlides = useMutation({
     mutationFn: async () => {
       if (!draft) throw new Error("Abra um projeto.");
-      if (dirty || save.isPending)
-        throw new Error("Aguarde o salvamento antes de exportar.");
-      const images = await Promise.all(
-        draft.slides.map((_, index) => imageForSlide(draft, index)),
-      );
+      if (dirty || save.isPending) throw new Error("Aguarde o salvamento antes de exportar.");
+      const images = await Promise.all(draft.slides.map((_, index) => imageForSlide(draft, index)));
       return mediaApi.exportSlides(draft.id, draft.revision, images);
     },
     onSuccess: (blob) => download(blob, "ihub-tiktok-carrossel.zip"),
@@ -349,18 +307,9 @@ export function TikTokMediaPage() {
   const render = useMutation({
     mutationFn: async () => {
       if (!draft) throw new Error("Abra um projeto.");
-      if (dirty || save.isPending)
-        throw new Error("Aguarde o salvamento antes de exportar.");
-      const images = await Promise.all(
-        draft.slides.map((_, index) => imageForSlide(draft, index)),
-      );
-      return mediaApi.render(
-        draft.id,
-        draft.revision,
-        images,
-        audioMode,
-        voiceId,
-      );
+      if (dirty || save.isPending) throw new Error("Aguarde o salvamento antes de exportar.");
+      const images = await Promise.all(draft.slides.map((_, index) => imageForSlide(draft, index)));
+      return mediaApi.render(draft.id, draft.revision, images, audioMode, voiceId);
     },
     onSuccess: (job) => {
       setJobId(job.job_id);
@@ -375,9 +324,7 @@ export function TikTokMediaPage() {
     enabled: Boolean(jobId),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status && ["succeeded", "failed", "cancelled"].includes(status)
-        ? false
-        : 2500;
+      return status && ["succeeded", "failed", "cancelled"].includes(status) ? false : 2500;
     },
   });
 
@@ -396,10 +343,7 @@ export function TikTokMediaPage() {
     if (target < 0 || target >= draft.slides.length) return;
     edit((current) => {
       const slides = [...current.slides];
-      [slides[activeIndex], slides[target]] = [
-        slides[target],
-        slides[activeIndex],
-      ];
+      [slides[activeIndex], slides[target]] = [slides[target], slides[activeIndex]];
       return { ...current, slides };
     });
     setActiveIndex(target);
@@ -442,11 +386,7 @@ export function TikTokMediaPage() {
         actions={
           <span className="tm-save-status">
             <Save size={16} />
-            {save.isPending
-              ? "Salvando…"
-              : dirty
-                ? "Alterações pendentes"
-                : "Salvo"}
+            {save.isPending ? "Salvando…" : dirty ? "Alterações pendentes" : "Salvo"}
           </span>
         }
       />
@@ -485,9 +425,7 @@ export function TikTokMediaPage() {
               <select
                 aria-label="Formato da nova produção"
                 value={newFormat}
-                onChange={(event) =>
-                  setNewFormat(event.target.value as MediaFormat)
-                }
+                onChange={(event) => setNewFormat(event.target.value as MediaFormat)}
               >
                 <option value="carousel">Carrossel</option>
                 <option value="lesson_video">Vídeo educativo</option>
@@ -530,16 +468,12 @@ export function TikTokMediaPage() {
                   onClick={() => ai.mutate()}
                   disabled={ai.isPending || aiPrompt.trim().length < 10}
                 >
-                  <Sparkles size={16} />{" "}
-                  {ai.isPending ? "Criando…" : "Sugerir roteiro"}
+                  <Sparkles size={16} /> {ai.isPending ? "Criando…" : "Sugerir roteiro"}
                 </button>
                 <details>
                   <summary>Importar roteiro de outra IA (JSON)</summary>
                   <p className="tm-small">
-                    Formato:{" "}
-                    <code>
-                      {'{"slides":[{"kind":"lesson","en":"...","pt":"..."}]}'}
-                    </code>
+                    Formato: <code>{'{"slides":[{"kind":"lesson","en":"...","pt":"..."}]}'}</code>
                   </p>
                   <textarea
                     aria-label="Roteiro JSON externo"
@@ -551,15 +485,9 @@ export function TikTokMediaPage() {
                     onClick={() => {
                       try {
                         setProposed(readExternalStoryboard(externalJson));
-                        setNotice(
-                          "Roteiro importado para revisão. Nenhum quadro foi substituído.",
-                        );
+                        setNotice("Roteiro importado para revisão. Nenhum quadro foi substituído.");
                       } catch (error) {
-                        setNotice(
-                          error instanceof Error
-                            ? error.message
-                            : "JSON inválido.",
-                        );
+                        setNotice(error instanceof Error ? error.message : "JSON inválido.");
                       }
                     }}
                   >
@@ -568,9 +496,7 @@ export function TikTokMediaPage() {
                 </details>
                 {proposed && (
                   <div className="tm-proposal">
-                    <p>
-                      {proposed.length} quadros propostos · revisão obrigatória
-                    </p>
+                    <p>{proposed.length} quadros propostos · revisão obrigatória</p>
                     <button
                       className="tm-accent"
                       onClick={() => {
@@ -623,8 +549,8 @@ export function TikTokMediaPage() {
                   Importar falas revisadas
                 </button>
                 <p className="tm-small">
-                  Usa EN/PT aprovados no Editorial. Para criar novos recortes e
-                  transcrever, acesse <Link to="/media">Mídia</Link>.
+                  Usa EN/PT aprovados no Editorial. Para criar novos recortes e transcrever, acesse{" "}
+                  <Link to="/media">Mídia</Link>.
                 </p>
               </div>
             </>
@@ -635,13 +561,8 @@ export function TikTokMediaPage() {
           <div className="tm-empty">
             <Film size={44} />
             <h2>Seu estúdio de conteúdo vertical</h2>
-            <p>
-              Crie uma produção ao lado para começar. Seus projetos ficam salvos
-              no Generator.
-            </p>
-            {projectQuery.isError && (
-              <p role="alert">{projectQuery.error.message}</p>
-            )}
+            <p>Crie uma produção ao lado para começar. Seus projetos ficam salvos no Generator.</p>
+            {projectQuery.isError && <p role="alert">{projectQuery.error.message}</p>}
           </div>
         ) : (
           <>
@@ -658,8 +579,7 @@ export function TikTokMediaPage() {
                   <button
                     title={playing ? "Pausar" : "Reproduzir sequência"}
                     onClick={() => {
-                      if (!playing && activeIndex === draft.slides.length - 1)
-                        setActiveIndex(0);
+                      if (!playing && activeIndex === draft.slides.length - 1) setActiveIndex(0);
                       setPlaying(!playing);
                     }}
                   >
@@ -668,9 +588,7 @@ export function TikTokMediaPage() {
                   <button
                     title="Próximo quadro"
                     onClick={() =>
-                      setActiveIndex(
-                        Math.min(draft.slides.length - 1, activeIndex + 1),
-                      )
+                      setActiveIndex(Math.min(draft.slides.length - 1, activeIndex + 1))
                     }
                   >
                     <ArrowRight size={16} />
@@ -691,12 +609,9 @@ export function TikTokMediaPage() {
                   Sequência{" "}
                   <span>
                     {draft.slides.length} quadros ·{" "}
-                    {(
-                      draft.slides.reduce(
-                        (sum, item) => sum + item.duration_ms,
-                        0,
-                      ) / 1000
-                    ).toFixed(1)}{" "}
+                    {(draft.slides.reduce((sum, item) => sum + item.duration_ms, 0) / 1000).toFixed(
+                      1,
+                    )}{" "}
                     s
                   </span>
                 </h2>
@@ -731,10 +646,7 @@ export function TikTokMediaPage() {
                   </button>
                 </div>
               </div>
-              <div
-                className="tm-timeline"
-                aria-label="Linha do tempo dos quadros"
-              >
+              <div className="tm-timeline" aria-label="Linha do tempo dos quadros">
                 {draft.slides.map((slide, index) => (
                   <button
                     key={slide.id}
@@ -752,10 +664,7 @@ export function TikTokMediaPage() {
                   </button>
                 ))}
                 {draft.slides.length < 30 && (
-                  <button
-                    className="tm-add-frame"
-                    onClick={() => addSlide("lesson")}
-                  >
+                  <button className="tm-add-frame" onClick={() => addSlide("lesson")}>
                     <Plus /> Adicionar
                   </button>
                 )}
@@ -768,9 +677,7 @@ export function TikTokMediaPage() {
                 <EditField
                   label="Título do projeto"
                   value={draft.title}
-                  onChange={(title) =>
-                    edit((current) => ({ ...current, title }))
-                  }
+                  onChange={(title) => edit((current) => ({ ...current, title }))}
                   maxLength={140}
                 />
                 <label className="tm-field">
@@ -813,9 +720,7 @@ export function TikTokMediaPage() {
                     <span>Modelo</span>
                     <select
                       value={active.kind}
-                      onChange={(event) =>
-                        updateSlide({ kind: event.target.value as MediaKind })
-                      }
+                      onChange={(event) => updateSlide({ kind: event.target.value as MediaKind })}
                     >
                       <option value="cover">Abertura</option>
                       <option value="lesson">Mini-aula</option>
@@ -858,18 +763,14 @@ export function TikTokMediaPage() {
                     maxLength={120}
                   />
                   <label className="tm-field">
-                    <span>
-                      Duração: {(active.duration_ms / 1000).toFixed(1)}s
-                    </span>
+                    <span>Duração: {(active.duration_ms / 1000).toFixed(1)}s</span>
                     <input
                       type="range"
                       min={1000}
                       max={20000}
                       step={500}
                       value={active.duration_ms}
-                      onChange={(event) =>
-                        updateSlide({ duration_ms: Number(event.target.value) })
-                      }
+                      onChange={(event) => updateSlide({ duration_ms: Number(event.target.value) })}
                     />
                   </label>
                   <div className="tm-template-row">
@@ -896,12 +797,8 @@ export function TikTokMediaPage() {
                     accept=".mp3,.wav,.ogg,audio/*"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      if (file && !dirty && !save.isPending)
-                        upload.mutate(file);
-                      else if (file)
-                        setNotice(
-                          "Aguarde o salvamento antes de enviar o áudio.",
-                        );
+                      if (file && !dirty && !save.isPending) upload.mutate(file);
+                      else if (file) setNotice("Aguarde o salvamento antes de enviar o áudio.");
                       event.target.value = "";
                     }}
                   />
@@ -917,9 +814,7 @@ export function TikTokMediaPage() {
                   <span>Trilha do vídeo</span>
                   <select
                     value={audioMode}
-                    onChange={(event) =>
-                      setAudioMode(event.target.value as typeof audioMode)
-                    }
+                    onChange={(event) => setAudioMode(event.target.value as typeof audioMode)}
                   >
                     <option value="silent">Sem áudio</option>
                     <option value="uploaded">Áudio enviado</option>
@@ -929,10 +824,7 @@ export function TikTokMediaPage() {
                 {audioMode === "voice" && (
                   <label className="tm-field">
                     <span>Voz</span>
-                    <select
-                      value={voiceId}
-                      onChange={(event) => setVoiceId(event.target.value)}
-                    >
+                    <select value={voiceId} onChange={(event) => setVoiceId(event.target.value)}>
                       <option value="">Selecione uma voz</option>
                       {voices.data?.map((voice) => (
                         <option key={voice.id} value={voice.id}>
@@ -949,9 +841,7 @@ export function TikTokMediaPage() {
                   disabled={dirty || save.isPending || exportSlides.isPending}
                 >
                   <Download size={16} />{" "}
-                  {exportSlides.isPending
-                    ? "Preparando…"
-                    : "Baixar carrossel (ZIP)"}
+                  {exportSlides.isPending ? "Preparando…" : "Baixar carrossel (ZIP)"}
                 </button>
                 <button
                   onClick={() => render.mutate()}
@@ -963,16 +853,12 @@ export function TikTokMediaPage() {
                     (audioMode === "uploaded" && !draft.audio_filename)
                   }
                 >
-                  <Film size={16} />{" "}
-                  {render.isPending ? "Enviando quadros…" : "Gerar vídeo MP4"}
+                  <Film size={16} /> {render.isPending ? "Enviando quadros…" : "Gerar vídeo MP4"}
                 </button>
                 {jobId && (
                   <p className="tm-small">
-                    Render:{" "}
-                    <Link to="/jobs">{job.data?.status ?? "aguardando"}</Link>
-                    {job.data?.error_message
-                      ? ` · ${job.data.error_message}`
-                      : ""}
+                    Render: <Link to="/jobs">{job.data?.status ?? "aguardando"}</Link>
+                    {job.data?.error_message ? ` · ${job.data.error_message}` : ""}
                   </p>
                 )}
                 {job.data?.status === "succeeded" && renderId && (
@@ -992,8 +878,7 @@ export function TikTokMediaPage() {
                   </>
                 )}
                 <p className="tm-small">
-                  Para músicas e cenas de terceiros, use apenas arquivos com
-                  autorização de uso.
+                  Para músicas e cenas de terceiros, use apenas arquivos com autorização de uso.
                 </p>
               </div>
             </aside>

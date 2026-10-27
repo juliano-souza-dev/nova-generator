@@ -67,16 +67,11 @@ export const mediaApi = {
   async exportSlides(id: string, revision: number, images: Blob[]) {
     const body = new FormData();
     body.append("revision", String(revision));
-    images.forEach((image, index) =>
-      body.append("images", image, `slide-${index + 1}.png`),
-    );
-    const response = await fetch(
-      apiUrl(`/tiktok-media/projects/${id}/slides.zip`),
-      {
-        method: "POST",
-        body,
-      },
-    );
+    images.forEach((image, index) => body.append("images", image, `slide-${index + 1}.png`));
+    const response = await fetch(apiUrl(`/tiktok-media/projects/${id}/slides.zip`), {
+      method: "POST",
+      body,
+    });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       throw new Error(error.detail || "Não foi possível exportar os quadros.");
@@ -94,9 +89,7 @@ export const mediaApi = {
     body.append("revision", String(revision));
     body.append("audio_mode", audioMode);
     if (audioMode === "voice") body.append("voice_profile_id", voiceProfileId);
-    images.forEach((image, index) =>
-      body.append("images", image, `slide-${index + 1}.png`),
-    );
+    images.forEach((image, index) => body.append("images", image, `slide-${index + 1}.png`));
     return apiRequest<MediaRender>(`/tiktok-media/projects/${id}/render`, {
       method: "POST",
       body,
@@ -134,13 +127,9 @@ export function readExternalStoryboard(value: string): MediaSlide[] {
       throw new Error(`Quadro ${index + 1} inválido.`);
     }
     const value = slide as Record<string, unknown>;
-    const kind: MediaKind = [
-      "cover",
-      "lesson",
-      "example",
-      "challenge",
-      "lyric",
-    ].includes(String(value.kind))
+    const kind: MediaKind = ["cover", "lesson", "example", "challenge", "lyric"].includes(
+      String(value.kind),
+    )
       ? (value.kind as MediaKind)
       : "lesson";
     const pick = (field: string, max: number) => {
@@ -157,9 +146,7 @@ export function readExternalStoryboard(value: string): MediaSlide[] {
       duration < 1000 ||
       duration > 20000
     ) {
-      throw new Error(
-        `Quadro ${index + 1}: duração precisa ser 1–20 segundos.`,
-      );
+      throw new Error(`Quadro ${index + 1}: duração precisa ser 1–20 segundos.`);
     }
     return {
       id: crypto.randomUUID(),

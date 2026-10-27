@@ -3,10 +3,7 @@
 }
 .tm-workspace {
   display: grid;
-  grid-template-columns: minmax(220px, 270px) minmax(320px, 1fr) minmax(
-      245px,
-      305px
-    );
+  grid-template-columns: minmax(220px, 270px) minmax(320px, 1fr) minmax(245px, 305px);
   align-items: start;
   gap: 16px;
 }

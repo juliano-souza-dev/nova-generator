@@ -47,11 +47,7 @@ function round(
   ctx.fill();
 }
 
-function lines(
-  ctx: CanvasRenderingContext2D,
-  value: string,
-  maxWidth: number,
-): string[] {
+function lines(ctx: CanvasRenderingContext2D, value: string, maxWidth: number): string[] {
   const all: string[] = [];
   value.split("\n").forEach((paragraph) => {
     if (!paragraph.trim()) {
@@ -66,16 +62,9 @@ function lines(
       } else {
         if (current) all.push(current);
         current = word;
-        while (
-          ctx.measureText(current).width > maxWidth &&
-          current.length > 1
-        ) {
+        while (ctx.measureText(current).width > maxWidth && current.length > 1) {
           let end = current.length - 1;
-          while (
-            end > 1 &&
-            ctx.measureText(current.slice(0, end)).width > maxWidth
-          )
-            end--;
+          while (end > 1 && ctx.measureText(current.slice(0, end)).width > maxWidth) end--;
           all.push(current.slice(0, end));
           current = current.slice(end);
         }
@@ -110,30 +99,17 @@ function type(
   ctx.fillStyle = color;
   ctx.textAlign = align;
   ctx.textBaseline = "top";
-  const atX =
-    align === "center" ? x + width / 2 : align === "right" ? x + width : x;
-  wrapped
-    .slice(0, Math.max(1, Math.floor(height / (fontSize * 1.19))))
-    .forEach((line, i) => {
-      ctx.fillText(line, atX, y + i * fontSize * 1.19, width);
-    });
+  const atX = align === "center" ? x + width / 2 : align === "right" ? x + width : x;
+  wrapped.slice(0, Math.max(1, Math.floor(height / (fontSize * 1.19)))).forEach((line, i) => {
+    ctx.fillText(line, atX, y + i * fontSize * 1.19, width);
+  });
   ctx.textAlign = "left";
 }
 
 function header(ctx: CanvasRenderingContext2D, p: Palette, dark: boolean) {
   type(ctx, "iHUB", 92, 80, 210, 90, 52, dark ? "#fff" : NAVY, 850);
   type(ctx, "ENGLISH", 268, 102, 225, 70, 30, dark ? "#8de1d9" : p.accent, 850);
-  type(
-    ctx,
-    "ENGLISH IN CONTEXT",
-    92,
-    164,
-    720,
-    70,
-    28,
-    dark ? "#96d5d0" : p.accent,
-    800,
-  );
+  type(ctx, "ENGLISH IN CONTEXT", 92, 164, 720, 70, 28, dark ? "#96d5d0" : p.accent, 800);
   ctx.strokeStyle = dark ? "#365472" : "#d3dfeb";
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -156,40 +132,9 @@ function footer(
   ctx.moveTo(92, 1676);
   ctx.lineTo(988, 1676);
   ctx.stroke();
-  type(
-    ctx,
-    "iHub English  ·  INGLÊS COM SÉRIES",
-    92,
-    1716,
-    680,
-    58,
-    27,
-    foreground,
-    750,
-  );
-  type(
-    ctx,
-    `${index + 1}/${total}`,
-    856,
-    1716,
-    132,
-    58,
-    27,
-    foreground,
-    750,
-    "right",
-  );
-  type(
-    ctx,
-    "Uma cena. Inglês para a vida real.",
-    92,
-    1790,
-    820,
-    50,
-    25,
-    foreground,
-    450,
-  );
+  type(ctx, "iHub English  ·  INGLÊS COM SÉRIES", 92, 1716, 680, 58, 27, foreground, 750);
+  type(ctx, `${index + 1}/${total}`, 856, 1716, 132, 58, 27, foreground, 750, "right");
+  type(ctx, "Uma cena. Inglês para a vida real.", 92, 1790, 820, 50, 25, foreground, 450);
   ctx.fillStyle = p.accent;
   ctx.fillRect(92, 1875, 896 * ((index + 1) / total), 7);
 }
@@ -224,8 +169,7 @@ export function paintSlide(
   const white = dark ? "#ffffff" : NAVY;
   const secondary = dark ? "#b9d4e5" : MUTED;
   const heading = (
-    slide.heading ||
-    (slide.kind === "lyric" ? "LYRICS + TRADUÇÃO" : "MINI-AULA")
+    slide.heading || (slide.kind === "lyric" ? "LYRICS + TRADUÇÃO" : "MINI-AULA")
   ).toUpperCase();
 
   if (slide.kind === "cover") {
@@ -253,17 +197,7 @@ export function paintSlide(
       "#fff",
       500,
     );
-    type(
-      ctx,
-      "DESAFIO • INGLÊS EM CONTEXTO",
-      92,
-      1536,
-      850,
-      80,
-      28,
-      "#90d0d9",
-      780,
-    );
+    type(ctx, "DESAFIO • INGLÊS EM CONTEXTO", 92, 1536, 850, 80, 28, "#90d0d9", 780);
   } else if (slide.kind === "lyric") {
     round(ctx, 92, 340, 460, 68, 34, "#184960");
     type(ctx, heading, 125, 359, 800, 56, 28, "#a8e4e0", 780);
@@ -271,21 +205,10 @@ export function paintSlide(
     ctx.fillStyle = ORANGE;
     ctx.fillRect(455, 1110, 170, 10);
     type(ctx, slide.pt, 100, 1190, 880, 285, 53, "#c4deec", 540, "center");
-    if (slide.note)
-      type(ctx, slide.note, 100, 1510, 880, 110, 32, "#9bb8cf", 480, "center");
+    if (slide.note) type(ctx, slide.note, 100, 1510, 880, 110, 32, "#9bb8cf", 480, "center");
   } else if (slide.kind === "example") {
     type(ctx, heading, 92, 325, 896, 80, 36, p.accent, 840);
-    type(
-      ctx,
-      slide.note || "Agora, use na vida real.",
-      92,
-      427,
-      896,
-      160,
-      62,
-      NAVY,
-      830,
-    );
+    type(ctx, slide.note || "Agora, use na vida real.", 92, 427, 896, 160, 62, NAVY, 830);
     round(ctx, 82, 660, 916, 520, 42, "#ffffff");
     ctx.strokeStyle = "#d0e1eb";
     ctx.lineWidth = 3;
@@ -300,17 +223,7 @@ export function paintSlide(
     }
   } else {
     type(ctx, heading, 92, 315, 896, 90, 36, p.accent, 850);
-    type(
-      ctx,
-      slide.note || "Entenda o padrão",
-      92,
-      425,
-      896,
-      195,
-      59,
-      NAVY,
-      820,
-    );
+    type(ctx, slide.note || "Entenda o padrão", 92, 425, 896, 195, 59, NAVY, 820);
     round(ctx, 78, 680, 924, 235, 40, NAVY);
     type(ctx, slide.en, 114, 722, 852, 170, 58, "#fff", 790, "center");
     type(ctx, slide.pt, 94, 1000, 890, 300, 47, NAVY, 520);
@@ -322,16 +235,12 @@ export function paintSlide(
   footer(ctx, p, dark, index, project.slides.length);
 }
 
-export function imageForSlide(
-  project: MediaProject,
-  index: number,
-): Promise<Blob> {
+export function imageForSlide(project: MediaProject, index: number): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1920;
   const ctx = canvas.getContext("2d");
-  if (!ctx)
-    return Promise.reject(new Error("Canvas indisponível neste navegador."));
+  if (!ctx) return Promise.reject(new Error("Canvas indisponível neste navegador."));
   paintSlide(ctx, project.slides[index], project, index);
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {

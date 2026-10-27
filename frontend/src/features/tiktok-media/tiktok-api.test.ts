@@ -24,9 +24,7 @@ describe("TikTok Media external AI draft", () => {
   });
 
   it("blocks invalid durations and unsupported structures", () => {
-    expect(() =>
-      readExternalStoryboard('{"slides":[{"duration_ms":999}]}'),
-    ).toThrow();
+    expect(() => readExternalStoryboard('{"slides":[{"duration_ms":999}]}')).toThrow();
     expect(() => readExternalStoryboard('{"slides":[]}')).toThrow();
     expect(() => readExternalStoryboard('{"foo":"bar"}')).toThrow();
   });
