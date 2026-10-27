@@ -23,6 +23,7 @@ SAFE_FIELDS = frozenset(
         "duration_ms",
         "count",
         "result",
+        "error_location",
     }
 )
 

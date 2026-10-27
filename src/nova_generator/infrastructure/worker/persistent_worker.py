@@ -5,6 +5,7 @@ import re
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from threading import Event
 from typing import Any
 
@@ -92,7 +93,8 @@ class PersistentWorker:
                 now=_utcnow(),
             )
             self._log(
-                "job_failed", job_id=str(job.id), kind=job.kind, result=type(error).__name__, **ids
+                "job_failed", job_id=str(job.id), kind=job.kind, result=type(error).__name__,
+                error_location=_safe_error_location(error), **ids
             )
             metrics.record("job_failed", duration_ms=int((time.monotonic() - started) * 1000))
         return True
@@ -122,3 +124,17 @@ def _safe_ids(payload: dict[str, Any]) -> dict[str, str]:
         if isinstance(value := payload.get(key), str)
         and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value)
     }
+
+
+
+def _safe_error_location(error: Exception) -> str:
+    """Expose a code location without logging user content, file paths or tokens."""
+    cause: BaseException = error
+    while cause.__cause__ is not None:
+        cause = cause.__cause__
+    tb = cause.__traceback__
+    if tb is None:
+        return "unknown"
+    while tb.tb_next is not None:
+        tb = tb.tb_next
+    return f"{Path(tb.tb_frame.f_code.co_filename).name}:{tb.tb_lineno}"

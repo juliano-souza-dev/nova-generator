@@ -107,3 +107,4 @@ def test_worker_logs_safe_correlations_without_private_error(tmp_path) -> None:
     assert all(event["job_id"] == str(job.id) for event in events)
     assert all(event["project_id"] == "project_1" for event in events)
     assert "private lesson" not in stream.getvalue()
+    assert events[-1]["error_location"].startswith("test_persistent_worker.py:")
