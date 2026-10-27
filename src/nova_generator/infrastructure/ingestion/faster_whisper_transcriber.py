@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import math
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
@@ -44,8 +46,10 @@ class FasterWhisperTranscriber:
             cues = tuple(self._cue(segment, detected_language) for segment in segments)
         except TranscriptionError:
             raise
-        except (OSError, RuntimeError, ValueError) as exc:
-            raise TranscriptionError("Faster-Whisper não conseguiu transcrever a fonte.") from exc
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            raise TranscriptionError(
+                f"Faster-Whisper não conseguiu transcrever a fonte ({type(exc).__name__})."
+            ) from exc
         if not cues:
             raise TranscriptionError("Faster-Whisper não retornou candidatos editoriais.")
         return TranscriptCandidate(
@@ -74,22 +78,54 @@ class FasterWhisperTranscriber:
 
     @staticmethod
     def _cue(segment: Any, language: str | None) -> TranscriptCueCandidate:
-        words = tuple(
-            TranscriptWordCandidate(
-                str(word.word),
-                round(float(word.start) * 1000),
-                round(float(word.end) * 1000),
-                getattr(word, "probability", None),
+        cue_start_ms = round(float(segment.start) * 1000)
+        cue_end_ms = round(float(segment.end) * 1000)
+        words: list[TranscriptWordCandidate] = []
+        skipped = 0
+        for word in FasterWhisperTranscriber._words(segment):
+            surface = getattr(word, "word", "")
+            if not surface:
+                continue
+            try:
+                start = float(getattr(word, "start", None))
+                end = float(getattr(word, "end", None))
+            except (TypeError, ValueError):
+                skipped += 1
+                continue
+            if not (math.isfinite(start) and math.isfinite(end)):
+                skipped += 1
+                continue
+            word_start_ms = round(start * 1000)
+            word_end_ms = round(end * 1000)
+            if (
+                word_start_ms < cue_start_ms
+                or word_end_ms > cue_end_ms
+                or word_end_ms <= word_start_ms
+            ):
+                skipped += 1
+                continue
+            probability = getattr(word, "probability", None)
+            if probability is not None:
+                try:
+                    probability = float(probability)
+                except (TypeError, ValueError):
+                    probability = None
+                if probability is not None and (
+                    not math.isfinite(probability) or not 0 <= probability <= 1
+                ):
+                    probability = None
+            words.append(
+                TranscriptWordCandidate(
+                    str(surface), word_start_ms, word_end_ms, probability
+                )
             )
-            for word in FasterWhisperTranscriber._words(segment)
-            if getattr(word, "word", "") and getattr(word, "end", 0) > getattr(word, "start", 0)
-        )
+        if skipped:
+            # Preserve the complete cue text; never fabricate missing word timestamps.
+            logging.getLogger("nova_generator").warning(
+                "asr_word_timing_unavailable", extra={"count": skipped}
+            )
         return TranscriptCueCandidate(
-            round(float(segment.start) * 1000),
-            round(float(segment.end) * 1000),
-            str(segment.text),
-            words,
-            language,
+            cue_start_ms, cue_end_ms, str(segment.text), tuple(words), language
         )
 
     @staticmethod
