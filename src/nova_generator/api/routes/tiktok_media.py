@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
@@ -15,7 +16,11 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, ValidationError
 
-from nova_generator.api.dependencies import get_enqueue_job, get_manage_voice_profiles
+from nova_generator.api.dependencies import (
+    get_enqueue_job,
+    get_manage_voice_profiles,
+    get_session_factory,
+)
 from nova_generator.application.use_cases.manage_voice_profiles import _payload
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.tiktok_media import (
@@ -24,6 +29,10 @@ from nova_generator.domain.tiktok_media import (
     MediaProjectEdit,
     MediaSlide,
 )
+from nova_generator.infrastructure.database.editorial_project_repository import (
+    SqlAlchemyEditorialProjectRepository,
+)
+from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
 from nova_generator.infrastructure.filesystem.tiktok_media_store import (
     MediaConflict,
     MediaProjectStore,
@@ -33,6 +42,8 @@ router = APIRouter(prefix="/tiktok-media", tags=["tiktok-media"])
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 MAX_PNG_BYTES = 8 * 1024 * 1024
 MAX_AUDIO_BYTES = 50 * 1024 * 1024
+MAX_SOURCE_BYTES = 512 * 1024 * 1024
+MAX_SOURCE_DURATION_MS = 180_000
 
 
 def _store() -> MediaProjectStore:
@@ -44,6 +55,130 @@ def _get(project_id: UUID) -> MediaProject:
     if project is None:
         raise HTTPException(404, "Projeto de mídia não encontrado.")
     return project
+
+
+def _video_cut(project: MediaProject) -> tuple[Path, int]:
+    """Resolve the exact verified ingest cut linked to an owned editorial scene.
+
+    The TikTok editor never downloads arbitrary links, never resolves an unverified
+    filename from user input, and never silently switches to a newer source cut.
+    """
+    if project.source_project_id is None or project.source_scene_id is None:
+        raise HTTPException(422, "Selecione uma cena revisada para usar o vídeo original.")
+    repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    scene = next(
+        (
+            item
+            for item in repository.get_project_scenes(project.source_project_id)
+            if item.id == project.source_scene_id
+        ),
+        None,
+    )
+    if scene is None:
+        raise HTTPException(422, "A cena não pertence ao projeto de origem.")
+    ingest_id = scene.provenance.get("ingest_job_id")
+    if not isinstance(ingest_id, str):
+        raise HTTPException(422, "Esta cena ainda não está ligada a um recorte verificado.")
+    try:
+        ingest_job_id = UUID(ingest_id)
+    except ValueError as exc:
+        raise HTTPException(422, "Identificador do recorte da cena inválido.") from exc
+    job = SqlAlchemyJobRepository(get_session_factory()).get(str(ingest_job_id))
+    if (
+        job is None
+        or job.kind != "ingest_scene_media"
+        or job.status != "succeeded"
+        or job.input.get("project_id") != str(project.source_project_id)
+        or not isinstance(job.output, dict)
+    ):
+        raise HTTPException(409, "O recorte verificado não está disponível.")
+    path = (
+        get_settings().project_root
+        / str(project.source_project_id)
+        / "cuts"
+        / f"{ingest_job_id}.mp4"
+    )
+    if not path.is_file() or path.stat().st_size == 0:
+        raise HTTPException(409, "O vídeo recortado não está disponível.")
+    if path.stat().st_size > MAX_SOURCE_BYTES:
+        raise HTTPException(422, "O recorte ultrapassa 512 MiB. Escolha um trecho menor.")
+    duration_ms = job.output.get("duration_ms")
+    if not isinstance(duration_ms, int) or duration_ms <= 0:
+        raise HTTPException(409, "Não foi possível confirmar a duração do recorte.")
+    if duration_ms > MAX_SOURCE_DURATION_MS:
+        raise HTTPException(422, "O vídeo deve ter até 3 minutos. Escolha um recorte menor.")
+    return path, duration_ms
+
+
+def _freeze_cut(source_video: Path, destination: Path) -> str:
+    """Copy source bytes and hash in a bounded streaming pass, off the async loop."""
+    digest = sha256()
+    with source_video.open("rb") as source_stream, destination.open("wb") as target_stream:
+        while chunk := source_stream.read(1024 * 1024):
+            digest.update(chunk)
+            target_stream.write(chunk)
+    return digest.hexdigest()
+
+
+def _has_original_audio(source_video: Path) -> bool:
+    try:
+        result = subprocess.run(
+            [
+                get_settings().ffprobe_executable,
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_type",
+                "-of",
+                "default=noprint_wrappers=1",
+                str(source_video),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and "codec_type=audio" in result.stdout
+
+
+def _validate_video_captions(project: MediaProject, duration_ms: int) -> None:
+    if not project.video_captions:
+        raise HTTPException(422, "Importe as legendas revisadas antes de gerar o vídeo.")
+    assert project.source_scene_id is not None
+    repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    approved = {
+        cue.id: cue
+        for cue in repository.get_scene_cues(project.source_scene_id)
+        if cue.approved_en.strip()
+        and cue.approved_pt.strip()
+        and cue.provenance.get("approval") != "draft"
+    }
+    previous_end = 0
+    for caption in sorted(project.video_captions, key=lambda item: item.start_ms):
+        if caption.cue_id not in approved:
+            raise HTTPException(422, "Existe legenda sem fala aprovada na cena selecionada.")
+        if caption.end_ms > duration_ms:
+            raise HTTPException(422, "Uma legenda ultrapassa a duração do recorte.")
+        if caption.enabled:
+            if caption.start_ms < previous_end:
+                raise HTTPException(422, "As legendas ativas não podem se sobrepor.")
+            previous_end = caption.end_ms
+
+
+@router.get("/projects/{project_id}/source")
+def stream_tiktok_source(project_id: UUID) -> FileResponse:
+    project = _get(project_id)
+    path, _duration_ms = _video_cut(project)
+    return FileResponse(
+        path,
+        media_type="video/mp4",
+        filename="source-cut.mp4",
+        content_disposition_type="inline",
+    )
 
 
 class CreateMediaRequest(BaseModel):
@@ -93,9 +228,18 @@ async def upload_media_audio(
     staging.write_bytes(content)
     try:
         result = subprocess.run(
-            [get_settings().ffprobe_executable, "-v", "error", "-select_streams", "a:0",
-             "-show_entries", "stream=codec_type", "-of", "default=noprint_wrappers=1",
-             str(staging)],
+            [
+                get_settings().ffprobe_executable,
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_type",
+                "-of",
+                "default=noprint_wrappers=1",
+                str(staging),
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -181,18 +325,38 @@ def suggest_media_ideas(input: IdeaRequest) -> IdeaResponse:
 @router.post("/projects/{project_id}/render", status_code=202)
 async def render_media_project(
     project_id: UUID,
-    images: Annotated[list[UploadFile], File(...)],
     revision: Annotated[int, Form(...)],
-    audio_mode: Annotated[Literal["silent", "uploaded", "voice"], Form(...)] = "silent",
+    images: Annotated[list[UploadFile] | None, File()] = None,
+    visual_mode: Annotated[Literal["slides", "video_source"], Form()] = "slides",
+    audio_mode: Annotated[Literal["silent", "uploaded", "voice", "original"], Form()] = "silent",
     voice_profile_id: Annotated[str | None, Form()] = None,
 ) -> dict[str, str]:
     project = _get(project_id)
     if revision != project.revision:
         raise HTTPException(409, "Salve e recarregue o projeto antes de renderizar.")
-    if len(images) != len(project.slides):
+    if visual_mode == "slides" and (images is None or len(images) != len(project.slides)):
         raise HTTPException(422, "Envie exatamente uma imagem por quadro.")
+    if visual_mode == "slides" and audio_mode == "original":
+        raise HTTPException(422, "Áudio original exige um vídeo de origem.")
+    if visual_mode == "video_source" and images:
+        raise HTTPException(422, "O vídeo original não aceita quadros de imagem adicionais.")
+    if visual_mode == "video_source" and audio_mode == "voice":
+        raise HTTPException(422, "Narração de voz não é compatível com o vídeo original.")
     if audio_mode == "uploaded" and not project.audio_filename:
         raise HTTPException(422, "Envie a música antes de exportar.")
+
+    source_video = None
+    source_duration_ms = None
+    if visual_mode == "video_source":
+        source_video, source_duration_ms = _video_cut(project)
+        _validate_video_captions(project, source_duration_ms)
+        if audio_mode == "original" and not await asyncio.to_thread(
+            _has_original_audio, source_video
+        ):
+            raise HTTPException(
+                422, "O recorte não tem áudio original. Envie uma faixa ou exporte sem áudio."
+            )
+
     snapshot = None
     if audio_mode == "voice":
         if not voice_profile_id:
@@ -215,18 +379,27 @@ async def render_media_project(
     directory = _store().directory(project_id) / "renders" / str(render_id)
     directory.mkdir(parents=True)
     image_hashes = []
-    for index, image in enumerate(images):
+    for index, image in enumerate(images or []):
         content = await image.read(MAX_PNG_BYTES + 1)
         if not content.startswith(PNG_SIGNATURE) or len(content) > MAX_PNG_BYTES:
             raise HTTPException(422, f"O quadro {index + 1} deve ser PNG de até 8 MiB.")
         (directory / f"{index:03d}.png").write_bytes(content)
         image_hashes.append(sha256(content).hexdigest())
+    source_sha256 = None
+    if source_video is not None:
+        # Freeze bytes before enqueueing. Changing/re-downloading the source
+        # cannot alter an already requested export.
+        frozen = directory / "source.mp4"
+        source_sha256 = await asyncio.to_thread(_freeze_cut, source_video, frozen)
     payload = {
         "project": project.model_dump(mode="json"),
+        "visual_mode": visual_mode,
         "image_hashes": image_hashes,
         "audio_mode": audio_mode,
         "voice_snapshot": snapshot,
         "audio_sha256": audio_hash,
+        "source_video_sha256": source_sha256,
+        "source_duration_ms": source_duration_ms,
     }
     content = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
     (directory / "snapshot.json").write_bytes(content)
@@ -257,7 +430,9 @@ def download_media_video(project_id: UUID, render_id: UUID) -> FileResponse:
     if not path.is_file():
         raise HTTPException(404, "Vídeo indisponível.")
     return FileResponse(
-        path, media_type="video/mp4", filename="tiktok-media.mp4",
+        path,
+        media_type="video/mp4",
+        filename="tiktok-media.mp4",
         content_disposition_type="inline",
     )
 
@@ -283,7 +458,8 @@ async def export_media_carousel(
                 raise HTTPException(422, f"Quadro {index + 1} inválido.")
             archive.writestr(f"slide-{index + 1:02d}.png", content)
     return Response(
-        stream.getvalue(), media_type="application/zip",
+        stream.getvalue(),
+        media_type="application/zip",
         headers={"Content-Disposition": 'attachment; filename="tiktok-carrossel.zip"'},
     )
 
@@ -298,6 +474,7 @@ def download_media_slides(project_id: UUID, render_id: UUID) -> Response:
         for image in sorted(directory.glob("[0-9][0-9][0-9].png")):
             archive.write(image, arcname=f"slide-{int(image.stem) + 1:02d}.png")
     return Response(
-        stream.getvalue(), media_type="application/zip",
+        stream.getvalue(),
+        media_type="application/zip",
         headers={"Content-Disposition": 'attachment; filename="tiktok-slides.zip"'},
     )
