@@ -26,6 +26,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { imageForSlide, paintSlide } from "./slide-canvas";
+import { MusicLessonComposer } from "./MusicLessonComposer";
 import {
   activeCaptionAt,
   adjustCaptionTiming,
@@ -165,6 +166,7 @@ export function TikTokMediaPage() {
   const [aiCount, setAiCount] = useState(5);
   const [externalJson, setExternalJson] = useState("");
   const [proposed, setProposed] = useState<MediaSlide[] | null>(null);
+  const [proposalOrigin, setProposalOrigin] = useState<"music" | null>(null);
   const [notice, setNotice] = useState("");
   const [audioMode, setAudioMode] = useState<MediaAudioMode>("silent");
   const [voiceId, setVoiceId] = useState("");
@@ -193,6 +195,8 @@ export function TikTokMediaPage() {
       setPlayheadMs(0);
       setSourceDurationMs(0);
       setSelectedCaptionId(null);
+      setProposed(null);
+      setProposalOrigin(null);
     }
   }, [projectQuery.data, selectedId]);
 
@@ -302,6 +306,7 @@ export function TikTokMediaPage() {
     mutationFn: () => mediaApi.ideas(aiPrompt.trim(), draft!.format, aiCount),
     onSuccess: (data) => {
       setProposed(data.slides.map((slide) => ({ ...slide, id: crypto.randomUUID() })));
+      setProposalOrigin(null);
       setNotice("A proposta da IA está pronta. Revise os textos antes de aplicar.");
     },
     onError: (error) => setNotice(`${error.message} Use o campo de JSON externo abaixo.`),
@@ -609,6 +614,21 @@ export function TikTokMediaPage() {
           </div>
           {draft && (
             <>
+              <MusicLessonComposer
+                disabled={videoMode}
+                onDraft={(slides) => {
+                  setProposed(slides);
+                  setProposalOrigin("music");
+                  setNotice(
+                    "Mini-aula montada. Confira os 7 quadros e aplique somente após revisar.",
+                  );
+                }}
+                onAiPrompt={(prompt) => {
+                  setAiPrompt(prompt);
+                  setAiCount(7);
+                  setNotice("Prompt preparado. Use “Sugerir roteiro” na seção Roteiro com IA.");
+                }}
+              />
               <div className="tm-card">
                 <h2>
                   <Sparkles size={18} /> Roteiro com IA
@@ -651,6 +671,7 @@ export function TikTokMediaPage() {
                     onClick={() => {
                       try {
                         setProposed(readExternalStoryboard(externalJson));
+                        setProposalOrigin(null);
                         setNotice("Roteiro importado para revisão. Nenhum quadro foi substituído.");
                       } catch (error) {
                         setNotice(error instanceof Error ? error.message : "JSON inválido.");
@@ -662,18 +683,48 @@ export function TikTokMediaPage() {
                 </details>
                 {proposed && (
                   <div className="tm-proposal">
-                    <p>{proposed.length} quadros propostos · revisão obrigatória</p>
+                    <p>
+                      {proposed.length} quadros ·{" "}
+                      {(proposed.reduce((sum, slide) => sum + slide.duration_ms, 0) / 1000).toFixed(
+                        1,
+                      )}{" "}
+                      s · revisão obrigatória
+                    </p>
+                    <ol className="tm-proposal-frames">
+                      {proposed.map((slide, index) => (
+                        <li key={slide.id}>
+                          <strong>
+                            {index + 1}. {slide.heading || titleOf(slide.kind)}
+                          </strong>
+                          <span>{(slide.duration_ms / 1000).toFixed(1)} s</span>
+                          <p>{slide.en || slide.pt}</p>
+                        </li>
+                      ))}
+                    </ol>
                     <button
                       className="tm-accent"
                       onClick={() => {
-                        edit((current) => ({ ...current, slides: proposed }));
+                        edit((current) => ({
+                          ...current,
+                          format: proposalOrigin === "music" ? "lesson_video" : current.format,
+                          slides: proposed,
+                        }));
                         setActiveIndex(0);
                         setProposed(null);
+                        setProposalOrigin(null);
+                        setNotice("Roteiro aplicado. Revise os quadros e aguarde o salvamento.");
                       }}
                     >
                       Aplicar proposta
                     </button>
-                    <button onClick={() => setProposed(null)}>Descartar</button>
+                    <button
+                      onClick={() => {
+                        setProposed(null);
+                        setProposalOrigin(null);
+                      }}
+                    >
+                      Descartar
+                    </button>
                   </div>
                 )}
               </div>

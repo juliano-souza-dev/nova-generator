@@ -154,6 +154,53 @@
   display: grid;
   gap: 7px;
 }
+.tm-proposal-frames {
+  margin: 0;
+  padding: 0 0 0 18px;
+  max-height: 280px;
+  overflow-y: auto;
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+}
+.tm-proposal-frames li {
+  padding-right: 5px;
+}
+.tm-proposal-frames li span {
+  margin-left: 8px;
+  color: #a9d8df;
+}
+.tm-proposal-frames li p {
+  margin: 4px 0 0;
+}
+.tm-music-composer {
+  border-color: #35848e;
+}
+.tm-music-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.tm-music-fields {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.tm-music-duration {
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: #123b42;
+  color: #9defe8;
+  font-size: 13px;
+  font-weight: 750;
+}
+.tm-card .tm-music-reset {
+  border: 0;
+  padding: 5px;
+  background: transparent;
+  color: #a7b5cc;
+  font-size: 12px;
+}
 .tm-inline-label {
   display: flex;
   align-items: center;
