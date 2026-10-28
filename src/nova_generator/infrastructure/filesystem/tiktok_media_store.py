@@ -72,7 +72,9 @@ class MediaProjectStore:
                 )
             updated = MediaProject.model_validate({
                 **current.model_dump(),
-                **edit.model_dump(),
+                # Older clients omit video fields. Only explicit edits may
+                # modify a source/caption configuration persisted by v1.
+                **edit.model_dump(exclude_unset=True),
                 "revision": current.revision + 1,
                 "audio_filename": current.audio_filename,
             })

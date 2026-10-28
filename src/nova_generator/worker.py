@@ -102,7 +102,7 @@ def main() -> None:
         worker_id=f"local-{os.getpid()}",
         handlers={
             "synthesize_voice_preview": make_voice_preview_handler(speech),
-            "tiktok.render": make_media_render_handler(speech),
+            "tiktok.render": make_media_render_handler(speech, editorial_repository),
             "story.render": make_story_render_handler(
                 settings.media_cache_root, RenderStory(speech, FfmpegStoryVideoRenderer())
             ),

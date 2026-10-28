@@ -63,6 +63,26 @@ corte. O worker gera o MP4 do projeto, waveform e transcrição candidata com Fa
 Editorial. Os jobs usam o mesmo worker local; em caso de falha, consulte **Jobs** e refaça
 somente o download ou corte afetado.
 
+### TikTok Mídia — carrosséis e vídeos com legendas
+
+Abra **TikTok Mídia** para criar um carrossel, vídeo educativo ou vídeo com
+letra e tradução. Você pode criar uma fonte a partir de um link YouTube e
+encaminhá-la ao recorte e transcrição da área **Mídia**. A revisão de inglês,
+português e tempos continua na área **Editorial**; a produção importa essas
+falas revisadas sem alterá-las na fonte.
+
+Em **Vídeo original**, selecione a cena preparada, confira a prévia do corte,
+revise as legendas bilíngues sobrepostas, habilite/desabilite trechos e escolha
+o estilo visual. A linha temporal usa os milissegundos do corte; intervalos
+sem fala não ganham texto. O vídeo final pode preservar seu áudio original.
+
+Em **Carrossel** e nos vídeos de quadros, continue adicionando, reordenando e
+editando telas 9:16, gerando roteiro por IA opcional, anexando áudio ou usando
+uma voz local. Exporte imagens em ZIP ou MP4. A renderização passa pelos jobs:
+acompanhe **Jobs** se demorar, falhar ou precisar ser reexecutada. Um MP4 pronto
+não é enviado automaticamente para o TikTok. Use somente conteúdos que você
+tenha autorização para publicar.
+
 ## Prévia de vozes locais
 
 Instale `chatterbox-tts`, `torch` e `torchaudio` em um ambiente Python separado e

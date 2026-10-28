@@ -3,6 +3,35 @@ import { apiRequest, apiUrl } from "../../lib/api";
 export type MediaFormat = "carousel" | "lesson_video" | "lyrics_video";
 export type MediaTheme = "ihub" | "midnight" | "warm";
 export type MediaKind = "cover" | "lesson" | "example" | "challenge" | "lyric";
+export type MediaVisualMode = "slides" | "video_source";
+export type MediaAudioMode = "silent" | "uploaded" | "voice" | "original";
+
+export type MediaCaption = {
+  cue_id: string;
+  start_ms: number;
+  end_ms: number;
+  en: string;
+  pt: string;
+  highlight: string;
+  note?: string;
+  enabled: boolean;
+};
+
+export type MediaCaptionStyle = {
+  template: "clean" | "impact" | "karaoke";
+  position: "top" | "center" | "bottom";
+  animation: "none" | "fade" | "pop";
+  text_scale: number;
+  text_color: string;
+};
+
+export const DEFAULT_CAPTION_STYLE: MediaCaptionStyle = {
+  template: "clean",
+  position: "bottom",
+  animation: "fade",
+  text_scale: 1,
+  text_color: "#FFFFFF",
+};
 
 export type MediaSlide = {
   id: string;
@@ -22,13 +51,24 @@ export type MediaProject = {
   format: MediaFormat;
   theme: MediaTheme;
   source_project_id: string | null;
+  source_scene_id?: string | null;
+  video_captions?: MediaCaption[];
+  caption_style?: MediaCaptionStyle;
   revision: number;
   slides: MediaSlide[];
   audio_filename: string | null;
 };
 export type MediaEdit = Pick<
   MediaProject,
-  "title" | "format" | "theme" | "source_project_id" | "revision" | "slides"
+  | "title"
+  | "format"
+  | "theme"
+  | "source_project_id"
+  | "source_scene_id"
+  | "video_captions"
+  | "caption_style"
+  | "revision"
+  | "slides"
 >;
 export type MediaRender = { job_id: string; render_id: string; status: string };
 export type MediaIdeas = {
@@ -59,6 +99,7 @@ export const mediaApi = {
     });
   },
   audioUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/audio`),
+  sourceUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/source`),
   ideas: (prompt: string, format: MediaFormat, count: number) =>
     apiRequest<MediaIdeas>("/tiktok-media/ideas", {
       method: "POST",
@@ -82,12 +123,14 @@ export const mediaApi = {
     id: string,
     revision: number,
     images: Blob[],
-    audioMode: "silent" | "uploaded" | "voice",
+    audioMode: MediaAudioMode,
     voiceProfileId: string,
+    visualMode: MediaVisualMode = "slides",
   ) => {
     const body = new FormData();
     body.append("revision", String(revision));
     body.append("audio_mode", audioMode);
+    body.append("visual_mode", visualMode);
     if (audioMode === "voice") body.append("voice_profile_id", voiceProfileId);
     images.forEach((image, index) => body.append("images", image, `slide-${index + 1}.png`));
     return apiRequest<MediaRender>(`/tiktok-media/projects/${id}/render`, {

@@ -44,6 +44,9 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Oferecer uma prévia fiel do iHub diretamente na bancada: `Ctrl+Enter` parte da cue atual,
   `Ctrl+Shift+Enter` parte do início, e o operador alterna EN, PT e Dual. A prévia usa o texto
   editorial literal e os timings locais de word by word, inclusive antes de salvar.
+- Na área TikTok Mídia, exibir o vídeo recortado real com legendas EN/PT temporizadas e estilos
+  editáveis; avisar claramente quando a fonte precisa passar primeiro por recorte, transcrição ou
+  revisão, sem confundir o rascunho da publicação com aprovação das cues na bancada Editorial.
 
 ## Limites
 
@@ -70,6 +73,8 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   não mantém uma word destacada durante gaps reais e interrompe a mídia ao fechar. `Ctrl+Enter`
   aguarda metadados e seek da mídia antes de reproduzir a partir da cue selecionada; somente
   `Ctrl+Shift+Enter` inicia em zero intencionalmente.
+- A prévia do TikTok Mídia usa a linha temporal do corte, preserva pausas entre falas e mostra
+  texto EN/PT sobre o vídeo, sem forçar o usuário a editar JSON para preparar legendas.
 - Ao mover integralmente a primeira/última palavra para a cue adjacente ou o intervalo vazio entre
   as duas, soltar o marcador ou salvar transfere o mesmo ID atomicamente, expande a cue de destino,
   retrai a de origem e sinaliza a revisão das traduções. Enquanto o operador ajusta IN/OUT,

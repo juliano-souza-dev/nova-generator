@@ -9,28 +9,42 @@ import {
   Download,
   FileJson,
   Film,
+  Link2,
   Music2,
   Pause,
   Play,
   Plus,
   Save,
   Sparkles,
+  Subtitles,
   Trash2,
+  Video,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { imageForSlide, paintSlide } from "./slide-canvas";
 import {
+  activeCaptionAt,
+  adjustCaptionTiming,
+  captionsFromApprovedCues,
+  durationLabel,
+} from "./caption-timeline";
+import {
   blankSlide,
+  DEFAULT_CAPTION_STYLE,
   mediaApi,
   readExternalStoryboard,
+  type MediaAudioMode,
+  type MediaCaption,
+  type MediaCaptionStyle,
   type MediaFormat,
   type MediaKind,
   type MediaProject,
   type MediaSlide,
+  type MediaVisualMode,
 } from "./tiktok-api";
 import "./tiktok-media.css";
 
@@ -105,6 +119,7 @@ function EditField({
 }
 
 export function TikTokMediaPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const projects = useQuery({
     queryKey: ["tiktok-projects"],
@@ -132,9 +147,18 @@ export function TikTokMediaPage() {
   const [newFormat, setNewFormat] = useState<MediaFormat>("carousel");
   const [sourceId, setSourceId] = useState("");
   const [sceneId, setSceneId] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [playheadMs, setPlayheadMs] = useState(0);
+  const [sourceDurationMs, setSourceDurationMs] = useState(0);
+  const [selectedCaptionId, setSelectedCaptionId] = useState<string | null>(null);
   const scenes = useQuery({
     queryKey: ["tiktok-scenes", sourceId],
     queryFn: () => studioApi.editorialScenes(sourceId),
+    enabled: Boolean(sourceId),
+  });
+  const sourceMedia = useQuery({
+    queryKey: ["project-media", sourceId],
+    queryFn: () => studioApi.projectMedia(sourceId),
     enabled: Boolean(sourceId),
   });
   const [aiPrompt, setAiPrompt] = useState("");
@@ -142,13 +166,14 @@ export function TikTokMediaPage() {
   const [externalJson, setExternalJson] = useState("");
   const [proposed, setProposed] = useState<MediaSlide[] | null>(null);
   const [notice, setNotice] = useState("");
-  const [audioMode, setAudioMode] = useState<"silent" | "uploaded" | "voice">("silent");
+  const [audioMode, setAudioMode] = useState<MediaAudioMode>("silent");
   const [voiceId, setVoiceId] = useState("");
   const [jobId, setJobId] = useState("");
   const [renderId, setRenderId] = useState("");
   const editVersion = useRef(0);
   const loadedId = useRef<string | null>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (!selectedId && projects.data?.length) selectProject(projects.data[0].id);
@@ -162,11 +187,18 @@ export function TikTokMediaPage() {
       setActiveIndex(0);
       setJobId("");
       setRenderId("");
+      setSourceId(projectQuery.data.source_project_id ?? "");
+      setSceneId(projectQuery.data.source_scene_id ?? "");
+      setAudioMode(projectQuery.data.source_scene_id ? "original" : "silent");
+      setPlayheadMs(0);
+      setSourceDurationMs(0);
+      setSelectedCaptionId(null);
     }
   }, [projectQuery.data, selectedId]);
 
   function edit(change: (current: MediaProject) => MediaProject) {
     editVersion.current += 1;
+    videoRef.current?.pause();
     setDraft((current) => (current ? change(current) : current));
     setDirty(true);
     setNotice("");
@@ -190,6 +222,9 @@ export function TikTokMediaPage() {
         format: value.format,
         theme: value.theme,
         source_project_id: value.source_project_id,
+        source_scene_id: value.source_scene_id,
+        video_captions: value.video_captions,
+        caption_style: value.caption_style,
         slides: value.slides,
         revision: value.revision,
       }),
@@ -230,19 +265,38 @@ export function TikTokMediaPage() {
   }, [draft, dirty, save.isPending]);
 
   const active = draft?.slides[activeIndex] ?? null;
+  const videoMode = Boolean(draft?.source_scene_id && draft.format !== "carousel");
+  const captionStyle = draft?.caption_style ?? DEFAULT_CAPTION_STYLE;
+  const captions = draft?.video_captions ?? [];
+  const activeCaption = activeCaptionAt(captions, playheadMs);
+  const selectedCaption =
+    captions.find((caption) => caption.cue_id === selectedCaptionId) ?? activeCaption;
+  // A cena pode apontar para um corte anterior ao último corte do projeto.
+  // Só a rota canônica verifica a cena/ingestão exatas usadas na exportação.
+  // Não requisitar o recorte enquanto a nova cena ainda não foi vinculada no servidor.
+  // Isso evita uma primeira resposta 404 persistente no elemento de vídeo.
+  const sourceVideoUrl =
+    videoMode &&
+    draft &&
+    projectQuery.data?.source_scene_id === draft.source_scene_id &&
+    projectQuery.data?.source_project_id === draft.source_project_id
+      ? `${mediaApi.sourceUrl(draft.id)}?scene=${encodeURIComponent(draft.source_scene_id!)}`
+      : null;
+  const actualDurationMs =
+    sourceDurationMs || Math.max(0, ...captions.map((caption) => caption.end_ms));
   useEffect(() => {
     const context = previewRef.current?.getContext("2d");
     if (context && active && draft) paintSlide(context, active, draft, activeIndex);
   }, [draft, active, activeIndex]);
 
   useEffect(() => {
-    if (!playing || !active || !draft) return;
+    if (!playing || !active || !draft || videoMode) return;
     const timeout = window.setTimeout(() => {
       if (activeIndex < draft.slides.length - 1) setActiveIndex(activeIndex + 1);
       else setPlaying(false);
     }, active.duration_ms);
     return () => window.clearTimeout(timeout);
-  }, [playing, activeIndex, active, draft]);
+  }, [playing, activeIndex, active, draft, videoMode]);
 
   const ai = useMutation({
     mutationFn: () => mediaApi.ideas(aiPrompt.trim(), draft!.format, aiCount),
@@ -251,6 +305,27 @@ export function TikTokMediaPage() {
       setNotice("A proposta da IA está pronta. Revise os textos antes de aplicar.");
     },
     onError: (error) => setNotice(`${error.message} Use o campo de JSON externo abaixo.`),
+  });
+  const prepareYoutube = useMutation({
+    mutationFn: async () => {
+      const url = youtubeUrl.trim();
+      const parsed = new URL(url);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        throw new Error("Informe um link válido do YouTube.");
+      }
+      return studioApi.createProject({ content_type: "dialogue", youtube_url: url });
+    },
+    onSuccess: (project) => {
+      void queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setSourceId(project.id);
+      setSceneId("");
+      setYoutubeUrl("");
+      navigate(`/media?project=${project.id}`);
+    },
+    onError: (error) =>
+      setNotice(
+        error instanceof TypeError ? "Informe uma URL completa do YouTube." : error.message,
+      ),
   });
   const importCues = useMutation({
     mutationFn: async () => {
@@ -261,7 +336,12 @@ export function TikTokMediaPage() {
           cue.approved_en.trim() && cue.approved_pt.trim() && cue.provenance?.approval !== "draft",
       );
       if (!approved.length) throw new Error("A cena não possui falas aprovadas.");
-      return approved.slice(0, 30).map((cue): MediaSlide => ({
+      if (approved.length > 30) {
+        throw new Error(
+          `Esta cena tem ${approved.length} falas aprovadas. Um carrossel aceita até 30. Use o vídeo com legendas ou prepare uma cena menor.`,
+        );
+      }
+      return approved.map((cue): MediaSlide => ({
         ...blankSlide("lesson"),
         heading: cue.speaker || "ENGLISH IN CONTEXT",
         en: cue.approved_en,
@@ -278,6 +358,36 @@ export function TikTokMediaPage() {
       edit((current) => ({ ...current, source_project_id: sourceId, slides }));
       setActiveIndex(0);
       setNotice(`${slides.length} falas importadas. Revise o enquadramento e a tradução.`);
+    },
+    onError: (error) => setNotice(error.message),
+  });
+  const importVideoCues = useMutation({
+    mutationFn: async () => {
+      if (!sceneId || !sourceId) throw new Error("Selecione uma cena revisada.");
+      const sourceCues = await studioApi.editorialCues(sceneId);
+      const prepared = captionsFromApprovedCues(sourceCues);
+      if (!prepared.length) {
+        throw new Error("A cena não possui falas revisadas com inglês e tradução aprovados.");
+      }
+      return prepared;
+    },
+    onSuccess: (prepared) => {
+      videoRef.current?.pause();
+      edit((current) => ({
+        ...current,
+        source_project_id: sourceId,
+        source_scene_id: sceneId,
+        video_captions: prepared,
+        caption_style: current.caption_style ?? { ...DEFAULT_CAPTION_STYLE },
+        format: current.format === "carousel" ? "lyrics_video" : current.format,
+      }));
+      setPlayheadMs(prepared[0].start_ms);
+      setSourceDurationMs(0);
+      setSelectedCaptionId(prepared[0].cue_id);
+      setAudioMode("original");
+      setNotice(
+        `${prepared.length} falas revisadas adicionadas ao vídeo. A tradução pode ser ajustada aqui sem alterar o Editorial.`,
+      );
     },
     onError: (error) => setNotice(error.message),
   });
@@ -306,8 +416,12 @@ export function TikTokMediaPage() {
     mutationFn: async () => {
       if (!draft) throw new Error("Abra um projeto.");
       if (dirty || save.isPending) throw new Error("Aguarde o salvamento antes de exportar.");
-      const images = await Promise.all(draft.slides.map((_, index) => imageForSlide(draft, index)));
-      return mediaApi.render(draft.id, draft.revision, images, audioMode, voiceId);
+      const visualMode: MediaVisualMode = videoMode ? "video_source" : "slides";
+      const images =
+        visualMode === "slides"
+          ? await Promise.all(draft.slides.map((_, index) => imageForSlide(draft, index)))
+          : [];
+      return mediaApi.render(draft.id, draft.revision, images, audioMode, voiceId, visualMode);
     },
     onSuccess: (job) => {
       setJobId(job.job_id);
@@ -332,6 +446,60 @@ export function TikTokMediaPage() {
       slides: current.slides.map((slide, index) =>
         index === activeIndex ? { ...slide, ...patch } : slide,
       ),
+    }));
+  }
+
+  function seekVideo(timeMs: number) {
+    const target = Math.max(0, Math.min(actualDurationMs, Math.round(timeMs)));
+    setPlayheadMs(target);
+    if (videoRef.current) videoRef.current.currentTime = target / 1000;
+  }
+
+  async function toggleVideoPlayback() {
+    const player = videoRef.current;
+    if (!player) return;
+    if (player.paused) {
+      try {
+        await player.play();
+      } catch {
+        setNotice("Não foi possível reproduzir o vídeo. Verifique se o recorte está disponível.");
+      }
+    } else {
+      player.pause();
+    }
+  }
+
+  function updateCaption(cueId: string, patch: Partial<MediaCaption>) {
+    videoRef.current?.pause();
+    edit((current) => ({
+      ...current,
+      video_captions: (current.video_captions ?? []).map((cue) =>
+        cue.cue_id === cueId ? { ...cue, ...patch } : cue,
+      ),
+    }));
+  }
+
+  function setCaptionTiming(cueId: string, edge: "start_ms" | "end_ms", value: number) {
+    const caption = captions.find((cue) => cue.cue_id === cueId);
+    if (!caption) return;
+    const updated = adjustCaptionTiming(
+      captions,
+      cueId,
+      { start_ms: caption.start_ms, end_ms: caption.end_ms, [edge]: value },
+      actualDurationMs,
+    );
+    if (updated === captions) {
+      setNotice("Os horários não podem se sobrepor ou ultrapassar a duração do vídeo.");
+      return;
+    }
+    videoRef.current?.pause();
+    edit((current) => ({ ...current, video_captions: updated }));
+  }
+
+  function changeCaptionStyle(change: Partial<MediaCaptionStyle>) {
+    edit((current) => ({
+      ...current,
+      caption_style: { ...DEFAULT_CAPTION_STYLE, ...current.caption_style, ...change },
     }));
   }
 
@@ -511,8 +679,32 @@ export function TikTokMediaPage() {
               </div>
               <div className="tm-card">
                 <h2>
-                  <ArrowLeft size={18} /> Importar do Generator
+                  <Video size={18} /> Vídeo e legendas
                 </h2>
+                <div className="tm-source-create">
+                  <p className="tm-small">
+                    Cole o link da música, cena ou entrevista. O recorte, a transcrição e a revisão
+                    continuam no mesmo Generator.
+                  </p>
+                  <label className="tm-field">
+                    <span>Link do YouTube</span>
+                    <input
+                      type="url"
+                      aria-label="URL do YouTube para preparar a fonte"
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      value={youtubeUrl}
+                      onChange={(event) => setYoutubeUrl(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    onClick={() => prepareYoutube.mutate()}
+                    disabled={prepareYoutube.isPending || !youtubeUrl.trim()}
+                  >
+                    <Link2 size={16} />{" "}
+                    {prepareYoutube.isPending ? "Preparando fonte…" : "Preparar esse vídeo"}
+                  </button>
+                </div>
+                <p className="tm-small">Ou reaproveite um vídeo que você já preparou:</p>
                 <select
                   aria-label="Projeto de origem"
                   value={sourceId}
@@ -540,15 +732,34 @@ export function TikTokMediaPage() {
                     </option>
                   ))}
                 </select>
+                {sourceId && (
+                  <div className="tm-preparation-links">
+                    <Link to={`/media?project=${sourceId}`}>Recortar e transcrever</Link>
+                    <Link to={`/editorial?project=${sourceId}`}>Revisar falas e tradução</Link>
+                  </div>
+                )}
+                {sourceMedia.isError && (
+                  <p className="tm-small" role="status">
+                    Fonte não preparada. Abra o recorte e a transcrição primeiro.
+                  </p>
+                )}
+                <button
+                  className="tm-accent"
+                  onClick={() => importVideoCues.mutate()}
+                  disabled={!sceneId || importVideoCues.isPending}
+                >
+                  <Subtitles size={16} /> Usar vídeo com legendas revisadas
+                </button>
                 <button
                   onClick={() => importCues.mutate()}
                   disabled={!sceneId || importCues.isPending}
                 >
-                  Importar falas revisadas
+                  Transformar falas em quadros
                 </button>
                 <p className="tm-small">
-                  Usa EN/PT aprovados no Editorial. Para criar novos recortes e transcrever, acesse{" "}
-                  <Link to="/media">Mídia</Link>.
+                  As legendas usam os tempos reais do corte. Nenhuma fala é publicada sem a sua
+                  revisão. Se você acabou de preparar uma fonte, selecione-a acima quando voltar a
+                  esta área.
                 </p>
               </div>
             </>
@@ -569,14 +780,30 @@ export function TikTokMediaPage() {
                 <span className="tm-eyebrow">PRÉVIA · 9:16 · 1080 × 1920</span>
                 <span className="tm-toolbar-actions">
                   <button
-                    title="Quadro anterior"
-                    onClick={() => setActiveIndex(Math.max(0, activeIndex - 1))}
+                    title={videoMode ? "Legenda anterior" : "Quadro anterior"}
+                    onClick={() => {
+                      if (videoMode) {
+                        const previous = [...captions]
+                          .reverse()
+                          .find((cue) => cue.enabled && cue.start_ms < playheadMs - 100);
+                        if (previous) {
+                          setSelectedCaptionId(previous.cue_id);
+                          seekVideo(previous.start_ms);
+                        }
+                      } else {
+                        setActiveIndex(Math.max(0, activeIndex - 1));
+                      }
+                    }}
                   >
                     <ArrowLeft size={16} />
                   </button>
                   <button
                     title={playing ? "Pausar" : "Reproduzir sequência"}
                     onClick={() => {
+                      if (videoMode) {
+                        void toggleVideoPlayback();
+                        return;
+                      }
                       if (!playing && activeIndex === draft.slides.length - 1) setActiveIndex(0);
                       setPlaying(!playing);
                     }}
@@ -584,89 +811,215 @@ export function TikTokMediaPage() {
                     {playing ? <Pause size={16} /> : <Play size={16} />}
                   </button>
                   <button
-                    title="Próximo quadro"
-                    onClick={() =>
-                      setActiveIndex(Math.min(draft.slides.length - 1, activeIndex + 1))
-                    }
+                    title={videoMode ? "Próxima legenda" : "Próximo quadro"}
+                    onClick={() => {
+                      if (videoMode) {
+                        const next = captions.find(
+                          (cue) => cue.enabled && cue.start_ms > playheadMs + 100,
+                        );
+                        if (next) {
+                          setSelectedCaptionId(next.cue_id);
+                          seekVideo(next.start_ms);
+                        }
+                      } else {
+                        setActiveIndex(Math.min(draft.slides.length - 1, activeIndex + 1));
+                      }
+                    }}
                   >
                     <ArrowRight size={16} />
                   </button>
                 </span>
               </div>
-              <div className="tm-stage">
-                <canvas
-                  ref={previewRef}
-                  width={1080}
-                  height={1920}
-                  aria-label="Prévia do quadro 9:16"
-                  role="img"
-                />
-              </div>
-              <div className="tm-timeline-heading">
-                <h2>
-                  Sequência{" "}
-                  <span>
-                    {draft.slides.length} quadros ·{" "}
-                    {(draft.slides.reduce((sum, item) => sum + item.duration_ms, 0) / 1000).toFixed(
-                      1,
-                    )}{" "}
-                    s
-                  </span>
-                </h2>
-                <div>
-                  <button
-                    title="Mover para esquerda"
-                    onClick={() => moveSlide(-1)}
-                    disabled={activeIndex === 0}
-                  >
-                    <ArrowUp size={17} />
-                  </button>
-                  <button
-                    title="Mover para direita"
-                    onClick={() => moveSlide(1)}
-                    disabled={activeIndex === draft.slides.length - 1}
-                  >
-                    <ArrowDown size={17} />
-                  </button>
-                  <button
-                    title="Duplicar quadro"
-                    onClick={duplicateSlide}
-                    disabled={draft.slides.length >= 30}
-                  >
-                    <Copy size={17} />
-                  </button>
-                  <button
-                    title="Remover quadro"
-                    onClick={removeSlide}
-                    disabled={draft.slides.length === 1}
-                  >
-                    <Trash2 size={17} />
-                  </button>
-                </div>
-              </div>
-              <div className="tm-timeline" aria-label="Linha do tempo dos quadros">
-                {draft.slides.map((slide, index) => (
-                  <button
-                    key={slide.id}
-                    className={`tm-frame ${activeIndex === index ? "tm-frame-active" : ""}`}
-                    onClick={() => {
-                      setActiveIndex(index);
-                      setPlaying(false);
-                    }}
-                  >
-                    <SlideThumb project={draft} index={index} />
-                    <span>
-                      {index + 1}. {titleOf(slide.kind)}
-                    </span>
-                    <small>{(slide.duration_ms / 1000).toFixed(1)}s</small>
-                  </button>
-                ))}
-                {draft.slides.length < 30 && (
-                  <button className="tm-add-frame" onClick={() => addSlide("lesson")}>
-                    <Plus /> Adicionar
-                  </button>
+              <div className={videoMode ? "tm-stage tm-stage-video" : "tm-stage"}>
+                {videoMode ? (
+                  <div className="tm-video-frame">
+                    {sourceVideoUrl ? (
+                      <video
+                        key={draft.source_scene_id}
+                        ref={videoRef}
+                        src={sourceVideoUrl}
+                        preload="metadata"
+                        playsInline
+                        aria-label="Prévia da cena original com legendas"
+                        onLoadedMetadata={(event) => {
+                          const player = event.currentTarget;
+                          setSourceDurationMs(Math.round(player.duration * 1000));
+                          if (playheadMs > 0) player.currentTime = playheadMs / 1000;
+                        }}
+                        onTimeUpdate={(event) =>
+                          setPlayheadMs(Math.round(event.currentTarget.currentTime * 1000))
+                        }
+                        onPlay={() => setPlaying(true)}
+                        onPause={() => setPlaying(false)}
+                        onEnded={() => setPlaying(false)}
+                        onError={() =>
+                          setNotice(
+                            "A prévia do recorte não carregou. Confira a preparação do vídeo de origem.",
+                          )
+                        }
+                      />
+                    ) : (
+                      <p className="tm-video-empty">Carregando o recorte para a prévia…</p>
+                    )}
+                    {activeCaption && (
+                      <div
+                        key={activeCaption.cue_id}
+                        className={`tm-caption-overlay tm-caption-${captionStyle.template} tm-caption-${captionStyle.position} tm-animation-${captionStyle.animation}`}
+                        style={{
+                          fontSize: `${(((captionStyle.template === "impact" ? 70 : 58) * captionStyle.text_scale * 100) / 1080).toFixed(3)}cqw`,
+                          color: captionStyle.text_color,
+                        }}
+                        aria-live="off"
+                      >
+                        <p className="tm-caption-en">
+                          {activeCaption.highlight &&
+                          activeCaption.en.includes(activeCaption.highlight) ? (
+                            <>
+                              {activeCaption.en.slice(
+                                0,
+                                activeCaption.en.indexOf(activeCaption.highlight),
+                              )}
+                              <mark>{activeCaption.highlight}</mark>
+                              {activeCaption.en.slice(
+                                activeCaption.en.indexOf(activeCaption.highlight) +
+                                  activeCaption.highlight.length,
+                              )}
+                            </>
+                          ) : (
+                            activeCaption.en
+                          )}
+                        </p>
+                        <p className="tm-caption-pt">{activeCaption.pt}</p>
+                        {activeCaption.note && (
+                          <p className="tm-caption-note">{activeCaption.note}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <canvas
+                    ref={previewRef}
+                    width={1080}
+                    height={1920}
+                    aria-label="Prévia do quadro 9:16"
+                    role="img"
+                  />
                 )}
               </div>
+              {videoMode && (
+                <div className="tm-video-transport">
+                  <button
+                    onClick={() => void toggleVideoPlayback()}
+                    disabled={!sourceVideoUrl}
+                    aria-label={playing ? "Pausar vídeo" : "Reproduzir vídeo"}
+                  >
+                    {playing ? <Pause size={16} /> : <Play size={16} />}
+                  </button>
+                  <span className="tm-time-readout">{durationLabel(playheadMs)}</span>
+                  <input
+                    type="range"
+                    aria-label="Posição do vídeo"
+                    min={0}
+                    max={Math.max(1, actualDurationMs)}
+                    step={100}
+                    value={Math.max(0, Math.min(actualDurationMs, playheadMs))}
+                    onChange={(event) => seekVideo(Number(event.target.value))}
+                  />
+                  <span className="tm-time-readout">{durationLabel(actualDurationMs)}</span>
+                </div>
+              )}
+              <div className="tm-timeline-heading">
+                <h2>
+                  {videoMode ? "Legendas sincronizadas" : "Sequência"}{" "}
+                  {videoMode ? (
+                    <span>{captions.filter((cue) => cue.enabled).length} falas no vídeo</span>
+                  ) : (
+                    <span>
+                      {draft.slides.length} quadros ·{" "}
+                      {(
+                        draft.slides.reduce((sum, item) => sum + item.duration_ms, 0) / 1000
+                      ).toFixed(1)}{" "}
+                      s
+                    </span>
+                  )}
+                </h2>
+                {!videoMode && (
+                  <div>
+                    <button
+                      title="Mover para esquerda"
+                      onClick={() => moveSlide(-1)}
+                      disabled={activeIndex === 0}
+                    >
+                      <ArrowUp size={17} />
+                    </button>
+                    <button
+                      title="Mover para direita"
+                      onClick={() => moveSlide(1)}
+                      disabled={activeIndex === draft.slides.length - 1}
+                    >
+                      <ArrowDown size={17} />
+                    </button>
+                    <button
+                      title="Duplicar quadro"
+                      onClick={duplicateSlide}
+                      disabled={draft.slides.length >= 30}
+                    >
+                      <Copy size={17} />
+                    </button>
+                    <button
+                      title="Remover quadro"
+                      onClick={removeSlide}
+                      disabled={draft.slides.length === 1}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+                )}
+              </div>
+              {videoMode ? (
+                <div className="tm-caption-timeline" aria-label="Linha do tempo das legendas">
+                  {captions.map((caption, index) => (
+                    <button
+                      key={caption.cue_id}
+                      className={`tm-caption-segment ${selectedCaption?.cue_id === caption.cue_id ? "tm-caption-segment-active" : ""} ${!caption.enabled ? "tm-caption-segment-disabled" : ""}`}
+                      onClick={() => {
+                        setSelectedCaptionId(caption.cue_id);
+                        videoRef.current?.pause();
+                        seekVideo(caption.start_ms);
+                      }}
+                      aria-label={`Editar fala ${index + 1} em ${durationLabel(caption.start_ms)}`}
+                    >
+                      <span className="tm-segment-time">{durationLabel(caption.start_ms)}</span>
+                      <strong>{caption.en.trim() || `Fala ${index + 1}`}</strong>
+                      <small>{caption.pt.trim()}</small>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="tm-timeline" aria-label="Linha do tempo dos quadros">
+                  {draft.slides.map((slide, index) => (
+                    <button
+                      key={slide.id}
+                      className={`tm-frame ${activeIndex === index ? "tm-frame-active" : ""}`}
+                      onClick={() => {
+                        setActiveIndex(index);
+                        setPlaying(false);
+                      }}
+                    >
+                      <SlideThumb project={draft} index={index} />
+                      <span>
+                        {index + 1}. {titleOf(slide.kind)}
+                      </span>
+                      <small>{(slide.duration_ms / 1000).toFixed(1)}s</small>
+                    </button>
+                  ))}
+                  {draft.slides.length < 30 && (
+                    <button className="tm-add-frame" onClick={() => addSlide("lesson")}>
+                      <Plus /> Adicionar
+                    </button>
+                  )}
+                </div>
+              )}
             </main>
 
             <aside className="tm-inspector">
@@ -682,12 +1035,15 @@ export function TikTokMediaPage() {
                   <span>Formato</span>
                   <select
                     value={draft.format}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      if (event.target.value === "carousel" && audioMode === "original") {
+                        setAudioMode("silent");
+                      }
                       edit((current) => ({
                         ...current,
                         format: event.target.value as MediaFormat,
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     <option value="carousel">Carrossel</option>
                     <option value="lesson_video">Vídeo educativo</option>
@@ -711,7 +1067,178 @@ export function TikTokMediaPage() {
                   </select>
                 </label>
               </div>
-              {active && (
+              {videoMode && (
+                <div className="tm-card tm-caption-editor">
+                  <h2>
+                    <Subtitles size={18} /> Legendas e efeitos
+                  </h2>
+                  <p className="tm-small">
+                    Prévia em cima do vídeo original. Use a linha do tempo para escolher a fala,
+                    ajustar a tradução e destacar expressões. As alterações ficam só nesta produção.
+                  </p>
+                  <label className="tm-field">
+                    <span>Estilo</span>
+                    <select
+                      aria-label="Estilo das legendas"
+                      value={captionStyle.template}
+                      onChange={(event) =>
+                        changeCaptionStyle({
+                          template: event.target.value as MediaCaptionStyle["template"],
+                        })
+                      }
+                    >
+                      <option value="clean">Leve e elegante</option>
+                      <option value="impact">Impacto</option>
+                      <option value="karaoke">Destaque da fala</option>
+                    </select>
+                  </label>
+                  <label className="tm-field">
+                    <span>Posição</span>
+                    <select
+                      aria-label="Posição das legendas"
+                      value={captionStyle.position}
+                      onChange={(event) =>
+                        changeCaptionStyle({
+                          position: event.target.value as MediaCaptionStyle["position"],
+                        })
+                      }
+                    >
+                      <option value="top">Superior</option>
+                      <option value="center">Centro</option>
+                      <option value="bottom">Inferior</option>
+                    </select>
+                  </label>
+                  <label className="tm-field">
+                    <span>Animação</span>
+                    <select
+                      aria-label="Animação das legendas"
+                      value={captionStyle.animation}
+                      onChange={(event) =>
+                        changeCaptionStyle({
+                          animation: event.target.value as MediaCaptionStyle["animation"],
+                        })
+                      }
+                    >
+                      <option value="none">Sem animação</option>
+                      <option value="fade">Aparecer suavemente</option>
+                      <option value="pop">Destacar ao entrar</option>
+                    </select>
+                  </label>
+                  <label className="tm-field">
+                    <span>Tamanho do texto: {Math.round(captionStyle.text_scale * 100)}%</span>
+                    <input
+                      type="range"
+                      aria-label="Tamanho das legendas"
+                      min={0.6}
+                      max={1.6}
+                      step={0.1}
+                      value={captionStyle.text_scale}
+                      onChange={(event) =>
+                        changeCaptionStyle({ text_scale: Number(event.target.value) })
+                      }
+                    />
+                  </label>
+                  <label className="tm-field">
+                    <span>Cor das legendas</span>
+                    <input
+                      type="color"
+                      aria-label="Cor das legendas"
+                      value={captionStyle.text_color}
+                      onChange={(event) =>
+                        changeCaptionStyle({ text_color: event.target.value.toUpperCase() })
+                      }
+                    />
+                  </label>
+                  {selectedCaption ? (
+                    <>
+                      <div className="tm-editor-separator" />
+                      <h2>Fala selecionada · {durationLabel(selectedCaption.start_ms)}</h2>
+                      <label className="tm-enabled-toggle">
+                        <input
+                          type="checkbox"
+                          checked={selectedCaption.enabled}
+                          onChange={(event) =>
+                            updateCaption(selectedCaption.cue_id, { enabled: event.target.checked })
+                          }
+                        />
+                        Mostrar esta legenda no vídeo
+                      </label>
+                      <EditField
+                        label="Inglês"
+                        value={selectedCaption.en}
+                        onChange={(en) => updateCaption(selectedCaption.cue_id, { en })}
+                        multiline
+                        maxLength={600}
+                      />
+                      <EditField
+                        label="Tradução"
+                        value={selectedCaption.pt}
+                        onChange={(pt) => updateCaption(selectedCaption.cue_id, { pt })}
+                        multiline
+                        maxLength={800}
+                      />
+                      <EditField
+                        label="Palavra ou expressão em destaque"
+                        value={selectedCaption.highlight}
+                        onChange={(highlight) =>
+                          updateCaption(selectedCaption.cue_id, { highlight })
+                        }
+                        maxLength={120}
+                        hint="Use exatamente o trecho que aparece no inglês."
+                      />
+                      <EditField
+                        label="Mini-aula opcional"
+                        value={selectedCaption.note ?? ""}
+                        onChange={(note) => updateCaption(selectedCaption.cue_id, { note })}
+                        multiline
+                        maxLength={300}
+                        hint="Uma explicação curta que aparece abaixo da tradução no vídeo."
+                      />
+                      <div className="tm-caption-timing">
+                        <label className="tm-field">
+                          <span>Entrada (segundos)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={Math.max(0, actualDurationMs / 1000)}
+                            step={0.1}
+                            aria-label="Entrada da legenda em segundos"
+                            value={selectedCaption.start_ms / 1000}
+                            onChange={(event) =>
+                              setCaptionTiming(
+                                selectedCaption.cue_id,
+                                "start_ms",
+                                Number(event.target.value) * 1000,
+                              )
+                            }
+                          />
+                        </label>
+                        <label className="tm-field">
+                          <span>Saída (segundos)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={Math.max(0, actualDurationMs / 1000)}
+                            step={0.1}
+                            aria-label="Saída da legenda em segundos"
+                            value={selectedCaption.end_ms / 1000}
+                            onChange={(event) =>
+                              setCaptionTiming(
+                                selectedCaption.cue_id,
+                                "end_ms",
+                                Number(event.target.value) * 1000,
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="tm-small">Toque em uma fala da linha do tempo para editar.</p>
+                  )}
+                </div>
+              )}
+              {!videoMode && active && (
                 <div className="tm-card">
                   <h2>Editar quadro {activeIndex + 1}</h2>
                   <label className="tm-field">
@@ -814,9 +1341,10 @@ export function TikTokMediaPage() {
                     value={audioMode}
                     onChange={(event) => setAudioMode(event.target.value as typeof audioMode)}
                   >
+                    {videoMode && <option value="original">Som original do vídeo</option>}
                     <option value="silent">Sem áudio</option>
                     <option value="uploaded">Áudio enviado</option>
-                    <option value="voice">Narração com voz do Generator</option>
+                    {!videoMode && <option value="voice">Narração com voz do Generator</option>}
                   </select>
                 </label>
                 {audioMode === "voice" && (
@@ -833,25 +1361,34 @@ export function TikTokMediaPage() {
                     <Link to="/voices">Gerenciar vozes</Link>
                   </label>
                 )}
-                <button
-                  className="tm-accent"
-                  onClick={() => exportSlides.mutate()}
-                  disabled={dirty || save.isPending || exportSlides.isPending}
-                >
-                  <Download size={16} />{" "}
-                  {exportSlides.isPending ? "Preparando…" : "Baixar carrossel (ZIP)"}
-                </button>
+                {!videoMode && (
+                  <button
+                    className="tm-accent"
+                    onClick={() => exportSlides.mutate()}
+                    disabled={dirty || save.isPending || exportSlides.isPending}
+                  >
+                    <Download size={16} />{" "}
+                    {exportSlides.isPending ? "Preparando…" : "Baixar carrossel (ZIP)"}
+                  </button>
+                )}
                 <button
                   onClick={() => render.mutate()}
                   disabled={
                     dirty ||
                     save.isPending ||
                     render.isPending ||
+                    (videoMode &&
+                      (!draft.source_scene_id || !captions.some((cue) => cue.enabled))) ||
                     (audioMode === "voice" && !voiceId) ||
                     (audioMode === "uploaded" && !draft.audio_filename)
                   }
                 >
-                  <Film size={16} /> {render.isPending ? "Enviando quadros…" : "Gerar vídeo MP4"}
+                  <Film size={16} />{" "}
+                  {render.isPending
+                    ? "Preparando vídeo…"
+                    : videoMode
+                      ? "Gerar vídeo com legendas"
+                      : "Gerar vídeo MP4"}
                 </button>
                 {jobId && (
                   <p className="tm-small">

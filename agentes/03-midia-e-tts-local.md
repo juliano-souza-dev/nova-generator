@@ -16,6 +16,8 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Usar cache de áudio por conteúdo e permitir reprocessamento seletivo de artefatos inválidos.
 - Implementar jobs retomáveis e manter Groq fora da geração de voz.
 - Produzir carrosséis PNG/ZIP e vídeos verticais TikTok Mídia usando o mesmo cache de síntese e o FFmpeg local, sem alterar contratos iHub; os quadros ficam congelados por revisão e hash.
+- No TikTok Mídia, também reaproveitar um corte verificado já existente no Generator para gerar vídeo vertical com as falas EN/PT escolhidas no editor; os tempos são relativos ao corte, respeitam silêncios e não alteram a aprovação editorial.
+- Congelar o SHA-256 do corte e as legendas com o job, compor overlays Unicode e preservar o áudio original quando solicitado; manter separada a exportação anterior baseada em quadros.
 - Expor download, corte, waveform e ASR como jornada derivada dos jobs e artefatos; o ASR usa
   sempre o MP4 cortado e o downloader registra sua estratégia de fallback.
 
@@ -31,3 +33,4 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - O reel contém intervalos corretos por cue e seu manifesto é validado contra o arquivo final.
 - Falhas de TTS ou render não corrompem artefatos aprovados e podem ser retomadas.
 - Todo artefato final informa origem textual, perfil de voz, configuração e hashes.
+- A prévia de vídeo e o MP4 usam o mesmo recorte e janelas de cue; gaps não contêm legenda, o áudio original não é substituído silenciosamente e um job com fonte alterada falha sem sobrescrever artefatos.
