@@ -83,6 +83,15 @@ acompanhe **Jobs** se demorar, falhar ou precisar ser reexecutada. Um MP4 pronto
 não é enviado automaticamente para o TikTok. Use somente conteúdos que você
 tenha autorização para publicar.
 
+Em **Inglês na Vida Real · Música**, informe título/artista, um intervalo de 30–60 s
+e a expressão que deseja ensinar. Revise explicação, estrutura, exemplos e desafio
+na seção expansível; **Montar mini-aula** prepara sete quadros com duração total
+exata, que você confere antes de **Aplicar proposta**. Depois, edite e exporte
+como um vídeo educativo. **Preparar versão com IA** preenche um prompt para o
+gerador Groq já existente (ou para adaptação por IA externa). O intervalo é apenas
+uma referência: faça o recorte real em **Mídia** e anexe áudio autorizado no
+estúdio, se necessário. O compositor não busca nem insere letras ou áudio.
+
 ## Prévia de vozes locais
 
 Instale `chatterbox-tts`, `torch` e `torchaudio` em um ambiente Python separado e
