@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lyricWords } from "./lyric-timing";
+import { handwritingProgress, lyricWords } from "./lyric-timing";
 
 describe("progressive lyric cues", () => {
   it("keeps spaces and literal text while lighting up the current word", () => {
@@ -21,5 +21,15 @@ describe("progressive lyric cues", () => {
         .map((item) => item.text)
         .join(""),
     ).toBe("Oi! ❤️");
+  });
+});
+
+
+describe("handwritten subtitle reveal", () => {
+  it("reveals progressively, clamps and reaches full text before the end", () => {
+    expect(handwritingProgress(1000, 4000, 900)).toBe(0);
+    expect(handwritingProgress(1000, 4000, 2200)).toBe(50);
+    expect(handwritingProgress(1000, 4000, 3400)).toBe(100);
+    expect(handwritingProgress(1000, 4000, 5000)).toBe(100);
   });
 });

@@ -125,6 +125,19 @@ describe("TikTok Media focused workstation", () => {
     expect(screen.getByLabelText("Estilo das legendas")).toHaveValue("impact");
   });
 
+  it("applies handwritten, neon and pop effects to the current production", async () => {
+    renderStudio();
+    await screen.findByRole("button", { name: "Editar fala 1 em 00:00.0" });
+    fireEvent.click(screen.getByRole("button", { name: /Visual/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Escrita à mão/ }));
+    expect(screen.getByLabelText("Estilo das legendas")).toHaveValue("handwriting");
+    expect(screen.getByText(/Um lápis acompanha/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Neon Beat/ }));
+    expect(screen.getByLabelText("Estilo das legendas")).toHaveValue("neon");
+    fireEvent.click(screen.getByRole("button", { name: /Pop Star/ }));
+    expect(screen.getByLabelText("Estilo das legendas")).toHaveValue("popstar");
+  });
+
   it("keeps only one source tool and one inspector tool visible at a time", async () => {
     renderStudio();
     await screen.findByRole("button", { name: "Editar fala 1 em 00:00.0" });

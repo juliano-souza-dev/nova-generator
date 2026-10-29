@@ -73,17 +73,22 @@ def _karaoke_words(value: str, duration_ms: int) -> str:
 
 
 def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle) -> str:
-    """Produce a 1080x1920 overlay preserving millisecond-based cue windows."""
+    """Render video effects using ASS so the exported MP4 matches the editor."""
+    template = style.template
     alignment = {"top": 8, "center": 5, "bottom": 2}[style.position]
-    font_size = round(
-        (90 if style.template == "karaoke" else 70 if style.template == "impact" else 58)
-        * style.text_scale
-    )
+    sizes = {"clean": 58, "impact": 70, "karaoke": 90,
+             "handwriting": 82, "neon": 78, "popstar": 88, "cinema": 63}
+    font_size = round(sizes[template] * style.text_scale)
     margin_v = 225 if style.position != "center" else 0
-    outline = 5 if style.template == "impact" else 3
-    bold = -1 if style.template == "impact" else 0
+    outline = {"impact": 5, "neon": 6, "popstar": 5, "handwriting": 2}.get(template, 3)
+    bold = -1 if template in {"impact", "karaoke", "neon", "popstar"} else 0
+    font = ("Comic Sans MS" if template == "handwriting"
+            else "Georgia" if template == "cinema" else "Arial")
     foreground = _ass_color(style.text_color)
-    accent = "&H0000EFFF&" if style.template == "karaoke" else "&H0000D9FF&"
+    accent = ("&H00FFE57D&" if template == "neon"
+              else "&H0000C8FF&" if template in {"karaoke", "handwriting", "popstar"}
+              else "&H0000D9FF&")
+    outline_color = "&H00904738&" if template == "neon" else "&H00202020&"
     translation = "&H00F4F4FA&"
     animation = {
         "none": "",
@@ -107,7 +112,7 @@ def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle) -> str:
             "Alignment, MarginL, MarginR, MarginV, Encoding"
         ),
         (
-            f"Style: Default,Arial,{font_size},{foreground},{accent},&H00202020&,"
+            f"Style: Default,{font},{font_size},{foreground},{accent},{outline_color},"
             f"&H90000000&,{bold},0,0,0,100,100,0,0,1,{outline},1,"
             f"{alignment},70,70,{margin_v},1"
         ),
@@ -118,25 +123,65 @@ def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle) -> str:
     for caption in sorted(
         (item for item in captions if item.enabled), key=lambda item: item.start_ms
     ):
-        karaoke = style.template == "karaoke"
+        start = _ass_time(caption.start_ms)
+        end = _ass_time(caption.end_ms)
+        duration = caption.end_ms - caption.start_ms
+        event = f"Dialogue: 0,{start},{end},Default,,0,0,0,,"
+        if template == "handwriting":
+            # Smooth left-to-right clipping simulates pencil lettering.
+            # ASS/libass substitutes the handwritten font when unavailable.
+            reveal = max(100, min(3000, round(duration * 0.8)))
+            y = {"top": 280, "center": 935, "bottom": 1575}[style.position]
+            x_start, x_end = 90, 990
+            drawing = (
+                rf"{{\an5\pos(540,{y})\clip({x_start},0,{x_start},1920)"
+                rf"\t(0,{reveal},\clip({x_start},0,{x_end},1920))}}"
+                + _literal(caption.en)
+            )
+            lines.append(event + drawing)
+            pencil = (
+                rf"{{\an5\fs60\bord2\c{accent}"
+                rf"\move({x_start},{y + 58},{x_end},{y + 58},0,{reveal})}}✎"
+            )
+            # Pencil stops when the written sentence has appeared.
+            lines.append(f"Dialogue: 1,{start},{_ass_time(caption.start_ms + reveal)},"
+                         f"Default,,0,0,0,,{pencil}")
+            if caption.pt:
+                lines.append(
+                    event + rf"{{\an5\pos(540,{y + round(font_size * 1.25)})"
+                    rf"\fs{round(font_size * 0.68)}\c{translation}}}"
+                    + _literal(caption.pt)
+                )
+            if caption.note:
+                lines.append(
+                    event + rf"{{\an5\pos(540,{y + round(font_size * 2.05)})"
+                    rf"\fs{round(font_size * 0.52)}\c{accent}}}"
+                    + _literal(caption.note)
+                )
+            continue
+
+        karaoke = template == "karaoke"
         english = (
-            _karaoke_words(caption.en, caption.end_ms - caption.start_ms)
-            if karaoke
+            _karaoke_words(caption.en, duration) if karaoke
             else _highlighted(caption.en, caption.highlight, accent, foreground)
         )
-        portuguese = _literal(caption.pt)
+        override = ""
+        if template == "neon":
+            override = rf"{{\blur4\bord6\3c{outline_color}\t(0,{max(1, duration // 2)},\fscx106\fscy106)\t({max(1, duration // 2)},{duration},\fscx100\fscy100)}}"
+        elif template == "popstar":
+            override = (rf"{{\frz-3\fscx118\fscy118\3c&H008200AE&"
+                        rf"\t(0,260,\frz0\fscx100\fscy100)}}")
+        elif template == "cinema":
+            override = r"{\fsp2\fad(320,320)}"
         color_override = rf"{{\c{accent}\2c{foreground}}}" if karaoke else rf"{{\c{foreground}}}"
-        text = animation + color_override + english
-        if portuguese:
+        text = animation + override + color_override + english
+        if caption.pt:
             text += (
                 rf"\N{{\fs{round(font_size * 0.68)}\c{translation}\2c{translation}}}"
-                if karaoke
+                if karaoke or template == "popstar"
                 else rf"\N{{\c{translation}}}"
-            ) + portuguese
+            ) + _literal(caption.pt)
         if caption.note:
             text += rf"\N{{\fs{round(font_size * 0.7)}\c{accent}}}" + _literal(caption.note)
-        lines.append(
-            f"Dialogue: 0,{_ass_time(caption.start_ms)},{_ass_time(caption.end_ms)},"
-            f"Default,,0,0,0,,{text}"
-        )
+        lines.append(event + text)
     return "\n".join(lines) + "\n"

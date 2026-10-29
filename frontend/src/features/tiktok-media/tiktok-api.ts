@@ -18,7 +18,7 @@ export type MediaCaption = {
 };
 
 export type MediaCaptionStyle = {
-  template: "clean" | "impact" | "karaoke";
+  template: "clean" | "impact" | "karaoke" | "handwriting" | "neon" | "popstar" | "cinema";
   position: "top" | "center" | "bottom";
   animation: "none" | "fade" | "pop";
   text_scale: number;

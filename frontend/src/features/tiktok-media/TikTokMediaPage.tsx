@@ -12,6 +12,9 @@ import {
   Link2,
   Music2,
   Palette,
+  Pencil,
+  Star,
+  Zap,
   Pause,
   Play,
   Plus,
@@ -30,7 +33,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { imageForSlide, paintSlide } from "./slide-canvas";
 import { MusicLessonComposer } from "./MusicLessonComposer";
-import { lyricWords } from "./lyric-timing";
+import { handwritingProgress, lyricWords } from "./lyric-timing";
 import {
   activeCaptionAt,
   adjustCaptionTiming,
@@ -86,6 +89,26 @@ const creationModes = [
   { id: "lesson", label: "Mini-aula", description: "Destaque educativo", icon: Sparkles },
   { id: "carousel", label: "Carrossel", description: "Quadros para deslizar", icon: Clapperboard },
 ] as const;
+
+const effectPresets = [
+  { template: "handwriting", title: "Escrita à mão", subtitle: "Lápis revelando a frase", icon: Pencil },
+  { template: "neon", title: "Neon Beat", subtitle: "Brilho vibrante", icon: Zap },
+  { template: "popstar", title: "Pop Star", subtitle: "Entrada explosiva", icon: Star },
+  { template: "karaoke", title: "Karaokê", subtitle: "Palavra a palavra", icon: Music2 },
+  { template: "cinema", title: "Cinema", subtitle: "Tipografia elegante", icon: Film },
+  { template: "impact", title: "Impacto", subtitle: "Grande e marcante", icon: Sparkles },
+  { template: "clean", title: "Minimal", subtitle: "Limpo e legível", icon: Type },
+] as const;
+
+const presetFontSizes: Record<MediaCaptionStyle["template"], number> = {
+  clean: 58,
+  impact: 70,
+  karaoke: 90,
+  handwriting: 82,
+  neon: 78,
+  popstar: 88,
+  cinema: 63,
+};
 
 function SlideThumb({ project, index }: { project: MediaProject; index: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -1291,13 +1314,41 @@ export function TikTokMediaPage() {
                         key={activeCaption.cue_id}
                         className={`tm-caption-overlay tm-caption-${captionStyle.template} tm-caption-${captionStyle.position} tm-animation-${captionStyle.animation}`}
                         style={{
-                          fontSize: `${(((captionStyle.template === "karaoke" ? 90 : captionStyle.template === "impact" ? 70 : 58) * captionStyle.text_scale * 100) / 1080).toFixed(3)}cqw`,
+                          fontSize: `${((presetFontSizes[captionStyle.template] * captionStyle.text_scale * 100) / 1080).toFixed(3)}cqw`,
                           color: captionStyle.text_color,
                         }}
                         aria-live="off"
                       >
                         <p className="tm-caption-en">
-                          {captionStyle.template === "karaoke" ? (
+                          {captionStyle.template === "handwriting" ? (
+                            <span className="tm-handwriting-line" aria-label={activeCaption.en}>
+                              <span
+                                className="tm-handwriting-ink"
+                                style={{
+                                  clipPath: `inset(0 ${100 - handwritingProgress(
+                                    activeCaption.start_ms,
+                                    activeCaption.end_ms,
+                                    playheadMs,
+                                  )}% 0 0)`,
+                                }}
+                              >
+                                {activeCaption.en}
+                              </span>
+                              <span
+                                className="tm-handwriting-pencil"
+                                aria-hidden="true"
+                                style={{
+                                  left: `${handwritingProgress(
+                                    activeCaption.start_ms,
+                                    activeCaption.end_ms,
+                                    playheadMs,
+                                  )}%`,
+                                }}
+                              >
+                                ✎
+                              </span>
+                            </span>
+                          ) : captionStyle.template === "karaoke" ? (
                             <span className="tm-lyric-line" aria-label={activeCaption.en}>
                               {lyricWords(
                                 activeCaption.en,
@@ -1614,6 +1665,25 @@ export function TikTokMediaPage() {
                         Alterações visíveis imediatamente na prévia. O estilo vale para todos os
                         blocos desta produção.
                       </p>
+                      <div className="tm-effect-gallery" aria-label="Galeria de efeitos visuais">
+                        {effectPresets.map(({ template, title, subtitle, icon: EffectIcon }) => (
+                          <button
+                            key={template}
+                            type="button"
+                            className={captionStyle.template === template ? "tm-effect-active" : ""}
+                            aria-pressed={captionStyle.template === template}
+                            onClick={() => changeCaptionStyle({
+                              template,
+                              position: template === "handwriting" || template === "karaoke" ? "center" : "bottom",
+                              animation: template === "popstar" ? "pop" : template === "cinema" ? "fade" : "none",
+                            })}
+                          >
+                            <EffectIcon size={19} />
+                            <strong>{title}</strong>
+                            <small>{subtitle}</small>
+                          </button>
+                        ))}
+                      </div>
                       <label className="tm-field">
                         <span>Estilo</span>
                         <select
@@ -1628,8 +1698,18 @@ export function TikTokMediaPage() {
                           <option value="clean">Leve e elegante</option>
                           <option value="impact">Impacto</option>
                           <option value="karaoke">Karaokê · palavra por palavra</option>
+                          <option value="handwriting">Escrita à mão · lápis</option>
+                          <option value="neon">Neon Beat · brilho</option>
+                          <option value="popstar">Pop Star · entrada</option>
+                          <option value="cinema">Cinema · elegante</option>
                         </select>
                       </label>
+                      {captionStyle.template === "handwriting" && (
+                        <p className="tm-music-tip">
+                          <Pencil size={15} /> Um lápis acompanha o aparecimento da frase, simulando
+                          escrita manual. A fonte manuscrita depende das fontes disponíveis no sistema.
+                        </p>
+                      )}
                       {captionStyle.template === "karaoke" && (
                         <p className="tm-music-tip">
                           <Music2 size={15} /> As palavras ganham cor conforme o vídeo toca. A

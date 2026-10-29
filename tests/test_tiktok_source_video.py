@@ -361,3 +361,37 @@ def test_http_render_video_mode_accepts_no_slide_images_and_freezes_cut(
     assert payload["source_video_sha256"] == expected_hash
     assert payload["project"]["video_captions"][0]["start_ms"] == 1200
     assert (snapshot_dir / "source.mp4").read_bytes() == source.read_bytes()
+
+
+def test_visual_effects_export_ass_tags_and_keep_literal_captions() -> None:
+    caption = MediaCaption(
+        cue_id=uuid4(), start_ms=1000, end_ms=3500,
+        en="We could make it work!", pt="Podemos fazer isso dar certo!"
+    )
+    for name in ("handwriting", "neon", "popstar", "cinema"):
+        ass = render_ass([caption], MediaCaptionStyle(template=name))
+        assert "We could make it work!" in ass
+        assert "Podemos fazer isso dar certo!" in ass
+        assert "Dialogue: 0,0:00:01.00,0:00:03.50" in ass
+        if name == "handwriting":
+            assert r"\clip(" in ass
+            assert r"\move(" in ass
+            assert "✎" in ass
+            assert ass.count("Dialogue: ") >= 3
+        if name == "neon":
+            assert r"\blur4" in ass
+        if name == "popstar":
+            assert r"\frz-3" in ass
+        if name == "cinema":
+            assert r"\fsp2" in ass
+
+
+def test_new_styles_round_trip_without_migrating_old_projects() -> None:
+    for name in ("handwriting", "neon", "popstar", "cinema"):
+        project = MediaProject(
+            title="Teste", slides=[MediaSlide()],
+            caption_style=MediaCaptionStyle(template=name)
+        )
+        assert MediaProject.model_validate_json(
+            project.model_dump_json()
+        ).caption_style.template == name

@@ -35,7 +35,7 @@ class MediaCaption(BaseModel):
 class MediaCaptionStyle(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    template: Literal["clean", "impact", "karaoke"] = "clean"
+    template: Literal["clean", "impact", "karaoke", "handwriting", "neon", "popstar", "cinema"] = "clean"
     position: Literal["top", "center", "bottom"] = "bottom"
     animation: Literal["none", "fade", "pop"] = "fade"
     text_scale: float = Field(default=1, ge=0.6, le=1.6)
