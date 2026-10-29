@@ -72,7 +72,9 @@ def _karaoke_words(value: str, duration_ms: int) -> str:
     return "".join(result)
 
 
-def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle, paper_theme: str | None = None) -> str:
+def render_ass(
+    captions: list[MediaCaption], style: MediaCaptionStyle, paper_theme: str | None = None
+) -> str:
     """Render video effects using ASS so the exported MP4 matches the editor."""
     template = style.template
     alignment = {"top": 8, "center": 5, "bottom": 2}[style.position]
@@ -84,7 +86,11 @@ def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle, paper_the
     bold = -1 if template in {"impact", "karaoke", "neon", "popstar"} else 0
     font = ("Comic Sans MS" if template == "handwriting"
             else "Georgia" if template == "cinema" else "Arial")
-    ink_color = "#233043" if paper_theme in {"cream", "kraft"} and style.text_color.upper() == "#FFFFFF" else style.text_color
+    ink_color = (
+        "#233043"
+        if paper_theme in {"cream", "kraft"} and style.text_color.upper() == "#FFFFFF"
+        else style.text_color
+    )
     foreground = _ass_color(ink_color)
     accent = ("&H00FFE57D&" if template == "neon"
               else "&H0000C8FF&" if template in {"karaoke", "handwriting", "popstar"}
@@ -168,10 +174,17 @@ def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle, paper_the
         )
         override = ""
         if template == "neon":
-            override = rf"{{\blur4\bord6\3c{outline_color}\t(0,{max(1, duration // 2)},\fscx106\fscy106)\t({max(1, duration // 2)},{duration},\fscx100\fscy100)}}"
+            half = max(1, duration // 2)
+            override = (
+                rf"{{\blur4\bord6\3c{outline_color}"
+                rf"\t(0,{half},\fscx106\fscy106)"
+                rf"\t({half},{duration},\fscx100\fscy100)}}"
+            )
         elif template == "popstar":
-            override = (rf"{{\frz-3\fscx118\fscy118\3c&H008200AE&"
-                        rf"\t(0,260,\frz0\fscx100\fscy100)}}")
+            override = (
+                r"{\frz-3\fscx118\fscy118\3c&H008200AE&"
+                r"\t(0,260,\frz0\fscx100\fscy100)}"
+            )
         elif template == "cinema":
             override = r"{\fsp2\fad(320,320)}"
         color_override = rf"{{\c{accent}\2c{foreground}}}" if karaoke else rf"{{\c{foreground}}}"

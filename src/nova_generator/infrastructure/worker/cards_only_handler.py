@@ -1,4 +1,5 @@
 """Cards-only durable worker: reuse the exact iHub didactic Anki model."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,7 @@ import os
 import shutil
 from hashlib import sha256
 from uuid import UUID
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from nova_generator.application.use_cases.cards_only import hub_item, normalize_cards
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech

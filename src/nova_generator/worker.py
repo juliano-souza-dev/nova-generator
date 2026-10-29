@@ -44,6 +44,7 @@ from nova_generator.infrastructure.speech.chatterbox_nano_synthesizer import (
 )
 from nova_generator.infrastructure.speech.ffprobe_wav_probe import FfprobeWavProbe
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
+from nova_generator.infrastructure.worker.cards_only_handler import make_cards_only_handler
 from nova_generator.infrastructure.worker.editorial_assistance_handler import (
     EditorialAssistanceJobHandler,
 )
@@ -51,7 +52,6 @@ from nova_generator.infrastructure.worker.ingest_scene_media_handler import (
     IngestSceneMediaJobHandler,
 )
 from nova_generator.infrastructure.worker.materials_handler import MaterialsJobHandler
-from nova_generator.infrastructure.worker.cards_only_handler import make_cards_only_handler
 from nova_generator.infrastructure.worker.persistent_worker import PersistentWorker
 from nova_generator.infrastructure.worker.project_media_handler import ProjectMediaJobHandler
 from nova_generator.infrastructure.worker.story_render_handler import make_story_render_handler
