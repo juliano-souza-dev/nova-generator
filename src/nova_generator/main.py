@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 
+from nova_generator.api.routes.cards_only import router as cards_only_router
 from nova_generator.api.routes.editorial import router as editorial_router
 from nova_generator.api.routes.health import router as health_router
 from nova_generator.api.routes.jobs import router as jobs_router
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(stories_router, prefix=settings.api_prefix)
     app.include_router(shadowing_router, prefix=settings.api_prefix)
     app.include_router(tiktok_media_router, prefix=settings.api_prefix)
+    app.include_router(cards_only_router, prefix=settings.api_prefix)
     return app
 
 

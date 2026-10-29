@@ -51,6 +51,7 @@ from nova_generator.infrastructure.worker.ingest_scene_media_handler import (
     IngestSceneMediaJobHandler,
 )
 from nova_generator.infrastructure.worker.materials_handler import MaterialsJobHandler
+from nova_generator.infrastructure.worker.cards_only_handler import make_cards_only_handler
 from nova_generator.infrastructure.worker.persistent_worker import PersistentWorker
 from nova_generator.infrastructure.worker.project_media_handler import ProjectMediaJobHandler
 from nova_generator.infrastructure.worker.story_render_handler import make_story_render_handler
@@ -117,6 +118,7 @@ def main() -> None:
             ),
             "synthesize_material_audio": materials.synthesize,
             "export_materials": materials.export,
+            "cards-only.export": make_cards_only_handler(speech),
             "download_youtube": project_media.download,
             "ingest_scene_media": project_media.ingest,
             "editorial_assistance": EditorialAssistanceJobHandler(

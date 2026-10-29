@@ -23,6 +23,10 @@ describe("Studio shell", () => {
     renderApp("/tiktok-media");
     expect(screen.getByRole("heading", { name: "TikTok Mídia" })).toBeInTheDocument();
   });
+  it("renders the independent Cards route", () => {
+    renderApp("/cards");
+    expect(screen.getByRole("heading", { name: "Cards" })).toBeInTheDocument();
+  });
   it("renders the independent story route", () => {
     renderApp("/story");
     expect(screen.getByRole("heading", { name: "Modo História" })).toBeInTheDocument();

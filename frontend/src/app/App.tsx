@@ -10,6 +10,7 @@ import { ProjectsPage } from "../features/projects/ProjectsPage";
 import { StoryPage } from "../features/story/StoryPage";
 import { VoicesPage } from "../features/voices/VoicesPage";
 import { TikTokMediaPage } from "../features/tiktok-media/TikTokMediaPage";
+import { CardsPage } from "../features/cards/CardsPage";
 
 export function App() {
   return (
@@ -24,6 +25,7 @@ export function App() {
         <Route path="/story" element={<StoryPage />} />
         <Route path="/voices" element={<VoicesPage />} />
         <Route path="/tiktok-media" element={<TikTokMediaPage />} />
+        <Route path="/cards" element={<CardsPage />} />
         <Route path="*" element={<Navigate to="/projects" replace />} />
       </Routes>
     </StudioShell>
