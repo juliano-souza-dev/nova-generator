@@ -1033,24 +1033,33 @@
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
+  /* Keep the editor inside its viewport but allow the subtitle track to scroll. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #52708b #111c30;
   padding: 10px;
   border-radius: 14px;
 }
 .tm-center .tm-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
   flex: 0 0 auto;
+  padding: 4px 0 8px;
   margin-bottom: 9px;
+  background: #111c30;
 }
 .tm-center .tm-stage {
-  flex: 1 1 auto;
+  /* Fixed visual height creates a predictable, reachable scrolling timeline. */
+  flex: 0 0 auto;
+  height: clamp(320px, 46dvh, 510px);
   min-height: 320px;
   max-height: none;
   width: 100%;
   overflow: hidden;
-}
-.tm-center {
-  overflow-y: auto;
-  scrollbar-width: thin;
 }
 .tm-center .tm-stage-video {
   padding: 0;
@@ -1324,3 +1333,43 @@
 .tm-cut-mp3 a, .tm-cut-link { display: inline-flex; align-items: center; justify-content: center;
   gap: 6px; padding: 9px; border: 1px solid #2cc7c3; border-radius: 8px;
   color: #b8ffef; text-decoration: none; font-size: 12px; font-weight: 750; }
+
+/* Subtitle navigation remains available when the central video is tall. */
+.tm-center .tm-jump-captions,
+.tm-center .tm-jump-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #2c8e9a;
+  border-radius: 8px;
+  background: #113b50;
+  color: #ddfffc;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 9px;
+}
+.tm-center .tm-jump-captions:hover,
+.tm-center .tm-jump-preview:hover {
+  background: #185a6b;
+}
+.tm-center .tm-caption-timeline {
+  /* No vertical clipping of the final row and scrollbar. */
+  flex: 0 0 auto;
+  min-height: 147px;
+  overflow: visible;
+  padding-bottom: 10px;
+}
+.tm-center .tm-track-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #52708b #0a1527;
+}
+@media (max-width: 720px) {
+  .tm-page .tm-center {
+    overflow-y: visible;
+    scrollbar-gutter: auto;
+  }
+  .tm-center .tm-toolbar {
+    position: static;
+  }
+}

@@ -151,6 +151,21 @@ describe("TikTok Media focused workstation", () => {
     expect(screen.getByRole("button", { name: /^Vídeo$/ })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("lets the user jump to the timeline and back inside the center panel", async () => {
+    renderStudio();
+    await screen.findByRole("button", { name: "Editar fala 1 em 00:00.0" });
+    const center = screen.getByRole("main", { name: "Editor de vídeo e legendas" });
+    const scrollTo = vi.fn();
+    Object.defineProperty(center, "scrollTo", { configurable: true, value: scrollTo });
+    Object.defineProperty(center, "scrollHeight", { configurable: true, value: 900 });
+    Object.defineProperty(center, "clientHeight", { configurable: true, value: 450 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Ir para as legendas" }));
+    expect(scrollTo).toHaveBeenCalledWith({ top: 450, behavior: "smooth" });
+    fireEvent.click(screen.getByRole("button", { name: "Voltar à prévia" }));
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "smooth" });
+  });
+
   it("keeps only one source tool and one inspector tool visible at a time", async () => {
     renderStudio();
     await screen.findByRole("button", { name: "Editar fala 1 em 00:00.0" });

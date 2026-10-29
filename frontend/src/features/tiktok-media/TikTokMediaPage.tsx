@@ -240,6 +240,16 @@ export function TikTokMediaPage() {
   const previewRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const centerRef = useRef<HTMLElement>(null);
+
+  function scrollEditorTo(where: "preview" | "captions") {
+    const center = centerRef.current;
+    if (!center) return;
+    center.scrollTo({
+      top: where === "captions" ? center.scrollHeight - center.clientHeight : 0,
+      behavior: "smooth",
+    });
+  }
 
   useEffect(() => {
     if (!selectedId && projects.data?.length) selectProject(projects.data[0].id);
@@ -1249,11 +1259,21 @@ export function TikTokMediaPage() {
           </div>
         ) : (
           <>
-            <main className="tm-center">
+            <main className="tm-center" ref={centerRef} aria-label="Editor de vídeo e legendas">
               <div className="tm-toolbar">
                 <span className="tm-eyebrow">
                   PRÉVIA · {creationModes.find(({ id }) => id === creationMode)?.label} · 9:16
                 </span>
+                {videoMode && (
+                  <button
+                    type="button"
+                    className="tm-jump-captions"
+                    onClick={() => scrollEditorTo("captions")}
+                    aria-label="Ir para as legendas"
+                  >
+                    <ArrowDown size={14} /> Legendas
+                  </button>
+                )}
                 {videoMode && (
                   <div className="tm-background-toggle" role="group" aria-label="Imagem de fundo">
                     <button type="button" aria-pressed={backgroundMode === "video"}
@@ -1491,6 +1511,16 @@ export function TikTokMediaPage() {
                     </span>
                   )}
                 </h2>
+                {videoMode && (
+                  <button
+                    type="button"
+                    className="tm-jump-preview"
+                    onClick={() => scrollEditorTo("preview")}
+                    aria-label="Voltar à prévia"
+                  >
+                    <ArrowUp size={14} /> Prévia
+                  </button>
+                )}
                 {!videoMode && (
                   <div>
                     <button
