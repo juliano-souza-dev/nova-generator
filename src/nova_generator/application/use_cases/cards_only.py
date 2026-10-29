@@ -58,7 +58,8 @@ def normalize_cards(document: Any) -> tuple[str, list[dict[str, Any]]]:
             )
         if "tags" not in item:
             item["tags"] = []
-        item.pop("scene_id", None)  # Kept in source materials; unrelated to card face.
+        item.pop("scene_id", None)  # Source metadata, not a card face field.
+        item.pop("audio", None)  # Exported card transport metadata, kept in ZIP.
         try:
             card = DidacticAnkiCard.model_validate_json(json.dumps(item, ensure_ascii=False))
         except (ValidationError, ValueError) as exc:

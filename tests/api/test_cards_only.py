@@ -52,6 +52,29 @@ def test_imports_only_anki_cards_from_full_material_output():
     assert "sections" not in cards[0]
 
 
+def test_exported_cards_json_can_be_reimported_without_audio_metadata():
+    card = _card()
+    original = {
+        "contract": "nova-generator-cards-only/1.0",
+        "title": "Backups",
+        "cards": [
+            {
+                **card,
+                "audio": {
+                    "type": "wav",
+                    "file": f"audio/anki_{card['card_id']}.wav",
+                    "duration_ms": 1000,
+                },
+            },
+        ],
+    }
+    title, cards = normalize_cards(original)
+    assert title == "Backups"
+    assert len(cards) == 1
+    assert cards[0]["card_id"] == card["card_id"]
+    assert "audio" not in cards[0]
+
+
 def test_rejects_fake_highlight_or_duplicate_identity():
     card = _card()
     with pytest.raises(CardsOnlyError, match="destaque inglês"):
