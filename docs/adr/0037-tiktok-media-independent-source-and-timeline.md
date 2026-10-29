@@ -22,6 +22,10 @@ vídeo diretamente no estúdio social.
   e um corte verificável, **mas não aprovação editorial** para produções independentes.
 - O editor mostra player, timeline proporcional ao tempo, bordas de bloco arrastáveis, edição
   EN/PT, destaque, nota, estilo e exportação em painéis contextualizados.
+- A bancada de edição tem navegação compacta, painel esquerdo de ferramentas mutuamente
+  exclusivas (Fonte, Projetos, Criar, Importar) e inspetor contextual à direita (Texto, Visual,
+  Exportar, Projeto). No desktop, vídeo, controles e timeline dividem a altura disponível sem
+  rolagem vertical global; os painéis laterais possuem suas próprias áreas de rolagem.
 - O render continua congelando o corte e o snapshot com hash. Se a fonte mudar, os blocos são
   limpos por escrita atômica. A incorporação do ASR usa revisão otimista e não sobrescreve
   ajustes posteriores do operador; tentativas do mesmo job são idempotentes.
@@ -46,6 +50,9 @@ vídeo diretamente no estúdio social.
 4. `tiktok.render` usa exatamente o corte congelado com timestamps relativos, preserva silêncios
    e não substitui o áudio original inadvertidamente.
 5. Um job atrasado ou repetido não altera um draft editado depois da transcrição.
+6. Em 1366×768 e 1440×900, a bancada cabe na janela, sem overflow horizontal e sem precisar
+   rolar a página para alternar prévia, timeline e edição; apenas uma ferramenta por lateral fica
+   aberta de cada vez.
 
 ## Limites conhecidos
 

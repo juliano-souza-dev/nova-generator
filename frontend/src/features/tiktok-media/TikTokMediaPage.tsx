@@ -11,13 +11,16 @@ import {
   Film,
   Link2,
   Music2,
+  Palette,
   Pause,
   Play,
   Plus,
   Save,
+  Settings2,
   Sparkles,
   Subtitles,
   Trash2,
+  Type,
   Video,
 } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -185,7 +188,10 @@ export function TikTokMediaPage() {
   const [voiceId, setVoiceId] = useState("");
   const [jobId, setJobId] = useState("");
   const [renderId, setRenderId] = useState("");
-  const [inspectorTab, setInspectorTab] = useState<"captions" | "export">("captions");
+  const [railTab, setRailTab] = useState<"source" | "projects" | "ideas" | "reuse">("source");
+  const [inspectorTab, setInspectorTab] = useState<"captions" | "style" | "export" | "settings">(
+    "captions",
+  );
   const editVersion = useRef(0);
   const loadedId = useRef<string | null>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
@@ -202,6 +208,7 @@ export function TikTokMediaPage() {
       (loadedId.current !== selectedId ||
         (!dirty && projectQuery.data.revision > (draft?.revision ?? 0)))
     ) {
+      const changedProduction = loadedId.current !== selectedId;
       loadedId.current = selectedId;
       setDraft(projectQuery.data);
       setDirty(false);
@@ -220,6 +227,10 @@ export function TikTokMediaPage() {
       setSelectedCaptionId(null);
       setProposed(null);
       setProposalOrigin(null);
+      if (changedProduction) {
+        setInspectorTab("captions");
+        setRailTab(projectQuery.data.format === "carousel" ? "ideas" : "source");
+      }
     }
   }, [projectQuery.data, selectedId, dirty, draft?.revision]);
 
@@ -239,6 +250,7 @@ export function TikTokMediaPage() {
       void queryClient.invalidateQueries({ queryKey: ["tiktok-projects"] });
       loadedId.current = null;
       selectProject(project.id);
+      setRailTab(project.format === "carousel" ? "ideas" : "source");
     },
   });
 
@@ -391,6 +403,8 @@ export function TikTokMediaPage() {
       setPlayheadMs(0);
       setSourceDurationMs(0);
       setSelectedCaptionId(null);
+      setRailTab("source");
+      setInspectorTab("captions");
       setYoutubeUrl("");
       setNotice("Download iniciado. Você poderá selecionar o trecho e transcrever aqui mesmo.");
     },
@@ -716,153 +730,192 @@ export function TikTokMediaPage() {
       />
       <div className="tm-workspace">
         <aside className="tm-rail">
-          <div className="tm-card tm-start-card">
-            <h2>
-              <Video size={18} /> Começar com um vídeo
-            </h2>
-            <p className="tm-small">
-              Cole um link do YouTube. O Media vai preparar o vídeo sem criar um projeto Editorial.
-            </p>
-            <input
-              type="url"
-              aria-label="URL do YouTube para preparar a fonte"
-              placeholder="https://www.youtube.com/watch?v=..."
-              value={youtubeUrl}
-              onChange={(event) => setYoutubeUrl(event.target.value)}
-            />
+          <nav className="tm-tool-tabs" aria-label="Ferramentas da produção">
             <button
-              className="tm-accent"
-              onClick={() => prepareYoutube.mutate()}
-              disabled={prepareYoutube.isPending || !youtubeUrl.trim() || dirty || save.isPending}
+              aria-pressed={railTab === "source"}
+              className={railTab === "source" ? "tm-tab-active" : ""}
+              onClick={() => setRailTab("source")}
             >
-              <Link2 size={16} /> {prepareYoutube.isPending ? "Preparando…" : "Usar este vídeo"}
+              <Video size={16} /> Fonte
             </button>
-            {draft?.source_youtube_id && (
-              <div className="tm-source-progress" aria-live="polite">
-                <span>
-                  {sourceStatus.data?.source_ready ? "✓ Vídeo disponível" : "Preparando download…"}
-                </span>
-                {sourceStatus.data?.download_error && (
-                  <p role="alert">{sourceStatus.data.download_error}</p>
-                )}
-                {sourceStatus.data?.source_ready && (
-                  <>
-                    <p className="tm-small">
-                      Escolha o trecho a transcrever (até 3 minutos). Você pode alterar esse recorte
-                      depois.
-                    </p>
-                    <div className="tm-cut-fields">
-                      <label>
-                        Início (s)
-                        <input
-                          type="number"
-                          aria-label="Início do trecho em segundos"
-                          min={0}
-                          step={0.1}
-                          max={Math.max(0, (sourceStatus.data.duration_ms ?? 0) / 1000)}
-                          value={cutStart}
-                          onChange={(e) => setCutStart(Number(e.target.value))}
-                        />
-                      </label>
-                      <label>
-                        Fim (s)
-                        <input
-                          type="number"
-                          aria-label="Fim do trecho em segundos"
-                          min={0.1}
-                          step={0.1}
-                          max={(sourceStatus.data.duration_ms ?? 0) / 1000}
-                          value={cutEnd}
-                          onChange={(e) => setCutEnd(Number(e.target.value))}
-                        />
-                      </label>
-                    </div>
-                    <button
-                      onClick={() => transcribeCut.mutate()}
-                      disabled={
-                        transcribeCut.isPending ||
-                        dirty ||
-                        save.isPending ||
-                        ["queued", "running", "retryable"].includes(
-                          sourceStatus.data.ingest_status ?? "",
-                        ) ||
-                        cutStart < 0 ||
-                        cutEnd <= cutStart ||
-                        cutEnd - cutStart > 180 ||
-                        cutEnd * 1000 > (sourceStatus.data.duration_ms ?? 0)
-                      }
-                    >
-                      <Subtitles size={16} />{" "}
-                      {transcribeCut.isPending ? "Enviando…" : "Transcrever este trecho"}
-                    </button>
-                    {sourceStatus.data.ingest_status && (
-                      <p className="tm-small">
-                        Transcrição:{" "}
-                        {sourceStatus.data.ingest_status === "succeeded"
-                          ? "pronta para editar"
-                          : sourceStatus.data.ingest_status}
-                      </p>
-                    )}
-                    {sourceStatus.data.ingest_error && (
-                      <p role="alert">{sourceStatus.data.ingest_error}</p>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="tm-card">
-            <h2>
-              <Clapperboard size={18} /> Produções
-            </h2>
-            <div className="tm-stack">
-              <select
-                aria-label="Produção selecionada"
-                value={selectedId ?? ""}
-                onChange={(event) => {
-                  if (dirty || save.isPending) {
-                    setNotice("Aguarde o salvamento para trocar de produção.");
-                    return;
-                  }
-                  loadedId.current = null;
-                  selectProject(event.target.value);
-                }}
-              >
-                <option value="">Selecione um projeto</option>
-                {projects.data?.map((item) => (
-                  <option value={item.id} key={item.id}>
-                    {item.title}
-                  </option>
-                ))}
-              </select>
+            <button
+              aria-pressed={railTab === "projects"}
+              className={railTab === "projects" ? "tm-tab-active" : ""}
+              onClick={() => setRailTab("projects")}
+            >
+              <Clapperboard size={16} /> Projetos
+            </button>
+            <button
+              aria-pressed={railTab === "ideas"}
+              className={railTab === "ideas" ? "tm-tab-active" : ""}
+              onClick={() => setRailTab("ideas")}
+              disabled={!draft || draft.format !== "carousel"}
+            >
+              <Sparkles size={16} /> Criar
+            </button>
+            <button
+              aria-pressed={railTab === "reuse"}
+              className={railTab === "reuse" ? "tm-tab-active" : ""}
+              onClick={() => setRailTab("reuse")}
+              disabled={!draft}
+            >
+              <Copy size={16} /> Importar
+            </button>
+          </nav>
+          {railTab === "source" && (
+            <div className="tm-card tm-start-card">
+              <h2>
+                <Video size={18} /> Começar com um vídeo
+              </h2>
+              <p className="tm-small">
+                Cole um link do YouTube. O Media vai preparar o vídeo sem criar um projeto
+                Editorial.
+              </p>
               <input
-                aria-label="Nome da nova produção"
-                value={newTitle}
-                onChange={(event) => setNewTitle(event.target.value)}
-                maxLength={140}
+                type="url"
+                aria-label="URL do YouTube para preparar a fonte"
+                placeholder="https://www.youtube.com/watch?v=..."
+                value={youtubeUrl}
+                onChange={(event) => setYoutubeUrl(event.target.value)}
               />
-              <select
-                aria-label="Formato da nova produção"
-                value={newFormat}
-                onChange={(event) => setNewFormat(event.target.value as MediaFormat)}
-              >
-                <option value="carousel">Carrossel</option>
-                <option value="lesson_video">Vídeo educativo</option>
-                <option value="lyrics_video">Lyrics + tradução</option>
-              </select>
               <button
                 className="tm-accent"
-                onClick={() => create.mutate()}
-                disabled={create.isPending}
+                onClick={() => prepareYoutube.mutate()}
+                disabled={prepareYoutube.isPending || !youtubeUrl.trim() || dirty || save.isPending}
               >
-                <Plus size={16} /> Nova produção
+                <Link2 size={16} /> {prepareYoutube.isPending ? "Preparando…" : "Usar este vídeo"}
               </button>
-              {create.isError && <p role="alert">{create.error.message}</p>}
+              {draft?.source_youtube_id && (
+                <div className="tm-source-progress" aria-live="polite">
+                  <span>
+                    {sourceStatus.data?.source_ready
+                      ? "✓ Vídeo disponível"
+                      : "Preparando download…"}
+                  </span>
+                  {sourceStatus.data?.download_error && (
+                    <p role="alert">{sourceStatus.data.download_error}</p>
+                  )}
+                  {sourceStatus.data?.source_ready && (
+                    <>
+                      <p className="tm-small">
+                        Escolha o trecho a transcrever (até 3 minutos). Você pode alterar esse
+                        recorte depois.
+                      </p>
+                      <div className="tm-cut-fields">
+                        <label>
+                          Início (s)
+                          <input
+                            type="number"
+                            aria-label="Início do trecho em segundos"
+                            min={0}
+                            step={0.1}
+                            max={Math.max(0, (sourceStatus.data.duration_ms ?? 0) / 1000)}
+                            value={cutStart}
+                            onChange={(e) => setCutStart(Number(e.target.value))}
+                          />
+                        </label>
+                        <label>
+                          Fim (s)
+                          <input
+                            type="number"
+                            aria-label="Fim do trecho em segundos"
+                            min={0.1}
+                            step={0.1}
+                            max={(sourceStatus.data.duration_ms ?? 0) / 1000}
+                            value={cutEnd}
+                            onChange={(e) => setCutEnd(Number(e.target.value))}
+                          />
+                        </label>
+                      </div>
+                      <button
+                        onClick={() => transcribeCut.mutate()}
+                        disabled={
+                          transcribeCut.isPending ||
+                          dirty ||
+                          save.isPending ||
+                          ["queued", "running", "retryable"].includes(
+                            sourceStatus.data.ingest_status ?? "",
+                          ) ||
+                          cutStart < 0 ||
+                          cutEnd <= cutStart ||
+                          cutEnd - cutStart > 180 ||
+                          cutEnd * 1000 > (sourceStatus.data.duration_ms ?? 0)
+                        }
+                      >
+                        <Subtitles size={16} />{" "}
+                        {transcribeCut.isPending ? "Enviando…" : "Transcrever este trecho"}
+                      </button>
+                      {sourceStatus.data.ingest_status && (
+                        <p className="tm-small">
+                          Transcrição:{" "}
+                          {sourceStatus.data.ingest_status === "succeeded"
+                            ? "pronta para editar"
+                            : sourceStatus.data.ingest_status}
+                        </p>
+                      )}
+                      {sourceStatus.data.ingest_error && (
+                        <p role="alert">{sourceStatus.data.ingest_error}</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-          {draft && (
+          )}
+          {railTab === "projects" && (
+            <div className="tm-card">
+              <h2>
+                <Clapperboard size={18} /> Produções
+              </h2>
+              <div className="tm-stack">
+                <select
+                  aria-label="Produção selecionada"
+                  value={selectedId ?? ""}
+                  onChange={(event) => {
+                    if (dirty || save.isPending) {
+                      setNotice("Aguarde o salvamento para trocar de produção.");
+                      return;
+                    }
+                    loadedId.current = null;
+                    selectProject(event.target.value);
+                  }}
+                >
+                  <option value="">Selecione um projeto</option>
+                  {projects.data?.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  aria-label="Nome da nova produção"
+                  value={newTitle}
+                  onChange={(event) => setNewTitle(event.target.value)}
+                  maxLength={140}
+                />
+                <select
+                  aria-label="Formato da nova produção"
+                  value={newFormat}
+                  onChange={(event) => setNewFormat(event.target.value as MediaFormat)}
+                >
+                  <option value="carousel">Carrossel</option>
+                  <option value="lesson_video">Vídeo educativo</option>
+                  <option value="lyrics_video">Lyrics + tradução</option>
+                </select>
+                <button
+                  className="tm-accent"
+                  onClick={() => create.mutate()}
+                  disabled={create.isPending}
+                >
+                  <Plus size={16} /> Nova produção
+                </button>
+                {create.isError && <p role="alert">{create.error.message}</p>}
+              </div>
+            </div>
+          )}
+          {draft && (railTab === "ideas" || railTab === "reuse") && (
             <>
-              {draft.format === "carousel" && (
+              {railTab === "ideas" && draft.format === "carousel" && (
                 <>
                   <MusicLessonComposer
                     disabled={videoMode}
@@ -985,71 +1038,73 @@ export function TikTokMediaPage() {
                   </div>
                 </>
               )}
-              <div className="tm-card">
-                <h2>
-                  <Video size={18} /> Reaproveitar material
-                </h2>
-                <p className="tm-small">Opcional: usar cenas de projetos antigos.</p>
-                <details>
-                  <summary>Importar de um projeto antigo</summary>
-                  <select
-                    aria-label="Projeto de origem"
-                    value={sourceId}
-                    onChange={(event) => {
-                      setSourceId(event.target.value);
-                      setSceneId("");
-                    }}
-                  >
-                    <option value="">Selecione um projeto</option>
-                    {sourceProjects.data?.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.title}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    aria-label="Cena de origem"
-                    value={sceneId}
-                    onChange={(event) => setSceneId(event.target.value)}
-                  >
-                    <option value="">Selecione uma cena</option>
-                    {scenes.data?.map((scene) => (
-                      <option key={scene.id} value={scene.id}>
-                        Cena {scene.order}
-                      </option>
-                    ))}
-                  </select>
-                  {sourceId && (
-                    <div className="tm-preparation-links">
-                      <Link to={`/media?project=${sourceId}`}>Recortar e transcrever</Link>
-                      <Link to={`/editorial?project=${sourceId}`}>Revisar falas e tradução</Link>
-                    </div>
-                  )}
-                  {sourceMedia.isError && (
-                    <p className="tm-small" role="status">
-                      Fonte não preparada. Abra o recorte e a transcrição primeiro.
+              {railTab === "reuse" && (
+                <div className="tm-card">
+                  <h2>
+                    <Video size={18} /> Reaproveitar material
+                  </h2>
+                  <p className="tm-small">Opcional: usar cenas de projetos antigos.</p>
+                  <details>
+                    <summary>Importar de um projeto antigo</summary>
+                    <select
+                      aria-label="Projeto de origem"
+                      value={sourceId}
+                      onChange={(event) => {
+                        setSourceId(event.target.value);
+                        setSceneId("");
+                      }}
+                    >
+                      <option value="">Selecione um projeto</option>
+                      {sourceProjects.data?.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label="Cena de origem"
+                      value={sceneId}
+                      onChange={(event) => setSceneId(event.target.value)}
+                    >
+                      <option value="">Selecione uma cena</option>
+                      {scenes.data?.map((scene) => (
+                        <option key={scene.id} value={scene.id}>
+                          Cena {scene.order}
+                        </option>
+                      ))}
+                    </select>
+                    {sourceId && (
+                      <div className="tm-preparation-links">
+                        <Link to={`/media?project=${sourceId}`}>Recortar e transcrever</Link>
+                        <Link to={`/editorial?project=${sourceId}`}>Revisar falas e tradução</Link>
+                      </div>
+                    )}
+                    {sourceMedia.isError && (
+                      <p className="tm-small" role="status">
+                        Fonte não preparada. Abra o recorte e a transcrição primeiro.
+                      </p>
+                    )}
+                    <button
+                      className="tm-accent"
+                      onClick={() => importVideoCues.mutate()}
+                      disabled={!sceneId || importVideoCues.isPending}
+                    >
+                      <Subtitles size={16} /> Usar vídeo com legendas revisadas
+                    </button>
+                    <button
+                      onClick={() => importCues.mutate()}
+                      disabled={!sceneId || importCues.isPending}
+                    >
+                      Transformar falas em quadros
+                    </button>
+                    <p className="tm-small">
+                      As legendas usam os tempos reais do corte. Nenhuma fala é publicada sem a sua
+                      revisão. Se você acabou de preparar uma fonte, selecione-a acima quando voltar
+                      a esta área.
                     </p>
-                  )}
-                  <button
-                    className="tm-accent"
-                    onClick={() => importVideoCues.mutate()}
-                    disabled={!sceneId || importVideoCues.isPending}
-                  >
-                    <Subtitles size={16} /> Usar vídeo com legendas revisadas
-                  </button>
-                  <button
-                    onClick={() => importCues.mutate()}
-                    disabled={!sceneId || importCues.isPending}
-                  >
-                    Transformar falas em quadros
-                  </button>
-                  <p className="tm-small">
-                    As legendas usam os tempos reais do corte. Nenhuma fala é publicada sem a sua
-                    revisão. Se você acabou de preparar uma fonte, selecione-a acima quando voltar a
-                    esta área.
-                  </p>
-                </details>
-              </div>
+                  </details>
+                </div>
+              )}
             </>
           )}
         </aside>
@@ -1305,12 +1360,14 @@ export function TikTokMediaPage() {
                           aria-label={`Editar fala ${index + 1} em ${durationLabel(caption.start_ms)}`}
                           onClick={() => {
                             setSelectedCaptionId(caption.cue_id);
+                            setInspectorTab("captions");
                             seekVideo(caption.start_ms);
                           }}
                           onKeyDown={(event) => {
                             if (event.key === "Enter" || event.key === " ") {
                               event.preventDefault();
                               setSelectedCaptionId(caption.cue_id);
+                              setInspectorTab("captions");
                               seekVideo(caption.start_ms);
                             }
                           }}
@@ -1374,252 +1431,275 @@ export function TikTokMediaPage() {
             </main>
 
             <aside className="tm-inspector">
-              {videoMode && (
-                <div className="tm-inspector-tabs" role="group" aria-label="Ferramentas do editor">
-                  <button
-                    className={inspectorTab === "captions" ? "tm-tab-active" : ""}
-                    onClick={() => setInspectorTab("captions")}
-                  >
-                    Editar legendas
-                  </button>
-                  <button
-                    className={inspectorTab === "export" ? "tm-tab-active" : ""}
-                    onClick={() => setInspectorTab("export")}
-                  >
-                    Exportar vídeo
-                  </button>
+              <div className="tm-inspector-tabs" role="group" aria-label="Ferramentas do editor">
+                <button
+                  className={inspectorTab === "captions" ? "tm-tab-active" : ""}
+                  onClick={() => setInspectorTab("captions")}
+                >
+                  <Type size={15} /> {videoMode ? "Texto" : "Quadros"}
+                </button>
+                <button
+                  className={inspectorTab === "style" ? "tm-tab-active" : ""}
+                  onClick={() => setInspectorTab("style")}
+                  disabled={!videoMode}
+                >
+                  <Palette size={15} /> Visual
+                </button>
+                <button
+                  className={inspectorTab === "export" ? "tm-tab-active" : ""}
+                  onClick={() => setInspectorTab("export")}
+                >
+                  <Download size={15} /> Exportar
+                </button>
+                <button
+                  className={inspectorTab === "settings" ? "tm-tab-active" : ""}
+                  onClick={() => setInspectorTab("settings")}
+                >
+                  <Settings2 size={15} /> Projeto
+                </button>
+              </div>
+              {inspectorTab === "settings" && (
+                <div className="tm-card tm-settings">
+                  <h2>Configurações da produção</h2>
+                  <EditField
+                    label="Título do projeto"
+                    value={draft.title}
+                    onChange={(title) => edit((current) => ({ ...current, title }))}
+                    maxLength={140}
+                  />
+                  <label className="tm-field">
+                    <span>Formato</span>
+                    <select
+                      value={draft.format}
+                      onChange={(event) => {
+                        if (event.target.value === "carousel" && audioMode === "original") {
+                          setAudioMode("silent");
+                        }
+                        edit((current) => ({
+                          ...current,
+                          format: event.target.value as MediaFormat,
+                        }));
+                      }}
+                    >
+                      <option value="carousel">Carrossel</option>
+                      <option value="lesson_video">Vídeo educativo</option>
+                      <option value="lyrics_video">Lyrics + tradução</option>
+                    </select>
+                  </label>
+                  <label className="tm-field">
+                    <span>Identidade visual</span>
+                    <select
+                      value={draft.theme}
+                      onChange={(event) =>
+                        edit((current) => ({
+                          ...current,
+                          theme: event.target.value as MediaProject["theme"],
+                        }))
+                      }
+                    >
+                      <option value="ihub">iHub English</option>
+                      <option value="midnight">Midnight</option>
+                      <option value="warm">Warm</option>
+                    </select>
+                  </label>
                 </div>
               )}
-              <details className="tm-card tm-settings">
-                <summary>Configurações da produção</summary>
-                <EditField
-                  label="Título do projeto"
-                  value={draft.title}
-                  onChange={(title) => edit((current) => ({ ...current, title }))}
-                  maxLength={140}
-                />
-                <label className="tm-field">
-                  <span>Formato</span>
-                  <select
-                    value={draft.format}
-                    onChange={(event) => {
-                      if (event.target.value === "carousel" && audioMode === "original") {
-                        setAudioMode("silent");
-                      }
-                      edit((current) => ({
-                        ...current,
-                        format: event.target.value as MediaFormat,
-                      }));
-                    }}
-                  >
-                    <option value="carousel">Carrossel</option>
-                    <option value="lesson_video">Vídeo educativo</option>
-                    <option value="lyrics_video">Lyrics + tradução</option>
-                  </select>
-                </label>
-                <label className="tm-field">
-                  <span>Identidade visual</span>
-                  <select
-                    value={draft.theme}
-                    onChange={(event) =>
-                      edit((current) => ({
-                        ...current,
-                        theme: event.target.value as MediaProject["theme"],
-                      }))
-                    }
-                  >
-                    <option value="ihub">iHub English</option>
-                    <option value="midnight">Midnight</option>
-                    <option value="warm">Warm</option>
-                  </select>
-                </label>
-              </details>
-              {videoMode && inspectorTab === "captions" && (
+              {videoMode && (inspectorTab === "captions" || inspectorTab === "style") && (
                 <div className="tm-card tm-caption-editor">
                   <h2>
-                    <Subtitles size={18} /> Legendas e efeitos
+                    {inspectorTab === "style" ? <Palette size={18} /> : <Subtitles size={18} />}
+                    {inspectorTab === "style" ? "Estilo das legendas" : "Editar bloco"}
                   </h2>
-                  <p className="tm-small">
-                    Prévia em cima do vídeo original. Use a linha do tempo para escolher a fala,
-                    ajustar a tradução e destacar expressões. As alterações ficam só nesta produção.
-                  </p>
-                  <label className="tm-field">
-                    <span>Estilo</span>
-                    <select
-                      aria-label="Estilo das legendas"
-                      value={captionStyle.template}
-                      onChange={(event) =>
-                        changeCaptionStyle({
-                          template: event.target.value as MediaCaptionStyle["template"],
-                        })
-                      }
-                    >
-                      <option value="clean">Leve e elegante</option>
-                      <option value="impact">Impacto</option>
-                      <option value="karaoke">Destaque da fala</option>
-                    </select>
-                  </label>
-                  <label className="tm-field">
-                    <span>Posição</span>
-                    <select
-                      aria-label="Posição das legendas"
-                      value={captionStyle.position}
-                      onChange={(event) =>
-                        changeCaptionStyle({
-                          position: event.target.value as MediaCaptionStyle["position"],
-                        })
-                      }
-                    >
-                      <option value="top">Superior</option>
-                      <option value="center">Centro</option>
-                      <option value="bottom">Inferior</option>
-                    </select>
-                  </label>
-                  <label className="tm-field">
-                    <span>Animação</span>
-                    <select
-                      aria-label="Animação das legendas"
-                      value={captionStyle.animation}
-                      onChange={(event) =>
-                        changeCaptionStyle({
-                          animation: event.target.value as MediaCaptionStyle["animation"],
-                        })
-                      }
-                    >
-                      <option value="none">Sem animação</option>
-                      <option value="fade">Aparecer suavemente</option>
-                      <option value="pop">Destacar ao entrar</option>
-                    </select>
-                  </label>
-                  <label className="tm-field">
-                    <span>Tamanho do texto: {Math.round(captionStyle.text_scale * 100)}%</span>
-                    <input
-                      type="range"
-                      aria-label="Tamanho das legendas"
-                      min={0.6}
-                      max={1.6}
-                      step={0.1}
-                      value={captionStyle.text_scale}
-                      onChange={(event) =>
-                        changeCaptionStyle({ text_scale: Number(event.target.value) })
-                      }
-                    />
-                  </label>
-                  <label className="tm-field">
-                    <span>Cor das legendas</span>
-                    <input
-                      type="color"
-                      aria-label="Cor das legendas"
-                      value={captionStyle.text_color}
-                      onChange={(event) =>
-                        changeCaptionStyle({ text_color: event.target.value.toUpperCase() })
-                      }
-                    />
-                  </label>
-                  {selectedCaption ? (
+                  {inspectorTab === "style" && (
                     <>
-                      <div className="tm-editor-separator" />
-                      <h2>Fala selecionada · {durationLabel(selectedCaption.start_ms)}</h2>
-                      <label className="tm-enabled-toggle">
-                        <input
-                          type="checkbox"
-                          checked={selectedCaption.enabled}
+                      <p className="tm-small">
+                        Alterações visíveis imediatamente na prévia. O estilo vale para todos os
+                        blocos desta produção.
+                      </p>
+                      <label className="tm-field">
+                        <span>Estilo</span>
+                        <select
+                          aria-label="Estilo das legendas"
+                          value={captionStyle.template}
                           onChange={(event) =>
-                            updateCaption(selectedCaption.cue_id, { enabled: event.target.checked })
+                            changeCaptionStyle({
+                              template: event.target.value as MediaCaptionStyle["template"],
+                            })
+                          }
+                        >
+                          <option value="clean">Leve e elegante</option>
+                          <option value="impact">Impacto</option>
+                          <option value="karaoke">Destaque da fala</option>
+                        </select>
+                      </label>
+                      <label className="tm-field">
+                        <span>Posição</span>
+                        <select
+                          aria-label="Posição das legendas"
+                          value={captionStyle.position}
+                          onChange={(event) =>
+                            changeCaptionStyle({
+                              position: event.target.value as MediaCaptionStyle["position"],
+                            })
+                          }
+                        >
+                          <option value="top">Superior</option>
+                          <option value="center">Centro</option>
+                          <option value="bottom">Inferior</option>
+                        </select>
+                      </label>
+                      <label className="tm-field">
+                        <span>Animação</span>
+                        <select
+                          aria-label="Animação das legendas"
+                          value={captionStyle.animation}
+                          onChange={(event) =>
+                            changeCaptionStyle({
+                              animation: event.target.value as MediaCaptionStyle["animation"],
+                            })
+                          }
+                        >
+                          <option value="none">Sem animação</option>
+                          <option value="fade">Aparecer suavemente</option>
+                          <option value="pop">Destacar ao entrar</option>
+                        </select>
+                      </label>
+                      <label className="tm-field">
+                        <span>Tamanho do texto: {Math.round(captionStyle.text_scale * 100)}%</span>
+                        <input
+                          type="range"
+                          aria-label="Tamanho das legendas"
+                          min={0.6}
+                          max={1.6}
+                          step={0.1}
+                          value={captionStyle.text_scale}
+                          onChange={(event) =>
+                            changeCaptionStyle({ text_scale: Number(event.target.value) })
                           }
                         />
-                        Mostrar esta legenda no vídeo
                       </label>
-                      <EditField
-                        label="Inglês"
-                        value={selectedCaption.en}
-                        onChange={(en) => updateCaption(selectedCaption.cue_id, { en })}
-                        multiline
-                        maxLength={600}
-                      />
-                      <EditField
-                        label="Tradução"
-                        value={selectedCaption.pt}
-                        onChange={(pt) => updateCaption(selectedCaption.cue_id, { pt })}
-                        multiline
-                        maxLength={800}
-                      />
-                      <EditField
-                        label="Palavra ou expressão em destaque"
-                        value={selectedCaption.highlight}
-                        onChange={(highlight) =>
-                          updateCaption(selectedCaption.cue_id, { highlight })
-                        }
-                        maxLength={120}
-                        hint="Use exatamente o trecho que aparece no inglês."
-                      />
-                      <EditField
-                        label="Mini-aula opcional"
-                        value={selectedCaption.note ?? ""}
-                        onChange={(note) => updateCaption(selectedCaption.cue_id, { note })}
-                        multiline
-                        maxLength={300}
-                        hint="Uma explicação curta que aparece abaixo da tradução no vídeo."
-                      />
-                      <div className="tm-caption-timing">
-                        <label className="tm-field">
-                          <span>Entrada (segundos)</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={Math.max(0, actualDurationMs / 1000)}
-                            step={0.1}
-                            aria-label="Entrada da legenda em segundos"
-                            value={selectedCaption.start_ms / 1000}
-                            onChange={(event) =>
-                              setCaptionTiming(
-                                selectedCaption.cue_id,
-                                "start_ms",
-                                Number(event.target.value) * 1000,
-                              )
-                            }
-                          />
-                        </label>
-                        <label className="tm-field">
-                          <span>Saída (segundos)</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={Math.max(0, actualDurationMs / 1000)}
-                            step={0.1}
-                            aria-label="Saída da legenda em segundos"
-                            value={selectedCaption.end_ms / 1000}
-                            onChange={(event) =>
-                              setCaptionTiming(
-                                selectedCaption.cue_id,
-                                "end_ms",
-                                Number(event.target.value) * 1000,
-                              )
-                            }
-                          />
-                        </label>
-                      </div>
-                      <button
-                        onClick={() => {
-                          const removedId = selectedCaption.cue_id;
-                          edit((current) => ({
-                            ...current,
-                            video_captions: current.video_captions?.filter(
-                              (cue) => cue.cue_id !== removedId,
-                            ),
-                          }));
-                          setSelectedCaptionId(null);
-                        }}
-                      >
-                        <Trash2 size={14} /> Remover bloco
-                      </button>
+                      <label className="tm-field">
+                        <span>Cor das legendas</span>
+                        <input
+                          type="color"
+                          aria-label="Cor das legendas"
+                          value={captionStyle.text_color}
+                          onChange={(event) =>
+                            changeCaptionStyle({ text_color: event.target.value.toUpperCase() })
+                          }
+                        />
+                      </label>
                     </>
-                  ) : (
-                    <p className="tm-small">Toque em uma fala da linha do tempo para editar.</p>
                   )}
+                  {inspectorTab === "captions" &&
+                    (selectedCaption ? (
+                      <>
+                        <div className="tm-editor-separator" />
+                        <h2>Fala selecionada · {durationLabel(selectedCaption.start_ms)}</h2>
+                        <label className="tm-enabled-toggle">
+                          <input
+                            type="checkbox"
+                            checked={selectedCaption.enabled}
+                            onChange={(event) =>
+                              updateCaption(selectedCaption.cue_id, {
+                                enabled: event.target.checked,
+                              })
+                            }
+                          />
+                          Mostrar esta legenda no vídeo
+                        </label>
+                        <EditField
+                          label="Inglês"
+                          value={selectedCaption.en}
+                          onChange={(en) => updateCaption(selectedCaption.cue_id, { en })}
+                          multiline
+                          maxLength={600}
+                        />
+                        <EditField
+                          label="Tradução"
+                          value={selectedCaption.pt}
+                          onChange={(pt) => updateCaption(selectedCaption.cue_id, { pt })}
+                          multiline
+                          maxLength={800}
+                        />
+                        <EditField
+                          label="Palavra ou expressão em destaque"
+                          value={selectedCaption.highlight}
+                          onChange={(highlight) =>
+                            updateCaption(selectedCaption.cue_id, { highlight })
+                          }
+                          maxLength={120}
+                          hint="Use exatamente o trecho que aparece no inglês."
+                        />
+                        <EditField
+                          label="Mini-aula opcional"
+                          value={selectedCaption.note ?? ""}
+                          onChange={(note) => updateCaption(selectedCaption.cue_id, { note })}
+                          multiline
+                          maxLength={300}
+                          hint="Uma explicação curta que aparece abaixo da tradução no vídeo."
+                        />
+                        <div className="tm-caption-timing">
+                          <label className="tm-field">
+                            <span>Entrada (segundos)</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={Math.max(0, actualDurationMs / 1000)}
+                              step={0.1}
+                              aria-label="Entrada da legenda em segundos"
+                              value={selectedCaption.start_ms / 1000}
+                              onChange={(event) =>
+                                setCaptionTiming(
+                                  selectedCaption.cue_id,
+                                  "start_ms",
+                                  Number(event.target.value) * 1000,
+                                )
+                              }
+                            />
+                          </label>
+                          <label className="tm-field">
+                            <span>Saída (segundos)</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={Math.max(0, actualDurationMs / 1000)}
+                              step={0.1}
+                              aria-label="Saída da legenda em segundos"
+                              value={selectedCaption.end_ms / 1000}
+                              onChange={(event) =>
+                                setCaptionTiming(
+                                  selectedCaption.cue_id,
+                                  "end_ms",
+                                  Number(event.target.value) * 1000,
+                                )
+                              }
+                            />
+                          </label>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const removedId = selectedCaption.cue_id;
+                            edit((current) => ({
+                              ...current,
+                              video_captions: current.video_captions?.filter(
+                                (cue) => cue.cue_id !== removedId,
+                              ),
+                            }));
+                            setSelectedCaptionId(null);
+                          }}
+                        >
+                          <Trash2 size={14} /> Remover bloco
+                        </button>
+                      </>
+                    ) : (
+                      <p className="tm-small">
+                        Selecione uma fala na timeline para editar inglês, tradução e timing.
+                      </p>
+                    ))}
                 </div>
               )}
-              {!videoMode && active && (
+              {!videoMode && active && inspectorTab === "captions" && (
                 <div className="tm-card">
                   <h2>Editar quadro {activeIndex + 1}</h2>
                   <label className="tm-field">
@@ -1692,7 +1772,7 @@ export function TikTokMediaPage() {
                   </div>
                 </div>
               )}
-              {(!videoMode || inspectorTab === "export") && (
+              {inspectorTab === "export" && (
                 <div className="tm-card">
                   <h2>
                     <Music2 size={18} /> Áudio e exportação

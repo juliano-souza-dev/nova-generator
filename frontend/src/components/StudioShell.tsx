@@ -10,7 +10,7 @@ import {
   Video,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 
 const links = [
   { to: "/projects", label: "Projetos", icon: FolderKanban },
@@ -25,6 +25,7 @@ const links = [
 
 export function StudioShell({ children }: { children: ReactNode }) {
   const [isMenuOpen, setMenuOpen] = useState(false);
+  const mediaStudio = useLocation().pathname === "/tiktok-media";
   return (
     <div className="studio-shell">
       <a className="skip-link" href="#main-content">
@@ -43,7 +44,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
         </a>
         <span className="environment">Estúdio</span>
       </header>
-      <div className="studio-layout">
+      <div className={`studio-layout ${mediaStudio ? "studio-layout-media" : ""}`}>
         <nav
           className={`sidebar ${isMenuOpen ? "sidebar-open" : ""}`}
           aria-label="Navegação principal"
@@ -54,6 +55,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
               to={to}
               className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`}
               onClick={() => setMenuOpen(false)}
+              title={label}
             >
               <Icon aria-hidden="true" /> {label}
             </NavLink>

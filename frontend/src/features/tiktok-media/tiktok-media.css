@@ -825,3 +825,222 @@
     animation: none;
   }
 }
+
+/* Media Studio: a dedicated editing surface, with independent tool viewports. */
+.studio-layout-media .tm-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  height: calc(100dvh - 88px);
+  min-height: 510px;
+  margin: 0;
+  transform: none;
+}
+.tm-page .page-header {
+  margin: 0 0 10px;
+  padding: 2px 5px;
+  align-items: center;
+  gap: 8px;
+}
+.tm-page .page-header h1 {
+  margin: 0 0 2px;
+  font-size: clamp(19px, 2vw, 25px);
+  letter-spacing: -0.035em;
+}
+.tm-page .page-header p {
+  font-size: 12px;
+  line-height: 1.35;
+}
+.tm-workspace {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-columns: minmax(210px, 245px) minmax(300px, 1fr) minmax(250px, 300px);
+  gap: 10px;
+  align-items: stretch;
+}
+.tm-rail,
+.tm-inspector {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 2px 4px 0;
+  gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #3f5875 transparent;
+}
+.tm-tool-tabs,
+.tm-inspector-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid #354a68;
+  border-radius: 12px;
+  background: #0b172a;
+}
+.tm-tool-tabs button,
+.tm-inspector-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 5px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #1b2940;
+  color: #bacde4;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tm-tool-tabs .tm-tab-active,
+.tm-inspector-tabs .tm-tab-active {
+  background: #116b76;
+  color: #f3ffff;
+  border-color: #29b9bb;
+}
+.tm-tool-tabs button:disabled,
+.tm-inspector-tabs button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.tm-rail .tm-card,
+.tm-inspector .tm-card {
+  flex: 0 0 auto;
+  padding: 14px;
+  gap: 10px;
+}
+.tm-start-card {
+  border-color: #217783;
+}
+.tm-page .tm-center {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 10px;
+  border-radius: 14px;
+}
+.tm-center .tm-toolbar {
+  flex: 0 0 auto;
+  margin-bottom: 9px;
+}
+.tm-center .tm-stage {
+  flex: 1 1 auto;
+  min-height: 170px;
+  max-height: none;
+  width: 100%;
+  overflow: hidden;
+}
+.tm-center .tm-stage-video {
+  padding: 0;
+}
+.tm-center .tm-stage canvas {
+  width: auto;
+  max-height: 100%;
+  max-width: 100%;
+}
+.tm-center .tm-video-frame {
+  height: 100%;
+  max-height: 100%;
+  max-width: 100%;
+}
+.tm-center .tm-video-transport {
+  flex: 0 0 auto;
+  margin-top: 9px;
+}
+.tm-center .tm-timeline-heading {
+  flex: 0 0 auto;
+  margin-top: 10px;
+}
+.tm-center .tm-timeline-heading h2 {
+  font-size: 14px;
+  margin: 3px 0;
+}
+.tm-center .tm-caption-timeline {
+  flex: 0 0 147px;
+  min-height: 0;
+  overflow: hidden;
+  align-content: start;
+  padding: 5px 0 0;
+}
+.tm-center .tm-track-scroll {
+  height: 107px;
+}
+.tm-center .tm-timeline {
+  flex: 0 0 145px;
+  min-height: 0;
+  overflow-x: auto;
+}
+.tm-caption-editor .tm-field textarea {
+  min-height: 68px;
+}
+.tm-notice {
+  z-index: 30;
+}
+@media (max-width: 1060px) {
+  .studio-layout-media .tm-page {
+    height: auto;
+    min-height: calc(100dvh - 88px);
+  }
+  .tm-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 310px);
+    grid-template-rows: auto minmax(560px, 1fr);
+    overflow: visible;
+  }
+  .tm-rail {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    overflow: visible;
+  }
+  .tm-tool-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .tm-center {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .tm-inspector {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+@media (max-width: 720px) {
+  .tm-page .page-header {
+    align-items: start;
+  }
+  .tm-workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .tm-rail,
+  .tm-inspector {
+    overflow: visible;
+  }
+  .tm-center {
+    min-height: 600px;
+  }
+  .tm-tool-tabs {
+    position: static;
+  }
+  .tm-inspector-tabs {
+    position: static;
+  }
+  .tm-center .tm-stage {
+    min-height: 360px;
+  }
+}
