@@ -23,6 +23,10 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Para fontes próprias do TikTok Mídia, executar `tiktok.download` e `tiktok.ingest` sem projeto
   editorial, gravar corte no espaço da produção e converter o ASR em blocos de legenda EN com PT
   em rascunho, respeitando revisão otimista e sem truncar silenciosamente falas.
+- Renderizar o estilo Música/Karaokê com progressão de palavras via ASS no mesmo intervalo de
+  cada bloco usado na prévia. Como os blocos independentes só registram início/fim da fala,
+  estimar a duração interna sem inventar alinhamento acústico; preservar EN/PT, lacunas
+  entre falas e a trilha original escolhida na exportação.
 
 ## Limites
 

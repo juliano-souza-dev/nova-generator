@@ -5,11 +5,24 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from nova_generator.domain.tiktok_media import MediaProject, MediaProjectEdit, MediaSlide
+from nova_generator.domain.tiktok_media import (
+    MediaProject,
+    MediaProjectEdit,
+    MediaSlide,
+    new_media_project,
+)
 from nova_generator.infrastructure.filesystem.tiktok_media_store import (
     MediaConflict,
     MediaProjectStore,
 )
+
+
+def test_new_music_productions_start_with_dynamic_lyrics() -> None:
+    music = new_media_project("Minha música", "lyrics_video")
+    assert music.caption_style.template == "karaoke"
+    assert music.caption_style.position == "center"
+    assert music.caption_style.animation == "pop"
+    assert new_media_project("Carrossel", "carousel").caption_style.template == "clean"
 
 
 def test_contract_preserves_unicode_and_literal_translations():

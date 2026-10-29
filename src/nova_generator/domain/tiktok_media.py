@@ -103,6 +103,11 @@ def new_media_project(title: str, format: MediaFormat) -> MediaProject:
     return MediaProject(
         title=title,
         format=format,
+        caption_style=(
+            MediaCaptionStyle(template="karaoke", position="center", animation="pop")
+            if format == "lyrics_video"
+            else MediaCaptionStyle()
+        ),
         slides=[
             MediaSlide(
                 kind="lyric" if format == "lyrics_video" else "cover",

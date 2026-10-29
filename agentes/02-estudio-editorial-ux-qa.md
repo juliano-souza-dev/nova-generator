@@ -53,6 +53,10 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Manter o Media como bancada única de altura controlada no desktop, com navegação externa
   compacta e apenas uma ferramenta ativa por lateral. Preservar a prévia e a timeline na área
   central enquanto o operador alterna entre Texto, Visual, Exportar e Projeto.
+- Exibir modos de criação claros no Media (Música, Diálogos, Mini-aula e Carrossel) e permitir
+  selecionar Música em produções existentes sem apagar legendas. No modo Música a prévia
+  destaca as palavras conforme o tempo da fala, indicando que a duração por palavra é
+  aproximada enquanto não houver alinhamento real.
 
 ## Limites
 

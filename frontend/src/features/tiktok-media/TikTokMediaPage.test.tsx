@@ -93,6 +93,7 @@ vi.mock("./tiktok-api", async (importOriginal) => {
 
 beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
 });
 
 function renderStudio() {
@@ -108,6 +109,22 @@ function renderStudio() {
 }
 
 describe("TikTok Media focused workstation", () => {
+  it("offers creation modes and activates progressive music subtitles", async () => {
+    renderStudio();
+    await screen.findByRole("button", { name: "Editar fala 1 em 00:00.0" });
+    expect(screen.getByRole("button", { name: /Música.*Clique para animar/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Música.*Clique para animar/ }));
+    expect(screen.getByLabelText("Estilo das legendas")).toHaveValue("karaoke");
+    expect(screen.getByText(/As palavras ganham cor/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Diálogos.*Falas com tradução/ }));
+    expect(screen.getByLabelText("Estilo das legendas")).toHaveValue("clean");
+    fireEvent.click(screen.getByRole("button", { name: /Mini-aula.*Destaque educativo/ }));
+    expect(screen.getByLabelText("Estilo das legendas")).toHaveValue("impact");
+  });
+
   it("keeps only one source tool and one inspector tool visible at a time", async () => {
     renderStudio();
     await screen.findByRole("button", { name: "Editar fala 1 em 00:00.0" });

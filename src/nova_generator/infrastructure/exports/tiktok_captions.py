@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from nova_generator.domain.tiktok_media import MediaCaption, MediaCaptionStyle
 
 
@@ -45,10 +47,38 @@ def _highlighted(value: str, highlight: str, accent: str, base: str) -> str:
     )
 
 
+def _karaoke_words(value: str, duration_ms: int) -> str:
+    """Reveal successive literal words over the cue window using ASS karaoke tags.
+
+    Word durations are estimated from visible character counts because the
+    TikTok caption contract currently records cue timing, not word timing.
+    """
+    words = re.findall(r"\s*\S+\s*", value)
+    centiseconds = max(1, (duration_ms + 5) // 10)
+    if not words or centiseconds < len(words):
+        return _literal(value)
+    weights = [max(1, len(word.strip())) for word in words]
+    total_weight = sum(weights)
+    consumed = 0
+    result: list[str] = []
+    cumulative_weight = 0
+    for index, (word, weight) in enumerate(zip(words, weights, strict=True)):
+        cumulative_weight += weight
+        # Leave one centisecond for every remaining word.
+        ideal_end = round(centiseconds * cumulative_weight / total_weight)
+        end = min(centiseconds - (len(words) - index - 1), max(consumed + 1, ideal_end))
+        result.append(rf"{{\kf{end - consumed}}}" + _literal(word))
+        consumed = end
+    return "".join(result)
+
+
 def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle) -> str:
     """Produce a 1080x1920 overlay preserving millisecond-based cue windows."""
     alignment = {"top": 8, "center": 5, "bottom": 2}[style.position]
-    font_size = round((70 if style.template == "impact" else 58) * style.text_scale)
+    font_size = round(
+        (90 if style.template == "karaoke" else 70 if style.template == "impact" else 58)
+        * style.text_scale
+    )
     margin_v = 225 if style.position != "center" else 0
     outline = 5 if style.template == "impact" else 3
     bold = -1 if style.template == "impact" else 0
@@ -88,11 +118,21 @@ def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle) -> str:
     for caption in sorted(
         (item for item in captions if item.enabled), key=lambda item: item.start_ms
     ):
-        english = _highlighted(caption.en, caption.highlight, accent, foreground)
+        karaoke = style.template == "karaoke"
+        english = (
+            _karaoke_words(caption.en, caption.end_ms - caption.start_ms)
+            if karaoke
+            else _highlighted(caption.en, caption.highlight, accent, foreground)
+        )
         portuguese = _literal(caption.pt)
-        text = animation + rf"{{\c{foreground}}}" + english
+        color_override = rf"{{\c{accent}\2c{foreground}}}" if karaoke else rf"{{\c{foreground}}}"
+        text = animation + color_override + english
         if portuguese:
-            text += rf"\N{{\c{translation}}}" + portuguese
+            text += (
+                rf"\N{{\fs{round(font_size * 0.68)}\c{translation}\2c{translation}}}"
+                if karaoke
+                else rf"\N{{\c{translation}}}"
+            ) + portuguese
         if caption.note:
             text += rf"\N{{\fs{round(font_size * 0.7)}\c{accent}}}" + _literal(caption.note)
         lines.append(

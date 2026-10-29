@@ -30,6 +30,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { imageForSlide, paintSlide } from "./slide-canvas";
 import { MusicLessonComposer } from "./MusicLessonComposer";
+import { lyricWords } from "./lyric-timing";
 import {
   activeCaptionAt,
   adjustCaptionTiming,
@@ -70,6 +71,21 @@ function titleOf(kind: MediaKind): string {
     lyric: "Letra",
   }[kind];
 }
+
+type CreationMode = "music" | "dialogue" | "lesson" | "carousel";
+
+function modeFor(project: MediaProject): CreationMode {
+  if (project.format === "carousel") return "carousel";
+  if (project.format === "lyrics_video") return "music";
+  return project.caption_style?.template === "impact" ? "lesson" : "dialogue";
+}
+
+const creationModes = [
+  { id: "music", label: "Música", description: "Letra em movimento", icon: Music2 },
+  { id: "dialogue", label: "Diálogos", description: "Falas com tradução", icon: Subtitles },
+  { id: "lesson", label: "Mini-aula", description: "Destaque educativo", icon: Sparkles },
+  { id: "carousel", label: "Carrossel", description: "Quadros para deslizar", icon: Clapperboard },
+] as const;
 
 function SlideThumb({ project, index }: { project: MediaProject; index: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -328,6 +344,13 @@ export function TikTokMediaPage() {
   }, [draft, dirty, save.isPending]);
 
   const active = draft?.slides[activeIndex] ?? null;
+  const creationMode = draft
+    ? modeFor(draft)
+    : newFormat === "carousel"
+      ? "carousel"
+      : newFormat === "lyrics_video"
+        ? "music"
+        : "dialogue";
   const videoMode = Boolean(
     (draft?.source_scene_id || draft?.source_youtube_id) && draft?.format !== "carousel",
   );
@@ -675,6 +698,35 @@ export function TikTokMediaPage() {
     }));
   }
 
+  function chooseCreationMode(mode: CreationMode) {
+    const nextFormat: MediaFormat =
+      mode === "carousel" ? "carousel" : mode === "music" ? "lyrics_video" : "lesson_video";
+    setNewFormat(nextFormat);
+    if (mode === "carousel" && audioMode === "original") setAudioMode("silent");
+    if (mode !== "carousel" && draft?.source_youtube_id && audioMode === "silent") {
+      setAudioMode("original");
+    }
+    if (
+      draft &&
+      (mode !== creationMode || (mode === "music" && draft.caption_style?.template !== "karaoke"))
+    ) {
+      edit((current) => ({
+        ...current,
+        format: nextFormat,
+        caption_style: {
+          ...DEFAULT_CAPTION_STYLE,
+          ...current.caption_style,
+          template: mode === "music" ? "karaoke" : mode === "lesson" ? "impact" : "clean",
+          position: mode === "music" ? "center" : "bottom",
+          animation: mode === "music" ? "pop" : "fade",
+        },
+      }));
+    }
+    const hasVideoSource = Boolean(draft?.source_youtube_id || draft?.source_scene_id);
+    setRailTab(mode === "carousel" || (mode === "lesson" && !hasVideoSource) ? "ideas" : "source");
+    setInspectorTab(mode === "carousel" ? "captions" : "style");
+  }
+
   function moveSlide(direction: -1 | 1) {
     if (!draft) return;
     const target = activeIndex + direction;
@@ -730,6 +782,34 @@ export function TikTokMediaPage() {
       />
       <div className="tm-workspace">
         <aside className="tm-rail">
+          <section className="tm-creation-mode" aria-label="Modos de criação">
+            <div className="tm-mode-title">
+              <strong>Escolha o modo</strong>
+              <small>O efeito aparece na prévia e no vídeo final</small>
+            </div>
+            <div className="tm-mode-grid">
+              {creationModes.map(({ id, label, description, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={creationMode === id ? "tm-mode-active" : ""}
+                  aria-pressed={creationMode === id}
+                  onClick={() => chooseCreationMode(id)}
+                  disabled={save.isPending}
+                >
+                  <Icon size={18} />
+                  <strong>{label}</strong>
+                  <small>
+                    {id === "music" &&
+                    creationMode === "music" &&
+                    captionStyle.template !== "karaoke"
+                      ? "Clique para animar"
+                      : description}
+                  </small>
+                </button>
+              ))}
+            </div>
+          </section>
           <nav className="tm-tool-tabs" aria-label="Ferramentas da produção">
             <button
               aria-pressed={railTab === "source"}
@@ -749,7 +829,7 @@ export function TikTokMediaPage() {
               aria-pressed={railTab === "ideas"}
               className={railTab === "ideas" ? "tm-tab-active" : ""}
               onClick={() => setRailTab("ideas")}
-              disabled={!draft || draft.format !== "carousel"}
+              disabled={!draft || videoMode}
             >
               <Sparkles size={16} /> Criar
             </button>
@@ -915,7 +995,7 @@ export function TikTokMediaPage() {
           )}
           {draft && (railTab === "ideas" || railTab === "reuse") && (
             <>
-              {railTab === "ideas" && draft.format === "carousel" && (
+              {railTab === "ideas" && !videoMode && (
                 <>
                   <MusicLessonComposer
                     disabled={videoMode}
@@ -1120,7 +1200,9 @@ export function TikTokMediaPage() {
           <>
             <main className="tm-center">
               <div className="tm-toolbar">
-                <span className="tm-eyebrow">PRÉVIA · 9:16 · 1080 × 1920</span>
+                <span className="tm-eyebrow">
+                  PRÉVIA · {creationModes.find(({ id }) => id === creationMode)?.label} · 9:16
+                </span>
                 <span className="tm-toolbar-actions">
                   <button
                     title={videoMode ? "Legenda anterior" : "Quadro anterior"}
@@ -1209,14 +1291,30 @@ export function TikTokMediaPage() {
                         key={activeCaption.cue_id}
                         className={`tm-caption-overlay tm-caption-${captionStyle.template} tm-caption-${captionStyle.position} tm-animation-${captionStyle.animation}`}
                         style={{
-                          fontSize: `${(((captionStyle.template === "impact" ? 70 : 58) * captionStyle.text_scale * 100) / 1080).toFixed(3)}cqw`,
+                          fontSize: `${(((captionStyle.template === "karaoke" ? 90 : captionStyle.template === "impact" ? 70 : 58) * captionStyle.text_scale * 100) / 1080).toFixed(3)}cqw`,
                           color: captionStyle.text_color,
                         }}
                         aria-live="off"
                       >
                         <p className="tm-caption-en">
-                          {activeCaption.highlight &&
-                          activeCaption.en.includes(activeCaption.highlight) ? (
+                          {captionStyle.template === "karaoke" ? (
+                            <span className="tm-lyric-line" aria-label={activeCaption.en}>
+                              {lyricWords(
+                                activeCaption.en,
+                                activeCaption.start_ms,
+                                activeCaption.end_ms,
+                                playheadMs,
+                              ).map((word, index) => (
+                                <span
+                                  key={index}
+                                  className={`tm-lyric-word tm-lyric-${word.state}`}
+                                >
+                                  {word.text}
+                                </span>
+                              ))}
+                            </span>
+                          ) : activeCaption.highlight &&
+                            activeCaption.en.includes(activeCaption.highlight) ? (
                             <>
                               {activeCaption.en.slice(
                                 0,
@@ -1529,9 +1627,16 @@ export function TikTokMediaPage() {
                         >
                           <option value="clean">Leve e elegante</option>
                           <option value="impact">Impacto</option>
-                          <option value="karaoke">Destaque da fala</option>
+                          <option value="karaoke">Karaokê · palavra por palavra</option>
                         </select>
                       </label>
+                      {captionStyle.template === "karaoke" && (
+                        <p className="tm-music-tip">
+                          <Music2 size={15} /> As palavras ganham cor conforme o vídeo toca. A
+                          divisão do tempo é uma estimativa dentro de cada fala: ajuste os blocos na
+                          linha do tempo para acompanhar melhor a música.
+                        </p>
+                      )}
                       <label className="tm-field">
                         <span>Posição</span>
                         <select

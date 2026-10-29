@@ -57,6 +57,25 @@ vídeo diretamente no estúdio social.
 ## Limites conhecidos
 
 Esta fatia oferece timeline de legendas com cortes de até três minutos. Ainda não inclui
-keyframes, multicamadas de efeitos, diarização de alto nível, karaoke palavra-a-palavra,
+keyframes, multicamadas de efeitos, diarização de alto nível, alinhamento acústico de palavras,
 tradução automática revisada por IA, undo/redo ou transcrição de vídeos longos em lote.
 Os textos de terceiros continuam sujeitos a autorização de uso na publicação.
+
+## Evolução — modos de criação e letra progressiva
+
+- A bancada exibe os modos **Música**, **Diálogos**, **Mini-aula** e **Carrossel** na área
+  de produção. Eles selecionam formatos e estilos já presentes em `nova-tiktok-media/1`;
+  nenhum campo novo ou migração de projetos é necessário.
+- **Música** seleciona `lyrics_video` e `karaoke`. A prévia destaca a letra palavra por
+  palavra; o MP4 recebe o efeito correspondente por tags `\kf` em legendas ASS. O texto
+  EN/PT permanece literal e o áudio original não é modificado.
+- Novas produções `lyrics_video` começam com esse estilo selecionado. Produções antigas
+  conservam suas preferências até o usuário clicar em Música para ativar a progressão.
+- Como cada bloco só guarda o início/fim da fala, a progressão interna é estimada
+  proporcionalmente ao comprimento de cada palavra; **não** equivale a alinhamento real
+  com sílabas ou batidas. Essa precisão exigirá tempos por palavra em evolução futura.
+- A área de prévia possui altura mínima e rolagem interna em janelas baixas. O inspetor não
+  ocupa mais uma segunda linha de largura total entre 1061 e 1180px.
+- Compatibilidade: projetos antigos continuam válidos. Escolher Música no projeto carregado
+  aplica o efeito sem apagar legendas; voltar para Diálogos ou para o estilo Leve e elegante
+  não altera o texto nem os tempos. Os estilos antigos mantêm sua renderização anterior.

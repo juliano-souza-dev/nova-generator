@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
@@ -129,6 +130,25 @@ def test_ass_uses_cut_relative_timing_unicode_and_literal_escape() -> None:
     assert "{\\pos(0,0)}" not in ass
     assert "\uff5b" in ass
     assert "\\c&H" in ass
+
+
+def test_music_mode_highlights_words_in_time_and_preserves_translation() -> None:
+    caption = MediaCaption(
+        cue_id=uuid4(),
+        start_ms=1000,
+        end_ms=2500,
+        en="I'll be there!  Você também?",
+        pt="Estarei lá!",
+    )
+    karaoke = render_ass([caption], MediaCaptionStyle(template="karaoke", position="center"))
+    dialogue = karaoke.split("Dialogue: ", 1)[1]
+    assert len(re.findall(r"\\kf\d+", dialogue)) == 5
+    assert sum(map(int, re.findall(r"\\kf(\d+)", dialogue))) == 150
+    without_karaoke_tags = re.sub(r"\{\\kf\d+\}", "", dialogue)
+    assert "I'll" in without_karaoke_tags and "Você também?" in without_karaoke_tags
+    assert "Estarei lá!" in dialogue
+    assert "\\fs61" in dialogue  # Translation is smaller in music mode.
+    assert "\\kf" not in render_ass([caption], MediaCaptionStyle(template="clean"))
 
 
 def test_approved_caption_validation_checks_ownership_gaps_and_cut_bounds(monkeypatch) -> None:
