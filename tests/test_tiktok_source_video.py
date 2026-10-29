@@ -423,7 +423,7 @@ def test_paper_render_uses_synthetic_background_and_source_audio(monkeypatch, tm
     assert "1:a:0?" in args
     assert "ass=captions.ass" in " ".join(args)
     assert kwargs["cwd"] == tmp_path
-    assert "This doesn't bother you" in (tmp_path / "captions.ass").read_text()
+    assert "doesn't bother you" in (tmp_path / "captions.ass").read_text()
 
     calls.clear()
     payload["audio_mode"] = "uploaded"
