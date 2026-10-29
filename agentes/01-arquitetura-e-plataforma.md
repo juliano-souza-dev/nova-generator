@@ -18,6 +18,8 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
   configurada ou não concluir a preparação editorial completa.
 - Criar ADRs para fronteiras de contexto, schema, dependências e decisões irreversíveis.
 - Isolar projetos TikTok Mídia dos projetos editoriais e publicar revisões por escrita atômica e controle otimista; exportações congelam snapshots por UUID e hash.
+- Manter a origem YouTube e o job de corte independentes no contrato TikTok, reutilizando o cache
+  global sem criar projeto editorial; falhas ou retries não podem sobrescrever um rascunho editado.
 - Manter `INICIAR.bat` como ponto único de entrada local no Windows, com bootstrap idempotente,
   migrations, supervisão dos processos e diagnóstico por logs.
 

@@ -19,8 +19,8 @@ class MediaCaption(BaseModel):
     cue_id: UUID
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
-    en: str = Field(min_length=1, max_length=600)
-    pt: str = Field(min_length=1, max_length=800)
+    en: str = Field(default="", max_length=600)
+    pt: str = Field(default="", max_length=800)
     highlight: str = Field(default="", max_length=120)
     note: str = Field(default="", max_length=300)
     enabled: bool = True
@@ -66,6 +66,8 @@ class MediaProject(BaseModel):
     theme: MediaTheme = "ihub"
     source_project_id: UUID | None = None
     source_scene_id: UUID | None = None
+    source_youtube_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{11}$")
+    source_cut_job_id: UUID | None = None
     revision: int = Field(default=1, ge=1)
     slides: list[MediaSlide] = Field(min_length=1, max_length=30)
     video_captions: list[MediaCaption] = Field(default_factory=list, max_length=200)
@@ -90,6 +92,8 @@ class MediaProjectEdit(BaseModel):
     theme: MediaTheme
     source_project_id: UUID | None = None
     source_scene_id: UUID | None = None
+    source_youtube_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{11}$")
+    source_cut_job_id: UUID | None = None
     slides: list[MediaSlide] = Field(min_length=1, max_length=30)
     video_captions: list[MediaCaption] = Field(default_factory=list, max_length=200)
     caption_style: MediaCaptionStyle = Field(default_factory=MediaCaptionStyle)

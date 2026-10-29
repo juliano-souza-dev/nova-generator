@@ -54,6 +54,12 @@ def _check_current_caption_approval(
     project: MediaProject, repository: SqlAlchemyEditorialProjectRepository
 ) -> None:
     """A queued render must not publish a cue that has since returned to draft."""
+    if project.source_cut_job_id is not None:
+        # TikTok-native ASR drafts are deliberately independent of Editorial.
+        # Their bytes/times are already frozen in the immutable render snapshot.
+        if not project.video_captions or project.source_youtube_id is None:
+            raise ValueError("O vídeo independente não possui legendas.")
+        return
     if project.source_project_id is None or project.source_scene_id is None:
         raise ValueError("O vídeo não tem uma cena editorial de origem válida.")
     if repository.get_scene_project_id(project.source_scene_id) != project.source_project_id:

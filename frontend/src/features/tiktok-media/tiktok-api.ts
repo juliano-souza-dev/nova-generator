@@ -52,6 +52,8 @@ export type MediaProject = {
   theme: MediaTheme;
   source_project_id: string | null;
   source_scene_id?: string | null;
+  source_youtube_id?: string | null;
+  source_cut_job_id?: string | null;
   video_captions?: MediaCaption[];
   caption_style?: MediaCaptionStyle;
   revision: number;
@@ -65,6 +67,8 @@ export type MediaEdit = Pick<
   | "theme"
   | "source_project_id"
   | "source_scene_id"
+  | "source_youtube_id"
+  | "source_cut_job_id"
   | "video_captions"
   | "caption_style"
   | "revision"
@@ -75,6 +79,16 @@ export type MediaIdeas = {
   slides: MediaSlide[];
   provider: "groq";
   needs_review: boolean;
+};
+export type MediaSourceStatus = {
+  source_ready: boolean;
+  duration_ms: number | null;
+  download_status: string | null;
+  download_error: string | null;
+  ingest_status: string | null;
+  ingest_error: string | null;
+  ingest_job_id?: string | null;
+  cut_ready?: boolean;
 };
 
 export const mediaApi = {
@@ -100,6 +114,27 @@ export const mediaApi = {
   },
   audioUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/audio`),
   sourceUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/source`),
+  originalUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/source/original`),
+  sourceStatus: (id: string) =>
+    apiRequest<MediaSourceStatus>(`/tiktok-media/projects/${id}/source/status`),
+  prepareYoutube: (id: string, revision: number, url: string) =>
+    apiRequest<{ project: MediaProject; job_id: string }>(
+      `/tiktok-media/projects/${id}/source/youtube`,
+      {
+        method: "POST",
+        body: JSON.stringify({ revision, url }),
+      },
+    ),
+  transcribeCut: (id: string, revision: number, startMs: number, endMs: number) =>
+    apiRequest<{ job_id: string; status: string }>(`/tiktok-media/projects/${id}/source/ingest`, {
+      method: "POST",
+      body: JSON.stringify({
+        revision,
+        start_ms: startMs,
+        end_ms: endMs,
+        language: "en",
+      }),
+    }),
   ideas: (prompt: string, format: MediaFormat, count: number) =>
     apiRequest<MediaIdeas>("/tiktok-media/ideas", {
       method: "POST",

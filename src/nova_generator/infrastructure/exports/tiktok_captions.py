@@ -90,7 +90,9 @@ def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle) -> str:
     ):
         english = _highlighted(caption.en, caption.highlight, accent, foreground)
         portuguese = _literal(caption.pt)
-        text = animation + rf"{{\c{foreground}}}" + english + rf"\N{{\c{translation}}}" + portuguese
+        text = animation + rf"{{\c{foreground}}}" + english
+        if portuguese:
+            text += rf"\N{{\c{translation}}}" + portuguese
         if caption.note:
             text += rf"\N{{\fs{round(font_size * 0.7)}\c{accent}}}" + _literal(caption.note)
         lines.append(

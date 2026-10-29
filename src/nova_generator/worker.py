@@ -27,6 +27,7 @@ from nova_generator.infrastructure.exports.ffmpeg_story_video_renderer import (
 )
 from nova_generator.infrastructure.exports.ffprobe_reel_validator import FfprobeReelValidator
 from nova_generator.infrastructure.exports.genanki_package_writer import GenankiPackageWriter
+from nova_generator.infrastructure.filesystem.tiktok_media_store import MediaProjectStore
 from nova_generator.infrastructure.filesystem.voice_references import FileVoiceReferenceStore
 from nova_generator.infrastructure.filesystem.youtube_media_cache import FileYoutubeMediaCache
 from nova_generator.infrastructure.ingestion.faster_whisper_transcriber import (
@@ -54,6 +55,7 @@ from nova_generator.infrastructure.worker.persistent_worker import PersistentWor
 from nova_generator.infrastructure.worker.project_media_handler import ProjectMediaJobHandler
 from nova_generator.infrastructure.worker.story_render_handler import make_story_render_handler
 from nova_generator.infrastructure.worker.tiktok_media_handler import make_media_render_handler
+from nova_generator.infrastructure.worker.tiktok_source_handler import TikTokSourceJobHandler
 from nova_generator.infrastructure.worker.voice_preview_handler import make_voice_preview_handler
 
 
@@ -79,22 +81,27 @@ def main() -> None:
         settings.media_cache_root / "exports",
     )
     media_cache = FileYoutubeMediaCache(settings.media_cache_root)
+    downloader = DownloadYoutubeSource(
+        media_cache,
+        YtDlpYoutubeDownloader(),
+        FfprobeMediaProbe(settings.ffprobe_executable),
+    )
+    ingestion = IngestSceneMediaJobHandler(
+        IngestSceneMedia(
+            FfmpegSourceCutter(settings.ffmpeg_executable),
+            FfmpegWaveformGenerator(settings.ffmpeg_executable),
+            FasterWhisperTranscriber(settings.whisper_model),
+        )
+    )
     project_media = ProjectMediaJobHandler(
         SqlAlchemyEditorialProjectRepository(get_session_factory()),
         media_cache,
-        DownloadYoutubeSource(
-            media_cache,
-            YtDlpYoutubeDownloader(),
-            FfprobeMediaProbe(settings.ffprobe_executable),
-        ),
-        IngestSceneMediaJobHandler(
-            IngestSceneMedia(
-                FfmpegSourceCutter(settings.ffmpeg_executable),
-                FfmpegWaveformGenerator(settings.ffmpeg_executable),
-                FasterWhisperTranscriber(settings.whisper_model),
-            )
-        ),
+        downloader,
+        ingestion,
         settings.project_root,
+    )
+    tiktok_source = TikTokSourceJobHandler(
+        MediaProjectStore(settings.media_cache_root), media_cache, downloader, ingestion
     )
     editorial_repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
     worker = PersistentWorker(
@@ -103,6 +110,8 @@ def main() -> None:
         handlers={
             "synthesize_voice_preview": make_voice_preview_handler(speech),
             "tiktok.render": make_media_render_handler(speech, editorial_repository),
+            "tiktok.download": tiktok_source.download,
+            "tiktok.ingest": tiktok_source.ingest,
             "story.render": make_story_render_handler(
                 settings.media_cache_root, RenderStory(speech, FfmpegStoryVideoRenderer())
             ),

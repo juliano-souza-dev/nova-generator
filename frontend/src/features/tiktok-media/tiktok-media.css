@@ -388,11 +388,171 @@
   font-variant-numeric: tabular-nums;
 }
 .tm-caption-timeline {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 0 7px;
+}
+.tm-timeline-guide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #a6c9dc;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+.tm-timeline-guide button,
+.tm-inspector-tabs button {
+  border: 1px solid #3c6b7b;
+  border-radius: 8px;
+  background: #1c3448;
+  color: #c9f4ec;
+  padding: 8px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.tm-track-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid #405772;
+  background: #0a1527;
+  border-radius: 10px;
+  max-width: 100%;
+}
+.tm-caption-track {
+  height: 100px;
+  position: relative;
+  background: linear-gradient(to bottom, #1b3042 0 26px, #101a2e 26px 100%);
+}
+.tm-caption-track::before {
+  content: "VÍDEO ORIGINAL";
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  color: #9cbdce;
+  font-size: 10px;
+  font-weight: 800;
+}
+.tm-caption-block {
+  position: absolute;
+  top: 32px;
+  height: 55px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 5px;
+  border-radius: 5px;
+  background: #1b746f;
+  border: 1px solid #76dfd5;
+  overflow: hidden;
+  cursor: pointer;
+}
+.tm-caption-block strong {
+  font-size: 11px;
+  font-weight: 650;
+  color: #f6fffc;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 0 6px;
+  pointer-events: none;
+}
+.tm-caption-block-active {
+  background: #12789f;
+  border: 2px solid #ffe17b;
+  z-index: 2;
+}
+.tm-caption-block-disabled {
+  opacity: 0.45;
+}
+.tm-edge {
+  align-self: stretch;
+  flex: 0 0 7px;
+  cursor: ew-resize;
+  touch-action: none;
+  border: 0;
+  background: #b1f9ec;
+  padding: 0;
+  z-index: 3;
+}
+.tm-playhead {
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-left: 2px solid #ffdb5a;
+  z-index: 4;
+}
+.tm-playhead::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -5px;
+  border: 5px solid transparent;
+  border-top-color: #ffdb5a;
+}
+.tm-start-card {
+  border-color: #158e98;
+}
+.tm-cut-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.tm-cut-fields label {
+  font-size: 12px;
+  color: #b2cbd8;
+}
+.tm-source-progress {
+  display: grid;
+  gap: 9px;
+  font-size: 13px;
+}
+.tm-source-progress > span {
+  color: #70e1ca;
+  font-weight: 750;
+}
+.tm-source-progress p[role="alert"] {
+  color: #ffc5bb;
+}
+.tm-inspector-tabs {
   display: flex;
   gap: 6px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  padding: 12px 0 7px;
+}
+.tm-inspector-tabs button {
+  flex: 1;
+}
+.tm-inspector-tabs .tm-tab-active {
+  background: #168f99;
+  color: #071e28;
+  font-weight: 800;
+}
+.tm-settings summary {
+  cursor: pointer;
+  color: #e6f7fc;
+  font-weight: 750;
+}
+.tm-settings[open] summary {
+  margin-bottom: 8px;
+}
+.tm-mark-controls {
+  display: flex;
+  gap: 4px;
+}
+.tm-video-transport .tm-mark-controls button {
+  flex: auto;
+  padding: 0 8px;
+  font-size: 11px;
+}
+@media (max-width: 900px) {
+  .tm-mark-controls {
+    width: 100%;
+  }
+  .tm-video-transport {
+    flex-wrap: wrap;
+  }
 }
 .tm-caption-segment {
   flex: 0 0 155px;

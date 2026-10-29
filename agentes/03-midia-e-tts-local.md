@@ -20,6 +20,9 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Congelar o SHA-256 do corte e as legendas com o job, compor overlays Unicode e preservar o áudio original quando solicitado; manter separada a exportação anterior baseada em quadros.
 - Expor download, corte, waveform e ASR como jornada derivada dos jobs e artefatos; o ASR usa
   sempre o MP4 cortado e o downloader registra sua estratégia de fallback.
+- Para fontes próprias do TikTok Mídia, executar `tiktok.download` e `tiktok.ingest` sem projeto
+  editorial, gravar corte no espaço da produção e converter o ASR em blocos de legenda EN com PT
+  em rascunho, respeitando revisão otimista e sem truncar silenciosamente falas.
 
 ## Limites
 

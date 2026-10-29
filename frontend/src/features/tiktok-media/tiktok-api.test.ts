@@ -37,6 +37,30 @@ describe("TikTok Media external AI draft", () => {
 });
 
 describe("TikTok Media video source request", () => {
+  it("prepares YouTube and the cut in the standalone Media API", async () => {
+    vi.mocked(apiRequest).mockClear();
+    await mediaApi.prepareYoutube("media-1", 3, "https://youtu.be/dQw4w9WgXcQ");
+    await mediaApi.transcribeCut("media-1", 4, 1000, 56000);
+    expect(vi.mocked(apiRequest).mock.calls[0][0]).toBe(
+      "/tiktok-media/projects/media-1/source/youtube",
+    );
+    expect(JSON.parse(String(vi.mocked(apiRequest).mock.calls[0][1]?.body))).toEqual({
+      revision: 3,
+      url: "https://youtu.be/dQw4w9WgXcQ",
+    });
+    expect(vi.mocked(apiRequest).mock.calls[1][0]).toBe(
+      "/tiktok-media/projects/media-1/source/ingest",
+    );
+    expect(JSON.parse(String(vi.mocked(apiRequest).mock.calls[1][1]?.body))).toMatchObject({
+      revision: 4,
+      start_ms: 1000,
+      end_ms: 56000,
+    });
+    expect(mediaApi.originalUrl("media-1")).toContain(
+      "/tiktok-media/projects/media-1/source/original",
+    );
+  });
+
   it("renders the exact cut with original audio and no uploaded slide frames", async () => {
     vi.mocked(apiRequest).mockClear();
     await mediaApi.render("production-1", 4, [], "original", "", "video_source");

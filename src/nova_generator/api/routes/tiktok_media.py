@@ -23,6 +23,7 @@ from nova_generator.api.dependencies import (
 )
 from nova_generator.application.use_cases.manage_voice_profiles import _payload
 from nova_generator.core.settings import get_settings
+from nova_generator.domain.media.youtube import InvalidYoutubeUrl, YoutubeVideo
 from nova_generator.domain.tiktok_media import (
     MediaFormat,
     MediaProject,
@@ -37,6 +38,7 @@ from nova_generator.infrastructure.filesystem.tiktok_media_store import (
     MediaConflict,
     MediaProjectStore,
 )
+from nova_generator.infrastructure.filesystem.youtube_media_cache import FileYoutubeMediaCache
 
 router = APIRouter(prefix="/tiktok-media", tags=["tiktok-media"])
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -63,6 +65,24 @@ def _video_cut(project: MediaProject) -> tuple[Path, int]:
     The TikTok editor never downloads arbitrary links, never resolves an unverified
     filename from user input, and never silently switches to a newer source cut.
     """
+    if project.source_cut_job_id is not None:
+        job = SqlAlchemyJobRepository(get_session_factory()).get(str(project.source_cut_job_id))
+        if (
+            job is None
+            or job.kind != "tiktok.ingest"
+            or job.status != "succeeded"
+            or job.input.get("project_id") != str(project.id)
+            or job.input.get("video_id") != project.source_youtube_id
+            or not isinstance(job.output, dict)
+        ):
+            raise HTTPException(409, "O corte independente não está disponível.")
+        path = _store().directory(project.id) / "cuts" / f"{job.id}.mp4"
+        duration_ms = job.output.get("duration_ms")
+        if not path.is_file() or not isinstance(duration_ms, int) or duration_ms <= 0:
+            raise HTTPException(409, "O corte independente foi removido.")
+        if path.stat().st_size > MAX_SOURCE_BYTES or duration_ms > MAX_SOURCE_DURATION_MS:
+            raise HTTPException(422, "O corte excede o limite de 3 minutos ou 512 MiB.")
+        return path, duration_ms
     if project.source_project_id is None or project.source_scene_id is None:
         raise HTTPException(422, "Selecione uma cena revisada para usar o vídeo original.")
     repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
@@ -147,19 +167,23 @@ def _has_original_audio(source_video: Path) -> bool:
 
 def _validate_video_captions(project: MediaProject, duration_ms: int) -> None:
     if not project.video_captions:
-        raise HTTPException(422, "Importe as legendas revisadas antes de gerar o vídeo.")
-    assert project.source_scene_id is not None
-    repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
-    approved = {
-        cue.id: cue
-        for cue in repository.get_scene_cues(project.source_scene_id)
-        if cue.approved_en.strip()
-        and cue.approved_pt.strip()
-        and cue.provenance.get("approval") != "draft"
-    }
+        raise HTTPException(422, "Transcreva ou crie legendas antes de gerar o vídeo.")
+    approved = None
+    if project.source_cut_job_id is None:
+        assert project.source_scene_id is not None
+        repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+        approved = {
+            cue.id: cue
+            for cue in repository.get_scene_cues(project.source_scene_id)
+            if cue.approved_en.strip()
+            and cue.approved_pt.strip()
+            and cue.provenance.get("approval") != "draft"
+        }
     previous_end = 0
     for caption in sorted(project.video_captions, key=lambda item: item.start_ms):
-        if caption.cue_id not in approved:
+        if caption.enabled and not caption.en.strip():
+            raise HTTPException(422, "Preencha o texto em inglês dos blocos ativos.")
+        if approved is not None and caption.cue_id not in approved:
             raise HTTPException(422, "Existe legenda sem fala aprovada na cena selecionada.")
         if caption.end_ms > duration_ms:
             raise HTTPException(422, "Uma legenda ultrapassa a duração do recorte.")
@@ -186,6 +210,128 @@ class CreateMediaRequest(BaseModel):
     format: MediaFormat = "carousel"
 
 
+class IndependentYoutubeSource(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
+    revision: int = Field(ge=1)
+
+
+class IndependentCut(BaseModel):
+    revision: int = Field(ge=1)
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+    language: str = Field(default="en", max_length=12)
+
+
+@router.post("/projects/{project_id}/source/youtube", status_code=202)
+def prepare_independent_youtube(project_id: UUID, input: IndependentYoutubeSource) -> dict:
+    try:
+        video = YoutubeVideo.from_url(input.url)
+    except InvalidYoutubeUrl as exc:
+        raise HTTPException(422, str(exc)) from exc
+    try:
+        project = _store().set_youtube_source(project_id, input.revision, video.video_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except MediaConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    job = get_enqueue_job().execute(
+        kind="tiktok.download",
+        input={"project_id": str(project_id), "video_id": video.video_id},
+        idempotency_key=f"tiktok.download:{project_id}:{project.revision}",
+    )
+    return {"project": project.model_dump(mode="json"), "job_id": str(job.id)}
+
+
+@router.get("/projects/{project_id}/source/status")
+def independent_source_status(project_id: UUID) -> dict:
+    project = _get(project_id)
+    if project.source_youtube_id is None:
+        return {
+            "source_ready": False,
+            "duration_ms": None,
+            "download_status": None,
+            "download_error": None,
+            "ingest_status": None,
+            "ingest_error": None,
+            "ingest_job_id": None,
+        }
+    video = YoutubeVideo(project.source_youtube_id)
+    metadata = FileYoutubeMediaCache(get_settings().media_cache_root).find_verified(video)
+    jobs = SqlAlchemyJobRepository(get_session_factory())
+    download = jobs.latest_for_project(str(project_id), "tiktok.download")
+    ingest = jobs.latest_for_project(str(project_id), "tiktok.ingest")
+    if download and download.input.get("video_id") != video.video_id:
+        download = None
+    if ingest and (
+        ingest.input.get("video_id") != video.video_id
+        or (
+            ingest.status == "succeeded"
+            and ingest.id != project.source_cut_job_id
+            and ingest.input.get("revision") != project.revision
+        )
+    ):
+        ingest = None
+    return {
+        "source_ready": metadata is not None,
+        "duration_ms": metadata.duration_ms if metadata else None,
+        "download_status": download.status if download else None,
+        "download_error": download.error_message if download else None,
+        "ingest_status": ingest.status if ingest else None,
+        "ingest_error": ingest.error_message if ingest else None,
+        "ingest_job_id": str(ingest.id) if ingest else None,
+        "cut_ready": project.source_cut_job_id is not None,
+    }
+
+
+@router.get("/projects/{project_id}/source/original")
+def stream_independent_original(project_id: UUID) -> FileResponse:
+    project = _get(project_id)
+    if project.source_youtube_id is None:
+        raise HTTPException(404, "Adicione um link do YouTube primeiro.")
+    video = YoutubeVideo(project.source_youtube_id)
+    cache = FileYoutubeMediaCache(get_settings().media_cache_root)
+    if cache.find_verified(video) is None:
+        raise HTTPException(404, "A origem ainda está sendo baixada.")
+    return FileResponse(
+        cache.source_path(video), media_type="video/mp4", content_disposition_type="inline"
+    )
+
+
+@router.post("/projects/{project_id}/source/ingest", status_code=202)
+def transcribe_independent_cut(project_id: UUID, input: IndependentCut) -> dict:
+    project = _get(project_id)
+    if project.revision != input.revision:
+        raise HTTPException(409, "Aguarde o salvamento antes de transcrever.")
+    if not project.source_youtube_id:
+        raise HTTPException(422, "Adicione um vídeo primeiro.")
+    video = YoutubeVideo(project.source_youtube_id)
+    metadata = FileYoutubeMediaCache(get_settings().media_cache_root).find_verified(video)
+    if metadata is None:
+        raise HTTPException(409, "Aguarde o download do vídeo.")
+    if input.end_ms <= input.start_ms or input.end_ms > metadata.duration_ms:
+        raise HTTPException(422, "O corte precisa estar dentro do vídeo.")
+    if input.end_ms - input.start_ms > MAX_SOURCE_DURATION_MS:
+        raise HTTPException(422, "Selecione um trecho de até 3 minutos.")
+    jobs = SqlAlchemyJobRepository(get_session_factory())
+    current = jobs.latest_for_project(str(project_id), "tiktok.ingest")
+    if current and current.status in {"queued", "running", "retryable"}:
+        raise HTTPException(409, "Já existe uma transcrição em andamento.")
+    job = get_enqueue_job().execute(
+        kind="tiktok.ingest",
+        input={
+            "project_id": str(project_id),
+            "video_id": video.video_id,
+            "source_sha256": metadata.sha256,
+            "revision": project.revision,
+            "start_ms": input.start_ms,
+            "end_ms": input.end_ms,
+            "language": input.language,
+        },
+        idempotency_key=None,
+    )
+    return {"job_id": str(job.id), "status": job.status}
+
+
 @router.get("/projects", response_model=list[MediaProject])
 def list_media_projects() -> list[MediaProject]:
     return _store().list()
@@ -203,6 +349,19 @@ def get_media_project(project_id: UUID) -> MediaProject:
 
 @router.put("/projects/{project_id}", response_model=MediaProject)
 def update_media_project(project_id: UUID, edit: MediaProjectEdit) -> MediaProject:
+    current = _get(project_id)
+    if (
+        "source_youtube_id" in edit.model_fields_set
+        and edit.source_youtube_id is not None
+        and edit.source_youtube_id != current.source_youtube_id
+    ):
+        raise HTTPException(422, "Use a preparação de origem para trocar o vídeo.")
+    if (
+        "source_cut_job_id" in edit.model_fields_set
+        and edit.source_cut_job_id is not None
+        and edit.source_cut_job_id != current.source_cut_job_id
+    ):
+        raise HTTPException(422, "Um corte só pode ser vinculado pelo job de transcrição.")
     try:
         return _store().update(project_id, edit)
     except FileNotFoundError as exc:

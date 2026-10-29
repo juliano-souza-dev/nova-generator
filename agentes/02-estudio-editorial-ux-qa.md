@@ -47,6 +47,9 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Na área TikTok Mídia, exibir o vídeo recortado real com legendas EN/PT temporizadas e estilos
   editáveis; avisar claramente quando a fonte precisa passar primeiro por recorte, transcrição ou
   revisão, sem confundir o rascunho da publicação com aprovação das cues na bancada Editorial.
+- No fluxo TikTok independente, apresentar fonte, prévia e timeline proporcional com blocos
+  arrastáveis; permitir edição EN/PT e ajustes de estilo na própria produção, deixando painéis de
+  importação antiga e configurações secundárias recolhidos ou contextualizados.
 
 ## Limites
 
