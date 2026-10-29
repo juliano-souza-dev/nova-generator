@@ -138,6 +138,19 @@ describe("TikTok Media focused workstation", () => {
     expect(screen.getByLabelText("Estilo das legendas")).toHaveValue("popstar");
   });
 
+  it("switches between video and paper without removing the lyric blocks", async () => {
+    renderStudio();
+    await screen.findByRole("button", { name: "Editar fala 1 em 00:00.0" });
+    fireEvent.click(screen.getByRole("button", { name: /^Papel$/ }));
+    expect(screen.getByRole("button", { name: /^Papel$/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("group", { name: "Estilo do papel" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Papel kraft/ }));
+    expect(screen.getByRole("button", { name: /Papel kraft/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Editar fala 1 em 00:00.0" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Vídeo$/ }));
+    expect(screen.getByRole("button", { name: /^Vídeo$/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("keeps only one source tool and one inspector tool visible at a time", async () => {
     renderStudio();
     await screen.findByRole("button", { name: "Editar fala 1 em 00:00.0" });

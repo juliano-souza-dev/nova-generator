@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 MediaFormat = Literal["carousel", "lesson_video", "lyrics_video"]
 MediaTheme = Literal["ihub", "midnight", "warm"]
+MediaBackground = Literal["video", "paper"]
+MediaPaperTheme = Literal["cream", "kraft", "night"]
 
 
 class MediaCaption(BaseModel):
@@ -64,6 +66,8 @@ class MediaProject(BaseModel):
     title: str = Field(min_length=1, max_length=140)
     format: MediaFormat = "carousel"
     theme: MediaTheme = "ihub"
+    background_mode: MediaBackground = "video"
+    paper_theme: MediaPaperTheme = "cream"
     source_project_id: UUID | None = None
     source_scene_id: UUID | None = None
     source_youtube_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{11}$")
@@ -90,6 +94,8 @@ class MediaProjectEdit(BaseModel):
     title: str = Field(min_length=1, max_length=140)
     format: MediaFormat
     theme: MediaTheme
+    background_mode: MediaBackground = "video"
+    paper_theme: MediaPaperTheme = "cream"
     source_project_id: UUID | None = None
     source_scene_id: UUID | None = None
     source_youtube_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{11}$")

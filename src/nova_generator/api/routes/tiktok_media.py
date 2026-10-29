@@ -193,6 +193,21 @@ def _validate_video_captions(project: MediaProject, duration_ms: int) -> None:
             previous_end = caption.end_ms
 
 
+@router.get("/projects/{project_id}/source/audio.mp3")
+def download_tiktok_cut_mp3(project_id: UUID) -> FileResponse:
+    """Download only the audio attached to the currently selected verified cut."""
+    project = _get(project_id)
+    cut, _duration = _video_cut(project)
+    mp3 = cut.with_suffix(".mp3")
+    if not mp3.is_file() or mp3.stat().st_size == 0:
+        raise HTTPException(404, "O MP3 deste recorte ainda não está disponível.")
+    return FileResponse(
+        mp3, media_type="audio/mpeg",
+        filename="tiktok-media-recorte.mp3",
+        content_disposition_type="inline",
+    )
+
+
 @router.get("/projects/{project_id}/source")
 def stream_tiktok_source(project_id: UUID) -> FileResponse:
     project = _get(project_id)
@@ -254,6 +269,7 @@ def independent_source_status(project_id: UUID) -> dict:
             "ingest_status": None,
             "ingest_error": None,
             "ingest_job_id": None,
+            "mp3_ready": False,
         }
     video = YoutubeVideo(project.source_youtube_id)
     metadata = FileYoutubeMediaCache(get_settings().media_cache_root).find_verified(video)
@@ -280,6 +296,12 @@ def independent_source_status(project_id: UUID) -> dict:
         "ingest_error": ingest.error_message if ingest else None,
         "ingest_job_id": str(ingest.id) if ingest else None,
         "cut_ready": project.source_cut_job_id is not None,
+        "mp3_ready": bool(
+            project.source_cut_job_id
+            and (
+                _store().directory(project.id) / "cuts" / f"{project.source_cut_job_id}.mp3"
+            ).is_file()
+        ),
     }
 
 

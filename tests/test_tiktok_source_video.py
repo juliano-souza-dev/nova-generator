@@ -395,3 +395,50 @@ def test_new_styles_round_trip_without_migrating_old_projects() -> None:
         assert MediaProject.model_validate_json(
             project.model_dump_json()
         ).caption_style.template == name
+
+
+def test_paper_render_uses_synthetic_background_and_source_audio(monkeypatch, tmp_path) -> None:
+    from nova_generator.infrastructure.worker import tiktok_media_handler as handler
+
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+    caption = _caption(100, 600)
+    project = MediaProject(
+        title="Paper", slides=[MediaSlide()], video_captions=[caption],
+        background_mode="paper", paper_theme="cream",
+    )
+    calls = []
+    monkeypatch.setattr(handler, "_run_ffmpeg", lambda args, **kwargs: calls.append((args, kwargs)))
+    execution = SimpleNamespace(raise_if_cancelled=lambda: None, heartbeat=lambda: None)
+    from hashlib import sha256 as h
+    payload = {
+        "audio_mode": "original", "source_duration_ms": 1000,
+        "source_video_sha256": h(b"source").hexdigest(),
+    }
+    handler._render_video_source(project, payload, tmp_path, tmp_path / "uploaded.mp3", execution)
+    args, kwargs = calls[0]
+    assert "color=c=0xF4EBDD" in " ".join(args)
+    assert args.count("-i") == 2
+    assert args[args.index("-map") + 1] == "0:v:0"
+    assert "1:a:0?" in args
+    assert "ass=captions.ass" in " ".join(args)
+    assert kwargs["cwd"] == tmp_path
+    assert "This doesn't bother you" in (tmp_path / "captions.ass").read_text()
+
+    calls.clear()
+    payload["audio_mode"] = "uploaded"
+    handler._render_video_source(project, payload, tmp_path, tmp_path / "uploaded.mp3", execution)
+    assert "2:a:0" in calls[0][0]
+
+
+def test_paper_contract_accepts_saved_themes_and_old_project_defaults() -> None:
+    for theme in ("cream", "kraft", "night"):
+        project = MediaProject(
+            title="Paper test", slides=[MediaSlide()],
+            background_mode="paper", paper_theme=theme,
+        )
+        saved = MediaProject.model_validate_json(project.model_dump_json())
+        assert saved.background_mode == "paper" and saved.paper_theme == theme
+    older = MediaProject.model_validate({"title": "Legacy", "slides": [MediaSlide()]})
+    assert older.background_mode == "video"
+    assert older.paper_theme == "cream"

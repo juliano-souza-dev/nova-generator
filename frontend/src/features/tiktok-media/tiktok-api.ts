@@ -4,6 +4,8 @@ export type MediaFormat = "carousel" | "lesson_video" | "lyrics_video";
 export type MediaTheme = "ihub" | "midnight" | "warm";
 export type MediaKind = "cover" | "lesson" | "example" | "challenge" | "lyric";
 export type MediaVisualMode = "slides" | "video_source";
+export type MediaBackground = "video" | "paper";
+export type PaperTheme = "cream" | "kraft" | "night";
 export type MediaAudioMode = "silent" | "uploaded" | "voice" | "original";
 
 export type MediaCaption = {
@@ -50,6 +52,8 @@ export type MediaProject = {
   title: string;
   format: MediaFormat;
   theme: MediaTheme;
+  background_mode?: MediaBackground;
+  paper_theme?: PaperTheme;
   source_project_id: string | null;
   source_scene_id?: string | null;
   source_youtube_id?: string | null;
@@ -65,6 +69,8 @@ export type MediaEdit = Pick<
   | "title"
   | "format"
   | "theme"
+  | "background_mode"
+  | "paper_theme"
   | "source_project_id"
   | "source_scene_id"
   | "source_youtube_id"
@@ -89,6 +95,7 @@ export type MediaSourceStatus = {
   ingest_error: string | null;
   ingest_job_id?: string | null;
   cut_ready?: boolean;
+  mp3_ready?: boolean;
 };
 
 export const mediaApi = {
@@ -115,6 +122,7 @@ export const mediaApi = {
   audioUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/audio`),
   sourceUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/source`),
   originalUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/source/original`),
+  cutMp3Url: (id: string) => apiUrl(`/tiktok-media/projects/${id}/source/audio.mp3`),
   sourceStatus: (id: string) =>
     apiRequest<MediaSourceStatus>(`/tiktok-media/projects/${id}/source/status`),
   prepareYoutube: (id: string, revision: number, url: string) =>

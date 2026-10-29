@@ -72,7 +72,7 @@ def _karaoke_words(value: str, duration_ms: int) -> str:
     return "".join(result)
 
 
-def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle) -> str:
+def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle, paper_theme: str | None = None) -> str:
     """Render video effects using ASS so the exported MP4 matches the editor."""
     template = style.template
     alignment = {"top": 8, "center": 5, "bottom": 2}[style.position]
@@ -84,12 +84,13 @@ def render_ass(captions: list[MediaCaption], style: MediaCaptionStyle) -> str:
     bold = -1 if template in {"impact", "karaoke", "neon", "popstar"} else 0
     font = ("Comic Sans MS" if template == "handwriting"
             else "Georgia" if template == "cinema" else "Arial")
-    foreground = _ass_color(style.text_color)
+    ink_color = "#233043" if paper_theme in {"cream", "kraft"} and style.text_color.upper() == "#FFFFFF" else style.text_color
+    foreground = _ass_color(ink_color)
     accent = ("&H00FFE57D&" if template == "neon"
               else "&H0000C8FF&" if template in {"karaoke", "handwriting", "popstar"}
               else "&H0000D9FF&")
     outline_color = "&H00904738&" if template == "neon" else "&H00202020&"
-    translation = "&H00F4F4FA&"
+    translation = "&H004C3829&" if paper_theme in {"cream", "kraft"} else "&H00F4F4FA&"
     animation = {
         "none": "",
         "fade": r"{\fad(180,180)}",

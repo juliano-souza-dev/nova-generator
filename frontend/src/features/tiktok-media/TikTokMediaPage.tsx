@@ -12,6 +12,8 @@ import {
   Link2,
   Music2,
   Palette,
+  FileAudio,
+  Layers2,
   Pencil,
   Star,
   Zap,
@@ -46,6 +48,8 @@ import {
   mediaApi,
   readExternalStoryboard,
   type MediaAudioMode,
+  type MediaBackground,
+  type PaperTheme,
   type MediaCaption,
   type MediaCaptionStyle,
   type MediaFormat,
@@ -299,6 +303,8 @@ export function TikTokMediaPage() {
         title: value.title,
         format: value.format,
         theme: value.theme,
+        background_mode: value.background_mode ?? "video",
+        paper_theme: value.paper_theme ?? "cream",
         source_project_id: value.source_project_id,
         source_scene_id: value.source_scene_id,
         source_youtube_id: value.source_youtube_id,
@@ -378,6 +384,11 @@ export function TikTokMediaPage() {
     (draft?.source_scene_id || draft?.source_youtube_id) && draft?.format !== "carousel",
   );
   const captionStyle = draft?.caption_style ?? DEFAULT_CAPTION_STYLE;
+  const backgroundMode = draft?.background_mode ?? "video";
+  const paperTheme = draft?.paper_theme ?? "cream";
+  const lightPaper = backgroundMode === "paper" && paperTheme !== "night";
+  const previewTextColor = lightPaper && captionStyle.text_color.toUpperCase() === "#FFFFFF"
+    ? "#233043" : captionStyle.text_color;
   const captions = draft?.video_captions ?? [];
   const activeCaption = activeCaptionAt(captions, playheadMs);
   const selectedCaption =
@@ -714,6 +725,17 @@ export function TikTokMediaPage() {
     setSelectedCaptionId(cueId);
   }
 
+  function setBackgroundMode(mode: MediaBackground) {
+    if (mode === backgroundMode) return;
+    edit((current) => ({ ...current, background_mode: mode }));
+    setInspectorTab("style");
+  }
+
+  function changePaperTheme(theme: PaperTheme) {
+    if (theme === paperTheme) return;
+    edit((current) => ({ ...current, paper_theme: theme }));
+  }
+
   function changeCaptionStyle(change: Partial<MediaCaptionStyle>) {
     edit((current) => ({
       ...current,
@@ -948,6 +970,12 @@ export function TikTokMediaPage() {
                         <Subtitles size={16} />{" "}
                         {transcribeCut.isPending ? "Enviando…" : "Transcrever este trecho"}
                       </button>
+                      {sourceStatus.data.mp3_ready && (
+                        <a className="tm-cut-link" href={mediaApi.cutMp3Url(draft.id)}
+                          download="tiktok-media-recorte.mp3">
+                          <FileAudio size={14} /> Baixar MP3 do recorte
+                        </a>
+                      )}
                       {sourceStatus.data.ingest_status && (
                         <p className="tm-small">
                           Transcrição:{" "}
@@ -1226,6 +1254,18 @@ export function TikTokMediaPage() {
                 <span className="tm-eyebrow">
                   PRÉVIA · {creationModes.find(({ id }) => id === creationMode)?.label} · 9:16
                 </span>
+                {videoMode && (
+                  <div className="tm-background-toggle" role="group" aria-label="Imagem de fundo">
+                    <button type="button" aria-pressed={backgroundMode === "video"}
+                      onClick={() => setBackgroundMode("video")}>
+                      <Video size={14} /> Vídeo
+                    </button>
+                    <button type="button" aria-pressed={backgroundMode === "paper"}
+                      onClick={() => setBackgroundMode("paper")}>
+                      <Layers2 size={14} /> Papel
+                    </button>
+                  </div>
+                )}
                 <span className="tm-toolbar-actions">
                   <button
                     title={videoMode ? "Legenda anterior" : "Quadro anterior"}
@@ -1280,11 +1320,12 @@ export function TikTokMediaPage() {
               </div>
               <div className={videoMode ? "tm-stage tm-stage-video" : "tm-stage"}>
                 {videoMode ? (
-                  <div className="tm-video-frame">
+                  <div className={`tm-video-frame ${backgroundMode === "paper" ? `tm-paper-frame tm-paper-${paperTheme}` : ""}`}>
                     {sourceVideoUrl ? (
                       <video
                         key={`${draft.source_scene_id ?? draft.source_youtube_id}-${draft.source_cut_job_id ?? "original"}`}
                         ref={videoRef}
+                        className={backgroundMode === "paper" ? "tm-source-audio-only" : undefined}
                         src={sourceVideoUrl}
                         preload="metadata"
                         playsInline
@@ -1309,13 +1350,18 @@ export function TikTokMediaPage() {
                     ) : (
                       <p className="tm-video-empty">Carregando o recorte para a prévia…</p>
                     )}
+                    {backgroundMode === "paper" && (
+                      <div className="tm-paper-layer" aria-hidden="true">
+                        <span className="tm-paper-grain" />
+                      </div>
+                    )}
                     {activeCaption && (
                       <div
                         key={activeCaption.cue_id}
                         className={`tm-caption-overlay tm-caption-${captionStyle.template} tm-caption-${captionStyle.position} tm-animation-${captionStyle.animation}`}
                         style={{
                           fontSize: `${((presetFontSizes[captionStyle.template] * captionStyle.text_scale * 100) / 1080).toFixed(3)}cqw`,
-                          color: captionStyle.text_color,
+                          color: previewTextColor,
                         }}
                         aria-live="off"
                       >
@@ -1661,6 +1707,37 @@ export function TikTokMediaPage() {
                   </h2>
                   {inspectorTab === "style" && (
                     <>
+                      {videoMode && (
+                        <div className="tm-paper-controls">
+                          <h3>Imagem da publicação</h3>
+                          <div className="tm-background-toggle tm-background-panel" role="group" aria-label="Escolha do fundo">
+                            <button aria-pressed={backgroundMode === "video"} onClick={() => setBackgroundMode("video")}>
+                              <Video size={15} /> Vídeo original
+                            </button>
+                            <button aria-pressed={backgroundMode === "paper"} onClick={() => setBackgroundMode("paper")}>
+                              <Layers2 size={15} /> Papel + áudio
+                            </button>
+                          </div>
+                          {backgroundMode === "paper" && (
+                            <div className="tm-paper-themes" role="group" aria-label="Estilo do papel">
+                              {([
+                                ["cream", "Papel claro"],
+                                ["kraft", "Papel kraft"],
+                                ["night", "Papel noturno"],
+                              ] as const).map(([theme, label]) => (
+                                <button key={theme} onClick={() => changePaperTheme(theme)}
+                                  className={`tm-paper-option tm-paper-${theme}`}
+                                  aria-pressed={paperTheme === theme}>
+                                  <span className="tm-paper-swatch" />{label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <p className="tm-small">
+                            A música e os tempos das legendas continuam iguais ao trocar o fundo.
+                          </p>
+                        </div>
+                      )}
                       <p className="tm-small">
                         Alterações visíveis imediatamente na prévia. O estilo vale para todos os
                         blocos desta produção.
@@ -1962,6 +2039,17 @@ export function TikTokMediaPage() {
                   <h2>
                     <Music2 size={18} /> Áudio e exportação
                   </h2>
+                  {draft.source_youtube_id && sourceStatus.data?.mp3_ready && (
+                    <div className="tm-cut-mp3">
+                      <strong><FileAudio size={17} /> MP3 do trecho recortado</strong>
+                      <audio controls preload="none" src={mediaApi.cutMp3Url(draft.id)}
+                        aria-label="Ouvir MP3 do recorte" />
+                      <a href={mediaApi.cutMp3Url(draft.id)} download="tiktok-media-recorte.mp3">
+                        <Download size={15} /> Baixar MP3 do recorte
+                      </a>
+                      <p className="tm-small">O MP3 fica guardado junto do recorte e pode ser reutilizado.</p>
+                    </div>
+                  )}
                   <label className="tm-field">
                     <span>Enviar música ou áudio (MP3, WAV, OGG)</span>
                     <input

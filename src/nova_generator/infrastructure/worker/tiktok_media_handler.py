@@ -109,22 +109,43 @@ def _render_video_source(
     # Working-directory-relative ASS path works identically on Windows and Unix
     # and avoids fragile escaping of drive letters/colons inside FFmpeg filters.
     (snapshot_dir / "captions.ass").write_text(
-        render_ass(project.video_captions, project.caption_style), encoding="utf-8"
+        render_ass(
+            project.video_captions, project.caption_style,
+            project.paper_theme if project.background_mode == "paper" else None,
+        ), encoding="utf-8"
     )
     execution.raise_if_cancelled()
-    filter_graph = (
-        "scale=1080:1920:force_original_aspect_ratio=increase,"
-        "crop=1080:1920,setsar=1,ass=captions.ass,format=yuv420p"
-    )
-    args = ["-y", "-i", str(source)]
+    paper = project.background_mode == "paper"
+    if paper:
+        # A generated page is deliberately independent from the source visuals.
+        backgrounds = {"cream": "0xF4EBDD", "kraft": "0xCFAF87", "night": "0x172238"}
+        if project.paper_theme not in backgrounds:
+            raise ValueError("Papel selecionado inválido.")
+        page_color = backgrounds[project.paper_theme]
+        grid_color = "0xA6D2E4@0.10" if project.paper_theme == "night" else "0x6B7B83@0.13"
+        filter_graph = (
+            f"setsar=1,drawgrid=w=1080:h=75:t=1:c={grid_color},"
+            "noise=alls=5:allf=u,ass=captions.ass,format=yuv420p"
+        )
+        args = [
+            "-y", "-f", "lavfi", "-i",
+            f"color=c={page_color}:s=1080x1920:r=30:d={duration / 1000:.3f}",
+            "-i", str(source),
+        ]
+    else:
+        filter_graph = (
+            "scale=1080:1920:force_original_aspect_ratio=increase,"
+            "crop=1080:1920,setsar=1,ass=captions.ass,format=yuv420p"
+        )
+        args = ["-y", "-i", str(source)]
     mode = payload["audio_mode"]
     if mode == "uploaded":
         args += ["-stream_loop", "-1", "-i", str(uploaded_audio)]
     args += ["-map", "0:v:0"]
     if mode == "original":
-        args += ["-map", "0:a:0?"]
+        args += ["-map", "1:a:0?" if paper else "0:a:0?"]
     elif mode == "uploaded":
-        args += ["-map", "1:a:0"]
+        args += ["-map", "2:a:0" if paper else "1:a:0"]
     args += ["-vf", filter_graph, "-r", "30", "-c:v", "libx264", "-preset", "veryfast"]
     args += ["-pix_fmt", "yuv420p", "-movflags", "+faststart"]
     if mode in {"original", "uploaded"}:
@@ -266,6 +287,8 @@ def make_media_render_handler(
             "render_id": str(render_id),
             "audio_mode": mode,
             "visual_mode": payload.get("visual_mode", "slides"),
+            "background_mode": project.background_mode,
+            "paper_theme": project.paper_theme,
             "source_video_sha256": source_digest,
             "source_scene_id": str(project.source_scene_id) if source_digest else None,
             "caption_count": (

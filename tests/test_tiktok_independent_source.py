@@ -16,6 +16,7 @@ from nova_generator.infrastructure.filesystem.tiktok_media_store import (
     MediaConflict,
     MediaProjectStore,
 )
+from nova_generator.infrastructure.worker import tiktok_source_handler
 from nova_generator.infrastructure.worker.tiktok_source_handler import TikTokSourceJobHandler
 
 
@@ -181,7 +182,30 @@ def test_cut_resolves_its_own_completed_job_not_an_editorial_scene(monkeypatch, 
     assert tiktok_media._video_cut(project) == (cut, 2000)
 
 
-def test_ingest_attaches_asr_as_editable_captions(tmp_path) -> None:
+def test_cut_mp3_endpoint_never_returns_outdated_audio(monkeypatch, tmp_path) -> None:
+    store = MediaProjectStore(tmp_path)
+    project = store.create("Com MP3", "lyrics_video")
+    job_id = uuid4()
+    cut = store.directory(project.id) / "cuts" / f"{job_id}.mp4"
+    cut.parent.mkdir(parents=True)
+    cut.write_bytes(b"cut")
+    cut.with_suffix(".mp3").write_bytes(b"mp3")
+    monkeypatch.setattr(tiktok_media, "_get", lambda _: project)
+    monkeypatch.setattr(tiktok_media, "_video_cut", lambda _: (cut, 2000))
+    app = FastAPI()
+    app.include_router(tiktok_media.router)
+    response = TestClient(app).get(
+        f"/tiktok-media/projects/{project.id}/source/audio.mp3"
+    )
+    assert response.status_code == 200
+    assert response.content == b"mp3"
+    cut.with_suffix(".mp3").unlink()
+    assert TestClient(app).get(
+        f"/tiktok-media/projects/{project.id}/source/audio.mp3"
+    ).status_code == 404
+
+
+def test_ingest_attaches_asr_as_editable_captions(tmp_path, monkeypatch) -> None:
     store = MediaProjectStore(tmp_path)
     project = store.create("Fonte", "lyrics_video")
     project = store.set_youtube_source(project.id, project.revision, "dQw4w9WgXcQ")
@@ -209,6 +233,14 @@ def test_ingest_attaches_asr_as_editable_captions(tmp_path) -> None:
         assert "tiktok-media" in job.input["output"]
         return {"transcript_candidate": candidate}
 
+    def make_mp3(cut):
+        assert cut == store.directory(project.id) / "cuts" / f"{job.id}.mp4"
+        cut.parent.mkdir(parents=True, exist_ok=True)
+        mp3 = cut.with_suffix(".mp3")
+        mp3.write_bytes(b"test mp3")
+        return mp3
+
+    monkeypatch.setattr(tiktok_source_handler, "_make_mp3_from_cut", make_mp3)
     handler = TikTokSourceJobHandler(store, cache, None, ingest)
     job = _job(
         "tiktok.ingest",
@@ -223,6 +255,7 @@ def test_ingest_attaches_asr_as_editable_captions(tmp_path) -> None:
     execution = SimpleNamespace(raise_if_cancelled=lambda: None, heartbeat=lambda: None)
     result = handler.ingest(job, execution)
     assert result["caption_count"] == 2
+    assert result["audio_mp3_ready"] is True
     saved = store.get(project.id)
     assert saved is not None
     assert saved.source_cut_job_id == job.id

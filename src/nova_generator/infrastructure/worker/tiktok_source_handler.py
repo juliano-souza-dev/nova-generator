@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import os
+import subprocess
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+from nova_generator.core.settings import get_settings
 from nova_generator.application.use_cases.download_youtube_source import DownloadYoutubeSource
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.media.youtube import YoutubeVideo
@@ -17,6 +21,36 @@ from nova_generator.infrastructure.worker.ingest_scene_media_handler import (
 )
 from nova_generator.infrastructure.worker.persistent_worker import JobExecution
 from nova_generator.infrastructure.worker.project_media_handler import _keep_lease
+
+
+def _make_mp3_from_cut(cut: Path) -> Path:
+    """Keep a reusable MP3 beside the exact independently prepared MP4 cut."""
+    target = cut.with_suffix(".mp3")
+    staging = cut.with_suffix(".partial.mp3")
+    if target.is_file() and target.stat().st_size > 0:
+        return target
+    if not cut.is_file() or cut.stat().st_size == 0:
+        raise ValueError("O vídeo recortado não está disponível para extrair áudio.")
+    try:
+        result = subprocess.run(
+            [
+                get_settings().ffmpeg_executable,
+                "-hide_banner", "-loglevel", "error", "-y",
+                "-i", str(cut),
+                "-map", "0:a:0", "-vn",
+                "-c:a", "libmp3lame", "-q:a", "2", "-ar", "44100",
+                str(staging),
+            ],
+            capture_output=True, text=True, check=False, timeout=180,
+        )
+        if result.returncode or not staging.is_file() or staging.stat().st_size == 0:
+            raise ValueError(
+                "Não foi possível guardar o MP3 do recorte. Confirme que o vídeo tem áudio."
+            )
+        os.replace(staging, target)
+        return target
+    finally:
+        staging.unlink(missing_ok=True)
 
 
 class TikTokSourceJobHandler:
@@ -90,6 +124,7 @@ class TikTokSourceJobHandler:
         )
         with _keep_lease(execution):
             result = self.ingestion(safe_job, execution)
+        mp3 = _make_mp3_from_cut(output)
         transcript = result["transcript_candidate"]
         captions: list[MediaCaption] = []
         previous_end = 0
@@ -129,5 +164,6 @@ class TikTokSourceJobHandler:
             "end_ms": end_ms,
             "duration_ms": end_ms - start_ms,
             "caption_count": len(captions),
+            "audio_mp3_ready": mp3.is_file(),
             "transcript_candidate": transcript,
         }
