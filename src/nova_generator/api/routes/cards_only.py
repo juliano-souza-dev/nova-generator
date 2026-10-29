@@ -37,7 +37,8 @@ async def _read_cards(file: UploadFile) -> tuple[str, list[dict]]:
 
 
 def _source_cues(document: dict) -> tuple[str, list[dict]]:
-    source = document.get("source") if isinstance(document.get("source"), dict) else document
+    raw_source = document.get("source")
+    source = raw_source if isinstance(raw_source, dict) else document
     title = source.get("title") or document.get("title") or "Cards IHUB"
     candidates = [
         cue for scene in source.get("scenes", [])

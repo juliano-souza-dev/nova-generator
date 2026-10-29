@@ -23,7 +23,8 @@ class CardsOnlyError(ValueError):
 def normalize_cards(document: Any) -> tuple[str, list[dict[str, Any]]]:
     if not isinstance(document, dict):
         raise CardsOnlyError("O JSON de cards precisa ser um objeto.")
-    kit = document.get("kit") if isinstance(document.get("kit"), dict) else {}
+    raw_kit = document.get("kit")
+    kit = raw_kit if isinstance(raw_kit, dict) else {}
     title = document.get("title") or kit.get("title") or "Cards IHUB"
     if not isinstance(title, str) or not 1 <= len(title.strip()) <= 255:
         raise CardsOnlyError("Título dos cards inválido.")
