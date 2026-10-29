@@ -185,7 +185,7 @@ export function CardsPage() {
             speaker: "",
             audio_url: ready && submitted ? apiUrl(`/cards-only/exports/${submitted.export_id}/audio/${current.card_id}`) : null,
             highlights: [],
-            pedagogical: { ...current, scene_id: current.scene_id ?? current.cue_id },
+            pedagogical: current,
           }}
           position={active + 1}
           total={cards.length}
