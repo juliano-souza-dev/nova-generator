@@ -359,9 +359,32 @@ class ExternalEditorialExchange:
             if name.lower().endswith(".zip"):
                 try:
                     with zipfile.ZipFile(BytesIO(payload)) as archive:
-                        if "cue-resegmentation-map.json" in archive.namelist():
+                        names = archive.namelist()
+                        # Newer exports carry an explicit map.  Accepting a complete
+                        # return that has a different cue count is also safe: the map
+                        # can be derived exclusively from its immutable word IDs and
+                        # the owner still has to confirm the replacement below.
+                        # This keeps a valid 14-cue editorial return from being
+                        # misreported as a stale 11-cue chunk package.
+                        source_is_resegmented = False
+                        if {
+                            "manifest.json", "editorial_input.json",
+                        }.issubset(names):
+                            source = json.loads(archive.read("editorial_input.json"))
+                            if (
+                                isinstance(source, dict)
+                                and source.get("scene_id") == str(scene_id)
+                                and isinstance(source.get("cues"), list)
+                            ):
+                                source_is_resegmented = len(source["cues"]) != len(
+                                    self._repository.get_scene_cues(scene_id)
+                                )
+                        if "cue-resegmentation-map.json" in names or source_is_resegmented:
                             mapped_zip.append((name, payload))
-                except (zipfile.BadZipFile, OSError, RuntimeError) as error:
+                except (
+                    zipfile.BadZipFile, OSError, RuntimeError, TypeError,
+                    ValueError, json.JSONDecodeError,
+                ) as error:
                     raise EditorialAssistanceError(f"{name}: invalid ZIP archive") from error
         if mapped_zip:
             if len(uploads) != 1:

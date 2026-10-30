@@ -5,7 +5,7 @@ from dataclasses import asdict
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -434,20 +434,27 @@ def list_scenes(
     ]
 
 
-@router.get("/scenes/{scene_id}/cues", response_model=list[CueWithWordsResponse])
+@router.get(
+    "/scenes/{scene_id}/cues",
+    response_model=list[CueWithWordsResponse],
+    responses={200: {"headers": {"Cache-Control": {"schema": {"type": "string"}}}}},
+)
 def list_scene_cues(
     scene_id: UUID,
     repository: Annotated[SqlAlchemyEditorialProjectRepository, Depends(get_editorial_repository)],
+    response: Response,
 ) -> list[dict[str, Any]]:
     if repository.get_scene_project_id(scene_id) is None:
         raise HTTPException(status_code=404, detail="scene not found")
-    return [
+    payload = [
         {
             **_cue_response(cue),
             "words": [_word_response(word) for word in repository.get_cue_words(cue.id)],
         }
         for cue in repository.get_scene_cues(scene_id)
     ]
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return payload
 
 
 @router.get("/scenes/{scene_id}/revisions", response_model=list[RevisionResponse])

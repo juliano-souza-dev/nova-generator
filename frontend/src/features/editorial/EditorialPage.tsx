@@ -732,8 +732,8 @@ export function EditorialPage() {
       setImportFeedback({kind: "success", message: `${result.suggestions.length} cues importadas. A nova organização e os materiais foram salvos.`});
     } catch (error) {
       const detail = error instanceof Error ? error.message : "O retorno externo não passou na validação.";
-      const guidance = /stale scene|scene changed|outra cena|another scene/i.test(detail)
-        ? " Este arquivo corresponde a outra versão da cena. Exporte um pacote atualizado ou use um ZIP de resegmentação com mapa validado."
+      const guidance = /stale|scene changed|current exported package|outra cena|another scene/i.test(detail)
+        ? " Este retorno pertence a um pacote anterior e não foi aplicado. Baixe o pacote atual, envie-o novamente à IA externa e importe todos os blocos gerados a partir dele."
         : "";
       setAssistantMessage(detail + guidance);
       setImportFeedback({kind: "error", message: detail + guidance});
@@ -1875,14 +1875,19 @@ export function EditorialPage() {
                         Salve ou descarte as alterações antes de regenerar o pacote.
                       </span>
                     ) : (
-                      <a
-                        className="secondary-button"
-                        href={studioApi.externalEditorialPackageUrl(sceneId)}
-                        download
-                        aria-label="Gerar novamente JSON para IA externa"
-                      >
-                        <Download aria-hidden="true" /> Gerar novamente JSON para IA externa
-                      </a>
+                      <>
+                        <a
+                          className="secondary-button"
+                          href={studioApi.externalEditorialPackageUrl(sceneId)}
+                          download
+                          aria-label="Baixar pacote atualizado para IA externa"
+                        >
+                          <Download aria-hidden="true" /> Baixar pacote atualizado para IA externa
+                        </a>
+                        <p className="editorial-ai-reexport-note">
+                          Baixar o pacote não altera as cues. Envie este arquivo à IA externa e importe o retorno para aplicar as mudanças.
+                        </p>
+                      </>
                     )}
                     <EditorialImportDropzone
                       disabledReason={importDisabledReason}
