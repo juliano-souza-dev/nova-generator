@@ -13,6 +13,9 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Tratar ZIP com `cue-resegmentation-map.json` como operação excepcional autorizada pelo dono:
   validar correspondência integral dos IDs/tempos de palavras da cena atual, confirmar por `409`,
   aplicar uma única revisão auditável e manter inalterado o importador ordinário 1.5.
+- No modo explícito de substituição completa do proprietário, validar a consistência interna do
+  ZIP 1.5 (manifesto, fonte, chunks, English in Context e Anki), sem exigir hash, IDs ou tempos
+  iguais aos da cena atual. Aplicar revisão atômica e preservar a origem e o corte.
 - Manter compatibilidade de leitura com sugestões editoriais 1.0 sem unidades, 1.1 com
   `semantic_units` e 1.2 com traduções. O contrato 1.3 reconcilia cada superfície e timing com o
   inglês aprovado; somente um retorno 1.3 completo pode liberar a bancada.

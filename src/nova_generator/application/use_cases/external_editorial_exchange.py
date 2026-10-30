@@ -49,7 +49,7 @@ from nova_generator.application.use_cases.structures_in_context import (
     prepare_external_structures,
     write_external_structures,
 )
-from nova_generator.domain.projects.entities import Cue, EditorialRevision
+from nova_generator.domain.projects.entities import Cue, EditorialRevision, WordTiming
 
 
 class _ExternalSemanticUnit(BaseModel):
@@ -347,11 +347,15 @@ class ExternalEditorialExchange:
 
     def import_batch(
         self, scene_id: UUID, uploads: list[tuple[str, bytes]], *,
-        allow_resegmentation: bool = False,
+        allow_resegmentation: bool = False, replace_complete: bool = False,
     ) -> EditorialAssistanceResult:
         """Preflight every external chunk, then persist one atomic scene revision."""
         if not uploads or len(uploads) > 24:
             raise EditorialAssistanceError("select between 1 and 24 JSON files, or one ZIP")
+        if replace_complete:
+            if len(uploads) != 1 or not uploads[0][0].lower().endswith(".zip"):
+                raise EditorialAssistanceError("complete replacement requires exactly one ZIP")
+            return self._replace_complete_zip(scene_id, uploads[0][1])
         # An explicitly authored cue map is a separate, user-confirmed operation.
         # Do not weaken normal 1.5 hash/manifest validation to support it.
         mapped_zip = []
@@ -652,6 +656,319 @@ class ExternalEditorialExchange:
                 temporary.unlink(missing_ok=True)
         write_external_structures(
             self._project_root, project_id, scene_id, source_hash, all_suggestions
+        )
+        return combined
+
+
+    def _replace_complete_zip(
+        self, scene_id: UUID, payload: bytes
+    ) -> EditorialAssistanceResult:
+        """Replace owner-selected editorial content using only ZIP-internal integrity.
+
+        The current cue count, word IDs, timings and input hash never gate this
+        operation.  An optimistic DB snapshot still prevents simultaneous writes.
+        """
+        if not payload or len(payload) > 10_000_000:
+            raise EditorialAssistanceError("complete ZIP is empty or exceeds 10 MB")
+        try:
+            with zipfile.ZipFile(BytesIO(payload)) as archive:
+                names = archive.namelist()
+                if len(names) != len(set(names)):
+                    raise EditorialAssistanceError("ZIP has duplicate filenames")
+                required = {"manifest.json", "editorial_input.json", "anki/anki-ai-result.json"}
+                if not required.issubset(names):
+                    raise EditorialAssistanceError(
+                        "ZIP incompleto: inclua manifesto, editorial e resultado Anki"
+                    )
+                if sum(
+                    item.file_size for item in archive.infolist()
+                    if item.filename.lower().endswith(".json")
+                ) > 8_000_000:
+                    raise EditorialAssistanceError("ZIP JSON exceeds 8 MB")
+                manifest = json.loads(archive.read("manifest.json"))
+                source = json.loads(archive.read("editorial_input.json"))
+                anki_content = archive.read("anki/anki-ai-result.json")
+                mapping = (
+                    json.loads(archive.read("cue-resegmentation-map.json"))
+                    if "cue-resegmentation-map.json" in names else None
+                )
+                if not isinstance(manifest, dict) or not isinstance(source, dict):
+                    raise EditorialAssistanceError("ZIP manifesto e editorial devem ser objetos")
+                chunks = manifest.get("chunks")
+                if not isinstance(chunks, list) or not 1 <= len(chunks) <= 24:
+                    raise EditorialAssistanceError("ZIP has no complete chunk manifest")
+                expanded = []
+                for index, chunk in enumerate(chunks, 1):
+                    if not isinstance(chunk, dict) or chunk.get("index") != index:
+                        raise EditorialAssistanceError("ZIP chunk indexes must be sequential")
+                    chunk_id = chunk.get("id")
+                    if not isinstance(chunk_id, str) or not chunk_id:
+                        raise EditorialAssistanceError("ZIP has an invalid chunk ID")
+                    filename = f"chunks/{index:03d}-{chunk_id}-result.json"
+                    if filename not in names:
+                        raise EditorialAssistanceError(f"ZIP incompleto: falta {filename}")
+                    expanded.append((filename, archive.read(filename)))
+        except (
+            zipfile.BadZipFile, OSError, RuntimeError, KeyError, TypeError, ValueError,
+        ) as error:
+            if isinstance(error, EditorialAssistanceError):
+                raise
+            raise EditorialAssistanceError("ZIP contains invalid or missing JSON") from error
+
+        if manifest.get("schema_version") != "nova-generator-editorial-exchange/1.5":
+            raise EditorialAssistanceError("complete ZIP requires editorial exchange 1.5")
+        if manifest.get("scene_id") != str(scene_id) or source.get("scene_id") != str(scene_id):
+            raise EditorialAssistanceError("ZIP pertence a outra cena")
+        source_hash = manifest.get("input_sha256")
+        if not isinstance(source_hash, str) or len(source_hash) != 64:
+            raise EditorialAssistanceError("invalid ZIP source hash")
+        if source.get("input_sha256") != source_hash:
+            raise EditorialAssistanceError("ZIP source and manifest hashes disagree")
+        source_cues = source.get("cues")
+        if not isinstance(source_cues, list) or not source_cues:
+            raise EditorialAssistanceError("ZIP has no editorial cues")
+        try:
+            prompts = tuple(
+                EditorialCuePrompt(
+                    **{key: value for key, value in cue.items() if key != "words"},
+                    words=tuple(EditorialWordPrompt(**word) for word in cue["words"]),
+                ) for cue in source_cues
+            )
+            canonical = json.dumps(
+                [asdict(cue) for cue in prompts], ensure_ascii=False,
+                separators=(",", ":"), sort_keys=True,
+            )
+            valid_hash = sha256(canonical.encode("utf-8")).hexdigest()
+        except (KeyError, TypeError, ValueError) as error:
+            raise EditorialAssistanceError("ZIP has invalid editorial cue data") from error
+        if valid_hash != source_hash:
+            raise EditorialAssistanceError("ZIP editorial source integrity check failed")
+        if [cue.order for cue in prompts] != list(range(1, len(prompts) + 1)):
+            raise EditorialAssistanceError("ZIP cues must have consecutive orders")
+        if len({cue.id for cue in prompts}) != len(prompts):
+            raise EditorialAssistanceError("ZIP contains duplicate cue IDs")
+        project_id = self._repository.get_scene_project_id(scene_id)
+        if project_id is None:
+            raise EditorialAssistanceError("scene not found")
+        scene = next(
+            (item for item in self._repository.get_project_scenes(project_id)
+             if item.id == scene_id), None,
+        )
+        assert scene is not None
+        all_word_ids: set[str] = set()
+        for cue in prompts:
+            try:
+                UUID(cue.id)
+                for word in cue.words:
+                    UUID(word.id)
+            except (ValueError, TypeError) as error:
+                raise EditorialAssistanceError("ZIP has invalid cue or word UUIDs") from error
+            if (
+                not 0 <= cue.speech_start_ms < cue.speech_end_ms <= scene.duration_ms
+                or not 0 <= cue.subtitle_start_ms < cue.subtitle_end_ms <= scene.duration_ms
+                or not cue.words
+                or [word.order for word in cue.words] != list(range(1, len(cue.words) + 1))
+            ):
+                raise EditorialAssistanceError("ZIP has invalid cue or word boundaries")
+            for word in cue.words:
+                if (
+                    word.id in all_word_ids
+                    or not cue.speech_start_ms <= word.start_ms < word.end_ms <= cue.speech_end_ms
+                    or not 0 <= word.original_start_ms < word.original_end_ms
+                ):
+                    raise EditorialAssistanceError("ZIP has duplicate words or invalid timings")
+                all_word_ids.add(word.id)
+        if [cue_id for chunk in chunks for cue_id in chunk.get("cue_ids", [])] != [
+            cue.id for cue in prompts
+        ] or [order for chunk in chunks for order in chunk.get("cue_orders", [])] != list(
+            range(1, len(prompts) + 1)
+        ):
+            raise EditorialAssistanceError("ZIP chunks do not cover every cue exactly once")
+
+        map_speakers: dict[str, str] = {}
+        if mapping is not None:
+            if (
+                not isinstance(mapping, dict)
+                or mapping.get("scene_id") != str(scene_id)
+                or mapping.get("schema_version") != "nova-generator-cue-resegmentation/1.0"
+                or mapping.get("resegmented_input_sha256") != source_hash
+                or not isinstance(mapping.get("cues"), list)
+                or len(mapping["cues"]) != len(prompts)
+            ):
+                raise EditorialAssistanceError("ZIP cue map is invalid")
+            for cue, item in zip(prompts, mapping["cues"], strict=True):
+                if not isinstance(item, dict) or item.get("cue_id") != cue.id:
+                    raise EditorialAssistanceError("ZIP cue map does not match its editorial")
+                speaker = item.get("speaker")
+                if not isinstance(speaker, str) or not speaker.strip():
+                    raise EditorialAssistanceError("ZIP cue map has no speaker")
+                spans = item.get("source_spans")
+                if (
+                    item.get("order") != cue.order
+                    or item.get("start_ms") != cue.speech_start_ms
+                    or item.get("end_ms") != cue.speech_end_ms
+                    or not isinstance(spans, list)
+                    or not all(isinstance(span, dict) for span in spans)
+                    or [word_id for span in spans for word_id in span.get("word_ids", [])]
+                    != [word.id for word in cue.words]
+                ):
+                    raise EditorialAssistanceError("ZIP cue map has inconsistent word spans")
+                map_speakers[cue.id] = speaker
+
+        documents: list[_ExternalResult] = []
+        for (filename, content), chunk in zip(expanded, chunks, strict=True):
+            if len(content) > self._maximum_result_bytes:
+                raise EditorialAssistanceError(f"{filename}: result is too large")
+            try:
+                document = _ExternalResult.model_validate_json(content)
+            except (ValidationError, ValueError) as error:
+                raise EditorialAssistanceError(
+                    f"{filename}: {_validation_detail(error)}"
+                ) from error
+            if (
+                document.schema_version != "nova-generator-editorial-suggestions/1.5"
+                or document.scene_id != scene_id
+                or document.input_sha256 != source_hash
+                or document.chunk_id != chunk["id"]
+            ):
+                raise EditorialAssistanceError(f"{filename}: scene, hash or chunk mismatch")
+            documents.append(document)
+        combined = EditorialAssistanceResult(
+            scene_id=str(scene_id), input_sha256=source_hash,
+            provider="external", model="external-ai",
+            suggestions=tuple(item for doc in documents for item in _as_result(doc).suggestions),
+            rate_limits={}, contract_version="nova-generator-editorial-suggestions/1.5",
+        )
+        validate_editorial_result(
+            combined, scene_id=scene_id, input_sha256=source_hash,
+            cues=prompts, require_word_translations=True, require_word_revisions=True,
+        )
+        if any(
+            "context_practices" not in item.model_fields_set
+            for doc in documents for item in doc.suggestions
+        ) or any(
+            practice.highlight is None
+            for doc in documents for item in doc.suggestions
+            for practice in item.context_practices
+        ):
+            raise EditorialAssistanceError("ZIP is missing English in Context preparation")
+        suggestions = [item.model_dump() for doc in documents for item in doc.suggestions]
+        try:
+            prepare_external_structures(suggestions)
+            if len(anki_content) > self._maximum_result_bytes:
+                raise EditorialAssistanceError("Anki result exceeds the allowed size")
+            anki_data = json.loads(anki_content)
+            anki = (
+                DidacticAnkiProposal.model_validate_json(anki_content)
+                if anki_data.get("contract") == ANKI_OUTPUT_CONTRACT
+                else _ExternalAnkiProposal.model_validate_json(anki_content)
+            )
+            if anki.scene_id != scene_id or anki.input_sha256 != source_hash:
+                raise EditorialAssistanceError("Anki does not belong to this ZIP scene")
+            editorial_by_id = {
+                item.cue_id: (item.approved_en, item.approved_pt)
+                for item in combined.suggestions
+            }
+            if isinstance(anki, DidacticAnkiProposal):
+                validate_didactic_cards(anki, editorial_by_id)
+            else:
+                validate_anki_cards(anki, editorial_by_id)
+        except (StructuresInContextError, ValidationError, ValueError, TypeError) as error:
+            raise EditorialAssistanceError(
+                f"ZIP pedagogical material is invalid: {error}"
+            ) from error
+
+        # No comparison with current editorial IDs, timestamps, count, or hash.
+        before = _scene_snapshot(self._repository, scene_id)
+        live_cues = self._repository.get_scene_cues(scene_id)
+        old_by_id = {str(cue.id): cue for cue in live_cues}
+        package_sha = sha256(payload).hexdigest()
+        entries: list[tuple[Cue, list[WordTiming]]] = []
+        for prompt, suggestion, document in zip(
+            prompts, combined.suggestions,
+            (item for doc in documents for item in doc.suggestions), strict=True,
+        ):
+            prior = old_by_id.get(prompt.id)
+            turns = document.speaker_turns
+            speaker = map_speakers.get(prompt.id) or (
+                turns[0].speaker if turns else prior.speaker if prior else "Interlocutor"
+            )
+            words = [WordTiming(
+                UUID(word.id), UUID(prompt.id), word.order, word.leading + word.surface,
+                word.start_ms, word.end_ms, word.original_start_ms, word.original_end_ms,
+                {},
+            ) for word in prompt.words]
+            prepared = _prepared_words(words, suggestion, source_hash)
+            entries.append((Cue(
+                UUID(prompt.id), scene_id, prompt.order,
+                prompt.speech_start_ms, prompt.speech_end_ms,
+                prompt.subtitle_start_ms, prompt.subtitle_end_ms,
+                speaker, prompt.original_en, suggestion.approved_en, suggestion.approved_pt,
+                (prior.revision + 1) if prior else 1,
+                {
+                    **(prior.provenance if prior else {}),
+                    "approval": "draft", "editorial_preparation": "complete",
+                    "editorial_preparation_provider": "external",
+                    "editorial_preparation_model": "external-ai",
+                    "editorial_preparation_sha256": source_hash,
+                    "editorial_preparation_notes": suggestion.notes,
+                    "editorial_preparation_trailing": suggestion.trailing,
+                    "editorial_preparation_contract": combined.contract_version,
+                    "editorial_owner_zip_sha256": package_sha,
+                },
+            ), prepared))
+        # Only skip a replay if the material itself is still unchanged.  A user
+        # edit after a previous import must never be mistaken for a no-op.
+        if len(live_cues) == len(entries) and all(
+            old.id == new.id
+            and old.order == new.order
+            and old.speech_start_ms == new.speech_start_ms
+            and old.speech_end_ms == new.speech_end_ms
+            and old.subtitle_start_ms == new.subtitle_start_ms
+            and old.subtitle_end_ms == new.subtitle_end_ms
+            and old.speaker == new.speaker
+            and old.original_en == new.original_en
+            and old.approved_en == new.approved_en
+            and old.approved_pt == new.approved_pt
+            and old.provenance.get("approval") == "draft"
+            and old.provenance.get("editorial_owner_zip_sha256") == package_sha
+            and [
+                (word.id, word.surface, word.start_ms, word.end_ms,
+                 word.original_start_ms, word.original_end_ms, word.provenance.get("pt"))
+                for word in self._repository.get_cue_words(old.id)
+            ] == [
+                (word.id, word.surface, word.start_ms, word.end_ms,
+                 word.original_start_ms, word.original_end_ms, word.provenance.get("pt"))
+                for word in words
+            ]
+            for old, (new, words) in zip(live_cues, entries, strict=True)
+        ):
+            return combined
+        revision = EditorialRevision(
+            uuid4(), project_id, scene_id, None,
+            max((item.sequence for item in self._repository.list_revisions(scene_id)), default=0)
+            + 1,
+            "replace_editorial_from_owner_zip", "project-owner", "external",
+            before, _entries_snapshot(entries), datetime.now(UTC),
+        )
+        if not self._repository.replace_scene_cues_with_revision(
+            scene_id, before, entries, revision
+        ):
+            raise EditorialAssistanceError("scene changed during ZIP replacement; retry")
+
+        destination = (
+            self._project_root / str(project_id) / "materials"
+            / f"anki-prepared-{scene_id}.json"
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_suffix(".tmp")
+        try:
+            temporary.write_text(anki.model_dump_json(indent=2) + "\n", encoding="utf-8")
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+        write_external_structures(
+            self._project_root, project_id, scene_id, source_hash, suggestions
         )
         return combined
 

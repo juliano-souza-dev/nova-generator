@@ -34,6 +34,10 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Em ZIPs com mapa explícito de resegmentação, mostrar ao operador a quantidade de cues antes e
   depois, pedir confirmação e exibir sucesso ou falha junto à área de importação. Um drop bloqueado
   por edição pendente ou arquivo incompatível deve informar a razão.
+- Para o ZIP completo enviado pelo proprietário no modo de substituição, validar o conteúdo do
+  próprio pacote e substituir cues, palavras e materiais sem exigir igualdade com o editorial
+  anterior ou confirmação adicional; mostrar erro quando o pacote estiver incompleto e refocar
+  a nova primeira cue se o ID selecionado deixar de existir.
 - No contrato editorial 1.3, exigir que `approved_en` seja reconstruído byte a byte por
   `leading + surface` de todas as palavras e pelo `trailing` final. A revisão automática pode
   corrigir superfície e timing mantendo IDs, ordem e tempos originais; mudança de cardinalidade

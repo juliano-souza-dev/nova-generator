@@ -106,12 +106,15 @@ export const studioApi = {
   externalEditorialPackageUrl: (sceneId: string) =>
     apiUrl(`/editorial/scenes/${sceneId}/external-package`),
   importExternalEditorialResults: (
-    sceneId: string, files: File[], allowResegmentation = false,
+    sceneId: string, files: File[], allowResegmentation = false, replaceComplete = false,
   ) => {
     const body = new FormData();
     files.forEach((file) => body.append("files", file));
-    const confirmation = allowResegmentation ? "?allow_resegmentation=true" : "";
-    return apiRequest<EditorialAssistance>(`/editorial/scenes/${sceneId}/external-results${confirmation}`, {
+    const options = new URLSearchParams();
+    if (allowResegmentation) options.set("allow_resegmentation", "true");
+    if (replaceComplete) options.set("replace_complete", "true");
+    const query = options.size ? `?${options}` : "";
+    return apiRequest<EditorialAssistance>(`/editorial/scenes/${sceneId}/external-results${query}`, {
       method: "POST",
       body,
     });

@@ -151,7 +151,7 @@ function EditorialImportDropzone({ disabledReason, onImport, onRejected }: Edito
       <Upload aria-hidden="true" />
       <span>
         <strong>Arraste seu material aqui</strong>
-        <small>Ou escolha um arquivo. Se houver vários blocos, selecione todos juntos.</small>
+        <small>ZIP completo substitui cues, palavras e materiais (inclusive rascunhos locais). Para JSON, selecione todos os blocos juntos.</small>
       </span>
       <button
         type="button"
@@ -463,9 +463,7 @@ export function EditorialPage() {
     ? "Aguarde a preparação ou importação atual terminar antes de enviar outro material."
     : saving
       ? "Aguarde o salvamento atual terminar antes de importar."
-      : isDirty
-        ? "Salve ou descarte as alterações da cue antes de importar outro material."
-        : undefined;
+      : undefined;
   const pendingTimingReview = visibleWords.some(
     (word) => word.provenance?.editorial_timing_estimated === true &&
       word.provenance?.word_timing_reviewed !== true,
@@ -658,6 +656,7 @@ export function EditorialPage() {
       setImportFeedback({kind: "error", message: "Nenhum arquivo recebido. Selecione um arquivo válido."});
       return;
     }
+    const isOwnerZip = files.length === 1 && files[0].name.toLowerCase().endsWith(".zip");
     if (importInFlightRef.current || assistantBusy) {
       setImportFeedback({kind: "error", message: "Já existe uma importação ou preparação em andamento. Aguarde a conclusão."});
       return;
@@ -666,11 +665,12 @@ export function EditorialPage() {
       setImportFeedback({kind: "error", message: "Aguarde o salvamento atual terminar antes de importar."});
       return;
     }
-    if (isDirty) {
+    if (isDirty && !isOwnerZip) {
       setImportFeedback({kind: "error", message: "Salve ou descarte as alterações da cue antes de importar outro JSON."});
       return;
     }
     if (
+      !isOwnerZip &&
       cues.some((cue) => cue.provenance?.approval === "approved") &&
       !window.confirm(
         "O retorno da IA substituirá a preparação editorial atual e reabrirá as cues " +
@@ -703,7 +703,9 @@ export function EditorialPage() {
         result =
         files.length === 1 && files[0].name.toLowerCase().endsWith(".json")
           ? await studioApi.importExternalEditorialResult(sceneId, files[0])
-          : await studioApi.importExternalEditorialResults(sceneId, files);
+          : isOwnerZip
+            ? await studioApi.importExternalEditorialResults(sceneId, files, false, true)
+            : await studioApi.importExternalEditorialResults(sceneId, files);
       } catch (error) {
         if (
           error instanceof ApiError && error.status === 409 &&
@@ -722,6 +724,18 @@ export function EditorialPage() {
       }
       setAssistance(result);
       const refreshed = await refreshCues();
+      if (isOwnerZip) {
+        // A complete ZIP can replace every cue/word ID. Clear stale local
+        // drafts and focus the imported content, even when an ID is reused.
+        const focus = refreshed.find((cue) => cue.id === selectedCueId) ?? refreshed[0];
+        pendingWordDrafts.current.clear();
+        setPendingDraftVersion((value) => value + 1);
+        setSelectedCueId(focus?.id ?? "");
+        setSelectedWordId(undefined);
+        setTextDraftCueId(focus?.id ?? "");
+        setApprovedEn(focus?.approved_en ?? "");
+        setApprovedPt(focus?.approved_pt ?? "");
+      }
       const remaining = refreshed.filter(cueNeedsEditorialTreatment).length;
       setAssistantFallbackRequired(remaining > 0);
       setAssistantMessage(

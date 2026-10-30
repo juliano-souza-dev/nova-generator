@@ -258,7 +258,7 @@ describe("EditorialPage", () => {
     );
     fireEvent.click(await screen.findByRole("button", { name: "Regerar JSON / importar IA" }));
     const regenerate = await screen.findByRole("link", {
-      name: "Gerar novamente JSON para IA externa",
+      name: "Baixar pacote atualizado para IA externa",
     });
     expect(regenerate).toHaveAttribute("href", "/api/external.zip");
     expect(screen.getByLabelText("Importar retorno editorial")).toBeInTheDocument();
@@ -659,7 +659,7 @@ describe("EditorialPage", () => {
     fireEvent.change(input!, { target: { files: [file] } });
 
     await waitFor(() =>
-      expect(mocks.importExternalEditorialResults).toHaveBeenCalledWith("s1", [file]),
+      expect(mocks.importExternalEditorialResults).toHaveBeenCalledWith("s1", [file], false, true),
     );
     expect(await screen.findByText(/cues importadas/)).toBeInTheDocument();
   });
@@ -686,7 +686,7 @@ describe("EditorialPage", () => {
     }
   });
 
-  it("explains why selection is blocked when cue edits are unsaved", async () => {
+  it("explains why JSON import is blocked when cue edits are unsaved", async () => {
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1"]}>
         <EditorialPage />
@@ -697,7 +697,9 @@ describe("EditorialPage", () => {
       target: { value: "Uma tradução ainda não salva" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Regerar JSON / importar IA" }));
-    fireEvent.click(screen.getByRole("button", { name: "Selecionar arquivo" }));
+    fireEvent.drop(screen.getByLabelText("Importar retorno editorial"), {
+      dataTransfer: { files: [new File(["{}"], "result.json")] },
+    });
 
     expect(screen.getByRole("alert")).toHaveTextContent(/Salve ou descarte as alterações/);
     expect(mocks.importExternalEditorialResults).not.toHaveBeenCalled();
@@ -747,18 +749,16 @@ describe("EditorialPage", () => {
     fireEvent.drop(screen.getByLabelText("Importar retorno editorial"), {
       dataTransfer: { files: [new File(["zip"], "outdated.zip")] },
     });
-    expect(await screen.findByRole("alert")).toHaveTextContent(/outra versão da cena/);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/pacote anterior/);
     expect(screen.getByRole("alert")).toHaveTextContent(/stale scene/);
   });
 
-  it("asks the owner before applying a ZIP that changes cue boundaries", async () => {
+  it("replaces the scene with one complete ZIP without a second confirmation", async () => {
     const confirmation = vi.spyOn(window, "confirm").mockReturnValue(true);
-    mocks.importExternalEditorialResults
-      .mockRejectedValueOnce(new ApiError("Este ZIP reorganiza 30 cues em 32 cues.", 409))
-      .mockResolvedValueOnce({
-        scene_id: "s1", input_sha256: "a".repeat(64),
-        provider: "external", model: "external-ai", rate_limits: {}, suggestions: [],
-      });
+    mocks.importExternalEditorialResults.mockResolvedValueOnce({
+      scene_id: "s1", input_sha256: "a".repeat(64),
+      provider: "external", model: "external-ai", rate_limits: {}, suggestions: [],
+    });
     render(
       <MemoryRouter initialEntries={["/editorial?project=p1"]}>
         <EditorialPage />
@@ -770,12 +770,50 @@ describe("EditorialPage", () => {
       dataTransfer: { files: [file] },
     });
     await waitFor(() => {
-      expect(confirmation).toHaveBeenCalledWith("Este ZIP reorganiza 30 cues em 32 cues.");
-      expect(mocks.importExternalEditorialResults).toHaveBeenNthCalledWith(1, "s1", [file]);
-      expect(mocks.importExternalEditorialResults).toHaveBeenNthCalledWith(2, "s1", [file], true);
+      expect(mocks.importExternalEditorialResults).toHaveBeenCalledOnce();
+      expect(mocks.importExternalEditorialResults).toHaveBeenCalledWith("s1", [file], false, true);
     });
+    expect(confirmation).not.toHaveBeenCalled();
     expect(await screen.findByText(/cues importadas/)).toBeInTheDocument();
     confirmation.mockRestore();
+  });
+
+  it("focuses the new cues and discards local drafts after owner ZIP replacement", async () => {
+    const oldCue = (await mocks.editorialCues())[0];
+    const newCue = {
+      ...oldCue,
+      id: "new-cue",
+      approved_en: "The new line.",
+      approved_pt: "A nova frase.",
+      words: [{
+        id: "new-word", order: 1, surface: "The new line.",
+        start_ms: 100, end_ms: 1800, pt: "A nova frase",
+      }],
+    };
+    mocks.editorialCues
+      .mockResolvedValueOnce([oldCue])
+      .mockResolvedValueOnce([newCue]);
+    mocks.importExternalEditorialResults.mockResolvedValueOnce({
+      scene_id: "s1", input_sha256: "a".repeat(64),
+      provider: "external", model: "external-ai", rate_limits: {}, suggestions: [],
+    });
+    render(
+      <MemoryRouter initialEntries={["/editorial?project=p1"]}>
+        <EditorialPage />
+      </MemoryRouter>,
+    );
+    const translation = await screen.findByLabelText("Português aprovado");
+    fireEvent.change(translation, { target: { value: "Edição que será substituída" } });
+    fireEvent.click(screen.getByRole("button", { name: "Regerar JSON / importar IA" }));
+    fireEvent.drop(screen.getByLabelText("Importar retorno editorial"), {
+      dataTransfer: { files: [new File(["zip"], "complete.zip")] },
+    });
+    await waitFor(() => {
+      expect(mocks.importExternalEditorialResults).toHaveBeenCalledWith(
+        "s1", [expect.objectContaining({ name: "complete.zip" })], false, true,
+      );
+      expect(screen.getByLabelText("Português aprovado")).toHaveValue("A nova frase.");
+    });
   });
 
   it("joins adjacent cues from the editor without changing their individual word timings", async () => {

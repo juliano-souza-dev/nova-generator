@@ -390,6 +390,7 @@ async def import_external_editorial_results(
     exchange: Annotated[ExternalEditorialExchange, Depends(get_external_editorial_exchange)],
     files: Annotated[list[UploadFile], File()],
     allow_resegmentation: bool = False,
+    replace_complete: bool = False,
 ) -> EditorialAssistanceResponse:
     """Upload JSON results together (or ZIP), with all-or-nothing scene persistence."""
     if not files or len(files) > 24:
@@ -402,7 +403,8 @@ async def import_external_editorial_results(
         uploads.append((file.filename or "unnamed", payload))
     try:
         result = exchange.import_batch(
-            scene_id, uploads, allow_resegmentation=allow_resegmentation
+            scene_id, uploads, allow_resegmentation=allow_resegmentation,
+            replace_complete=replace_complete,
         )
     except ResegmentationConfirmationRequired as error:
         raise HTTPException(409, detail=str(error)) from error

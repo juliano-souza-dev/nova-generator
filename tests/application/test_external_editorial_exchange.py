@@ -173,6 +173,161 @@ def test_resegmented_zip_requires_owner_confirmation_and_imports_atomically(tmp_
     assert len(repo.list_revisions(scene_id)) == original_revisions + 1
 
 
+
+def test_complete_owner_zip_replaces_changed_words_without_a_second_confirmation(
+    tmp_path: Path,
+) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'owner_replace.db'}")
+    Base.metadata.create_all(engine)
+    repo = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repo).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="owner-replacement", imported_by="test",
+    )
+    scene_id = repo.get_project_scenes(project_id)[0].id
+    original_scene = repo.get_project_scenes(project_id)[0]
+    exchange = ExternalEditorialExchange(repo, tmp_path)
+    payload = _resegmented_fixture_zip(repo, scene_id)
+    original_words = repo.get_cue_words(repo.get_scene_cues(scene_id)[0].id)
+    cue = repo.get_scene_cues(scene_id)[0]
+    changed = replace(
+        original_words[0], id=uuid4(), start_ms=original_words[0].start_ms + 10,
+        end_ms=original_words[0].end_ms + 10,
+    )
+    repo.save_cue(cue, [changed, *original_words[1:]])
+    revision_count = len(repo.list_revisions(scene_id))
+
+    imported = exchange.import_batch(
+        scene_id, [("complete.zip", payload)], replace_complete=True,
+    )
+    cues = repo.get_scene_cues(scene_id)
+    assert len(imported.suggestions) == len(cues) == 2
+    assert [word.id for row in cues for word in repo.get_cue_words(row.id)] == [
+        word.id for word in original_words
+    ]
+    assert all(row.provenance["approval"] == "draft" for row in cues)
+    assert repo.get_project_scenes(project_id)[0] == original_scene  # cut and video unchanged
+    assert len(repo.list_revisions(scene_id)) == revision_count + 1
+    assert repo.list_revisions(scene_id)[-1].command == "replace_editorial_from_owner_zip"
+    assert (tmp_path / str(project_id) / "materials" /
+            f"anki-prepared-{scene_id}.json").exists()
+
+    exchange.import_batch(scene_id, [("complete.zip", payload)], replace_complete=True)
+    assert len(repo.list_revisions(scene_id)) == revision_count + 1
+
+    # The owner can deliberately re-open an already approved scene with the
+    # same ZIP; idempotency must not make that operation a silent no-op.
+    approved = repo.get_scene_cues(scene_id)[0]
+    repo.save_cue(
+        replace(approved, provenance={**approved.provenance, "approval": "approved"}),
+        repo.get_cue_words(approved.id),
+    )
+    exchange.import_batch(scene_id, [("complete.zip", payload)], replace_complete=True)
+    assert all(cue.provenance["approval"] == "draft" for cue in repo.get_scene_cues(scene_id))
+    assert len(repo.list_revisions(scene_id)) == revision_count + 2
+
+
+def test_complete_owner_zip_accepts_internally_valid_cues_without_an_explicit_map(
+    tmp_path: Path,
+) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'without_map.db'}")
+    Base.metadata.create_all(engine)
+    repo = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repo).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="owner-mapless", imported_by="test",
+    )
+    scene_id = repo.get_project_scenes(project_id)[0].id
+    payload = _resegmented_fixture_zip(repo, scene_id)
+    buffer = BytesIO()
+    with zipfile.ZipFile(BytesIO(payload)) as source, zipfile.ZipFile(buffer, "w") as target:
+        for name in source.namelist():
+            if name != "cue-resegmentation-map.json":
+                target.writestr(name, source.read(name))
+    result = ExternalEditorialExchange(repo, tmp_path).import_batch(
+        scene_id, [("complete.zip", buffer.getvalue())], replace_complete=True,
+    )
+    assert len(result.suggestions) == len(repo.get_scene_cues(scene_id)) == 2
+
+
+@pytest.mark.parametrize(
+    ("invalid_part", "error_text"),
+    [
+        ("editorial", "approved English must exactly match"),
+        ("cue-map", "ZIP cue map has inconsistent word spans"),
+    ],
+)
+def test_invalid_complete_zip_never_changes_the_editorial(
+    tmp_path: Path, invalid_part: str, error_text: str,
+) -> None:
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'invalid_owner_zip.db'}")
+    Base.metadata.create_all(engine)
+    repo = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repo).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="owner-invalid", imported_by="test",
+    )
+    scene_id = repo.get_project_scenes(project_id)[0].id
+    original = repo.get_scene_cues(scene_id)
+    revision_count = len(repo.list_revisions(scene_id))
+    with zipfile.ZipFile(BytesIO(_resegmented_fixture_zip(repo, scene_id))) as archive:
+        contents = {name: archive.read(name) for name in archive.namelist()}
+    if invalid_part == "editorial":
+        document = json.loads(contents["chunks/001-chunk-001-result.json"])
+        document["suggestions"][0]["approved_en"] = "A sentence not found in the source."
+        contents["chunks/001-chunk-001-result.json"] = json.dumps(document).encode()
+    else:
+        document = json.loads(contents["cue-resegmentation-map.json"])
+        document["cues"][0]["source_spans"][0]["word_ids"] = [str(uuid4())]
+        contents["cue-resegmentation-map.json"] = json.dumps(document).encode()
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, content in contents.items():
+            archive.writestr(name, content)
+    with pytest.raises(EditorialAssistanceError, match=error_text):
+        ExternalEditorialExchange(repo, tmp_path).import_batch(
+            scene_id, [("invalid.zip", buffer.getvalue())], replace_complete=True,
+        )
+    assert repo.get_scene_cues(scene_id) == original
+    assert len(repo.list_revisions(scene_id)) == revision_count
+    assert not (tmp_path / str(project_id) / "materials" /
+                f"anki-prepared-{scene_id}.json").exists()
+
+
+def test_complete_owner_zip_imports_through_http_without_confirmation(
+    client, tmp_path: Path,
+) -> None:
+    from nova_generator.api.dependencies import (
+        get_external_editorial_exchange,
+        get_session_factory,
+    )
+
+    repo = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repo).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="owner-api", imported_by="test",
+    )
+    scene_id = repo.get_project_scenes(project_id)[0].id
+    payload = _resegmented_fixture_zip(repo, scene_id)
+    exchange = ExternalEditorialExchange(repo, tmp_path)
+    client.app.dependency_overrides[get_external_editorial_exchange] = lambda: exchange
+    try:
+        response = client.post(
+            f"/api/editorial/scenes/{scene_id}/external-results",
+            params={"replace_complete": "true"},
+            files=[("files", ("complete.zip", payload, "application/zip"))],
+        )
+    finally:
+        client.app.dependency_overrides.pop(get_external_editorial_exchange, None)
+    assert response.status_code == 200, response.text
+    assert len(response.json()["suggestions"]) == 2
+    assert len(repo.get_scene_cues(scene_id)) == 2
+
+
 def test_resegmented_zip_rejects_changed_words_without_mutation(tmp_path: Path) -> None:
     engine = create_database_engine(f"sqlite:///{tmp_path / 'stale_resegmentation.db'}")
     Base.metadata.create_all(engine)
