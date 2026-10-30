@@ -63,7 +63,9 @@ class _ExternalWordTranslation(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     word_id: str
-    pt: str = Field(min_length=1)
+    # An owner ZIP may carry valid word timings with translations left pending.
+    # Normal imports still reject blank translations in validate_editorial_result.
+    pt: str
     order: int | None = Field(default=None, ge=1)
     leading: str | None = None
     surface: str | None = Field(default=None, min_length=1)
@@ -675,10 +677,10 @@ class ExternalEditorialExchange:
                 names = archive.namelist()
                 if len(names) != len(set(names)):
                     raise EditorialAssistanceError("ZIP has duplicate filenames")
-                required = {"manifest.json", "editorial_input.json", "anki/anki-ai-result.json"}
+                required = {"manifest.json", "editorial_input.json"}
                 if not required.issubset(names):
                     raise EditorialAssistanceError(
-                        "ZIP incompleto: inclua manifesto, editorial e resultado Anki"
+                        "ZIP incompleto: inclua manifesto e editorial"
                     )
                 if sum(
                     item.file_size for item in archive.infolist()
@@ -687,7 +689,10 @@ class ExternalEditorialExchange:
                     raise EditorialAssistanceError("ZIP JSON exceeds 8 MB")
                 manifest = json.loads(archive.read("manifest.json"))
                 source = json.loads(archive.read("editorial_input.json"))
-                anki_content = archive.read("anki/anki-ai-result.json")
+                anki_content = (
+                    archive.read("anki/anki-ai-result.json")
+                    if "anki/anki-ai-result.json" in names else None
+                )
                 mapping = (
                     json.loads(archive.read("cue-resegmentation-map.json"))
                     if "cue-resegmentation-map.json" in names else None
@@ -842,6 +847,7 @@ class ExternalEditorialExchange:
         validate_editorial_result(
             combined, scene_id=scene_id, input_sha256=source_hash,
             cues=prompts, require_word_translations=True, require_word_revisions=True,
+            allow_empty_word_translations=True,
         )
         if any(
             "context_practices" not in item.model_fields_set
@@ -853,26 +859,28 @@ class ExternalEditorialExchange:
         ):
             raise EditorialAssistanceError("ZIP is missing English in Context preparation")
         suggestions = [item.model_dump() for doc in documents for item in doc.suggestions]
+        anki: _ExternalAnkiProposal | DidacticAnkiProposal | None = None
         try:
             prepare_external_structures(suggestions)
-            if len(anki_content) > self._maximum_result_bytes:
-                raise EditorialAssistanceError("Anki result exceeds the allowed size")
-            anki_data = json.loads(anki_content)
-            anki = (
-                DidacticAnkiProposal.model_validate_json(anki_content)
-                if anki_data.get("contract") == ANKI_OUTPUT_CONTRACT
-                else _ExternalAnkiProposal.model_validate_json(anki_content)
-            )
-            if anki.scene_id != scene_id or anki.input_sha256 != source_hash:
-                raise EditorialAssistanceError("Anki does not belong to this ZIP scene")
-            editorial_by_id = {
-                item.cue_id: (item.approved_en, item.approved_pt)
-                for item in combined.suggestions
-            }
-            if isinstance(anki, DidacticAnkiProposal):
-                validate_didactic_cards(anki, editorial_by_id)
-            else:
-                validate_anki_cards(anki, editorial_by_id)
+            if anki_content is not None:
+                if len(anki_content) > self._maximum_result_bytes:
+                    raise EditorialAssistanceError("Anki result exceeds the allowed size")
+                anki_data = json.loads(anki_content)
+                anki = (
+                    DidacticAnkiProposal.model_validate_json(anki_content)
+                    if anki_data.get("contract") == ANKI_OUTPUT_CONTRACT
+                    else _ExternalAnkiProposal.model_validate_json(anki_content)
+                )
+                if anki.scene_id != scene_id or anki.input_sha256 != source_hash:
+                    raise EditorialAssistanceError("Anki does not belong to this ZIP scene")
+                editorial_by_id = {
+                    item.cue_id: (item.approved_en, item.approved_pt)
+                    for item in combined.suggestions
+                }
+                if isinstance(anki, DidacticAnkiProposal):
+                    validate_didactic_cards(anki, editorial_by_id)
+                else:
+                    validate_anki_cards(anki, editorial_by_id)
         except (StructuresInContextError, ValidationError, ValueError, TypeError) as error:
             raise EditorialAssistanceError(
                 f"ZIP pedagogical material is invalid: {error}"
@@ -956,17 +964,18 @@ class ExternalEditorialExchange:
         ):
             raise EditorialAssistanceError("scene changed during ZIP replacement; retry")
 
-        destination = (
-            self._project_root / str(project_id) / "materials"
-            / f"anki-prepared-{scene_id}.json"
-        )
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary = destination.with_suffix(".tmp")
-        try:
-            temporary.write_text(anki.model_dump_json(indent=2) + "\n", encoding="utf-8")
-            os.replace(temporary, destination)
-        finally:
-            temporary.unlink(missing_ok=True)
+        if anki is not None:
+            destination = (
+                self._project_root / str(project_id) / "materials"
+                / f"anki-prepared-{scene_id}.json"
+            )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            temporary = destination.with_suffix(".tmp")
+            try:
+                temporary.write_text(anki.model_dump_json(indent=2) + "\n", encoding="utf-8")
+                os.replace(temporary, destination)
+            finally:
+                temporary.unlink(missing_ok=True)
         write_external_structures(
             self._project_root, project_id, scene_id, source_hash, suggestions
         )

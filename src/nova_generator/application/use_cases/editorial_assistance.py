@@ -74,6 +74,7 @@ def validate_editorial_result(
     cues: tuple[EditorialCuePrompt, ...],
     require_word_translations: bool = False,
     require_word_revisions: bool = False,
+    allow_empty_word_translations: bool = False,
 ) -> EditorialAssistanceResult:
     if result.scene_id != str(scene_id):
         raise EditorialAssistanceError("assistant returned a different scene_id")
@@ -95,6 +96,7 @@ def validate_editorial_result(
             suggestion,
             required=require_word_translations,
             require_revisions=require_word_revisions,
+            allow_empty=allow_empty_word_translations,
         )
         _validate_semantic_units(cue, suggestion.semantic_units)
     return result
@@ -106,6 +108,7 @@ def _validate_word_translations(
     *,
     required: bool,
     require_revisions: bool,
+    allow_empty: bool = False,
 ) -> None:
     if not suggestion.word_translations and not required:
         return
@@ -115,7 +118,7 @@ def _validate_word_translations(
         raise EditorialAssistanceError(
             "assistant must translate every word once, in the original order"
         )
-    if any(not item.pt.strip() for item in suggestion.word_translations):
+    if not allow_empty and any(not item.pt.strip() for item in suggestion.word_translations):
         raise EditorialAssistanceError("assistant returned an empty word translation")
     if not require_revisions:
         return
@@ -711,7 +714,7 @@ def _prepared_words(
                         "pt_original",
                     }
                 },
-                "pt": translations[str(word.id)].pt,
+                "pt": translations[str(word.id)].pt or None,
             },
         )
         for word in words

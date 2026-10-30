@@ -743,7 +743,7 @@ export function EditorialPage() {
           ? `${result.suggestions.length} cues processadas. Restam ${remaining}; envie os blocos que faltam.`
           : "Todos os blocos foram validados. A revisão editorial está liberada.",
       );
-      setImportFeedback({kind: "success", message: `${result.suggestions.length} cues importadas. A nova organização e os materiais foram salvos.`});
+      setImportFeedback({kind: "success", message: `${result.suggestions.length} cues importadas. A nova organização foi salva; materiais opcionais presentes no ZIP foram aplicados.`});
     } catch (error) {
       const detail = error instanceof Error ? error.message : "O retorno externo não passou na validação.";
       const guidance = /stale|scene changed|current exported package|outra cena|another scene/i.test(detail)

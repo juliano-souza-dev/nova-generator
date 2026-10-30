@@ -252,6 +252,50 @@ def test_complete_owner_zip_accepts_internally_valid_cues_without_an_explicit_ma
     assert len(result.suggestions) == len(repo.get_scene_cues(scene_id)) == 2
 
 
+def test_owner_zip_replaces_editorial_with_pending_word_translations_and_without_anki(
+    tmp_path: Path,
+) -> None:
+    """External editorial results must be importable independently from Anki."""
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'without_anki.db'}")
+    Base.metadata.create_all(engine)
+    repo = SqlAlchemyEditorialProjectRepository(create_session_factory(engine))
+    fixture = Path(__file__).parents[1] / "fixtures" / "legacy_canonical_scene.json"
+    project_id = ImportLegacyEditorialProject(repo).execute(
+        json.loads(fixture.read_text(encoding="utf-8")),
+        legacy_key="owner-without-anki", imported_by="test",
+    )
+    scene_id = repo.get_project_scenes(project_id)[0].id
+    revision_count = len(repo.list_revisions(scene_id))
+    payload = _resegmented_fixture_zip(repo, scene_id)
+    buffer = BytesIO()
+    with zipfile.ZipFile(BytesIO(payload)) as source, zipfile.ZipFile(buffer, "w") as target:
+        for name in source.namelist():
+            if name == "anki/anki-ai-result.json":
+                continue
+            content = source.read(name)
+            if name.endswith("-result.json"):
+                document = json.loads(content)
+                for suggestion in document["suggestions"]:
+                    for word in suggestion["word_translations"]:
+                        word["pt"] = ""
+                content = json.dumps(document).encode()
+            target.writestr(name, content)
+
+    exchange = ExternalEditorialExchange(repo, tmp_path)
+    result = exchange.import_batch(
+        scene_id, [("without-anki.zip", buffer.getvalue())], replace_complete=True,
+    )
+    assert len(result.suggestions) == len(repo.get_scene_cues(scene_id)) == 2
+    assert all(
+        word.provenance.get("pt") is None
+        for cue in repo.get_scene_cues(scene_id)
+        for word in repo.get_cue_words(cue.id)
+    )
+    assert not (tmp_path / str(project_id) / "materials" /
+                f"anki-prepared-{scene_id}.json").exists()
+    assert len(repo.list_revisions(scene_id)) == revision_count + 1
+
+
 @pytest.mark.parametrize(
     ("invalid_part", "error_text"),
     [
