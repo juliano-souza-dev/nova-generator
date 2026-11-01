@@ -388,6 +388,29 @@ def test_visual_effects_export_ass_tags_and_keep_literal_captions() -> None:
             assert r"\fsp2" in ass
 
 
+def test_handwriting_long_caption_moves_translation_below_wrapped_english() -> None:
+    caption = MediaCaption(
+        cue_id=uuid4(),
+        start_ms=1000,
+        end_ms=5000,
+        en="If you ever find yourself lost in the dark and you cannot see the way home",
+        pt=(
+            "Se algum dia você se encontrar perdido no escuro e não conseguir "
+            "enxergar o caminho de casa"
+        ),
+    )
+    ass = render_ass(
+        [caption],
+        MediaCaptionStyle(template="handwriting", position="center", text_scale=1.2),
+    )
+    positions = [int(value) for value in re.findall(r"\\pos\(540,(\d+)\)", ass)]
+    assert r"\N" in ass
+    # The old fixed placement put PT at 1.25 × 98 pixels below the centre.
+    # A wrapped English block must create more space without changing styling.
+    assert positions[0] == 935
+    assert positions[1] > 935 + round(98 * 1.25)
+
+
 def test_new_styles_round_trip_without_migrating_old_projects() -> None:
     for name in ("handwriting", "neon", "popstar", "cinema"):
         project = MediaProject(

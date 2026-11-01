@@ -34,6 +34,39 @@ def _literal(value: str) -> str:
     )
 
 
+def _wrapped_literal(value: str, characters_per_line: int) -> tuple[str, int]:
+    """Return an ASS-safe, naturally wrapped line and its visual line count.
+
+    Handwriting captions place the English and Portuguese events separately so
+    their animation can remain independent.  A fixed vertical offset works for
+    one line only; this wrapper lets the translation move down precisely when a
+    long English caption occupies extra lines.
+    """
+    limit = max(12, characters_per_line)
+    paragraphs = value.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    lines: list[str] = []
+    for paragraph in paragraphs:
+        words = paragraph.split()
+        if not words:
+            lines.append("")
+            continue
+        current = words[0]
+        for word in words[1:]:
+            candidate = f"{current} {word}"
+            if len(candidate) <= limit:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+    return r"\N".join(_literal(line) for line in lines), max(1, len(lines))
+
+
+def _characters_per_line(font_size: int) -> int:
+    """Conservative 9:16 caption width with room for outline and shadow."""
+    return max(12, round(940 / max(1, font_size * 0.52)))
+
+
 def _highlighted(value: str, highlight: str, accent: str, base: str) -> str:
     if not highlight or highlight not in value:
         return _literal(value)
@@ -140,10 +173,32 @@ def render_ass(
             reveal = max(100, min(3000, round(duration * 0.8)))
             y = {"top": 280, "center": 935, "bottom": 1575}[style.position]
             x_start, x_end = 90, 990
+            wrapped_english, english_lines = _wrapped_literal(
+                caption.en, _characters_per_line(font_size)
+            )
+            translation_size = round(font_size * 0.68)
+            wrapped_pt, pt_lines = _wrapped_literal(
+                caption.pt, _characters_per_line(translation_size)
+            ) if caption.pt else ("", 0)
+            english_line_height = round(font_size * 1.18)
+            pt_line_height = round(translation_size * 1.22)
+            # The English event is vertically centered at y.  Keep that visual
+            # anchor and move the independent PT/note events down only by the
+            # extra lines that the English (or PT) actually uses.
+            translation_y = (
+                y
+                + round((english_lines - 1) * english_line_height / 2)
+                + round(font_size * 1.25)
+            )
+            note_y = (
+                translation_y
+                + round((pt_lines - 1) * pt_line_height / 2)
+                + round(font_size * 0.8)
+            )
             drawing = (
                 rf"{{\an5\pos(540,{y})\clip({x_start},0,{x_start},1920)"
                 rf"\t(0,{reveal},\clip({x_start},0,{x_end},1920))}}"
-                + _literal(caption.en)
+                + wrapped_english
             )
             lines.append(event + drawing)
             pencil = (
@@ -155,13 +210,13 @@ def render_ass(
                          f"Default,,0,0,0,,{pencil}")
             if caption.pt:
                 lines.append(
-                    event + rf"{{\an5\pos(540,{y + round(font_size * 1.25)})"
-                    rf"\fs{round(font_size * 0.68)}\c{translation}}}"
-                    + _literal(caption.pt)
+                    event + rf"{{\an5\pos(540,{translation_y})"
+                    rf"\fs{translation_size}\c{translation}}}"
+                    + wrapped_pt
                 )
             if caption.note:
                 lines.append(
-                    event + rf"{{\an5\pos(540,{y + round(font_size * 2.05)})"
+                    event + rf"{{\an5\pos(540,{note_y})"
                     rf"\fs{round(font_size * 0.52)}\c{accent}}}"
                     + _literal(caption.note)
                 )
