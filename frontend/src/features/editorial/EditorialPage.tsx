@@ -477,6 +477,14 @@ export function EditorialPage() {
     (word) => word.semantic_group_role !== "member" && !word.pt?.trim(),
   );
   const needsApprovalReview = pendingTimingReview || pendingTranslationReview;
+  // A reviewed archive is already populated with EN/PT and semantic units.
+  // Its timings may remain marked as estimated so the operator can refine
+  // them, but the operator's explicit "Approve cue" click is the review
+  // confirmation. Do not put a second hidden confirmation in that path.
+  const approvalUsesArchiveBaseline =
+    selectedCue?.provenance?.source === "external_review_archive" &&
+    selectedCue?.provenance?.editorial_preparation === "complete" &&
+    !pendingTranslationReview;
   const cueStatus = selectedCue?.provenance?.approval === "approved" ? "Aprovado" : "Pendente";
 
   useEffect(() => {
@@ -1415,7 +1423,7 @@ export function EditorialPage() {
     review?: { timings: boolean; translations: boolean; wholeCue: boolean },
   ): Promise<boolean> {
     if (!selectedCue || saving) return false;
-    if (approve && needsApprovalReview && !review && !hasInsertedWords) {
+    if (approve && needsApprovalReview && !review && !hasInsertedWords && !approvalUsesArchiveBaseline) {
       setShowApprovalReview(true);
       setSaveFeedback("");
       return false;
@@ -1909,14 +1917,6 @@ export function EditorialPage() {
                       onRejected={(message) => setImportFeedback({kind: "error", message})}
                     />
                   </div>
-                  {importFeedback && (
-                    <p ref={importFeedbackRef} className={`editorial-import-feedback is-${importFeedback.kind}`}
-                      role={importFeedback.kind === "error" ? "alert" : "status"}>
-                      {importFeedback.kind === "error" && <AlertCircle aria-hidden="true" />}
-                      {importFeedback.kind === "working" && <LoaderCircle className="editorial-import-spinner" aria-hidden="true" />}
-                      {importFeedback.message}
-                    </p>
-                  )}
                   {assistantMessage && (
                     <p className="assistant-message" role="status">{assistantMessage}</p>
                   )}
@@ -1933,6 +1933,19 @@ export function EditorialPage() {
           ) : undefined
         }
       />
+      {importFeedback && (
+        <p
+          ref={importFeedbackRef}
+          className={`editorial-import-feedback editorial-import-feedback-global is-${importFeedback.kind}`}
+          role={importFeedback.kind === "error" ? "alert" : "status"}
+        >
+          {importFeedback.kind === "error" && <AlertCircle aria-hidden="true" />}
+          {importFeedback.kind === "working" && (
+            <LoaderCircle className="editorial-import-spinner" aria-hidden="true" />
+          )}
+          {importFeedback.message}
+        </p>
+      )}
       <header className="review-context" aria-label="Contexto da revisão">
         <label>
           <span>Projeto</span>
@@ -2103,13 +2116,6 @@ export function EditorialPage() {
                   onImport={(files) => void importExternalResult(files)}
                   onRejected={(message) => setImportFeedback({kind: "error", message})}
                 />
-                {importFeedback && (
-                  <p ref={importFeedbackRef} className={`editorial-import-feedback is-${importFeedback.kind}`}
-                    role={importFeedback.kind === "error" ? "alert" : "status"}>
-                    {importFeedback.kind === "working" && <LoaderCircle className="editorial-import-spinner" aria-hidden="true" />}
-                    {importFeedback.message}
-                  </p>
-                )}
               </div>
             )}
           </div>
@@ -2167,7 +2173,13 @@ export function EditorialPage() {
                 </button>
                 <button type="button" className="primary-button"
                   aria-label="Aprovar cue" disabled={saving}
-                  onClick={() => void saveChanges(true, true)}>
+                  onClick={() => void saveChanges(
+                    true,
+                    true,
+                    approvalUsesArchiveBaseline
+                      ? { timings: true, translations: true, wholeCue: false }
+                      : undefined,
+                  )}>
                   <Check aria-hidden="true" /> Aprovar e próxima
                 </button>
                 <button type="button" className="secondary-button"

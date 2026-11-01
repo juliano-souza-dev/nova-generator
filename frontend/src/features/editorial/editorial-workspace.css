@@ -812,6 +812,10 @@
   line-height: 1.4;
 }
 
+.editorial-import-feedback-global {
+  margin: 0 0 0.85rem;
+}
+
 .editorial-import-feedback svg {
   flex-shrink: 0;
   width: 1rem;

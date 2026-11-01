@@ -662,6 +662,8 @@ describe("EditorialPage", () => {
       expect(mocks.importExternalEditorialResults).toHaveBeenCalledWith("s1", [file], false, true),
     );
     expect(await screen.findByText(/cues importadas/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Fechar opções de IA" }));
+    expect(screen.getByText(/cues importadas/)).toBeInTheDocument();
   });
 
   it("acknowledges an upload immediately and warns when processing takes longer", async () => {

@@ -88,7 +88,11 @@ def _render_video_source(
     uploaded_audio: Path,
     execution: JobExecution,
 ) -> tuple[list[int], str]:
-    source = snapshot_dir / "source.mp4"
+    # This render runs with ``snapshot_dir`` as FFmpeg's working directory so
+    # captions.ass can remain portable.  Never pass a snapshot-prefixed *relative*
+    # input path in that context: FFmpeg would resolve it below snapshot_dir a
+    # second time (``.../renders/id/media_cache/.../source.mp4`` on Windows).
+    source = (snapshot_dir / "source.mp4").resolve()
     if not source.is_file():
         raise ValueError("O corte congelado da origem não está disponível.")
     with source.open("rb") as source_stream:
@@ -140,7 +144,7 @@ def _render_video_source(
         args = ["-y", "-i", str(source)]
     mode = payload["audio_mode"]
     if mode == "uploaded":
-        args += ["-stream_loop", "-1", "-i", str(uploaded_audio)]
+        args += ["-stream_loop", "-1", "-i", str(uploaded_audio.resolve())]
     args += ["-map", "0:v:0"]
     if mode == "original":
         args += ["-map", "1:a:0?" if paper else "0:a:0?"]
@@ -152,7 +156,9 @@ def _render_video_source(
         args += ["-c:a", "aac", "-ar", "44100"]
     else:
         args += ["-an"]
-    args += ["-t", f"{duration / 1000:.3f}", str(snapshot_dir / "final.mp4")]
+    # final.mp4 is deliberately relative to cwd=snapshot_dir; source/audio
+    # inputs above are absolute because they originate outside that cwd.
+    args += ["-t", f"{duration / 1000:.3f}", "final.mp4"]
     _run_ffmpeg(args, cwd=snapshot_dir)
     execution.heartbeat()
     return [duration], digest
