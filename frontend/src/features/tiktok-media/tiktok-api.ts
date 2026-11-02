@@ -5,7 +5,7 @@ export type MediaTheme = "ihub" | "midnight" | "warm";
 export type MediaKind = "cover" | "lesson" | "example" | "challenge" | "lyric";
 export type MediaVisualMode = "slides" | "video_source";
 export type MediaBackground = "video" | "paper";
-export type PaperTheme = "cream" | "kraft" | "night";
+export type PaperTheme = "cream" | "kraft" | "night" | "aurora";
 export type MediaAudioMode = "silent" | "uploaded" | "voice" | "original";
 
 export type MediaCaption = {
@@ -169,11 +169,15 @@ export const mediaApi = {
     audioMode: MediaAudioMode,
     voiceProfileId: string,
     visualMode: MediaVisualMode = "slides",
+    endAtLastCaption = false,
+    addOutro = false,
   ) => {
     const body = new FormData();
     body.append("revision", String(revision));
     body.append("audio_mode", audioMode);
     body.append("visual_mode", visualMode);
+    body.append("end_at_last_caption", String(endAtLastCaption));
+    body.append("add_outro", String(addOutro));
     if (audioMode === "voice") body.append("voice_profile_id", voiceProfileId);
     images.forEach((image, index) => body.append("images", image, `slide-${index + 1}.png`));
     return apiRequest<MediaRender>(`/tiktok-media/projects/${id}/render`, {

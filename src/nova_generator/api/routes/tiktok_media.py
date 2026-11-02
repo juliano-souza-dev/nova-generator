@@ -510,6 +510,8 @@ async def render_media_project(
     images: Annotated[list[UploadFile] | None, File()] = None,
     visual_mode: Annotated[Literal["slides", "video_source"], Form()] = "slides",
     audio_mode: Annotated[Literal["silent", "uploaded", "voice", "original"], Form()] = "silent",
+    end_at_last_caption: Annotated[bool, Form()] = False,
+    add_outro: Annotated[bool, Form()] = False,
     voice_profile_id: Annotated[str | None, Form()] = None,
 ) -> dict[str, str]:
     project = _get(project_id)
@@ -525,6 +527,8 @@ async def render_media_project(
         raise HTTPException(422, "Narração de voz não é compatível com o vídeo original.")
     if audio_mode == "uploaded" and not project.audio_filename:
         raise HTTPException(422, "Envie a música antes de exportar.")
+    if end_at_last_caption and add_outro:
+        raise HTTPException(422, "Escolha apenas uma forma de encerramento.")
 
     source_video = None
     source_duration_ms = None
@@ -581,6 +585,8 @@ async def render_media_project(
         "audio_sha256": audio_hash,
         "source_video_sha256": source_sha256,
         "source_duration_ms": source_duration_ms,
+        "end_at_last_caption": end_at_last_caption if visual_mode == "video_source" else False,
+        "add_outro": add_outro if visual_mode == "video_source" else False,
     }
     content = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
     (directory / "snapshot.json").write_bytes(content)

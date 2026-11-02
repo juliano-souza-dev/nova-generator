@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 MediaFormat = Literal["carousel", "lesson_video", "lyrics_video"]
 MediaTheme = Literal["ihub", "midnight", "warm"]
 MediaBackground = Literal["video", "paper"]
-MediaPaperTheme = Literal["cream", "kraft", "night"]
+MediaPaperTheme = Literal["cream", "kraft", "night", "aurora"]
 
 
 class MediaCaption(BaseModel):

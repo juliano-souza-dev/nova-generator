@@ -354,15 +354,30 @@ def test_http_render_video_mode_accepts_no_slide_images_and_freezes_cut(
             "revision": project.revision,
             "visual_mode": "video_source",
             "audio_mode": "original",
+            "end_at_last_caption": "true",
         },
     )
     assert result.status_code == 202, result.text
     snapshot_dir = store.directory(project.id) / "renders" / result.json()["render_id"]
     payload = json.loads((snapshot_dir / "snapshot.json").read_text())
     assert payload["visual_mode"] == "video_source"
+    assert payload["end_at_last_caption"] is True
+    assert payload["add_outro"] is False
     assert payload["source_video_sha256"] == expected_hash
     assert payload["project"]["video_captions"][0]["start_ms"] == 1200
     assert (snapshot_dir / "source.mp4").read_bytes() == source.read_bytes()
+
+    conflicting = TestClient(app).post(
+        f"/tiktok-media/projects/{project.id}/render",
+        data={
+            "revision": project.revision,
+            "visual_mode": "video_source",
+            "audio_mode": "original",
+            "end_at_last_caption": "true",
+            "add_outro": "true",
+        },
+    )
+    assert conflicting.status_code == 422
 
 
 def test_visual_effects_export_ass_tags_and_keep_literal_captions() -> None:
@@ -376,10 +391,11 @@ def test_visual_effects_export_ass_tags_and_keep_literal_captions() -> None:
         assert "Podemos fazer isso dar certo!" in ass
         assert "Dialogue: 0,0:00:01.00,0:00:03.50" in ass
         if name == "handwriting":
-            assert r"\clip(" in ass
-            assert r"\move(" in ass
-            assert "✎" in ass
-            assert ass.count("Dialogue: ") >= 3
+            assert r"\clip(" not in ass
+            assert r"\move(" not in ass
+            assert "✎" not in ass
+            assert r"\fad(160,160)" in ass
+            assert ass.count("Dialogue: ") == 2
         if name == "neon":
             assert r"\blur4" in ass
         if name == "popstar":
@@ -457,7 +473,7 @@ def test_paper_render_uses_synthetic_background_and_source_audio(monkeypatch, tm
 
 
 def test_paper_contract_accepts_saved_themes_and_old_project_defaults() -> None:
-    for theme in ("cream", "kraft", "night"):
+    for theme in ("cream", "kraft", "night", "aurora"):
         project = MediaProject(
             title="Paper test", slides=[MediaSlide()],
             background_mode="paper", paper_theme=theme,
@@ -467,3 +483,53 @@ def test_paper_contract_accepts_saved_themes_and_old_project_defaults() -> None:
     older = MediaProject.model_validate({"title": "Legacy", "slides": [MediaSlide()]})
     assert older.background_mode == "video"
     assert older.paper_theme == "cream"
+
+
+def test_trim_export_removes_blank_tail_without_changing_caption_timing(
+    monkeypatch, tmp_path: Path
+) -> None:
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+    caption = _caption(1000, 4500)
+    project = MediaProject(
+        title="Reel", slides=[MediaSlide()], video_captions=[caption],
+        background_mode="paper", paper_theme="aurora",
+    )
+    calls = []
+    monkeypatch.setattr(
+        tiktok_media_handler, "_run_ffmpeg", lambda args, **kw: calls.append(args)
+    )
+    execution = SimpleNamespace(raise_if_cancelled=lambda: None, heartbeat=lambda: None)
+    payload = {
+        "audio_mode": "original", "source_duration_ms": 15000,
+        "source_video_sha256": sha256(source.read_bytes()).hexdigest(),
+        "end_at_last_caption": True,
+    }
+    durations, _ = tiktok_media_handler._render_video_source(
+        project, payload, tmp_path, tmp_path / "uploaded.mp3", execution
+    )
+    assert durations == [4500]
+    assert calls[0][calls[0].index("-t") + 1] == "4.500"
+    assert "gradients=" in " ".join(calls[0])
+    assert calls[0][calls[0].index("-crf") + 1] == "19"
+    assert "Dialogue: 0,0:00:01.00,0:00:04.50" in (tmp_path / "captions.ass").read_text()
+
+    calls.clear()
+    payload["end_at_last_caption"] = False
+    durations, _ = tiktok_media_handler._render_video_source(
+        project, payload, tmp_path, tmp_path / "uploaded.mp3", execution
+    )
+    assert durations == [15000]
+    assert calls[0][calls[0].index("-t") + 1] == "15.000"
+
+    calls.clear()
+    payload["add_outro"] = True
+    durations, _ = tiktok_media_handler._render_video_source(
+        project, payload, tmp_path, tmp_path / "uploaded.mp3", execution
+    )
+    assert durations == [8000]
+    assert calls[0][calls[0].index("-t") + 1] == "8.000"
+    outro_ass = (tmp_path / "captions.ass").read_text()
+    assert "Dialogue: 2,0:00:04.50,0:00:08.00" in outro_ass
+    assert "ENGLISH IN CONTEXT" in outro_ass
+    assert "Salve para praticar com o IHUB" in outro_ass

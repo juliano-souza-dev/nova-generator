@@ -106,7 +106,10 @@ def _karaoke_words(value: str, duration_ms: int) -> str:
 
 
 def render_ass(
-    captions: list[MediaCaption], style: MediaCaptionStyle, paper_theme: str | None = None
+    captions: list[MediaCaption],
+    style: MediaCaptionStyle,
+    paper_theme: str | None = None,
+    outro: tuple[int, int] | None = None,
 ) -> str:
     """Render video effects using ASS so the exported MP4 matches the editor."""
     template = style.template
@@ -117,7 +120,7 @@ def render_ass(
     margin_v = 225 if style.position != "center" else 0
     outline = {"impact": 5, "neon": 6, "popstar": 5, "handwriting": 2}.get(template, 3)
     bold = -1 if template in {"impact", "karaoke", "neon", "popstar"} else 0
-    font = ("Comic Sans MS" if template == "handwriting"
+    font = ("Georgia" if template == "handwriting"
             else "Georgia" if template == "cinema" else "Arial")
     ink_color = (
         "#233043"
@@ -168,11 +171,10 @@ def render_ass(
         duration = caption.end_ms - caption.start_ms
         event = f"Dialogue: 0,{start},{end},Default,,0,0,0,,"
         if template == "handwriting":
-            # Smooth left-to-right clipping simulates pencil lettering.
-            # ASS/libass substitutes the handwritten font when unavailable.
-            reveal = max(100, min(3000, round(duration * 0.8)))
+            # The old clipping animation revealed half-words while PT was already
+            # visible (and the floating pencil distracted from the lesson).
+            # Keep the full literal English sentence readable from frame one.
             y = {"top": 280, "center": 935, "bottom": 1575}[style.position]
-            x_start, x_end = 90, 990
             wrapped_english, english_lines = _wrapped_literal(
                 caption.en, _characters_per_line(font_size)
             )
@@ -195,19 +197,7 @@ def render_ass(
                 + round((pt_lines - 1) * pt_line_height / 2)
                 + round(font_size * 0.8)
             )
-            drawing = (
-                rf"{{\an5\pos(540,{y})\clip({x_start},0,{x_start},1920)"
-                rf"\t(0,{reveal},\clip({x_start},0,{x_end},1920))}}"
-                + wrapped_english
-            )
-            lines.append(event + drawing)
-            pencil = (
-                rf"{{\an5\fs60\bord2\c{accent}"
-                rf"\move({x_start},{y + 58},{x_end},{y + 58},0,{reveal})}}✎"
-            )
-            # Pencil stops when the written sentence has appeared.
-            lines.append(f"Dialogue: 1,{start},{_ass_time(caption.start_ms + reveal)},"
-                         f"Default,,0,0,0,,{pencil}")
+            lines.append(event + rf"{{\an5\pos(540,{y})\i1\fad(160,160)}}" + wrapped_english)
             if caption.pt:
                 lines.append(
                     event + rf"{{\an5\pos(540,{translation_y})"
@@ -253,4 +243,16 @@ def render_ass(
         if caption.note:
             text += rf"\N{{\fs{round(font_size * 0.7)}\c{accent}}}" + _literal(caption.note)
         lines.append(event + text)
+    if outro is not None:
+        outro_start, outro_end = outro
+        if outro_end > outro_start:
+            interval = f"{_ass_time(outro_start)},{_ass_time(outro_end)}"
+            lines.extend([
+                f"Dialogue: 2,{interval},Default,,0,0,0,,"
+                rf"{{\an5\pos(540,855)\fs78\i0\b1\c{accent}\fad(250,250)}}"
+                "ENGLISH IN CONTEXT",
+                f"Dialogue: 2,{interval},Default,,0,0,0,,"
+                rf"{{\an5\pos(540,1010)\fs57\i0\b0\c{foreground}\fad(250,250)}}"
+                "Salve para praticar com o IHUB",
+            ])
     return "\n".join(lines) + "\n"
