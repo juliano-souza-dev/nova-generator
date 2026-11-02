@@ -109,6 +109,20 @@ def _render_video_source(
         raise ValueError("Este vídeo não contém legendas revisadas.")
     if payload["audio_mode"] == "voice":
         raise ValueError("Narração não está disponível para vídeo com áudio original.")
+    output_duration = duration
+    outro = None
+    if payload.get("end_at_last_caption") or payload.get("add_outro"):
+        active_end = max(
+            (caption.end_ms for caption in project.video_captions if caption.enabled), default=0
+        )
+        if active_end <= 0:
+            raise ValueError("Não há legendas ativas para definir o fim do vídeo.")
+        if payload.get("add_outro"):
+            output_duration = min(duration, active_end + 3500)
+            if output_duration - active_end >= 1000:
+                outro = (active_end, output_duration)
+        else:
+            output_duration = min(duration, max(1000, active_end))
 
     # Working-directory-relative ASS path works identically on Windows and Unix
     # and avoids fragile escaping of drive letters/colons inside FFmpeg filters.
@@ -116,6 +130,7 @@ def _render_video_source(
         render_ass(
             project.video_captions, project.caption_style,
             project.paper_theme if project.background_mode == "paper" else None,
+            outro=outro,
         ), encoding="utf-8"
     )
     execution.raise_if_cancelled()
@@ -123,19 +138,29 @@ def _render_video_source(
     if paper:
         # A generated page is deliberately independent from the source visuals.
         backgrounds = {"cream": "0xF4EBDD", "kraft": "0xCFAF87", "night": "0x172238"}
-        if project.paper_theme not in backgrounds:
+        if project.paper_theme not in (*backgrounds, "aurora"):
             raise ValueError("Papel selecionado inválido.")
-        page_color = backgrounds[project.paper_theme]
-        grid_color = "0xA6D2E4@0.10" if project.paper_theme == "night" else "0x6B7B83@0.13"
-        filter_graph = (
-            f"setsar=1,drawgrid=w=1080:h=75:t=1:c={grid_color},"
-            "noise=alls=5:allf=u,ass=captions.ass,format=yuv420p"
-        )
-        args = [
-            "-y", "-f", "lavfi", "-i",
-            f"color=c={page_color}:s=1080x1920:r=30:d={duration / 1000:.3f}",
-            "-i", str(source),
-        ]
+        if project.paper_theme == "aurora":
+            # Rotating gradient source yields a gently animated background while
+            # the original audio and cut-relative captions remain untouched.
+            visual_source = (
+                "gradients=s=1080x1920:r=30:c0=0x0B1732:c1=0x21577B:"
+                f"c2=0x593B7A:n=3:t=spiral:speed=0.003:d={output_duration / 1000:.3f}"
+            )
+            filter_graph = "setsar=1,vignette=PI/7,ass=captions.ass,format=yuv420p"
+        else:
+            page_color = backgrounds[project.paper_theme]
+            grid_color = (
+                "0xA6D2E4@0.10" if project.paper_theme == "night" else "0x6B7B83@0.13"
+            )
+            visual_source = (
+                f"color=c={page_color}:s=1080x1920:r=30:d={output_duration / 1000:.3f}"
+            )
+            filter_graph = (
+                f"setsar=1,drawgrid=w=1080:h=75:t=1:c={grid_color},"
+                "noise=alls=5:allf=u,ass=captions.ass,format=yuv420p"
+            )
+        args = ["-y", "-f", "lavfi", "-i", visual_source, "-i", str(source)]
     else:
         filter_graph = (
             "scale=1080:1920:force_original_aspect_ratio=increase,"
@@ -150,18 +175,21 @@ def _render_video_source(
         args += ["-map", "1:a:0?" if paper else "0:a:0?"]
     elif mode == "uploaded":
         args += ["-map", "2:a:0" if paper else "1:a:0"]
-    args += ["-vf", filter_graph, "-r", "30", "-c:v", "libx264", "-preset", "veryfast"]
+    args += [
+        "-vf", filter_graph, "-r", "30", "-c:v", "libx264",
+        "-preset", "medium", "-crf", "19",
+    ]
     args += ["-pix_fmt", "yuv420p", "-movflags", "+faststart"]
     if mode in {"original", "uploaded"}:
-        args += ["-c:a", "aac", "-ar", "44100"]
+        args += ["-c:a", "aac", "-ar", "44100", "-b:a", "192k"]
     else:
         args += ["-an"]
     # final.mp4 is deliberately relative to cwd=snapshot_dir; source/audio
     # inputs above are absolute because they originate outside that cwd.
-    args += ["-t", f"{duration / 1000:.3f}", "final.mp4"]
+    args += ["-t", f"{output_duration / 1000:.3f}", "final.mp4"]
     _run_ffmpeg(args, cwd=snapshot_dir)
     execution.heartbeat()
-    return [duration], digest
+    return [output_duration], digest
 
 
 def make_media_render_handler(

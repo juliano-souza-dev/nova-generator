@@ -35,7 +35,9 @@ import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { imageForSlide, paintSlide } from "./slide-canvas";
 import { MusicLessonComposer } from "./MusicLessonComposer";
-import { handwritingProgress, lyricWords } from "./lyric-timing";
+import { lyricWords } from "./lyric-timing";
+import { captionGaps, lastCaptionEnd } from "./caption-coverage";
+import { proposeMaterialLessons } from "./material-lessons";
 import {
   activeCaptionAt,
   adjustCaptionTiming,
@@ -95,7 +97,12 @@ const creationModes = [
 ] as const;
 
 const effectPresets = [
-  { template: "handwriting", title: "Escrita à mão", subtitle: "Lápis revelando a frase", icon: Pencil },
+  {
+    template: "handwriting",
+    title: "Editorial suave",
+    subtitle: "Frase completa e elegante",
+    icon: Pencil,
+  },
   { template: "neon", title: "Neon Beat", subtitle: "Brilho vibrante", icon: Zap },
   { template: "popstar", title: "Pop Star", subtitle: "Entrada explosiva", icon: Star },
   { template: "karaoke", title: "Karaokê", subtitle: "Palavra a palavra", icon: Music2 },
@@ -224,10 +231,15 @@ export function TikTokMediaPage() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiCount, setAiCount] = useState(5);
   const [externalJson, setExternalJson] = useState("");
+  const [materialJson, setMaterialJson] = useState("");
+  const [materialProposal, setMaterialProposal] = useState<ReturnType<
+    typeof proposeMaterialLessons
+  > | null>(null);
   const [proposed, setProposed] = useState<MediaSlide[] | null>(null);
   const [proposalOrigin, setProposalOrigin] = useState<"music" | null>(null);
   const [notice, setNotice] = useState("");
   const [audioMode, setAudioMode] = useState<MediaAudioMode>("silent");
+  const [endingMode, setEndingMode] = useState<"trim" | "outro" | "full">("trim");
   const [voiceId, setVoiceId] = useState("");
   const [jobId, setJobId] = useState("");
   const [renderId, setRenderId] = useState("");
@@ -396,9 +408,12 @@ export function TikTokMediaPage() {
   const captionStyle = draft?.caption_style ?? DEFAULT_CAPTION_STYLE;
   const backgroundMode = draft?.background_mode ?? "video";
   const paperTheme = draft?.paper_theme ?? "cream";
-  const lightPaper = backgroundMode === "paper" && paperTheme !== "night";
-  const previewTextColor = lightPaper && captionStyle.text_color.toUpperCase() === "#FFFFFF"
-    ? "#233043" : captionStyle.text_color;
+  const lightPaper =
+    backgroundMode === "paper" && (paperTheme === "cream" || paperTheme === "kraft");
+  const previewTextColor =
+    lightPaper && captionStyle.text_color.toUpperCase() === "#FFFFFF"
+      ? "#233043"
+      : captionStyle.text_color;
   const captions = draft?.video_captions ?? [];
   const activeCaption = activeCaptionAt(captions, playheadMs);
   const selectedCaption =
@@ -425,6 +440,9 @@ export function TikTokMediaPage() {
     sourceDurationMs ||
     sourceStatus.data?.duration_ms ||
     Math.max(0, ...captions.map((caption) => caption.end_ms));
+  const uncoveredGaps = captionGaps(captions, actualDurationMs);
+  const lastVisibleCaptionEnd = lastCaptionEnd(captions);
+  const longTailMs = Math.max(0, actualDurationMs - lastVisibleCaptionEnd);
   useEffect(() => {
     const context = previewRef.current?.getContext("2d");
     if (context && active && draft) paintSlide(context, active, draft, activeIndex);
@@ -594,7 +612,16 @@ export function TikTokMediaPage() {
         visualMode === "slides"
           ? await Promise.all(draft.slides.map((_, index) => imageForSlide(draft, index)))
           : [];
-      return mediaApi.render(draft.id, draft.revision, images, audioMode, voiceId, visualMode);
+      return mediaApi.render(
+        draft.id,
+        draft.revision,
+        images,
+        audioMode,
+        voiceId,
+        visualMode,
+        visualMode === "video_source" && endingMode === "trim" && longTailMs >= 800,
+        visualMode === "video_source" && endingMode === "outro" && longTailMs >= 1000,
+      );
     },
     onSuccess: (job) => {
       setJobId(job.job_id);
@@ -981,8 +1008,11 @@ export function TikTokMediaPage() {
                         {transcribeCut.isPending ? "Enviando…" : "Transcrever este trecho"}
                       </button>
                       {sourceStatus.data.mp3_ready && (
-                        <a className="tm-cut-link" href={mediaApi.cutMp3Url(draft.id)}
-                          download="tiktok-media-recorte.mp3">
+                        <a
+                          className="tm-cut-link"
+                          href={mediaApi.cutMp3Url(draft.id)}
+                          download="tiktok-media-recorte.mp3"
+                        >
                           <FileAudio size={14} /> Baixar MP3 do recorte
                         </a>
                       )}
@@ -1276,12 +1306,18 @@ export function TikTokMediaPage() {
                 )}
                 {videoMode && (
                   <div className="tm-background-toggle" role="group" aria-label="Imagem de fundo">
-                    <button type="button" aria-pressed={backgroundMode === "video"}
-                      onClick={() => setBackgroundMode("video")}>
+                    <button
+                      type="button"
+                      aria-pressed={backgroundMode === "video"}
+                      onClick={() => setBackgroundMode("video")}
+                    >
                       <Video size={14} /> Vídeo
                     </button>
-                    <button type="button" aria-pressed={backgroundMode === "paper"}
-                      onClick={() => setBackgroundMode("paper")}>
+                    <button
+                      type="button"
+                      aria-pressed={backgroundMode === "paper"}
+                      onClick={() => setBackgroundMode("paper")}
+                    >
                       <Layers2 size={14} /> Papel
                     </button>
                   </div>
@@ -1340,7 +1376,9 @@ export function TikTokMediaPage() {
               </div>
               <div className={videoMode ? "tm-stage tm-stage-video" : "tm-stage"}>
                 {videoMode ? (
-                  <div className={`tm-video-frame ${backgroundMode === "paper" ? `tm-paper-frame tm-paper-${paperTheme}` : ""}`}>
+                  <div
+                    className={`tm-video-frame ${backgroundMode === "paper" ? `tm-paper-frame tm-paper-${paperTheme}` : ""}`}
+                  >
                     {sourceVideoUrl ? (
                       <video
                         key={`${draft.source_scene_id ?? draft.source_youtube_id}-${draft.source_cut_job_id ?? "original"}`}
@@ -1386,35 +1424,7 @@ export function TikTokMediaPage() {
                         aria-live="off"
                       >
                         <p className="tm-caption-en">
-                          {captionStyle.template === "handwriting" ? (
-                            <span className="tm-handwriting-line" aria-label={activeCaption.en}>
-                              <span
-                                className="tm-handwriting-ink"
-                                style={{
-                                  clipPath: `inset(0 ${100 - handwritingProgress(
-                                    activeCaption.start_ms,
-                                    activeCaption.end_ms,
-                                    playheadMs,
-                                  )}% 0 0)`,
-                                }}
-                              >
-                                {activeCaption.en}
-                              </span>
-                              <span
-                                className="tm-handwriting-pencil"
-                                aria-hidden="true"
-                                style={{
-                                  left: `${handwritingProgress(
-                                    activeCaption.start_ms,
-                                    activeCaption.end_ms,
-                                    playheadMs,
-                                  )}%`,
-                                }}
-                              >
-                                ✎
-                              </span>
-                            </span>
-                          ) : captionStyle.template === "karaoke" ? (
+                          {captionStyle.template === "karaoke" ? (
                             <span className="tm-lyric-line" aria-label={activeCaption.en}>
                               {lyricWords(
                                 activeCaption.en,
@@ -1453,6 +1463,17 @@ export function TikTokMediaPage() {
                         )}
                       </div>
                     )}
+                    {backgroundMode &&
+                      endingMode === "outro" &&
+                      !activeCaption &&
+                      playheadMs >= lastVisibleCaptionEnd &&
+                      playheadMs < Math.min(actualDurationMs, lastVisibleCaptionEnd + 3500) &&
+                      longTailMs >= 1000 && (
+                        <div className="tm-outro-overlay" aria-label="Prévia do encerramento">
+                          <strong>ENGLISH IN CONTEXT</strong>
+                          <span>Salve para praticar com o IHUB</span>
+                        </div>
+                      )}
                   </div>
                 ) : (
                   <canvas
@@ -1740,25 +1761,46 @@ export function TikTokMediaPage() {
                       {videoMode && (
                         <div className="tm-paper-controls">
                           <h3>Imagem da publicação</h3>
-                          <div className="tm-background-toggle tm-background-panel" role="group" aria-label="Escolha do fundo">
-                            <button aria-pressed={backgroundMode === "video"} onClick={() => setBackgroundMode("video")}>
+                          <div
+                            className="tm-background-toggle tm-background-panel"
+                            role="group"
+                            aria-label="Escolha do fundo"
+                          >
+                            <button
+                              aria-pressed={backgroundMode === "video"}
+                              onClick={() => setBackgroundMode("video")}
+                            >
                               <Video size={15} /> Vídeo original
                             </button>
-                            <button aria-pressed={backgroundMode === "paper"} onClick={() => setBackgroundMode("paper")}>
+                            <button
+                              aria-pressed={backgroundMode === "paper"}
+                              onClick={() => setBackgroundMode("paper")}
+                            >
                               <Layers2 size={15} /> Papel + áudio
                             </button>
                           </div>
                           {backgroundMode === "paper" && (
-                            <div className="tm-paper-themes" role="group" aria-label="Estilo do papel">
-                              {([
-                                ["cream", "Papel claro"],
-                                ["kraft", "Papel kraft"],
-                                ["night", "Papel noturno"],
-                              ] as const).map(([theme, label]) => (
-                                <button key={theme} onClick={() => changePaperTheme(theme)}
+                            <div
+                              className="tm-paper-themes"
+                              role="group"
+                              aria-label="Estilo do papel"
+                            >
+                              {(
+                                [
+                                  ["cream", "Papel claro"],
+                                  ["kraft", "Papel kraft"],
+                                  ["night", "Papel noturno"],
+                                  ["aurora", "Aurora animada"],
+                                ] as const
+                              ).map(([theme, label]) => (
+                                <button
+                                  key={theme}
+                                  onClick={() => changePaperTheme(theme)}
                                   className={`tm-paper-option tm-paper-${theme}`}
-                                  aria-pressed={paperTheme === theme}>
-                                  <span className="tm-paper-swatch" />{label}
+                                  aria-pressed={paperTheme === theme}
+                                >
+                                  <span className="tm-paper-swatch" />
+                                  {label}
                                 </button>
                               ))}
                             </div>
@@ -1779,11 +1821,21 @@ export function TikTokMediaPage() {
                             type="button"
                             className={captionStyle.template === template ? "tm-effect-active" : ""}
                             aria-pressed={captionStyle.template === template}
-                            onClick={() => changeCaptionStyle({
-                              template,
-                              position: template === "handwriting" || template === "karaoke" ? "center" : "bottom",
-                              animation: template === "popstar" ? "pop" : template === "cinema" ? "fade" : "none",
-                            })}
+                            onClick={() =>
+                              changeCaptionStyle({
+                                template,
+                                position:
+                                  template === "handwriting" || template === "karaoke"
+                                    ? "center"
+                                    : "bottom",
+                                animation:
+                                  template === "popstar"
+                                    ? "pop"
+                                    : template === "cinema"
+                                      ? "fade"
+                                      : "none",
+                              })
+                            }
                           >
                             <EffectIcon size={19} />
                             <strong>{title}</strong>
@@ -1805,7 +1857,7 @@ export function TikTokMediaPage() {
                           <option value="clean">Leve e elegante</option>
                           <option value="impact">Impacto</option>
                           <option value="karaoke">Karaokê · palavra por palavra</option>
-                          <option value="handwriting">Escrita à mão · lápis</option>
+                          <option value="handwriting">Editorial suave · frase completa</option>
                           <option value="neon">Neon Beat · brilho</option>
                           <option value="popstar">Pop Star · entrada</option>
                           <option value="cinema">Cinema · elegante</option>
@@ -1813,8 +1865,8 @@ export function TikTokMediaPage() {
                       </label>
                       {captionStyle.template === "handwriting" && (
                         <p className="tm-music-tip">
-                          <Pencil size={15} /> Um lápis acompanha o aparecimento da frase, simulando
-                          escrita manual. A fonte manuscrita depende das fontes disponíveis no sistema.
+                          <Pencil size={15} /> A frase permanece legível durante toda a fala, com
+                          entrada suave e sem elementos cobrindo as palavras.
                         </p>
                       )}
                       {captionStyle.template === "karaoke" && (
@@ -1931,6 +1983,101 @@ export function TikTokMediaPage() {
                           maxLength={300}
                           hint="Uma explicação curta que aparece abaixo da tradução no vídeo."
                         />
+                        <details className="tm-material-lessons">
+                          <summary>Trazer mini-aulas do material do Generator</summary>
+                          <p className="tm-small">
+                            Importe o JSON final de materiais. As explicações serão propostas para
+                            as falas correspondentes, sem alterar o inglês, a tradução ou os tempos.
+                          </p>
+                          <input
+                            type="file"
+                            accept=".json,application/json"
+                            aria-label="Arquivo JSON de materiais"
+                            onChange={async (event) => {
+                              const file = event.target.files?.[0];
+                              if (file) {
+                                setMaterialJson(await file.text());
+                                setMaterialProposal(null);
+                              }
+                              event.target.value = "";
+                            }}
+                          />
+                          <textarea
+                            aria-label="JSON de mini-aulas"
+                            rows={4}
+                            value={materialJson}
+                            placeholder="Cole aqui o JSON dos materiais ou escolha um arquivo."
+                            onChange={(event) => {
+                              setMaterialJson(event.target.value);
+                              setMaterialProposal(null);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try {
+                                const proposal = proposeMaterialLessons(materialJson, captions);
+                                setMaterialProposal(proposal);
+                                setNotice(
+                                  `${proposal.suggestions.length} mini-aula(s) encontrada(s). Revise antes de aplicar.`,
+                                );
+                              } catch (error) {
+                                setNotice(
+                                  error instanceof Error ? error.message : "JSON inválido.",
+                                );
+                              }
+                            }}
+                          >
+                            <FileJson size={14} /> Conferir mini-aulas
+                          </button>
+                          {materialProposal && (
+                            <div className="tm-lesson-proposal">
+                              <strong>
+                                {materialProposal.suggestions.length} sugestões para revisar
+                              </strong>
+                              {materialProposal.ignored > 0 && (
+                                <p className="tm-small">
+                                  {materialProposal.ignored} item(ns) sem correspondência ou com
+                                  explicação longa demais.
+                                </p>
+                              )}
+                              {materialProposal.suggestions.map((item) => (
+                                <p key={item.cueId}>
+                                  <strong>{item.english}</strong> — {item.note}
+                                </p>
+                              ))}
+                              <button
+                                className="tm-accent"
+                                type="button"
+                                disabled={!materialProposal.suggestions.length}
+                                onClick={() => {
+                                  const updates = new Map(
+                                    materialProposal.suggestions.map((item) => [item.cueId, item]),
+                                  );
+                                  edit((current) => ({
+                                    ...current,
+                                    video_captions: current.video_captions?.map((caption) => {
+                                      const suggestion = updates.get(caption.cue_id);
+                                      return suggestion
+                                        ? {
+                                            ...caption,
+                                            highlight: suggestion.highlight || caption.highlight,
+                                            note: suggestion.note,
+                                          }
+                                        : caption;
+                                    }),
+                                  }));
+                                  setMaterialProposal(null);
+                                  setNotice(
+                                    "Mini-aulas aplicadas ao rascunho. Revise e salve a produção.",
+                                  );
+                                }}
+                              >
+                                <Sparkles size={14} /> Aplicar mini-aulas
+                              </button>
+                            </div>
+                          )}
+                        </details>
                         <div className="tm-caption-timing">
                           <label className="tm-field">
                             <span>Entrada (segundos)</span>
@@ -2071,13 +2218,21 @@ export function TikTokMediaPage() {
                   </h2>
                   {draft.source_youtube_id && sourceStatus.data?.mp3_ready && (
                     <div className="tm-cut-mp3">
-                      <strong><FileAudio size={17} /> MP3 do trecho recortado</strong>
-                      <audio controls preload="none" src={mediaApi.cutMp3Url(draft.id)}
-                        aria-label="Ouvir MP3 do recorte" />
+                      <strong>
+                        <FileAudio size={17} /> MP3 do trecho recortado
+                      </strong>
+                      <audio
+                        controls
+                        preload="none"
+                        src={mediaApi.cutMp3Url(draft.id)}
+                        aria-label="Ouvir MP3 do recorte"
+                      />
                       <a href={mediaApi.cutMp3Url(draft.id)} download="tiktok-media-recorte.mp3">
                         <Download size={15} /> Baixar MP3 do recorte
                       </a>
-                      <p className="tm-small">O MP3 fica guardado junto do recorte e pode ser reutilizado.</p>
+                      <p className="tm-small">
+                        O MP3 fica guardado junto do recorte e pode ser reutilizado.
+                      </p>
                     </div>
                   )}
                   <label className="tm-field">
@@ -2112,6 +2267,65 @@ export function TikTokMediaPage() {
                       {!videoMode && <option value="voice">Narração com voz do Generator</option>}
                     </select>
                   </label>
+                  {videoMode && actualDurationMs > 0 && (
+                    <div className="tm-export-check">
+                      <strong>Revisão antes de exportar</strong>
+                      {uncoveredGaps.length > 0 ? (
+                        <>
+                          <p>
+                            {uncoveredGaps.length} trecho(s) sem legenda. Confira se são pausas da
+                            música ou se falta alguma fala.
+                          </p>
+                          <div className="tm-gap-list">
+                            {uncoveredGaps.slice(0, 6).map((gap) => (
+                              <button
+                                key={`${gap.startMs}-${gap.endMs}`}
+                                type="button"
+                                onClick={() => {
+                                  if (videoRef.current)
+                                    videoRef.current.currentTime = gap.startMs / 1000;
+                                  setPlayheadMs(gap.startMs);
+                                }}
+                              >
+                                Conferir {durationLabel(gap.startMs)}–{durationLabel(gap.endMs)}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <p>As legendas cobrem o trecho inteiro.</p>
+                      )}
+                      {longTailMs >= 800 && lastVisibleCaptionEnd > 0 && (
+                        <label className="tm-field">
+                          <span>Como o vídeo deve terminar?</span>
+                          <select
+                            aria-label="Encerramento do vídeo"
+                            value={endingMode}
+                            onChange={(event) =>
+                              setEndingMode(event.target.value as typeof endingMode)
+                            }
+                          >
+                            <option value="trim">
+                              Na última legenda ({durationLabel(lastVisibleCaptionEnd)})
+                            </option>
+                            {longTailMs >= 1000 && (
+                              <option value="outro">Com encerramento IHUB (+ até 3,5s)</option>
+                            )}
+                            <option value="full">
+                              Manter o corte completo ({durationLabel(actualDurationMs)})
+                            </option>
+                          </select>
+                          <small>
+                            {endingMode === "full"
+                              ? `${Math.round(longTailMs / 1000)}s finais podem ficar sem texto.`
+                              : endingMode === "outro"
+                                ? "Uma chamada para salvar o vídeo aparece após a última legenda."
+                                : "O áudio e o vídeo terminam juntos na última frase."}
+                          </small>
+                        </label>
+                      )}
+                    </div>
+                  )}
                   {audioMode === "voice" && (
                     <label className="tm-field">
                       <span>Voz</span>
