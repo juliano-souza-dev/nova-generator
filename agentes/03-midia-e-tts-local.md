@@ -28,6 +28,7 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
   estimar a duração interna sem inventar alinhamento acústico; preservar EN/PT, lacunas
   entre falas e a trilha original escolhida na exportação.
 - Em Cenas Animadas, transformar imagens próprias normalizadas e quadros já renderizados em MP4 local via movimentos suaves de câmera; manter prévia, hash, revisão e duração dos quadros compatíveis com a exportação anterior. Oferecer saída leve em 720p para CPU antiga sem obrigar WhisperX ou geração de vídeo por difusão.
+- No TikTok Mídia, importar pacotes ZIP versionados com ordem explícita, imagens PNG, áudio opcional e hashes, criando produção nova apenas após validação total e preservando as anteriores.
 - No TikTok Shadowing, reutilizar somente blocos aprovados, com corte e hashes congelados;
   montar 35–60 s de falas originais seguidas pelas respectivas pausas silenciosas, sem
   sintetizar outra voz ou editar o material aprovado. Verificar áudio e duração do MP4.

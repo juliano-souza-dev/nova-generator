@@ -306,7 +306,9 @@ export function TikTokMediaPage() {
           projectQuery.data.source_scene_id ||
           projectQuery.data.source_youtube_id
           ? "original"
-          : "silent",
+          : projectQuery.data.audio_filename
+            ? "uploaded"
+            : "silent",
       );
       setPlayheadMs(0);
       setSourceDurationMs(0);
@@ -350,6 +352,19 @@ export function TikTokMediaPage() {
             : "source",
       );
     },
+  });
+
+  const importPackage = useMutation({
+    mutationFn: (file: File) => mediaApi.importPackage(file),
+    onSuccess: (project) => {
+      queryClient.setQueryData(["tiktok-project", project.id], project);
+      void queryClient.invalidateQueries({ queryKey: ["tiktok-projects"] });
+      loadedId.current = null;
+      selectProject(project.id);
+      setAudioMode(project.audio_filename ? "uploaded" : "silent");
+      setNotice("Pacote importado em ordem. Revise os quadros, imagens e áudio antes de exportar.");
+    },
+    onError: (error) => setNotice(`Falha ao importar pacote: ${error.message}`),
   });
 
   const save = useMutation({
@@ -1049,7 +1064,6 @@ export function TikTokMediaPage() {
               aria-pressed={railTab === "reuse"}
               className={railTab === "reuse" ? "tm-tab-active" : ""}
               onClick={() => setRailTab("reuse")}
-              disabled={!draft || creationMode === "shadowing"}
             >
               <Copy size={16} /> Importar
             </button>
@@ -1218,7 +1232,7 @@ export function TikTokMediaPage() {
               </div>
             </div>
           )}
-          {draft && (railTab === "ideas" || railTab === "reuse") && (
+          {(railTab === "reuse" || (draft && railTab === "ideas")) && (
             <>
               {railTab === "ideas" && !videoMode && (
                 <>
@@ -1344,71 +1358,102 @@ export function TikTokMediaPage() {
                 </>
               )}
               {railTab === "reuse" && (
-                <div className="tm-card">
-                  <h2>
-                    <Video size={18} /> Reaproveitar material
-                  </h2>
-                  <p className="tm-small">Opcional: usar cenas de projetos antigos.</p>
-                  <details>
-                    <summary>Importar de um projeto antigo</summary>
-                    <select
-                      aria-label="Projeto de origem"
-                      value={sourceId}
-                      onChange={(event) => {
-                        setSourceId(event.target.value);
-                        setSceneId("");
-                      }}
-                    >
-                      <option value="">Selecione um projeto</option>
-                      {sourceProjects.data?.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.title}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label="Cena de origem"
-                      value={sceneId}
-                      onChange={(event) => setSceneId(event.target.value)}
-                    >
-                      <option value="">Selecione uma cena</option>
-                      {scenes.data?.map((scene) => (
-                        <option key={scene.id} value={scene.id}>
-                          Cena {scene.order}
-                        </option>
-                      ))}
-                    </select>
-                    {sourceId && (
-                      <div className="tm-preparation-links">
-                        <Link to={`/media?project=${sourceId}`}>Recortar e transcrever</Link>
-                        <Link to={`/editorial?project=${sourceId}`}>Revisar falas e tradução</Link>
-                      </div>
-                    )}
-                    {sourceMedia.isError && (
-                      <p className="tm-small" role="status">
-                        Fonte não preparada. Abra o recorte e a transcrição primeiro.
-                      </p>
-                    )}
-                    <button
-                      className="tm-accent"
-                      onClick={() => importVideoCues.mutate()}
-                      disabled={!sceneId || importVideoCues.isPending}
-                    >
-                      <Subtitles size={16} /> Usar vídeo com legendas revisadas
-                    </button>
-                    <button
-                      onClick={() => importCues.mutate()}
-                      disabled={!sceneId || importCues.isPending}
-                    >
-                      Transformar falas em quadros
-                    </button>
+                <>
+                  <div className="tm-card">
+                    <h2>
+                      <FileJson size={18} /> Importar pacote completo
+                    </h2>
                     <p className="tm-small">
-                      As legendas usam os tempos reais do corte. Nenhuma fala é publicada sem a sua
-                      revisão. Se você acabou de preparar uma fonte, selecione-a acima quando voltar
-                      a esta área.
+                      Envie um ZIP com manifest.json, imagens e narração opcional. O Generator
+                      organiza os quadros pela ordem do manifesto e cria uma nova produção para você
+                      revisar. Seus projetos existentes não são substituídos.
                     </p>
-                  </details>
-                </div>
+                    <label className="tm-field">
+                      <span>Pacote ZIP da microaula</span>
+                      <input
+                        type="file"
+                        accept=".zip,application/zip"
+                        aria-label="Pacote ZIP da microaula"
+                        disabled={dirty || save.isPending || importPackage.isPending}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) importPackage.mutate(file);
+                          event.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {importPackage.isPending && <p role="status">Importando e validando pacote…</p>}
+                  </div>
+                  {draft && (
+                    <div className="tm-card">
+                      <h2>
+                        <Video size={18} /> Reaproveitar material
+                      </h2>
+                      <p className="tm-small">Opcional: usar cenas de projetos antigos.</p>
+                      <details>
+                        <summary>Importar de um projeto antigo</summary>
+                        <select
+                          aria-label="Projeto de origem"
+                          value={sourceId}
+                          onChange={(event) => {
+                            setSourceId(event.target.value);
+                            setSceneId("");
+                          }}
+                        >
+                          <option value="">Selecione um projeto</option>
+                          {sourceProjects.data?.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.title}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          aria-label="Cena de origem"
+                          value={sceneId}
+                          onChange={(event) => setSceneId(event.target.value)}
+                        >
+                          <option value="">Selecione uma cena</option>
+                          {scenes.data?.map((scene) => (
+                            <option key={scene.id} value={scene.id}>
+                              Cena {scene.order}
+                            </option>
+                          ))}
+                        </select>
+                        {sourceId && (
+                          <div className="tm-preparation-links">
+                            <Link to={`/media?project=${sourceId}`}>Recortar e transcrever</Link>
+                            <Link to={`/editorial?project=${sourceId}`}>
+                              Revisar falas e tradução
+                            </Link>
+                          </div>
+                        )}
+                        {sourceMedia.isError && (
+                          <p className="tm-small" role="status">
+                            Fonte não preparada. Abra o recorte e a transcrição primeiro.
+                          </p>
+                        )}
+                        <button
+                          className="tm-accent"
+                          onClick={() => importVideoCues.mutate()}
+                          disabled={!sceneId || importVideoCues.isPending}
+                        >
+                          <Subtitles size={16} /> Usar vídeo com legendas revisadas
+                        </button>
+                        <button
+                          onClick={() => importCues.mutate()}
+                          disabled={!sceneId || importCues.isPending}
+                        >
+                          Transformar falas em quadros
+                        </button>
+                        <p className="tm-small">
+                          As legendas usam os tempos reais do corte. Nenhuma fala é publicada sem a
+                          sua revisão. Se você acabou de preparar uma fonte, selecione-a acima
+                          quando voltar a esta área.
+                        </p>
+                      </details>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

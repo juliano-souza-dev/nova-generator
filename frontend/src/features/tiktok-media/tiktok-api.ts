@@ -118,6 +118,14 @@ export const mediaApi = {
       method: "POST",
       body: JSON.stringify({ title, format, animated_scenes: animatedScenes }),
     }),
+  importPackage: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return apiRequest<MediaProject>("/tiktok-media/packages/import", {
+      method: "POST",
+      body,
+    });
+  },
   update: (id: string, payload: MediaEdit) =>
     apiRequest<MediaProject>(`/tiktok-media/projects/${id}`, {
       method: "PUT",
