@@ -499,6 +499,12 @@ def make_media_render_handler(
             "animated_scenes": project.animated_scenes,
             "slide_motions": [slide.motion for slide in project.slides],
             "render_quality": payload.get("render_quality", "balanced"),
+            "output_resolution": (
+                ("720x1280" if payload.get("render_quality") != "full" else "1080x1920")
+                if project.animated_scenes and visual_mode == "slides"
+                else "1080x1920" if visual_mode == "slides" else None
+            ),
+            "image_hashes": payload.get("image_hashes", []),
             "source_video_sha256": source_digest,
             "source_scene_id": str(project.source_scene_id) if source_digest else None,
             "caption_count": (

@@ -7,6 +7,7 @@ import json
 import os
 import struct
 import subprocess
+import zlib
 from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, Literal
@@ -51,6 +52,36 @@ MAX_PNG_BYTES = 8 * 1024 * 1024
 MAX_AUDIO_BYTES = 50 * 1024 * 1024
 MAX_SOURCE_BYTES = 512 * 1024 * 1024
 MAX_SOURCE_DURATION_MS = 180_000
+
+
+def _valid_scene_png(content: bytes) -> bool:
+    """Check dimensions, chunk boundaries and CRC before storing an uploaded PNG."""
+    if not content.startswith(PNG_SIGNATURE):
+        return False
+    position = len(PNG_SIGNATURE)
+    seen_header = False
+    seen_pixels = False
+    while position + 12 <= len(content):
+        size = int.from_bytes(content[position : position + 4], "big")
+        kind = content[position + 4 : position + 8]
+        data_end = position + 8 + size
+        if data_end + 4 > len(content):
+            return False
+        expected_crc = int.from_bytes(content[data_end : data_end + 4], "big")
+        if zlib.crc32(content[position + 4 : data_end]) != expected_crc:
+            return False
+        if not seen_header:
+            if kind != b"IHDR" or size != 13:
+                return False
+            if struct.unpack(">II", content[position + 8 : position + 16]) != (1080, 1920):
+                return False
+            seen_header = True
+        elif kind == b"IDAT":
+            seen_pixels = True
+        elif kind == b"IEND":
+            return seen_pixels and size == 0 and data_end + 4 == len(content)
+        position = data_end + 4
+    return False
 
 
 def _store() -> MediaProjectStore:
@@ -463,13 +494,8 @@ async def upload_slide_image(
     content = await image.read(MAX_PNG_BYTES + 1)
     if not content or len(content) > MAX_PNG_BYTES:
         raise HTTPException(413, "A imagem precisa ter até 8 MiB.")
-    if (
-        not content.startswith(PNG_SIGNATURE)
-        or len(content) < 24
-        or content[12:16] != b"IHDR"
-        or struct.unpack(">II", content[16:24]) != (1080, 1920)
-    ):
-        raise HTTPException(422, "Envie uma imagem PNG vertical de 1080×1920.")
+    if not _valid_scene_png(content):
+        raise HTTPException(422, "Envie uma imagem PNG válida de 1080×1920.")
     try:
         return _store().set_slide_image(
             project_id, revision=revision, slide_id=slide_id, content=content

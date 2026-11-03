@@ -15,6 +15,10 @@ export async function preloadSlidePhoto(project: MediaProject, slide: MediaSlide
       image.onload = () => resolve();
       image.onerror = () => reject(new Error("Não foi possível carregar a imagem da cena."));
       image.src = url;
+    }).catch((error: unknown) => {
+      photoRequests.delete(url);
+      photoCache.delete(url);
+      throw error;
     });
     photoRequests.set(url, request);
   }
