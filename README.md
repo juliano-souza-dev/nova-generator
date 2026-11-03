@@ -10,6 +10,12 @@ inicia API, worker e interface e abre `http://127.0.0.1:5173` automaticamente. A
 inicial pode demorar por causa do PyTorch e do modelo de voz; as próximas execuções reutilizam
 o ambiente.
 
+Ao iniciar o worker, a voz expressiva Qwen3-TTS 1.7B também é verificada. Se ainda
+não estiver instalada, o próprio Generator baixa os recursos oficiais em segundo plano,
+enquanto as outras funções continuam disponíveis. A Biblioteca de vozes mostra as etapas
+da preparação; a voz de referência é preparada automaticamente quando escolhida.
+[Saiba mais sobre a preparação automática](docs/qwen3-tts-local.md).
+
 Mantenha a janela **Nova Generator - Inicializador** aberta. Fechá-la encerra os serviços.
 Se algo falhar, a janela mostra a causa e os detalhes ficam em `data/logs/`.
 
