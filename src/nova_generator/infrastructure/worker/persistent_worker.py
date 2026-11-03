@@ -45,9 +45,12 @@ class PersistentWorker:
         handlers: dict[str, JobHandler],
         heartbeat_timeout: timedelta = timedelta(minutes=2),
         logger: logging.Logger | None = None,
+        allowed_kinds: tuple[str, ...] | None = None,
+        excluded_kinds: tuple[str, ...] = (),
     ) -> None:
         configure_json_logging()
         self._repository, self._worker_id, self._handlers = repository, worker_id, handlers
+        self._allowed_kinds, self._excluded_kinds = allowed_kinds, excluded_kinds
         self._heartbeat_timeout, self._logger = (
             heartbeat_timeout,
             logger or logging.getLogger("nova_generator.worker"),
@@ -60,7 +63,15 @@ class PersistentWorker:
         )
         if recovered:
             self._log("jobs_recovered", count=recovered)
-        job = self._repository.claim_next(worker_id=self._worker_id, now=now)
+        if self._allowed_kinds is None and not self._excluded_kinds:
+            job = self._repository.claim_next(worker_id=self._worker_id, now=now)
+        else:
+            job = self._repository.claim_next(
+                worker_id=self._worker_id,
+                now=now,
+                allowed_kinds=self._allowed_kinds,
+                excluded_kinds=self._excluded_kinds,
+            )
         if job is None:
             return False
         execution = JobExecution(self._repository, job, self._worker_id)
