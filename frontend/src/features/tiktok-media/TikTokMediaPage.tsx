@@ -362,7 +362,9 @@ export function TikTokMediaPage() {
       loadedId.current = null;
       selectProject(project.id);
       setAudioMode(project.audio_filename ? "uploaded" : "silent");
-      setNotice("Pacote importado em ordem. Revise os quadros, imagens e áudio antes de exportar.");
+      setNotice(
+        "Pacote importado em ordem. Revise os quadros, imagens e áudio antes de exportar.",
+      );
     },
     onError: (error) => setNotice(`Falha ao importar pacote: ${error.message}`),
   });
@@ -1364,9 +1366,10 @@ export function TikTokMediaPage() {
                       <FileJson size={18} /> Importar pacote completo
                     </h2>
                     <p className="tm-small">
-                      Envie um ZIP com manifest.json, imagens e narração opcional. O Generator
-                      organiza os quadros pela ordem do manifesto e cria uma nova produção
-                      para você revisar. Seus projetos existentes não são substituídos.
+                      Envie um ZIP com manifest.json, imagens e narração opcional. O
+                      Generator organiza os quadros pela ordem do manifesto e cria
+                      uma nova produção para você revisar. Seus projetos existentes
+                      não são substituídos.
                     </p>
                     <label className="tm-field">
                       <span>Pacote ZIP da microaula</span>
@@ -1374,7 +1377,9 @@ export function TikTokMediaPage() {
                         type="file"
                         accept=".zip,application/zip"
                         aria-label="Pacote ZIP da microaula"
-                        disabled={dirty || save.isPending || importPackage.isPending}
+                        disabled={
+                          dirty || save.isPending || importPackage.isPending
+                        }
                         onChange={(event) => {
                           const file = event.target.files?.[0];
                           if (file) importPackage.mutate(file);
@@ -1382,7 +1387,9 @@ export function TikTokMediaPage() {
                         }}
                       />
                     </label>
-                    {importPackage.isPending && <p role="status">Importando e validando pacote…</p>}
+                    {importPackage.isPending && (
+                      <p role="status">Importando e validando pacote…</p>
+                    )}
                   </div>
                   {draft && (
                     <div className="tm-card">
