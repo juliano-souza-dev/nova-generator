@@ -11,10 +11,10 @@ import { studioApi } from "../../lib/studio-api";
 import "./voices.css";
 
 const VOICE_MODELS = [
-  { id: "qwen3-tts-1.7b-voice-design", label: "Qwen3 · Criar voz por descrição" },
-  { id: "qwen3-tts-1.7b-base", label: "Qwen3 · Reproduzir voz de referência" },
-  { id: "chatterbox-turbo", label: "Chatterbox · Voz de referência (legado)" },
-  { id: "chatterbox-nano", label: "Chatterbox · Perfil antigo" },
+  { id: "qwen3-tts-1.7b-voice-design", label: "Voz expressiva · criar por descrição" },
+  { id: "qwen3-tts-1.7b-base", label: "Voz consistente · usar gravação" },
+  { id: "chatterbox-turbo", label: "Voz clássica · usar gravação" },
+  { id: "chatterbox-nano", label: "Voz clássica · perfil antigo" },
 ] as const;
 
 type VoiceModelId = (typeof VOICE_MODELS)[number]["id"];
