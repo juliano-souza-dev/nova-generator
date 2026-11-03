@@ -44,6 +44,7 @@ from nova_generator.infrastructure.speech.chatterbox_nano_synthesizer import (
 )
 from nova_generator.infrastructure.speech.ffprobe_wav_probe import FfprobeWavProbe
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
+from nova_generator.infrastructure.speech.routing_synthesizer import RoutingSpeechSynthesizer
 from nova_generator.infrastructure.worker.cards_only_handler import make_cards_only_handler
 from nova_generator.infrastructure.worker.editorial_assistance_handler import (
     EditorialAssistanceJobHandler,
@@ -63,10 +64,24 @@ from nova_generator.infrastructure.worker.voice_preview_handler import make_voic
 def main() -> None:
     settings = get_settings()
     runner = Path(__file__).parent / "infrastructure" / "speech" / "chatterbox_nano_runner.py"
-    synthesizer = ChatterboxNanoSynthesizer(
+    references = FileVoiceReferenceStore(settings.media_cache_root)
+    chatterbox = ChatterboxNanoSynthesizer(
         runner,
         executable=os.environ.get("NOVA_GENERATOR_TTS_PYTHON", sys.executable),
-        reference_store=FileVoiceReferenceStore(settings.media_cache_root),
+        reference_store=references,
+    )
+    qwen = ChatterboxNanoSynthesizer(
+        runner.parent / "qwen3_tts_runner.py",
+        executable=settings.qwen_tts_python or sys.executable,
+        reference_store=references,
+        environment={
+            "NOVA_GENERATOR_QWEN_MODEL_ROOT": str(settings.qwen_model_root.resolve()),
+        },
+        engine_name="Qwen3-TTS",
+        timeout_seconds=900,
+    )
+    synthesizer = RoutingSpeechSynthesizer(
+        chatterbox=chatterbox, qwen=qwen, settings=settings
     )
     speech = SynthesizeSpeech(FileSpeechCache(settings.media_cache_root), synthesizer)
     materials = MaterialsJobHandler(
