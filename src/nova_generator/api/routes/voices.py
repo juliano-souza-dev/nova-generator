@@ -12,6 +12,7 @@ from nova_generator.application.use_cases.manage_voice_profiles import (
 )
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.voices import VoiceProfile
+from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
 from nova_generator.infrastructure.filesystem.voice_references import (
     MAX_REFERENCE_UPLOAD_BYTES,
     FileVoiceReferenceStore,
@@ -22,12 +23,11 @@ from nova_generator.infrastructure.filesystem.voice_references import (
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 from nova_generator.infrastructure.speech.model_checkpoint import checkpoint_sha256
 from nova_generator.infrastructure.speech.qwen3_installer import (
+    STAGES,
     ensure_setup_queued,
     qwen_ready,
     setup_status,
-    STAGES,
 )
-from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
 from nova_generator.infrastructure.speech.qwen3_tts_models import (
     QWEN_MODELS,
     qwen_model_sha256,
