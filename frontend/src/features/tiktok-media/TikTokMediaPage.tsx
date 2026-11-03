@@ -13,6 +13,7 @@ import {
   Music2,
   Palette,
   FileAudio,
+  ImagePlus,
   Layers2,
   Pencil,
   Star,
@@ -33,7 +34,7 @@ import { Link } from "react-router-dom";
 
 import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
-import { imageForSlide, paintSlide } from "./slide-canvas";
+import { imageForSlide, normalizeSlidePhoto, paintSlide, preloadSlidePhoto } from "./slide-canvas";
 import { MusicLessonComposer } from "./MusicLessonComposer";
 import { TikTokShadowingStudio } from "./TikTokShadowingStudio";
 import { lyricWords } from "./lyric-timing";
@@ -60,6 +61,7 @@ import {
   type MediaProject,
   type MediaSlide,
   type MediaVisualMode,
+  type SlideMotion,
 } from "./tiktok-api";
 import "./tiktok-media.css";
 
@@ -82,12 +84,13 @@ function titleOf(kind: MediaKind): string {
   }[kind];
 }
 
-type CreationMode = "music" | "dialogue" | "lesson" | "carousel" | "shadowing";
+type CreationMode = "music" | "dialogue" | "lesson" | "animated" | "carousel" | "shadowing";
 
 function modeFor(project: MediaProject): CreationMode {
   if (project.format === "shadowing_video") return "shadowing";
   if (project.format === "carousel") return "carousel";
   if (project.format === "lyrics_video") return "music";
+  if (project.animated_scenes) return "animated";
   return project.caption_style?.template === "impact" ? "lesson" : "dialogue";
 }
 
@@ -95,6 +98,7 @@ const creationModes = [
   { id: "music", label: "Música", description: "Letra em movimento", icon: Music2 },
   { id: "dialogue", label: "Diálogos", description: "Falas com tradução", icon: Subtitles },
   { id: "lesson", label: "Mini-aula", description: "Destaque educativo", icon: Sparkles },
+  { id: "animated", label: "Cenas animadas", description: "Fotos com movimento", icon: ImagePlus },
   { id: "carousel", label: "Carrossel", description: "Quadros para deslizar", icon: Clapperboard },
   { id: "shadowing", label: "Shadowing", description: "Ouça e repita · 35–60 s", icon: Play },
 ] as const;
@@ -128,7 +132,17 @@ function SlideThumb({ project, index }: { project: MediaProject; index: number }
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const ctx = ref.current?.getContext("2d");
-    if (ctx) paintSlide(ctx, project.slides[index], project, index);
+    if (!ctx) return;
+    paintSlide(ctx, project.slides[index], project, index);
+    let cancelled = false;
+    void preloadSlidePhoto(project, project.slides[index])
+      .then(() => {
+        if (!cancelled) paintSlide(ctx, project.slides[index], project, index);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [project, index]);
   return <canvas className="tm-thumb" ref={ref} width={1080} height={1920} aria-hidden="true" />;
 }
@@ -201,6 +215,7 @@ export function TikTokMediaPage() {
   const [playing, setPlaying] = useState(false);
   const [newTitle, setNewTitle] = useState("Minha publicação");
   const [newFormat, setNewFormat] = useState<MediaFormat>("carousel");
+  const [newAnimated, setNewAnimated] = useState(false);
   const [sourceId, setSourceId] = useState("");
   const [sceneId, setSceneId] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -243,6 +258,7 @@ export function TikTokMediaPage() {
   const [notice, setNotice] = useState("");
   const [audioMode, setAudioMode] = useState<MediaAudioMode>("silent");
   const [endingMode, setEndingMode] = useState<"trim" | "outro" | "full">("trim");
+  const [renderQuality, setRenderQuality] = useState<"balanced" | "full">("balanced");
   const [voiceId, setVoiceId] = useState("");
   const [jobId, setJobId] = useState("");
   const [renderId, setRenderId] = useState("");
@@ -320,7 +336,7 @@ export function TikTokMediaPage() {
   }
 
   const create = useMutation({
-    mutationFn: () => mediaApi.create(newTitle.trim() || "Nova publicação", newFormat),
+    mutationFn: () => mediaApi.create(newTitle.trim() || "Nova publicação", newFormat, newAnimated),
     onSuccess: (project) => {
       queryClient.setQueryData(["tiktok-project", project.id], project);
       void queryClient.invalidateQueries({ queryKey: ["tiktok-projects"] });
@@ -344,6 +360,7 @@ export function TikTokMediaPage() {
         theme: value.theme,
         background_mode: value.background_mode ?? "video",
         paper_theme: value.paper_theme ?? "cream",
+        animated_scenes: value.animated_scenes ?? false,
         source_project_id: value.source_project_id,
         source_scene_id: value.source_scene_id,
         source_youtube_id: value.source_youtube_id,
@@ -415,9 +432,11 @@ export function TikTokMediaPage() {
   const active = draft?.slides[activeIndex] ?? null;
   const creationMode = draft
     ? modeFor(draft)
-    : newFormat === "carousel"
-      ? "carousel"
-      : newFormat === "shadowing_video"
+    : newAnimated
+      ? "animated"
+      : newFormat === "carousel"
+        ? "carousel"
+        : newFormat === "shadowing_video"
         ? "shadowing"
         : newFormat === "lyrics_video"
           ? "music"
@@ -465,8 +484,18 @@ export function TikTokMediaPage() {
   const longTailMs = Math.max(0, actualDurationMs - lastVisibleCaptionEnd);
   useEffect(() => {
     const context = previewRef.current?.getContext("2d");
-    if (context && active && draft) paintSlide(context, active, draft, activeIndex);
-  }, [draft, active, activeIndex]);
+    if (!context || !active || !draft) return;
+    paintSlide(context, active, draft, activeIndex);
+    let cancelled = false;
+    void preloadSlidePhoto(draft, active)
+      .then(() => {
+        if (!cancelled) paintSlide(context, active, draft, activeIndex);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, active, activeIndex, playing]);
 
   useEffect(() => {
     if (!playing || !active || !draft || videoMode) return;
@@ -613,6 +642,38 @@ export function TikTokMediaPage() {
     },
     onError: (error) => setNotice(error.message),
   });
+  const uploadImage = useMutation({
+    mutationFn: async (file: File) => {
+      if (!draft || !active) throw new Error("Selecione um quadro.");
+      const version = editVersion.current;
+      const targetSlideId = active.id;
+      const image = await normalizeSlidePhoto(file);
+      const updated = await mediaApi.uploadSlideImage(
+        draft.id, draft.revision, targetSlideId, image,
+      );
+      return { updated, version, targetSlideId };
+    },
+    onSuccess: ({ updated, version, targetSlideId }) => {
+      queryClient.setQueryData(["tiktok-project", updated.id], updated);
+      setDraft((current) => {
+        if (!current || current.id !== updated.id) return current;
+        if (version === editVersion.current) return updated;
+        const attachment = updated.slides.find((slide) => slide.id === targetSlideId);
+        return {
+          ...current,
+          revision: updated.revision,
+          slides: current.slides.map((slide) =>
+            slide.id === targetSlideId
+              ? { ...slide, background_image: attachment?.background_image }
+              : slide,
+          ),
+        };
+      });
+      setDirty(version !== editVersion.current);
+      setNotice("Imagem pronta. Escolha o movimento da câmera para esta cena.");
+    },
+    onError: (error) => setNotice(error.message),
+  });
   const exportSlides = useMutation({
     mutationFn: async () => {
       if (!draft) throw new Error("Abra um projeto.");
@@ -641,6 +702,7 @@ export function TikTokMediaPage() {
         visualMode,
         visualMode === "video_source" && endingMode === "trim" && longTailMs >= 800,
         visualMode === "video_source" && endingMode === "outro" && longTailMs >= 1000,
+        renderQuality,
       );
     },
     onSuccess: (job) => {
@@ -801,6 +863,11 @@ export function TikTokMediaPage() {
   }
 
   function chooseCreationMode(mode: CreationMode) {
+    if (mode === "animated" && (draft?.source_youtube_id || draft?.source_scene_id)) {
+      setNotice("Crie uma produção independente para animar fotos, sem vídeo de origem.");
+      return;
+    }
+    setNewAnimated(mode === "animated");
     const nextFormat: MediaFormat =
       mode === "carousel"
         ? "carousel"
@@ -821,6 +888,19 @@ export function TikTokMediaPage() {
       edit((current) => ({
         ...current,
         format: nextFormat,
+        animated_scenes: mode === "animated",
+        slides:
+          mode === "animated"
+            ? current.slides.map((slide, index) => ({
+                ...slide,
+                motion:
+                  slide.motion && slide.motion !== "still"
+                    ? slide.motion
+                    : index % 2 === 0
+                      ? "zoom_in"
+                      : "pan_left",
+              }))
+            : current.slides,
         ...(mode === "shadowing" || current.format === "shadowing_video"
           ? {
               source_project_id: null,
@@ -844,11 +924,11 @@ export function TikTokMediaPage() {
     setRailTab(
       mode === "shadowing"
         ? "projects"
-        : mode === "carousel" || (mode === "lesson" && !hasVideoSource)
+        : mode === "carousel" || mode === "animated" || (mode === "lesson" && !hasVideoSource)
           ? "ideas"
           : "source",
     );
-    setInspectorTab(mode === "carousel" ? "captions" : "style");
+    setInspectorTab(mode === "carousel" || mode === "animated" ? "captions" : "style");
   }
 
   function moveSlide(direction: -1 | 1) {
@@ -867,7 +947,9 @@ export function TikTokMediaPage() {
     if (!draft || draft.slides.length >= 30) return;
     edit((current) => {
       const slides = [...current.slides];
-      slides.splice(activeIndex + 1, 0, blankSlide(kind));
+      const added = blankSlide(kind);
+      if (current.animated_scenes) added.motion = "zoom_in";
+      slides.splice(activeIndex + 1, 0, added);
       return { ...current, slides };
     });
     setActiveIndex(activeIndex + 1);
@@ -1110,7 +1192,10 @@ export function TikTokMediaPage() {
                 <select
                   aria-label="Formato da nova produção"
                   value={newFormat}
-                  onChange={(event) => setNewFormat(event.target.value as MediaFormat)}
+                  onChange={(event) => {
+                    setNewFormat(event.target.value as MediaFormat);
+                    setNewAnimated(false);
+                  }}
                 >
                   <option value="carousel">Carrossel</option>
                   <option value="lesson_video">Vídeo educativo</option>
@@ -1529,7 +1614,14 @@ export function TikTokMediaPage() {
                   </div>
                 ) : (
                   <canvas
+                    key={`${active?.id}-${playing ? "playing" : "stopped"}`}
                     ref={previewRef}
+                    className={
+                      draft.animated_scenes && playing && active
+                        ? `tm-motion-${active.motion ?? "still"}`
+                        : undefined
+                    }
+                    style={active ? { animationDuration: `${active.duration_ms}ms` } : undefined}
                     width={1080}
                     height={1920}
                     aria-label="Prévia do quadro 9:16"
@@ -1776,6 +1868,8 @@ export function TikTokMediaPage() {
                         edit((current) => ({
                           ...current,
                           format: event.target.value as MediaFormat,
+                          animated_scenes:
+                            event.target.value === "lesson_video" ? current.animated_scenes : false,
                         }));
                       }}
                     >
@@ -2250,6 +2344,54 @@ export function TikTokMediaPage() {
                       onChange={(event) => updateSlide({ duration_ms: Number(event.target.value) })}
                     />
                   </label>
+                  {draft.animated_scenes && (
+                    <div className="tm-animated-controls">
+                      <h3>
+                        <ImagePlus size={16} /> Imagem e movimento
+                      </h3>
+                      <label className="tm-field">
+                        <span>Imagem desta cena (JPG, PNG ou WebP)</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          aria-label="Imagem da cena"
+                          disabled={dirty || save.isPending || uploadImage.isPending}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) uploadImage.mutate(file);
+                            event.target.value = "";
+                          }}
+                        />
+                      </label>
+                      {active.background_image && (
+                        <button
+                          type="button"
+                          onClick={() => updateSlide({ background_image: null })}
+                        >
+                          <Trash2 size={14} /> Remover imagem
+                        </button>
+                      )}
+                      <small>
+                        Imagem enquadrada em 9:16. Salve o quadro antes de trocar a foto.
+                      </small>
+                      <label className="tm-field">
+                        <span>Movimento de câmera</span>
+                        <select
+                          aria-label="Movimento da cena"
+                          value={active.motion ?? "still"}
+                          onChange={(event) =>
+                            updateSlide({ motion: event.target.value as SlideMotion })
+                          }
+                        >
+                          <option value="still">Sem movimento</option>
+                          <option value="zoom_in">Aproximar devagar</option>
+                          <option value="zoom_out">Afastar devagar</option>
+                          <option value="pan_left">Deslizar para a esquerda</option>
+                          <option value="pan_right">Deslizar para a direita</option>
+                        </select>
+                      </label>
+                    </div>
+                  )}
                   <div className="tm-template-row">
                     <button onClick={() => addSlide("example")}>
                       <Plus size={14} /> Exemplo
@@ -2377,6 +2519,21 @@ export function TikTokMediaPage() {
                         </label>
                       )}
                     </div>
+                  )}
+                  {!videoMode && draft.animated_scenes && (
+                    <label className="tm-field">
+                      <span>Qualidade do vídeo</span>
+                      <select
+                        aria-label="Qualidade da exportação animada"
+                        value={renderQuality}
+                        onChange={(event) =>
+                          setRenderQuality(event.target.value as "balanced" | "full")
+                        }
+                      >
+                        <option value="balanced">Leve · 720p (recomendado)</option>
+                        <option value="full">Alta qualidade · 1080p (mais lento)</option>
+                      </select>
+                    </label>
                   )}
                   {audioMode === "voice" && (
                     <label className="tm-field">

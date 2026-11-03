@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from threading import Lock
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from nova_generator.domain.tiktok_media import (
     MediaCaption,
@@ -84,8 +84,10 @@ class MediaProjectStore:
             reverse=True,
         )
 
-    def create(self, title: str, format: MediaFormat) -> MediaProject:
-        project = new_media_project(title, format)
+    def create(
+        self, title: str, format: MediaFormat, *, animated_scenes: bool = False
+    ) -> MediaProject:
+        project = new_media_project(title, format, animated_scenes=animated_scenes)
         with _WRITE_LOCK:
             self._write(project)
         return project
@@ -121,6 +123,42 @@ class MediaProjectStore:
                 {
                     **current.model_dump(),
                     "audio_filename": filename,
+                    "revision": current.revision + 1,
+                }
+            )
+            self._write(updated)
+            return updated
+
+    def set_slide_image(
+        self, project_id: UUID, *, revision: int, slide_id: str, content: bytes
+    ) -> MediaProject:
+        """Save a normalized PNG and attach it to one scene with revision protection."""
+        with _WRITE_LOCK, self._locked(project_id):
+            current = self.get(project_id)
+            if current is None:
+                raise FileNotFoundError("Produção não encontrada.")
+            if current.revision != revision:
+                raise MediaConflict(
+                    "A produção mudou. Salve e recarregue antes de enviar a imagem."
+                )
+            if not any(slide.id == slide_id for slide in current.slides):
+                raise ValueError("Quadro não encontrado nesta produção.")
+            filename = f"{uuid4().hex}.png"
+            assets = self.directory(project_id) / "assets"
+            assets.mkdir(parents=True, exist_ok=True)
+            temporary = assets / f"{filename}.tmp"
+            try:
+                temporary.write_bytes(content)
+                os.replace(temporary, assets / filename)
+            finally:
+                temporary.unlink(missing_ok=True)
+            updated = current.model_copy(
+                update={
+                    "slides": [
+                        slide.model_copy(update={"background_image": filename})
+                        if slide.id == slide_id else slide
+                        for slide in current.slides
+                    ],
                     "revision": current.revision + 1,
                 }
             )

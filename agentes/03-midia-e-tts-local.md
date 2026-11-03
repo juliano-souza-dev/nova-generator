@@ -27,6 +27,7 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
   cada bloco usado na prévia. Como os blocos independentes só registram início/fim da fala,
   estimar a duração interna sem inventar alinhamento acústico; preservar EN/PT, lacunas
   entre falas e a trilha original escolhida na exportação.
+- Em Cenas Animadas, transformar imagens próprias normalizadas e quadros já renderizados em MP4 local via movimentos suaves de câmera; manter prévia, hash, revisão e duração dos quadros compatíveis com a exportação anterior. Oferecer saída leve em 720p para CPU antiga sem obrigar WhisperX ou geração de vídeo por difusão.
 - No TikTok Shadowing, reutilizar somente blocos aprovados, com corte e hashes congelados;
   montar 35–60 s de falas originais seguidas pelas respectivas pausas silenciosas, sem
   sintetizar outra voz ou editar o material aprovado. Verificar áudio e duração do MP4.
@@ -44,3 +45,4 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Falhas de TTS ou render não corrompem artefatos aprovados e podem ser retomadas.
 - Todo artefato final informa origem textual, perfil de voz, configuração e hashes.
 - A prévia de vídeo e o MP4 usam o mesmo recorte e janelas de cue; gaps não contêm legenda, o áudio original não é substituído silenciosamente e um job com fonte alterada falha sem sobrescrever artefatos.
+- Cenas Animadas preserva o quadro e sua foto após salvar/reabrir; o MP4 registra movimentos e resolução, e um upload de revisão antiga não substitui imagens persistidas.

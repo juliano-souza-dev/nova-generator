@@ -1,4 +1,65 @@
-import type { MediaProject, MediaSlide } from "./tiktok-api";
+import { mediaApi, type MediaProject, type MediaSlide } from "./tiktok-api";
+
+const portraitWidth = 1080;
+const portraitHeight = 1920;
+const photoCache = new Map<string, HTMLImageElement>();
+const photoRequests = new Map<string, Promise<void>>();
+
+export async function preloadSlidePhoto(project: MediaProject, slide: MediaSlide): Promise<void> {
+  if (!project.animated_scenes || !slide.background_image) return;
+  const url = mediaApi.slideImageUrl(project.id, slide.background_image);
+  if (!photoRequests.has(url)) {
+    const image = new Image();
+    photoCache.set(url, image);
+    const request = new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Não foi possível carregar a imagem da cena."));
+      image.src = url;
+    });
+    photoRequests.set(url, request);
+  }
+  await photoRequests.get(url);
+}
+
+export async function normalizeSlidePhoto(file: File): Promise<Blob> {
+  if (!file.type.startsWith("image/") || file.size > 12 * 1024 * 1024) {
+    throw new Error("Escolha uma foto JPG, PNG ou WebP de até 12 MiB.");
+  }
+  const bitmap = await createImageBitmap(file);
+  try {
+    if (bitmap.width * bitmap.height > 24_000_000) {
+      throw new Error("A imagem tem resolução excessiva. Escolha uma foto menor.");
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = portraitWidth;
+    canvas.height = portraitHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Seu navegador não conseguiu preparar a imagem.");
+    const scale = Math.max(portraitWidth / bitmap.width, portraitHeight / bitmap.height);
+    const sourceWidth = portraitWidth / scale;
+    const sourceHeight = portraitHeight / scale;
+    ctx.drawImage(
+      bitmap,
+      (bitmap.width - sourceWidth) / 2,
+      (bitmap.height - sourceHeight) / 2,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      portraitWidth,
+      portraitHeight,
+    );
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob && blob.size <= 8 * 1024 * 1024) resolve(blob);
+        else reject(new Error("Não foi possível preparar a imagem dentro de 8 MiB."));
+      }, "image/png");
+    });
+  } finally {
+    bitmap.close();
+  }
+}
+
 
 const NAVY = "#13233e";
 const DEEP = "#0c1930";
@@ -153,6 +214,29 @@ export function paintSlide(
   const bg = dark ? p.dark : p.paper;
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, w, h);
+  const photo = slide.background_image
+    ? photoCache.get(mediaApi.slideImageUrl(project.id, slide.background_image))
+    : null;
+  if (project.animated_scenes && photo?.complete && photo.naturalWidth > 0) {
+    ctx.drawImage(photo, 0, 0, w, h);
+    const shade = ctx.createLinearGradient(0, 0, 0, h);
+    shade.addColorStop(0, "#071322c9");
+    shade.addColorStop(0.45, "#07132288");
+    shade.addColorStop(1, "#071322ed");
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, w, h);
+    header(ctx, p, true);
+    type(
+      ctx,
+      (slide.heading || "ENGLISH IN CONTEXT").toUpperCase(),
+      92, 350, 896, 100, 37, "#9ff0e8", 850,
+    );
+    type(ctx, slide.en || project.title, 92, 560, 896, 480, 84, "#fff", 840);
+    type(ctx, slide.pt, 92, 1110, 896, 290, 53, "#f4dfc8", 650);
+    type(ctx, slide.note || slide.highlight, 92, 1475, 896, 170, 34, "#d4ebf2", 550);
+    footer(ctx, p, true, index, project.slides.length);
+    return;
+  }
   if (dark) {
     ctx.strokeStyle = p.accent;
     ctx.globalAlpha = 0.22;
@@ -235,7 +319,8 @@ export function paintSlide(
   footer(ctx, p, dark, index, project.slides.length);
 }
 
-export function imageForSlide(project: MediaProject, index: number): Promise<Blob> {
+export async function imageForSlide(project: MediaProject, index: number): Promise<Blob> {
+  await preloadSlidePhoto(project, project.slides[index]);
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1920;

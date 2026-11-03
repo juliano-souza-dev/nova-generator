@@ -310,6 +310,33 @@ def _render_shadowing_source(
     return durations, digest
 
 
+def _slide_motion_filter(motion: str, duration_ms: int, width: int) -> str:
+    """Smooth photo-camera presets; avoids CPU-heavy generative video models."""
+    height = width * 16 // 9
+    if motion == "still":
+        return f"scale={width}:{height},format=yuv420p"
+    frames = max(1, round(duration_ms * 30 / 1000) - 1)
+    progress = f"on/{frames}"
+    if motion == "zoom_in":
+        zoom = f"1+0.08*{progress}"
+        x = "(iw-iw/zoom)/2"
+    elif motion == "zoom_out":
+        zoom = f"1.08-0.08*{progress}"
+        x = "(iw-iw/zoom)/2"
+    elif motion == "pan_left":
+        zoom = "1.10"
+        x = f"(iw-iw/zoom)*{progress}"
+    elif motion == "pan_right":
+        zoom = "1.10"
+        x = f"(iw-iw/zoom)*(1-{progress})"
+    else:
+        raise ValueError("Movimento de câmera desconhecido.")
+    return (
+        f"zoompan=z='{zoom}':x='{x}':y='(ih-ih/zoom)/2':"
+        f"d=1:s={width}x{height}:fps=30,format=yuv420p"
+    )
+
+
 def make_media_render_handler(
     speech: SynthesizeSpeech, repository: SqlAlchemyEditorialProjectRepository
 ):
@@ -373,17 +400,23 @@ def make_media_render_handler(
                     else:
                         args += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono"]
                 secs = f"{duration / 1000:.3f}"
+                animated = project.animated_scenes
+                width = 720 if animated and payload.get("render_quality") != "full" else 1080
+                motion_filter = (
+                    _slide_motion_filter(slide.motion, duration, width)
+                    if animated else "scale=1080:1920,format=yuv420p"
+                )
                 args += [
                     "-t",
                     secs,
                     "-vf",
-                    "scale=1080:1920,format=yuv420p",
+                    motion_filter,
                     "-r",
                     "30",
                     "-c:v",
                     "libx264",
                     "-preset",
-                    "veryfast",
+                    "ultrafast" if animated else "veryfast",
                     "-pix_fmt",
                     "yuv420p",
                 ]
@@ -463,6 +496,9 @@ def make_media_render_handler(
             "visual_mode": payload.get("visual_mode", "slides"),
             "background_mode": project.background_mode,
             "paper_theme": project.paper_theme,
+            "animated_scenes": project.animated_scenes,
+            "slide_motions": [slide.motion for slide in project.slides],
+            "render_quality": payload.get("render_quality", "balanced"),
             "source_video_sha256": source_digest,
             "source_scene_id": str(project.source_scene_id) if source_digest else None,
             "caption_count": (

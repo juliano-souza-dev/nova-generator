@@ -1793,3 +1793,73 @@
     position: static;
   }
 }
+
+/* Cenas Animadas: photo-camera presets shared with FFmpeg's subtle zoom/pan. */
+.tm-animated-controls {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #315d70;
+  border-radius: 12px;
+  background: #0d2638;
+}
+.tm-animated-controls h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #a5ece8;
+  font-size: 0.94rem;
+}
+.tm-animated-controls small {
+  color: #9db5c9;
+}
+.tm-stage canvas[class*="tm-motion-"] {
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  transform-origin: center center;
+}
+.tm-motion-zoom_in {
+  animation-name: tm-zoom-in;
+}
+.tm-motion-zoom_out {
+  animation-name: tm-zoom-out;
+}
+.tm-motion-pan_left {
+  animation-name: tm-pan-left;
+}
+.tm-motion-pan_right {
+  animation-name: tm-pan-right;
+}
+@keyframes tm-zoom-in {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+@keyframes tm-zoom-out {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes tm-pan-left {
+  from {
+    transform: translateX(4%) scale(1.1);
+  }
+  to {
+    transform: translateX(-4%) scale(1.1);
+  }
+}
+@keyframes tm-pan-right {
+  from {
+    transform: translateX(-4%) scale(1.1);
+  }
+  to {
+    transform: translateX(4%) scale(1.1);
+  }
+}
