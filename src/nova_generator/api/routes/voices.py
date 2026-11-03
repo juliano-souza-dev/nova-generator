@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from nova_generator.api.dependencies import get_manage_voice_profiles
+from nova_generator.api.dependencies import get_manage_voice_profiles, get_session_factory
 from nova_generator.application.use_cases.manage_voice_profiles import (
     ManageVoiceProfiles,
     preview_text_for_model,
@@ -21,6 +21,13 @@ from nova_generator.infrastructure.filesystem.voice_references import (
 )
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 from nova_generator.infrastructure.speech.model_checkpoint import checkpoint_sha256
+from nova_generator.infrastructure.speech.qwen3_installer import (
+    ensure_setup_queued,
+    qwen_ready,
+    setup_status,
+    STAGES,
+)
+from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
 from nova_generator.infrastructure.speech.qwen3_tts_models import (
     QWEN_MODELS,
     qwen_model_sha256,
@@ -53,15 +60,39 @@ def _reference_response(reference: VoiceReference) -> ReferenceResponse:
 @router.get("/model")
 def get_model_status(model_id: str = "chatterbox-turbo") -> dict[str, str | bool]:
     try:
+        settings = get_settings()
         if model_id in QWEN_MODELS:
-            digest = qwen_model_sha256(get_settings(), model_id)
-        elif model_id in {"chatterbox-turbo", "chatterbox-nano"}:
-            digest = checkpoint_sha256(get_settings())
-        else:
-            raise ValueError("Modelo de voz não suportado.")
-        return {"available": True, "model_sha256": digest}
+            status_data = setup_status(settings, model_id)
+            if qwen_ready(settings, model_id):
+                return {
+                    "available": True,
+                    "model_sha256": qwen_model_sha256(settings, model_id),
+                }
+            stage = str(status_data.get("stage", "queued"))
+            return {
+                "available": False,
+                "install_stage": stage,
+                "message": STAGES.get(stage, "Preparando a voz automaticamente"),
+            }
+        if model_id in {"chatterbox-turbo", "chatterbox-nano"}:
+            digest = checkpoint_sha256(settings)
+            return {"available": True, "model_sha256": digest}
+        raise ValueError("Modelo de voz não suportado.")
     except ValueError as exc:
         return {"available": False, "message": str(exc)}
+
+
+@router.post("/model/prepare", status_code=202)
+def prepare_local_model(model_id: str) -> dict[str, str]:
+    if model_id not in QWEN_MODELS:
+        raise HTTPException(422, "Tipo de voz não suportado para preparação automática.")
+    settings = get_settings()
+    repository = SqlAlchemyJobRepository(get_session_factory())
+    job = ensure_setup_queued(settings, repository, model_id)
+    return {
+        "status": job.status if job is not None else "ready",
+        "job_id": str(job.id) if job is not None else "",
+    }
 
 
 @router.get("/references", response_model=list[ReferenceResponse])
