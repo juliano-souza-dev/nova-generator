@@ -6,7 +6,7 @@ Leia este mapa antes de delegar uma tarefa. Se ela tocar mais de uma linha, esco
 | --- | --- | --- | --- |
 | Domínio, API, SQLite, migrations, worker, cache ou logs | 01 Arquitetura e Plataforma | 05 Integração e Release | ADR quando estrutural, migration, testes e logs |
 | Texto EN/PT, cues, tokens, timing, waveform ou interface de revisão | 02 Estúdio Editorial, UX e QA | 01 Arquitetura; 05 quando exportar | fixtures editoriais, testes de domínio/UI e critérios de aceite |
-| Download, FFmpeg, FFprobe, áudio, Chatterbox, Anki ou reel | 03 Mídia e TTS Local | 01 Arquitetura; 05 Integração | manifesto de artefatos, fixtures de mídia e testes de validação |
+| Download, FFmpeg, FFprobe, áudio, Chatterbox, Qwen3-TTS, Anki ou reel | 03 Mídia e TTS Local | 01 Arquitetura; 05 Integração | manifesto de artefatos, fixtures de mídia e testes de validação |
 | ZIP de história, imagens, highlights, narração ou vídeo de História | 04 Modo História | 03 Mídia; 05 Integração | schema do ZIP, fixture de História e testes de validação |
 | TikTok Mídia: roteiro, canvas, áudio, PNG/ZIP, vídeo original, legendas e MP4 | 03 Mídia e TTS Local | 01 Arquitetura; 02 UX; 05 Integração | ADR, contrato TikTok compatível, testes de editor, tempos e render |
 | `hub_final.json`, `ankiAudio`, `immersionhub-text-audio`, importação no Hub ou release | 05 Integração e Release | agente dono do conteúdo | schema versionado, fixture válida/inválida, compatibilidade e rollback |

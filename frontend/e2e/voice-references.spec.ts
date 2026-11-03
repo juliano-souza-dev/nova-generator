@@ -4,7 +4,7 @@ test("uploads a WAV and creates a selectable voice without entering hashes", asy
   const digest = "c".repeat(64);
   let created = false;
   let uploaded = false;
-  await page.route("**/api/voices/model", (route) =>
+  await page.route(/\/api\/voices\/model(?:\?.*)?$/, (route) =>
     route.fulfill({ json: { available: true, model_sha256: "a".repeat(64) } }),
   );
   await page.route("**/api/voices/references", async (route) => {
@@ -68,7 +68,8 @@ test("uploads a WAV and creates a selectable voice without entering hashes", asy
   await page.route("**/api/voices/references/*", (route) => route.fulfill({ body: "audio" }));
 
   await page.goto("/voices");
-  await expect(page.getByText("Modelo Chatterbox Turbo disponível.")).toBeVisible();
+  await page.getByLabel("Tipo de voz").selectOption("chatterbox-turbo");
+  await expect(page.getByText("Voz local pronta para gerar prévias.")).toBeVisible();
   await page.getByLabel("Enviar áudio de referência (6 a 30 segundos)").setInputFiles({
     name: "speaker.wav",
     mimeType: "audio/wav",
@@ -85,7 +86,7 @@ test("uploads a WAV dropped into the reference area without opening the file pic
 }) => {
   const digest = "e".repeat(64);
   let uploaded = false;
-  await page.route("**/api/voices/model", (route) =>
+  await page.route(/\/api\/voices\/model(?:\?.*)?$/, (route) =>
     route.fulfill({ json: { available: true, model_sha256: "a".repeat(64) } }),
   );
   await page.route("**/api/voices/references", async (route) => {
@@ -108,6 +109,7 @@ test("uploads a WAV dropped into the reference area without opening the file pic
   await page.route("**/api/voices/references/*", (route) => route.fulfill({ body: "audio" }));
 
   await page.goto("/voices");
+  await page.getByLabel("Tipo de voz").selectOption("chatterbox-turbo");
   const zone = page.getByTestId("voice-reference-dropzone");
   await expect(zone).toBeVisible();
   await zone.evaluate((element) => {

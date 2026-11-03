@@ -6,7 +6,7 @@ import os
 import signal
 import sys
 from pathlib import Path
-from threading import Event
+from threading import Event, Thread
 
 from nova_generator.api.dependencies import get_session_factory
 from nova_generator.application.use_cases.download_youtube_source import DownloadYoutubeSource
@@ -44,6 +44,12 @@ from nova_generator.infrastructure.speech.chatterbox_nano_synthesizer import (
 )
 from nova_generator.infrastructure.speech.ffprobe_wav_probe import FfprobeWavProbe
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
+from nova_generator.infrastructure.speech.qwen3_installer import (
+    ensure_setup_queued,
+    make_setup_handler,
+    qwen_python,
+)
+from nova_generator.infrastructure.speech.routing_synthesizer import RoutingSpeechSynthesizer
 from nova_generator.infrastructure.worker.cards_only_handler import make_cards_only_handler
 from nova_generator.infrastructure.worker.editorial_assistance_handler import (
     EditorialAssistanceJobHandler,
@@ -62,11 +68,26 @@ from nova_generator.infrastructure.worker.voice_preview_handler import make_voic
 
 def main() -> None:
     settings = get_settings()
+    stopped = Event()
     runner = Path(__file__).parent / "infrastructure" / "speech" / "chatterbox_nano_runner.py"
-    synthesizer = ChatterboxNanoSynthesizer(
+    references = FileVoiceReferenceStore(settings.media_cache_root)
+    chatterbox = ChatterboxNanoSynthesizer(
         runner,
         executable=os.environ.get("NOVA_GENERATOR_TTS_PYTHON", sys.executable),
-        reference_store=FileVoiceReferenceStore(settings.media_cache_root),
+        reference_store=references,
+    )
+    qwen = ChatterboxNanoSynthesizer(
+        runner.parent / "qwen3_tts_runner.py",
+        executable=qwen_python(settings),
+        reference_store=references,
+        environment={
+            "NOVA_GENERATOR_QWEN_MODEL_ROOT": str(settings.qwen_model_root.resolve()),
+        },
+        engine_name="Qwen3-TTS",
+        timeout_seconds=900,
+    )
+    synthesizer = RoutingSpeechSynthesizer(
+        chatterbox=chatterbox, qwen=qwen, settings=settings
     )
     speech = SynthesizeSpeech(FileSpeechCache(settings.media_cache_root), synthesizer)
     materials = MaterialsJobHandler(
@@ -105,9 +126,13 @@ def main() -> None:
         MediaProjectStore(settings.media_cache_root), media_cache, downloader, ingestion
     )
     editorial_repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    job_repository = SqlAlchemyJobRepository(get_session_factory())
+    # The normal Generator launch automatically prepares the default Qwen voice.
+    ensure_setup_queued(settings, job_repository)
     worker = PersistentWorker(
-        SqlAlchemyJobRepository(get_session_factory()),
+        job_repository,
         worker_id=f"local-{os.getpid()}",
+        excluded_kinds=("qwen.setup",),
         handlers={
             "synthesize_voice_preview": make_voice_preview_handler(speech),
             "tiktok.render": make_media_render_handler(speech, editorial_repository),
@@ -133,10 +158,28 @@ def main() -> None:
             ),
         },
     )
-    stopped = Event()
+    # Voice preparation is long-running; it gets a dedicated queue consumer.
+    # Media jobs remain responsive while several gigabytes are downloaded.
+    setup_worker = PersistentWorker(
+        SqlAlchemyJobRepository(get_session_factory()),
+        worker_id=f"qwen-setup-{os.getpid()}",
+        handlers={"qwen.setup": make_setup_handler(settings, stop_event=stopped)},
+        allowed_kinds=("qwen.setup",),
+    )
+    setup_thread = Thread(
+        target=setup_worker.run_forever,
+        kwargs={"poll_interval_seconds": 2, "stop_event": stopped},
+        daemon=True,
+        name="qwen-setup-worker",
+    )
     signal.signal(signal.SIGINT, lambda *_: stopped.set())
     signal.signal(signal.SIGTERM, lambda *_: stopped.set())
-    worker.run_forever(poll_interval_seconds=2, stop_event=stopped)
+    setup_thread.start()
+    try:
+        worker.run_forever(poll_interval_seconds=2, stop_event=stopped)
+    finally:
+        stopped.set()
+        setup_thread.join(timeout=20)
 
 
 if __name__ == "__main__":

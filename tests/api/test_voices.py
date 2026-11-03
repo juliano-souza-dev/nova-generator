@@ -62,3 +62,63 @@ def test_preview_is_available_only_for_existing_cached_version(client, tmp_path,
     response = client.get(f"{detail_url}/preview")
     assert response.status_code == 200
     assert response.content == b"RIFF-test-preview"
+
+
+def test_qwen_voice_design_model_status_and_portuguese_preview(client, tmp_path, monkeypatch):
+    from nova_generator.application.use_cases.manage_voice_profiles import (
+        QWEN_PREVIEW_TEXT,
+    )
+    from nova_generator.core.settings import get_settings
+
+    root = tmp_path / "qwen"
+    model = root / "Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+    model.mkdir(parents=True)
+    (model / "config.json").write_text("{}", encoding="utf-8")
+    (model / "model.safetensors").write_bytes(b"local-dummy-weights")
+    monkeypatch.setenv("NOVA_GENERATOR_QWEN_MODEL_ROOT", str(root))
+    get_settings.cache_clear()
+    monkeypatch.setattr("nova_generator.api.routes.voices.qwen_ready", lambda *_: True)
+
+    model_status = client.get("/api/voices/model?model_id=qwen3-tts-1.7b-voice-design")
+    assert model_status.json()["available"] is True
+    payload = {
+        "name": "Narradora de aulas",
+        "model_id": "qwen3-tts-1.7b-voice-design",
+        "parameters": {"instruct": "Voz brasileira muito natural e expressiva."},
+    }
+    created = client.post("/api/voices", json=payload)
+    assert created.status_code == 201
+    assert created.json()["reference_audio_sha256"] is None
+    assert created.json()["model_sha256"] == model_status.json()["model_sha256"]
+    queued = client.get("/api/jobs").json()["items"]
+    assert any(
+        job["kind"] == "synthesize_voice_preview"
+        and job["input"]["text"] == QWEN_PREVIEW_TEXT
+        for job in queued
+    )
+
+
+def test_qwen_clone_requires_reference_and_transcript(client, tmp_path, monkeypatch):
+    from nova_generator.core.settings import get_settings
+
+    root = tmp_path / "qwen"
+    model = root / "Qwen3-TTS-12Hz-1.7B-Base"
+    model.mkdir(parents=True)
+    (model / "config.json").write_text("{}", encoding="utf-8")
+    (model / "model.safetensors").write_bytes(b"local-dummy-weights")
+    monkeypatch.setenv("NOVA_GENERATOR_QWEN_MODEL_ROOT", str(root))
+    get_settings.cache_clear()
+    payload = {
+        "name": "Minha voz",
+        "model_id": "qwen3-tts-1.7b-base",
+        "parameters": {"reference_text": "A gravação de referência."},
+    }
+    response = client.post("/api/voices", json=payload)
+    assert response.status_code == 422
+    assert "referência" in response.json()["detail"].lower()
+    response = client.post(
+        "/api/voices",
+        json={**payload, "reference_audio_sha256": "a" * 64},
+    )
+    assert response.status_code == 422
+    assert client.get("/api/voices/model?model_id=unsupported").json()["available"] is False

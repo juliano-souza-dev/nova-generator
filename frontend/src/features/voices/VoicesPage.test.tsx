@@ -21,6 +21,7 @@ vi.mock("../../lib/studio-api", () => ({
   studioApi: {
     voices: vi.fn(),
     voiceModel: vi.fn(),
+    prepareVoiceModel: vi.fn(),
     voiceReferences: vi.fn(),
     uploadVoiceReference: vi.fn(),
     createVoice: vi.fn(),
@@ -63,6 +64,9 @@ describe("VoicesPage", () => {
         <VoicesPage />
       </QueryClientProvider>,
     );
+    fireEvent.change(screen.getByLabelText("Tipo de voz"), {
+      target: { value: "chatterbox-turbo" },
+    });
     fireEvent.click(await screen.findByRole("button", { name: /Ana v2/ }));
     expect(
       screen.getByText(/A referência da voz precisa ter pelo menos 6 segundos/),
@@ -72,7 +76,7 @@ describe("VoicesPage", () => {
       target: { value: digest },
     });
     const replace = screen.getByRole("button", {
-      name: "Criar nova versão de Ana com este áudio",
+      name: "Criar nova versão de Ana",
     });
     await waitFor(() => expect(replace).toBeEnabled());
     fireEvent.click(replace);
@@ -100,6 +104,9 @@ describe("VoicesPage", () => {
         <VoicesPage />
       </QueryClientProvider>,
     );
+    fireEvent.change(screen.getByLabelText("Tipo de voz"), {
+      target: { value: "chatterbox-turbo" },
+    });
     fireEvent.click(await screen.findByRole("button", { name: /Ana v2/ }));
     expect(screen.getByText("v2")).toBeInTheDocument();
     expect(screen.getByLabelText("Prévia da voz Ana")).toHaveAttribute("src", profile.preview_url);
@@ -130,7 +137,10 @@ describe("VoicesPage", () => {
         <VoicesPage />
       </QueryClientProvider>,
     );
-    await screen.findByText("Modelo Chatterbox Turbo disponível.");
+    fireEvent.change(screen.getByLabelText("Tipo de voz"), {
+      target: { value: "chatterbox-turbo" },
+    });
+    await screen.findByText("Voz local pronta para gerar prévias.");
     fireEvent.change(screen.getByLabelText("Enviar áudio de referência (6 a 30 segundos)"), {
       target: { files: [new File(["wav"], "speaker.wav", { type: "audio/wav" })] },
     });
@@ -180,6 +190,9 @@ describe("VoicesPage", () => {
         <VoicesPage />
       </QueryClientProvider>,
     );
+    fireEvent.change(screen.getByLabelText("Tipo de voz"), {
+      target: { value: "chatterbox-turbo" },
+    });
 
     const zone = screen.getByTestId("voice-reference-dropzone");
     const wav = new File(["wav"], "minha-voz.WAV", { type: "audio/wav" });
@@ -222,6 +235,9 @@ describe("VoicesPage", () => {
         <VoicesPage />
       </QueryClientProvider>,
     );
+    fireEvent.change(screen.getByLabelText("Tipo de voz"), {
+      target: { value: "chatterbox-turbo" },
+    });
     const file = new File(["encoded audio"], filename, { type });
     fireEvent.drop(screen.getByTestId("voice-reference-dropzone"), {
       dataTransfer: { files: [file] },
@@ -255,6 +271,9 @@ describe("VoicesPage", () => {
         <VoicesPage />
       </QueryClientProvider>,
     );
+    fireEvent.change(screen.getByLabelText("Tipo de voz"), {
+      target: { value: "chatterbox-turbo" },
+    });
     const legacyOption = await screen.findByRole("option", { name: /5\.0 s/ });
     expect(legacyOption).toBeDisabled();
     expect(screen.getByRole("button", { name: /Criar e sintetizar prévia/ })).toBeDisabled();
@@ -274,6 +293,9 @@ describe("VoicesPage", () => {
         <VoicesPage />
       </QueryClientProvider>,
     );
+    fireEvent.change(screen.getByLabelText("Tipo de voz"), {
+      target: { value: "chatterbox-turbo" },
+    });
 
     const zone = screen.getByTestId("voice-reference-dropzone");
     fireEvent.drop(zone, {
@@ -282,4 +304,71 @@ describe("VoicesPage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Selecione um áudio WAV, MP3 ou OGG.");
     expect(studioApi.uploadVoiceReference).not.toHaveBeenCalled();
   });
+  it("creates an expressive Qwen voice without uploading a reference", async () => {
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: true,
+      model_sha256: "a".repeat(64),
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([]);
+    vi.mocked(studioApi.createVoice).mockClear();
+    vi.mocked(studioApi.createVoice).mockResolvedValue({
+      ...profile,
+      name: "Professora",
+      model_id: "qwen3-tts-1.7b-voice-design",
+      reference_audio_sha256: null,
+    });
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+    await screen.findByText("Voz local pronta para gerar prévias.");
+    expect(screen.queryByTestId("voice-reference-dropzone")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Narradora Ana"), {
+      target: { value: "Professora" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Criar e sintetizar prévia" }));
+    await waitFor(() =>
+      expect(studioApi.createVoice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Professora",
+          model_id: "qwen3-tts-1.7b-voice-design",
+          reference_audio_sha256: undefined,
+          parameters: expect.objectContaining({
+            instruct: expect.stringContaining("Voz brasileira"),
+          }),
+        }),
+      ),
+    );
+  });
+  it("automatically requests local voice preparation when missing", async () => {
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: false,
+      install_stage: "queued",
+      message: "Aguardando preparação da voz",
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([]);
+    vi.mocked(studioApi.prepareVoiceModel).mockClear();
+    vi.mocked(studioApi.prepareVoiceModel).mockResolvedValue({
+      status: "queued",
+      job_id: "setup-1",
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("Aguardando preparação da voz")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(studioApi.prepareVoiceModel).toHaveBeenCalledWith(
+        "qwen3-tts-1.7b-voice-design",
+        expect.anything(),
+      ),
+    );
+    expect(screen.getByRole("button", { name: /Criar e sintetizar prévia/ })).toBeDisabled();
+  });
+
 });
