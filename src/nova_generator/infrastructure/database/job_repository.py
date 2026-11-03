@@ -54,13 +54,22 @@ class SqlAlchemyJobRepository:
             session.refresh(record)
             return _job(record)
 
-    def claim_next(self, *, worker_id: str, now: datetime) -> Job | None:
+    def claim_next(
+        self,
+        *,
+        worker_id: str,
+        now: datetime,
+        allowed_kinds: tuple[str, ...] | None = None,
+        excluded_kinds: tuple[str, ...] = (),
+    ) -> Job | None:
         with self._session_factory() as session:
+            query = select(JobRecord.id).where(JobRecord.status.in_(("queued", "retryable")))
+            if allowed_kinds is not None:
+                query = query.where(JobRecord.kind.in_(allowed_kinds))
+            if excluded_kinds:
+                query = query.where(~JobRecord.kind.in_(excluded_kinds))
             candidate_id = session.scalar(
-                select(JobRecord.id)
-                .where(JobRecord.status.in_(("queued", "retryable")))
-                .order_by(JobRecord.created_at, JobRecord.id)
-                .limit(1)
+                query.order_by(JobRecord.created_at, JobRecord.id).limit(1)
             )
             if candidate_id is None:
                 return None
