@@ -12,7 +12,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
-from zipfile import ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
@@ -40,6 +40,11 @@ from nova_generator.infrastructure.database.editorial_project_repository import 
     SqlAlchemyEditorialProjectRepository,
 )
 from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
+from nova_generator.infrastructure.filesystem.tiktok_media_package import (
+    MAX_PACKAGE_BYTES,
+    MediaPackageError,
+    import_media_package,
+)
 from nova_generator.infrastructure.filesystem.tiktok_media_store import (
     MediaConflict,
     MediaProjectStore,
@@ -389,6 +394,25 @@ def transcribe_independent_cut(project_id: UUID, input: IndependentCut) -> dict:
         idempotency_key=None,
     )
     return {"job_id": str(job.id), "status": job.status}
+
+
+@router.post("/packages/import", status_code=201, response_model=MediaProject)
+async def import_tiktok_media_package(
+    file: Annotated[UploadFile, File(...)],
+) -> MediaProject:
+    """Import a complete, ordered ZIP as a new production awaiting operator review."""
+    package = await file.read(MAX_PACKAGE_BYTES + 1)
+    if not package or len(package) > MAX_PACKAGE_BYTES:
+        raise HTTPException(413, "O pacote ZIP precisa ter até 90 MiB.")
+    try:
+        return await asyncio.to_thread(
+            import_media_package,
+            package,
+            _store(),
+            get_settings().ffprobe_executable,
+        )
+    except (MediaPackageError, BadZipFile) as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.get("/projects", response_model=list[MediaProject])

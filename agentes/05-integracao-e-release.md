@@ -28,6 +28,7 @@ Garantir que Generator e iHub evoluam sem quebra de contratos, com testes integr
 - Validar a extensão aditiva `shadowing_video` do contrato TikTok v1, garantindo seleção
   por hashes de plano aprovado, limite de 35–60 s e compatibilidade de produções antigas;
   nenhum bloco TikTok deve editar o Shadowing nem o contrato Generator–iHub.
+- Validar a entrada ZIP independente `nova-tiktok-package/1`, inclusive paths, quotas, ordem, integridade, importação atômica e compatibilidade retroativa das produções TikTok.
 - Manter os contratos de reel Anki (`hub_final.json` e `ankiAudio`) e História (`immersionhub-text-audio` 1.1).
 - Publicar `hub_final.json` por projeto/exportação somente após APKG e reel concluídos e upload manual do reel; incluir cues, texto EN/PT aprovado, itens Anki, palavras revisadas e timeline do reel com ID validado do YouTube.
 - Exigir compatibilidade retroativa, migration ou janela de transição para mudanças públicas.
