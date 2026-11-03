@@ -124,6 +124,10 @@ def _prepare(payload: VoiceInput) -> dict[str, Any]:
         values["model_sha256"] = digest
     elif values["model_id"] in {"chatterbox-turbo", "chatterbox-nano"}:
         values["model_sha256"] = values["model_sha256"] or checkpoint_sha256(get_settings())
+    elif values["model_sha256"] and not values["model_id"].startswith("qwen3-tts"):
+        # Preserve pre-existing free-form legacy IDs (e.g. "nano") with explicit
+        # snapshots. The worker still rejects unsupported engines at synthesis time.
+        pass
     else:
         raise ValueError("Modelo de voz não suportado.")
     return values
