@@ -75,6 +75,7 @@ class MediaSlide(BaseModel):
     note: str = Field(default="", max_length=900)
     highlight: str = Field(default="", max_length=120)
     speaker: str = Field(default="", max_length=100)
+    narration_text: str = Field(default="", max_length=2000)
     duration_ms: int = Field(default=4500, ge=1000, le=20000)
     motion: Literal["still", "zoom_in", "zoom_out", "pan_left", "pan_right"] = "still"
     background_image: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}\.png$")
