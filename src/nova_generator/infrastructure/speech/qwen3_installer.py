@@ -10,6 +10,7 @@ import time
 import venv
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event
 from typing import Any
 
 from nova_generator.application.ports.job_repository import JobRepository
@@ -20,7 +21,7 @@ from nova_generator.infrastructure.speech.qwen3_tts_models import (
     VOICE_DESIGN,
     qwen_model_sha256,
 )
-from nova_generator.infrastructure.worker.persistent_worker import JobExecution
+from nova_generator.infrastructure.worker.persistent_worker import JobCancelled, JobExecution
 
 SETUP_KIND = "qwen.setup"
 TOKENIZER = "Qwen/Qwen3-TTS-Tokenizer-12Hz"
@@ -47,6 +48,7 @@ STAGES = {
     "verification": "Verificando a instalação",
     "ready": "Voz pronta para uso",
     "failed": "Não foi possível preparar a voz",
+    "cancelled": "Preparação interrompida",
 }
 
 
@@ -146,7 +148,11 @@ def ensure_setup_queued(
 
 
 def _step(
-    argv: list[str], execution: JobExecution, log: Path, timeout_seconds: int
+    argv: list[str],
+    execution: JobExecution,
+    log: Path,
+    timeout_seconds: int,
+    stop_event: Event | None = None,
 ) -> None:
     started = time.monotonic()
     log.parent.mkdir(parents=True, exist_ok=True)
@@ -162,6 +168,8 @@ def _step(
                 while process.poll() is None:
                     execution.heartbeat()
                     execution.raise_if_cancelled()
+                    if stop_event is not None and stop_event.is_set():
+                        raise JobCancelled()
                     if time.monotonic() - started > timeout_seconds:
                         raise TimeoutError("A preparação excedeu o tempo limite.")
                     try:
@@ -183,7 +191,7 @@ def _step(
                 )
 
 
-def make_setup_handler(settings: Settings):
+def make_setup_handler(settings: Settings, stop_event: Event | None = None):
     def handle(job: Job, execution: JobExecution) -> dict[str, Any]:
         model_id = job.input.get("model_id")
         if not isinstance(model_id, str) or model_id not in QWEN_MODELS:
@@ -213,7 +221,7 @@ def make_setup_handler(settings: Settings):
                         python, "-m", "pip", "install", "--disable-pip-version-check",
                         "--no-input", "qwen-tts", "soundfile", "huggingface_hub",
                     ],
-                    execution, log, 3600,
+                    execution, log, 3600, stop_event,
                 )
             if not _python_has_qwen(python):
                 raise RuntimeError("O ambiente Qwen instalado não pôde ser validado.")
@@ -226,16 +234,22 @@ def make_setup_handler(settings: Settings):
                         f"Qwen/{QWEN_MODELS[model_id]}",
                         str(install_root / QWEN_MODELS[model_id]),
                     ],
-                    execution, log, 10800,
+                    execution, log, 10800, stop_event,
                 )
             _write_status(settings, model_id, stage="tokenizer")
-            _step([python, "-c", DOWNLOAD_SCRIPT, TOKENIZER, "-"], execution, log, 3600)
+            _step(
+                [python, "-c", DOWNLOAD_SCRIPT, TOKENIZER, "-"],
+                execution, log, 3600, stop_event,
+            )
             _write_status(settings, model_id, stage="verification")
             digest = qwen_model_sha256(settings, model_id)
             if not _python_has_qwen(python):
                 raise RuntimeError("Os recursos de voz não foram instalados corretamente.")
             _write_status(settings, model_id, stage="ready", model_sha256=digest)
             return {"model_id": model_id, "ready": True, "model_sha256": digest}
+        except JobCancelled:
+            _write_status(settings, model_id, stage="cancelled")
+            raise
         except Exception:
             _write_status(settings, model_id, stage="failed")
             raise
