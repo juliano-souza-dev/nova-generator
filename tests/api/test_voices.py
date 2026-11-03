@@ -77,6 +77,7 @@ def test_qwen_voice_design_model_status_and_portuguese_preview(client, tmp_path,
     (model / "model.safetensors").write_bytes(b"local-dummy-weights")
     monkeypatch.setenv("NOVA_GENERATOR_QWEN_MODEL_ROOT", str(root))
     get_settings.cache_clear()
+    monkeypatch.setattr("nova_generator.api.routes.voices.qwen_ready", lambda *_: True)
 
     model_status = client.get("/api/voices/model?model_id=qwen3-tts-1.7b-voice-design")
     assert model_status.json()["available"] is True
