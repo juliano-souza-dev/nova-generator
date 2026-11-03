@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 
 from nova_generator.api.dependencies import get_manage_voice_profiles
 from nova_generator.application.use_cases.manage_voice_profiles import (
-    PREVIEW_TEXT,
     ManageVoiceProfiles,
+    preview_text_for_model,
 )
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.voices import VoiceProfile
@@ -21,6 +21,11 @@ from nova_generator.infrastructure.filesystem.voice_references import (
 )
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
 from nova_generator.infrastructure.speech.model_checkpoint import checkpoint_sha256
+from nova_generator.infrastructure.speech.qwen3_tts_models import (
+    QWEN_MODELS,
+    qwen_model_sha256,
+    validate_qwen_voice,
+)
 
 router = APIRouter(prefix="/voices", tags=["voices"])
 
@@ -46,9 +51,15 @@ def _reference_response(reference: VoiceReference) -> ReferenceResponse:
 
 
 @router.get("/model")
-def get_model_status() -> dict[str, str | bool]:
+def get_model_status(model_id: str = "chatterbox-turbo") -> dict[str, str | bool]:
     try:
-        return {"available": True, "model_sha256": checkpoint_sha256(get_settings())}
+        if model_id in QWEN_MODELS:
+            digest = qwen_model_sha256(get_settings(), model_id)
+        elif model_id in {"chatterbox-turbo", "chatterbox-nano"}:
+            digest = checkpoint_sha256(get_settings())
+        else:
+            raise ValueError("Modelo de voz não suportado.")
+        return {"available": True, "model_sha256": digest}
     except ValueError as exc:
         return {"available": False, "message": str(exc)}
 
@@ -105,7 +116,16 @@ def _prepare(payload: VoiceInput) -> dict[str, Any]:
     if any(key.lower().endswith(("_path", "_file")) for key in parameters):
         raise ValueError("Caminhos de arquivo não são aceitos nos parâmetros da voz.")
     validate_profile_reference(_references(), values["reference_audio_sha256"])
-    values["model_sha256"] = values["model_sha256"] or checkpoint_sha256(get_settings())
+    if values["model_id"] in QWEN_MODELS:
+        validate_qwen_voice(values["model_id"], values["reference_audio_sha256"], parameters)
+        digest = qwen_model_sha256(get_settings(), values["model_id"])
+        if values["model_sha256"] and values["model_sha256"] != digest:
+            raise ValueError("A versão do modelo Qwen mudou. Atualize a página.")
+        values["model_sha256"] = digest
+    elif values["model_id"] in {"chatterbox-turbo", "chatterbox-nano"}:
+        values["model_sha256"] = values["model_sha256"] or checkpoint_sha256(get_settings())
+    else:
+        raise ValueError("Modelo de voz não suportado.")
     return values
 
 
@@ -165,7 +185,7 @@ def get_voice_preview(
     if profile is None:
         raise HTTPException(404, detail="voice profile not found")
     cache = FileSpeechCache(get_settings().media_cache_root)
-    key = cache.cache_key(text=PREVIEW_TEXT, profile=profile.snapshot(), parameters={})
+    key = cache.cache_key(text=preview_text_for_model(profile.model_id), profile=profile.snapshot(), parameters={})
     speech = cache.find(key)
     if speech is None:
         raise HTTPException(404, detail="voice preview not ready")
@@ -175,7 +195,7 @@ def get_voice_preview(
 def _response(profile: VoiceProfile) -> VoiceResponse:
     snapshot = profile.snapshot()
     cache = FileSpeechCache(get_settings().media_cache_root)
-    key = cache.cache_key(text=PREVIEW_TEXT, profile=snapshot, parameters={})
+    key = cache.cache_key(text=preview_text_for_model(profile.model_id), profile=snapshot, parameters={})
     reference_message = None
     try:
         validate_profile_reference(_references(), profile.reference_audio_sha256)
