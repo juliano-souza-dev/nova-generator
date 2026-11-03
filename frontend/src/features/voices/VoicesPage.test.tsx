@@ -343,4 +343,32 @@ describe("VoicesPage", () => {
       ),
     );
   });
+  it("automatically requests local voice preparation when missing", async () => {
+    vi.mocked(studioApi.voices).mockResolvedValue([]);
+    vi.mocked(studioApi.voiceModel).mockResolvedValue({
+      available: false,
+      install_stage: "queued",
+      message: "Aguardando preparação da voz",
+    });
+    vi.mocked(studioApi.voiceReferences).mockResolvedValue([]);
+    vi.mocked(studioApi.prepareVoiceModel).mockClear();
+    vi.mocked(studioApi.prepareVoiceModel).mockResolvedValue({
+      status: "queued",
+      job_id: "setup-1",
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VoicesPage />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("Aguardando preparação da voz")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(studioApi.prepareVoiceModel).toHaveBeenCalledWith(
+        "qwen3-tts-1.7b-voice-design",
+        expect.anything(),
+      ),
+    );
+    expect(screen.getByRole("button", { name: /Criar e sintetizar prévia/ })).toBeDisabled();
+  });
+
 });
