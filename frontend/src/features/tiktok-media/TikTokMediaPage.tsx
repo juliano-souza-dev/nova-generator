@@ -645,12 +645,14 @@ export function TikTokMediaPage() {
   const uploadImage = useMutation({
     mutationFn: async (file: File) => {
       if (!draft || !active) throw new Error("Selecione um quadro.");
+      if (save.isPending) throw new Error("Aguarde o salvamento em andamento.");
       const version = editVersion.current;
       const targetSlideId = active.id;
+      const saved = dirty ? await save.mutateAsync({ value: draft, version }) : draft;
       const image = await normalizeSlidePhoto(file);
       const updated = await mediaApi.uploadSlideImage(
-        draft.id,
-        draft.revision,
+        saved.id,
+        saved.revision,
         targetSlideId,
         image,
       );
