@@ -6,7 +6,7 @@ import os
 import signal
 import sys
 from pathlib import Path
-from threading import Event
+from threading import Event, Thread
 
 from nova_generator.api.dependencies import get_session_factory
 from nova_generator.application.use_cases.download_youtube_source import DownloadYoutubeSource
@@ -68,6 +68,7 @@ from nova_generator.infrastructure.worker.voice_preview_handler import make_voic
 
 def main() -> None:
     settings = get_settings()
+    stopped = Event()
     runner = Path(__file__).parent / "infrastructure" / "speech" / "chatterbox_nano_runner.py"
     references = FileVoiceReferenceStore(settings.media_cache_root)
     chatterbox = ChatterboxNanoSynthesizer(
@@ -131,8 +132,8 @@ def main() -> None:
     worker = PersistentWorker(
         job_repository,
         worker_id=f"local-{os.getpid()}",
+        excluded_kinds=("qwen.setup",),
         handlers={
-            "qwen.setup": make_setup_handler(settings),
             "synthesize_voice_preview": make_voice_preview_handler(speech),
             "tiktok.render": make_media_render_handler(speech, editorial_repository),
             "tiktok.download": tiktok_source.download,
@@ -157,10 +158,28 @@ def main() -> None:
             ),
         },
     )
-    stopped = Event()
+    # Voice preparation is long-running; it gets a dedicated queue consumer.
+    # Media jobs remain responsive while several gigabytes are downloaded.
+    setup_worker = PersistentWorker(
+        SqlAlchemyJobRepository(get_session_factory()),
+        worker_id=f"qwen-setup-{os.getpid()}",
+        handlers={"qwen.setup": make_setup_handler(settings, stop_event=stopped)},
+        allowed_kinds=("qwen.setup",),
+    )
+    setup_thread = Thread(
+        target=setup_worker.run_forever,
+        kwargs={"poll_interval_seconds": 2, "stop_event": stopped},
+        daemon=True,
+        name="qwen-setup-worker",
+    )
     signal.signal(signal.SIGINT, lambda *_: stopped.set())
     signal.signal(signal.SIGTERM, lambda *_: stopped.set())
-    worker.run_forever(poll_interval_seconds=2, stop_event=stopped)
+    setup_thread.start()
+    try:
+        worker.run_forever(poll_interval_seconds=2, stop_event=stopped)
+    finally:
+        stopped.set()
+        setup_thread.join(timeout=20)
 
 
 if __name__ == "__main__":
