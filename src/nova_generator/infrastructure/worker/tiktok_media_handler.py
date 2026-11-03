@@ -392,7 +392,7 @@ def make_media_render_handler(
                 duration = slide.duration_ms
                 args = ["-y", "-loop", "1", "-framerate", "30", "-i", str(image)]
                 if voice:
-                    spoken = slide.en.strip() or slide.pt.strip()
+                    spoken = slide.narration_text.strip() or slide.en.strip() or slide.pt.strip()
                     if spoken:
                         rendered = speech.execute(text=spoken, profile=voice)
                         duration = max(duration, rendered.duration_ms + 400)
