@@ -437,10 +437,10 @@ export function TikTokMediaPage() {
       : newFormat === "carousel"
         ? "carousel"
         : newFormat === "shadowing_video"
-        ? "shadowing"
-        : newFormat === "lyrics_video"
-          ? "music"
-          : "dialogue";
+          ? "shadowing"
+          : newFormat === "lyrics_video"
+            ? "music"
+            : "dialogue";
   const videoMode = Boolean(
     (draft?.source_scene_id || draft?.source_youtube_id) && draft?.format !== "carousel",
   );
@@ -649,7 +649,10 @@ export function TikTokMediaPage() {
       const targetSlideId = active.id;
       const image = await normalizeSlidePhoto(file);
       const updated = await mediaApi.uploadSlideImage(
-        draft.id, draft.revision, targetSlideId, image,
+        draft.id,
+        draft.revision,
+        targetSlideId,
+        image,
       );
       return { updated, version, targetSlideId };
     },

@@ -64,7 +64,6 @@ export async function normalizeSlidePhoto(file: File): Promise<Blob> {
   }
 }
 
-
 const NAVY = "#13233e";
 const DEEP = "#0c1930";
 const TEAL = "#05a6a9";
@@ -233,7 +232,13 @@ export function paintSlide(
     type(
       ctx,
       (slide.heading || "ENGLISH IN CONTEXT").toUpperCase(),
-      92, 350, 896, 100, 37, "#9ff0e8", 850,
+      92,
+      350,
+      896,
+      100,
+      37,
+      "#9ff0e8",
+      850,
     );
     type(ctx, slide.en || project.title, 92, 560, 896, 480, 84, "#fff", 840);
     type(ctx, slide.pt, 92, 1110, 896, 290, 53, "#f4dfc8", 650);

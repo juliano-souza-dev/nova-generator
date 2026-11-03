@@ -55,6 +55,11 @@ def test_image_upload_is_revision_safe_and_scoped_to_slide(tmp_path):
         store.set_slide_image(
             project.id, revision=updated.revision, slide_id=str(uuid4()), content=b"wrong"
         )
+    replacement = store.set_slide_image(
+        project.id, revision=updated.revision, slide_id=slide_id, content=b"new-png"
+    )
+    assert not (store.directory(project.id) / "assets" / filename).exists()
+    assert replacement.slides[0].background_image != filename
 
 
 def test_ffmpeg_camera_presets_are_bounded_and_use_requested_resolution():

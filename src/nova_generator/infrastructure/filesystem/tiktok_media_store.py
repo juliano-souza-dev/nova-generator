@@ -143,6 +143,10 @@ class MediaProjectStore:
                 )
             if not any(slide.id == slide_id for slide in current.slides):
                 raise ValueError("Quadro não encontrado nesta produção.")
+            previous_image = next(
+                (slide.background_image for slide in current.slides if slide.id == slide_id),
+                None,
+            )
             filename = f"{uuid4().hex}.png"
             assets = self.directory(project_id) / "assets"
             assets.mkdir(parents=True, exist_ok=True)
@@ -163,6 +167,13 @@ class MediaProjectStore:
                 }
             )
             self._write(updated)
+            if previous_image and not any(
+                slide.background_image == previous_image for slide in updated.slides
+            ):
+                try:
+                    (assets / previous_image).unlink(missing_ok=True)
+                except OSError:
+                    pass  # In-use image may still be held by an in-progress export.
             return updated
 
     def set_youtube_source(self, project_id: UUID, revision: int, video_id: str) -> MediaProject:
