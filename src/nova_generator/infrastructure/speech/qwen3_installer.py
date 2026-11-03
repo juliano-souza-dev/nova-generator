@@ -119,7 +119,8 @@ def qwen_ready(settings: Settings, model_id: str) -> bool:
         return False
     if saved.get("stage") == "ready" and Path(qwen_python(settings)).is_file():
         return True
-    return _python_has_qwen(qwen_python(settings))
+    # Managed environments are ready only after a verified full snapshot.
+    return bool(settings.qwen_tts_python) and _python_has_qwen(qwen_python(settings))
 
 
 def ensure_setup_queued(
@@ -231,16 +232,16 @@ def make_setup_handler(settings: Settings, stop_event: Event | None = None):
             if not _python_has_qwen(python):
                 raise RuntimeError("O ambiente Qwen instalado não pôde ser validado.")
 
-            if not _weights_present(settings, model_id):
-                _write_status(settings, model_id, stage="model")
-                _step(
-                    [
-                        python, "-c", DOWNLOAD_SCRIPT,
-                        f"Qwen/{QWEN_MODELS[model_id]}",
-                        str(install_root / QWEN_MODELS[model_id]),
-                    ],
-                    execution, log, 10800, stop_event,
-                )
+            # Always validate the complete snapshot, including every weight shard.
+            _write_status(settings, model_id, stage="model")
+            _step(
+                [
+                    python, "-c", DOWNLOAD_SCRIPT,
+                    f"Qwen/{QWEN_MODELS[model_id]}",
+                    str(install_root / QWEN_MODELS[model_id]),
+                ],
+                execution, log, 10800, stop_event,
+            )
             _write_status(settings, model_id, stage="tokenizer")
             _step(
                 [python, "-c", DOWNLOAD_SCRIPT, TOKENIZER, "-"],
@@ -261,10 +262,3 @@ def make_setup_handler(settings: Settings, stop_event: Event | None = None):
 
     return handle
 
-
-def _weights_present(settings: Settings, model_id: str) -> bool:
-    try:
-        qwen_model_sha256(settings, model_id)
-    except ValueError:
-        return False
-    return True
