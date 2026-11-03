@@ -244,6 +244,7 @@ export type VoiceModelStatus = {
   available: boolean;
   model_sha256?: string;
   message?: string;
+  install_stage?: string;
 };
 
 export type ShadowingCue = {
