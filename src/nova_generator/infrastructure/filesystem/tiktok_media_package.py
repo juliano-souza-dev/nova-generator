@@ -124,7 +124,10 @@ def import_media_package(
         ):
             raise MediaPackageError("Título, formato ou quadros inválidos.")
 
-        if any(not isinstance(entry, dict) or type(entry.get("order")) is not int for entry in entries):
+        if any(
+            not isinstance(entry, dict) or type(entry.get("order")) is not int
+            for entry in entries
+        ):
             raise MediaPackageError("Cada quadro precisa de uma ordem numérica.")
         ordered = sorted(entries, key=lambda entry: entry["order"])
         if [entry["order"] for entry in ordered] != list(range(1, len(ordered) + 1)):

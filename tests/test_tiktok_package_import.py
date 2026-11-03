@@ -92,7 +92,8 @@ def test_import_creates_ordered_production_with_immutable_images(tmp_path: Path)
     assert [slide.duration_ms for slide in project.slides] == [6000, 8000]
     for slide in project.slides:
         assert slide.background_image is not None
-        assert (store.directory(project.id) / "assets" / slide.background_image).read_bytes() == image
+        picture = store.directory(project.id) / "assets" / slide.background_image
+        assert picture.read_bytes() == image
     assert store.get(project.id) == project
 
 
