@@ -45,6 +45,7 @@ export type MediaSlide = {
   note: string;
   highlight: string;
   speaker: string;
+  narration_text?: string;
   duration_ms: number;
   motion?: SlideMotion;
   background_image?: string | null;
