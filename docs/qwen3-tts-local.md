@@ -44,10 +44,11 @@ hf disponível:
 ~~~powershell
 hf download Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign --local-dir models/qwen3-tts/Qwen3-TTS-12Hz-1.7B-VoiceDesign
 hf download Qwen/Qwen3-TTS-12Hz-1.7B-Base --local-dir models/qwen3-tts/Qwen3-TTS-12Hz-1.7B-Base
-hf download Qwen/Qwen3-TTS-Tokenizer-12Hz --local-dir models/qwen3-tts/Qwen3-TTS-Tokenizer-12Hz
+hf download Qwen/Qwen3-TTS-Tokenizer-12Hz
 ~~~
 
-O tokenizer pode ser requisitado pelo modelo. Antes de desconectar a internet,
+O tokenizer pode ser requisitado pelo modelo pelo seu nome oficial, por isso
+é mantido no cache local do Hugging Face. Antes de desconectar a internet,
 confirme que suas dependências e seus pesos/tokenizer estão completos no cache
 local. O worker **nunca** baixa pesos sob demanda.
 
