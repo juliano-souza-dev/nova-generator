@@ -21,6 +21,7 @@ vi.mock("../../lib/studio-api", () => ({
   studioApi: {
     voices: vi.fn(),
     voiceModel: vi.fn(),
+    prepareVoiceModel: vi.fn(),
     voiceReferences: vi.fn(),
     uploadVoiceReference: vi.fn(),
     createVoice: vi.fn(),
