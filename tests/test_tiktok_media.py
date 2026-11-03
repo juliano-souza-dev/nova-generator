@@ -72,3 +72,18 @@ def test_revision_lock_and_project_isolation(tmp_path):
     assert {p.id for p in store.list()} == {saved.id, b.id}
     with pytest.raises(MediaConflict):
         store.update(a.id, edit)
+
+
+def test_narration_script_is_independent_of_on_screen_text():
+    slide = MediaSlide(
+        en="WATCH",
+        pt="Acompanhar",
+        narration_text="O segredo do WATCH... é acompanhar com atenção!",
+    )
+    project = MediaProject(title="Microaula", slides=[slide])
+    restored = MediaProject.model_validate_json(project.model_dump_json())
+    assert restored.slides[0].narration_text == slide.narration_text
+    assert restored.slides[0].en == "WATCH"
+    assert restored.slides[0].pt == "Acompanhar"
+    with pytest.raises(ValidationError):
+        MediaSlide(narration_text="x" * 2001)
