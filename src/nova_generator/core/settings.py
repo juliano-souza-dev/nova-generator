@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     chatterbox_model_root: Path = Path("models/chatterbox")
     chatterbox_model_file: Path | None = None
     qwen_model_root: Path = Path("models/qwen3-tts")
+    qwen_venv_root: Path = Path("data/tts/qwen-venv")
     qwen_tts_python: str | None = None
     ffmpeg_executable: str = "ffmpeg"
     ffprobe_executable: str = "ffprobe"
@@ -44,7 +45,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "media_cache_root", "project_root", "whisper_model_root", "chatterbox_model_root",
-        "qwen_model_root"
+        "qwen_model_root", "qwen_venv_root"
     )
     @classmethod
     def validate_path(cls, value: Path) -> Path:
