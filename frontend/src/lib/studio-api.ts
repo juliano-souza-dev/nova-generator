@@ -410,7 +410,8 @@ export const studioApi = {
       },
     ),
   voices: () => apiRequest<VoiceProfile[]>("/voices"),
-  voiceModel: () => apiRequest<VoiceModelStatus>("/voices/model"),
+  voiceModel: (modelId = "chatterbox-turbo") =>
+    apiRequest<VoiceModelStatus>(`/voices/model?model_id=${encodeURIComponent(modelId)}`),
   voiceReferences: () => apiRequest<VoiceReference[]>("/voices/references"),
   uploadVoiceReference: (file: File) => {
     const body = new FormData();
