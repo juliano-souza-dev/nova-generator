@@ -10,11 +10,68 @@ import type { VoiceProfile, VoiceReference } from "../../lib/api.types";
 import { studioApi } from "../../lib/studio-api";
 import "./voices.css";
 
-const schema = z.object({
-  name: z.string().trim().min(1, "Informe o nome."),
-  reference_audio_sha256: z.string().regex(/^[a-f0-9]{64}$/, "Selecione um áudio de referência."),
-});
+const VOICE_MODELS = [
+  { id: "qwen3-tts-1.7b-voice-design", label: "Qwen3 · Criar voz por descrição" },
+  { id: "qwen3-tts-1.7b-base", label: "Qwen3 · Reproduzir voz de referência" },
+  { id: "chatterbox-turbo", label: "Chatterbox · Voz de referência (legado)" },
+  { id: "chatterbox-nano", label: "Chatterbox · Perfil antigo" },
+] as const;
+
+type VoiceModelId = (typeof VOICE_MODELS)[number]["id"];
+
+const DEFAULT_INSTRUCTION =
+  "Voz brasileira calorosa, jovem e expressiva, como alguém explicando uma descoberta aos amigos. " +
+  "Conversa natural, pausas breves e ênfase nas palavras importantes, sem soar como locução de comercial.";
+
+const schema = z
+  .object({
+    name: z.string().trim().min(1, "Informe o nome."),
+    model_id: z.enum([
+      "qwen3-tts-1.7b-voice-design",
+      "qwen3-tts-1.7b-base",
+      "chatterbox-turbo",
+      "chatterbox-nano",
+    ]),
+    reference_audio_sha256: z.string(),
+    instruct: z.string().max(800, "Descreva a voz em até 800 caracteres."),
+    reference_text: z.string().max(1000, "A transcrição deve ter até 1000 caracteres."),
+  })
+  .superRefine((values, ctx) => {
+    if (values.model_id === "qwen3-tts-1.7b-voice-design") {
+      if (values.instruct.trim().length < 10) {
+        ctx.addIssue({ code: "custom", path: ["instruct"], message: "Descreva a voz desejada." });
+      }
+    } else if (!/^[a-f0-9]{64}$/.test(values.reference_audio_sha256)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["reference_audio_sha256"],
+        message: "Selecione um áudio de referência.",
+      });
+    }
+    if (values.model_id === "qwen3-tts-1.7b-base" && !values.reference_text.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["reference_text"],
+        message: "Transcreva a fala exata da gravação de referência.",
+      });
+    }
+  });
+
 type FormValues = z.infer<typeof schema>;
+
+function modelLabel(modelId: string): string {
+  return VOICE_MODELS.find((model) => model.id === modelId)?.label ?? modelId;
+}
+
+function parametersFor(values: FormValues): Record<string, unknown> {
+  if (values.model_id === "qwen3-tts-1.7b-voice-design") {
+    return { instruct: values.instruct.trim() };
+  }
+  if (values.model_id === "qwen3-tts-1.7b-base") {
+    return { reference_text: values.reference_text.trim() };
+  }
+  return {};
+}
 
 export function VoicesPage() {
   const queryClient = useQueryClient();
@@ -29,10 +86,12 @@ export function VoicesPage() {
     mutationFn: ({ values, existing }: { values: FormValues; existing?: VoiceProfile }) => {
       const input = {
         name: values.name,
-        model_id: "chatterbox-turbo",
+        model_id: values.model_id,
         model_sha256: undefined,
-        reference_audio_sha256: values.reference_audio_sha256 || undefined,
-        parameters: {},
+        reference_audio_sha256: values.model_id === "qwen3-tts-1.7b-voice-design"
+          ? undefined
+          : values.reference_audio_sha256 || undefined,
+        parameters: parametersFor(values),
       };
       return existing
         ? studioApi.createVoiceVersion(existing.id, input)
@@ -47,7 +106,7 @@ export function VoicesPage() {
     <section>
       <PageHeader
         title="Biblioteca de vozes"
-        description="Perfis Chatterbox versionados. Exportações guardam um snapshot e nunca mudam de voz."
+        description="Narração local com diferentes estilos e vozes versionadas. Suas exportações preservam a voz escolhida."
       />
       <div className="voices-layout">
         <div className="voice-list panel">
@@ -71,7 +130,7 @@ export function VoicesPage() {
               <span>
                 {voice.name}
                 <small>
-                  v{voice.version} · {voice.model_id}
+                  v{voice.version} · {modelLabel(voice.model_id)}
                   {voice.reference_ready === false ? " · referência inválida" : ""}
                 </small>
               </span>
@@ -86,7 +145,10 @@ export function VoicesPage() {
                 mutation.mutate({
                   values: {
                     name: selected.name,
+                    model_id: selected.model_id as VoiceModelId,
                     reference_audio_sha256: selected.reference_audio_sha256 ?? "",
+                    instruct: String(selected.parameters.instruct ?? DEFAULT_INSTRUCTION),
+                    reference_text: String(selected.parameters.reference_text ?? ""),
                   },
                   existing: selected,
                 })
@@ -128,7 +190,7 @@ function VoiceDetail({
       <dl>
         <div>
           <dt>Modelo</dt>
-          <dd>{voice.model_id}</dd>
+          <dd>{modelLabel(voice.model_id)}</dd>
         </div>
         <div>
           <dt>Snapshot</dt>
@@ -188,7 +250,13 @@ function VoiceForm({
 }) {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", reference_audio_sha256: "" },
+    defaultValues: {
+      name: "",
+      model_id: "qwen3-tts-1.7b-voice-design",
+      reference_audio_sha256: "",
+      instruct: DEFAULT_INSTRUCTION,
+      reference_text: "",
+    },
   });
   const queryClient = useQueryClient();
   const [lastUploaded, setLastUploaded] = useState<VoiceReference | null>(null);
@@ -196,7 +264,13 @@ function VoiceForm({
     queryKey: ["voice-references"],
     queryFn: studioApi.voiceReferences,
   });
-  const model = useQuery({ queryKey: ["voice-model"], queryFn: studioApi.voiceModel });
+  const selectedModel = form.watch("model_id");
+  const isVoiceDesign = selectedModel === "qwen3-tts-1.7b-voice-design";
+  const isVoiceClone = selectedModel === "qwen3-tts-1.7b-base";
+  const model = useQuery({
+    queryKey: ["voice-model", selectedModel],
+    queryFn: () => studioApi.voiceModel(selectedModel),
+  });
   const upload = useMutation({
     mutationFn: studioApi.uploadVoiceReference,
     onSuccess: (reference) => {
@@ -261,8 +335,12 @@ function VoiceForm({
     (reference) => reference.sha256 === currentReference,
   );
   const referenceTooShort = !!selectedReference && selectedReference.duration_ms < 6000;
+  const referenceRequired = !isVoiceDesign;
   const cannotCreate =
-    busy || !model.data?.available || upload.isPending || !selectedReference || referenceTooShort;
+    busy || !model.data?.available || upload.isPending ||
+    (referenceRequired && (!selectedReference || referenceTooShort)) ||
+    (isVoiceDesign && form.watch("instruct").trim().length < 10) ||
+    (isVoiceClone && !form.watch("reference_text").trim());
   return (
     <form className="panel voice-form" onSubmit={form.handleSubmit(onSubmit)}>
       <h2>Nova voz ou nova versão</h2>
@@ -270,94 +348,127 @@ function VoiceForm({
         Nome
         <input {...form.register("name")} placeholder="Narradora Ana" />
       </label>
+      <label>
+        Tipo de voz
+        <select {...form.register("model_id")}>
+          {VOICE_MODELS.map((choice) => (
+            <option key={choice.id} value={choice.id}>{choice.label}</option>
+          ))}
+        </select>
+      </label>
+      {isVoiceDesign && (
+        <label>
+          Como a voz deve interpretar a aula?
+          <textarea
+            rows={4}
+            {...form.register("instruct")}
+            placeholder="Ex.: voz brasileira envolvente, ritmo natural, curiosidade no início…"
+          />
+        </label>
+      )}
+      {isVoiceClone && (
+        <label>
+          O que está sendo dito na gravação de referência?
+          <textarea
+            rows={3}
+            {...form.register("reference_text")}
+            placeholder="Transcreva exatamente a fala do áudio, inclusive pontuação."
+          />
+          <small>A transcrição ajuda a manter o timbre da mesma pessoa nos quadros.</small>
+        </label>
+      )}
       <p role="status">
         {model.isPending
           ? "Verificando modelo local…"
           : model.data?.available
-            ? "Modelo Chatterbox Turbo disponível."
+            ? "Voz local pronta para gerar prévias."
             : (model.data?.message ?? model.error?.message)}
       </p>
-      <div className="voice-upload-field">
-        <span className="voice-upload-title">Enviar áudio de referência (6 a 30 segundos)</span>
-        <div
-          className={`voice-dropzone${isDragging ? " is-dragging" : ""}${upload.isPending ? " is-uploading" : ""}`}
-          onDragEnter={onDragEnter}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          data-testid="voice-reference-dropzone"
-        >
-          <input
-            id="voice-reference-upload"
-            aria-label="Enviar áudio de referência (6 a 30 segundos)"
-            className="voice-file-input"
-            type="file"
-            accept=".wav,.mp3,.ogg,audio/wav,audio/x-wav,audio/wave,audio/mpeg,audio/ogg,application/ogg"
-            disabled={upload.isPending}
-            onChange={(event) => {
-              submitReference(event.target.files?.[0]);
-              event.target.value = "";
-            }}
-          />
-          <label className="voice-dropzone-label" htmlFor="voice-reference-upload">
-            <UploadCloud aria-hidden="true" />
-            <strong>
-              {isDragging ? "Solte o áudio aqui" : "Arraste seu arquivo de áudio para cá"}
-            </strong>
-            <span>ou clique aqui para escolher um arquivo</span>
-            <small>WAV, MP3 ou OGG · áudio de 6 a 30 segundos</small>
-          </label>
-        </div>
-        {fileName && (
-          <p className="voice-upload-filename" role="status">
-            {upload.isPending
-              ? "Enviando"
-              : upload.isError
-                ? "Falha ao enviar"
-                : "Arquivo selecionado"}
-            : {fileName}
-          </p>
-        )}
-        {fileError && (
-          <p className="field-error" role="alert">
-            {fileError}
-          </p>
-        )}
-      </div>
-      {upload.isPending && <p role="status">Validando áudio…</p>}
-      {upload.isError && (
-        <p role="alert" className="field-error">
-          {upload.error.message}
-        </p>
-      )}
-      <label htmlFor="voice-reference-select">Áudio de referência</label>
-      <select
-        id="voice-reference-select"
-        {...form.register("reference_audio_sha256")}
-        value={currentReference}
-      >
-        <option value="">Selecione um áudio da biblioteca</option>
-        {availableReferences.map((reference) => (
-          <option
-            key={reference.sha256}
-            value={reference.sha256}
-            disabled={reference.duration_ms < 6000}
+      {!isVoiceDesign && (
+        <>
+          <div className="voice-upload-field">
+            <span className="voice-upload-title">Enviar áudio de referência (6 a 30 segundos)</span>
+            <div
+              className={`voice-dropzone${isDragging ? " is-dragging" : ""}${upload.isPending ? " is-uploading" : ""}`}
+              onDragEnter={onDragEnter}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              data-testid="voice-reference-dropzone"
+            >
+              <input
+                id="voice-reference-upload"
+                aria-label="Enviar áudio de referência (6 a 30 segundos)"
+                className="voice-file-input"
+                type="file"
+                accept=".wav,.mp3,.ogg,audio/wav,audio/x-wav,audio/wave,audio/mpeg,audio/ogg,application/ogg"
+                disabled={upload.isPending}
+                onChange={(event) => {
+                  submitReference(event.target.files?.[0]);
+                  event.target.value = "";
+                }}
+              />
+              <label className="voice-dropzone-label" htmlFor="voice-reference-upload">
+                <UploadCloud aria-hidden="true" />
+                <strong>
+                  {isDragging ? "Solte o áudio aqui" : "Arraste seu arquivo de áudio para cá"}
+                </strong>
+                <span>ou clique aqui para escolher um arquivo</span>
+                <small>WAV, MP3 ou OGG · áudio de 6 a 30 segundos</small>
+              </label>
+            </div>
+            {fileName && (
+              <p className="voice-upload-filename" role="status">
+                {upload.isPending
+                  ? "Enviando"
+                  : upload.isError
+                    ? "Falha ao enviar"
+                    : "Arquivo selecionado"}
+                : {fileName}
+              </p>
+            )}
+            {fileError && (
+              <p className="field-error" role="alert">
+                {fileError}
+              </p>
+            )}
+          </div>
+          {upload.isPending && <p role="status">Validando áudio…</p>}
+          {upload.isError && (
+            <p role="alert" className="field-error">
+              {upload.error.message}
+            </p>
+          )}
+          <label htmlFor="voice-reference-select">Áudio de referência</label>
+          <select
+            id="voice-reference-select"
+            {...form.register("reference_audio_sha256")}
+            value={currentReference}
           >
-            {reference.sha256.slice(0, 12)} · {(reference.duration_ms / 1000).toFixed(1)} s
-          </option>
-        ))}
-      </select>
-      {referenceTooShort && (
-        <p className="field-error" role="alert">
-          Este áudio tem menos de 6 segundos. Escolha uma gravação mais longa.
-        </p>
-      )}
-      {selectedReference && (
-        <audio
-          controls
-          src={selectedReference.audio_url}
-          aria-label="Áudio de referência selecionado"
-        />
+            <option value="">Selecione um áudio da biblioteca</option>
+            {availableReferences.map((reference) => (
+              <option
+                key={reference.sha256}
+                value={reference.sha256}
+                disabled={reference.duration_ms < 6000}
+              >
+                {reference.sha256.slice(0, 12)} · {(reference.duration_ms / 1000).toFixed(1)} s
+              </option>
+            ))}
+          </select>
+          {referenceTooShort && (
+            <p className="field-error" role="alert">
+              Este áudio tem menos de 6 segundos. Escolha uma gravação mais longa.
+            </p>
+          )}
+          {selectedReference && (
+            <audio
+              controls
+              src={selectedReference.audio_url}
+              aria-label="Áudio de referência selecionado"
+            />
+          )}
+        </>
       )}
       {Object.values(form.formState.errors).map((value) => (
         <p key={value.message} className="field-error">
@@ -375,14 +486,13 @@ function VoiceForm({
           className="secondary-button"
           disabled={cannotCreate}
           onClick={() => {
-            if (!selectedReference) return;
             onNewVersion(
-              { name: selectedVoice.name, reference_audio_sha256: selectedReference.sha256 },
+              { ...form.getValues(), name: selectedVoice.name },
               selectedVoice,
             );
           }}
         >
-          <Volume2 /> Criar nova versão de {selectedVoice.name} com este áudio
+          <Volume2 /> Criar nova versão de {selectedVoice.name}
         </button>
       )}
     </form>
