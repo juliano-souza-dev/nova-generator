@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from hashlib import sha256
 from pathlib import Path
@@ -27,11 +28,17 @@ class ChatterboxNanoSynthesizer:
         executable: str = "python",
         wav_probe: WavProbe | None = None,
         reference_store: FileVoiceReferenceStore | None = None,
+        environment: dict[str, str] | None = None,
+        engine_name: str = "Chatterbox",
+        timeout_seconds: int = 300,
     ) -> None:
         self._runner = runner
         self._executable = executable
         self._wav_probe = wav_probe or FfprobeWavProbe()
         self._reference_store = reference_store
+        self._environment = environment
+        self._engine_name = engine_name
+        self._timeout_seconds = timeout_seconds
 
     def synthesize(
         self,
@@ -69,7 +76,8 @@ class ChatterboxNanoSynthesizer:
                 encoding="utf-8",
                 capture_output=True,
                 check=False,
-                timeout=300,
+                timeout=self._timeout_seconds,
+                env={**os.environ, **self._environment} if self._environment else None,
             )
         except subprocess.TimeoutExpired as exc:
             def _decode(value: bytes | str | None) -> str:
@@ -88,19 +96,19 @@ class ChatterboxNanoSynthesizer:
                 exc_info=True,
             )
             raise RuntimeError(
-                "A síntese do Chatterbox excedeu 300 segundos e foi interrompida. "
+                f"A síntese do {self._engine_name} excedeu {self._timeout_seconds} segundos. "
                 "Verifique a carga da CPU/GPU, o primeiro carregamento do modelo "
                 "e os logs do worker antes de tentar novamente."
             ) from exc
         except OSError as exc:
             raise RuntimeError(
-                "Não foi possível iniciar o processo isolado do Chatterbox."
+                f"Não foi possível iniciar o processo isolado do {self._engine_name}."
             ) from exc
         if completed.returncode != 0:
             detail = completed.stderr.strip() or "erro não informado"
-            raise RuntimeError(f"Chatterbox falhou: {detail}")
+            raise RuntimeError(f"{self._engine_name} falhou: {detail}")
         if output.suffix.lower() != ".wav" or not output.is_file() or output.stat().st_size == 0:
-            raise RuntimeError("Chatterbox não produziu WAV canônico válido.")
+            raise RuntimeError(f"{self._engine_name} não produziu WAV canônico válido.")
         duration_ms, sample_rate, channels = self._wav_probe.inspect_wav(output)
         return SynthesizedSpeech(
             str(output),
