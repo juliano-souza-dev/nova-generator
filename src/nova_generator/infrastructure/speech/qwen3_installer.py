@@ -106,12 +106,18 @@ def _python_has_qwen(executable: str) -> bool:
 
 
 def qwen_ready(settings: Settings, model_id: str) -> bool:
+    # Weights appearing on disk do not imply that the tokenizer has finished
+    # downloading. Keep previews disabled until every setup step is complete.
+    saved = setup_status(settings, model_id)
+    if saved.get("stage") in {
+        "queued", "environment", "dependencies", "model", "tokenizer",
+        "verification", "failed", "cancelled",
+    }:
+        return False
     try:
         qwen_model_sha256(settings, model_id)
     except ValueError:
         return False
-    # A saved successful setup avoids expensive import checks on every UI poll.
-    saved = setup_status(settings, model_id)
     if saved.get("stage") == "ready" and Path(qwen_python(settings)).is_file():
         return True
     return _python_has_qwen(qwen_python(settings))
