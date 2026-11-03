@@ -22,6 +22,10 @@ from nova_generator.api.dependencies import (
     get_session_factory,
 )
 from nova_generator.application.use_cases.manage_voice_profiles import _payload
+from nova_generator.application.use_cases.tiktok_shadowing import (
+    TikTokShadowingError,
+    resolve_tiktok_shadowing,
+)
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.media.youtube import InvalidYoutubeUrl, YoutubeVideo
 from nova_generator.domain.tiktok_media import (
@@ -508,7 +512,7 @@ async def render_media_project(
     project_id: UUID,
     revision: Annotated[int, Form(...)],
     images: Annotated[list[UploadFile] | None, File()] = None,
-    visual_mode: Annotated[Literal["slides", "video_source"], Form()] = "slides",
+    visual_mode: Annotated[Literal["slides", "video_source", "shadowing"], Form()] = "slides",
     audio_mode: Annotated[Literal["silent", "uploaded", "voice", "original"], Form()] = "silent",
     end_at_last_caption: Annotated[bool, Form()] = False,
     add_outro: Annotated[bool, Form()] = False,
@@ -517,6 +521,12 @@ async def render_media_project(
     project = _get(project_id)
     if revision != project.revision:
         raise HTTPException(409, "Salve e recarregue o projeto antes de renderizar.")
+    if (project.format == "shadowing_video") != (visual_mode == "shadowing"):
+        raise HTTPException(422, "Esta produção deve usar o modo Shadowing.")
+    if visual_mode == "shadowing" and (
+        images or audio_mode != "original" or end_at_last_caption or add_outro
+    ):
+        raise HTTPException(422, "Shadowing usa apenas o áudio da cena e suas pausas originais.")
     if visual_mode == "slides" and (images is None or len(images) != len(project.slides)):
         raise HTTPException(422, "Envie exatamente uma imagem por quadro.")
     if visual_mode == "slides" and audio_mode == "original":
@@ -532,9 +542,22 @@ async def render_media_project(
 
     source_video = None
     source_duration_ms = None
-    if visual_mode == "video_source":
+    shadowing_blocks = None
+    shadowing_duration_ms = None
+    if visual_mode == "shadowing":
+        try:
+            repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+            shadowing_blocks, shadowing_duration_ms = resolve_tiktok_shadowing(
+                project, repository
+            )
+        except TikTokShadowingError as exc:
+            raise HTTPException(422, str(exc)) from exc
+    if visual_mode in {"video_source", "shadowing"}:
         source_video, source_duration_ms = _video_cut(project)
-        _validate_video_captions(project, source_duration_ms)
+        if visual_mode == "video_source":
+            _validate_video_captions(project, source_duration_ms)
+        elif any(block["end_ms"] > source_duration_ms for block in shadowing_blocks or []):
+            raise HTTPException(422, "Uma prática ultrapassa o recorte original. Refazer o corte.")
         if audio_mode == "original" and not await asyncio.to_thread(
             _has_original_audio, source_video
         ):
@@ -585,6 +608,8 @@ async def render_media_project(
         "audio_sha256": audio_hash,
         "source_video_sha256": source_sha256,
         "source_duration_ms": source_duration_ms,
+        "shadowing_blocks": shadowing_blocks,
+        "shadowing_duration_ms": shadowing_duration_ms,
         "end_at_last_caption": end_at_last_caption if visual_mode == "video_source" else False,
         "add_outro": add_outro if visual_mode == "video_source" else False,
     }

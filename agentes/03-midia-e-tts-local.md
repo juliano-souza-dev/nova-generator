@@ -27,6 +27,9 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
   cada bloco usado na prévia. Como os blocos independentes só registram início/fim da fala,
   estimar a duração interna sem inventar alinhamento acústico; preservar EN/PT, lacunas
   entre falas e a trilha original escolhida na exportação.
+- No TikTok Shadowing, reutilizar somente blocos aprovados, com corte e hashes congelados;
+  montar 35–60 s de falas originais seguidas pelas respectivas pausas silenciosas, sem
+  sintetizar outra voz ou editar o material aprovado. Verificar áudio e duração do MP4.
 
 ## Limites
 

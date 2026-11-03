@@ -8,12 +8,13 @@ import subprocess
 from hashlib import file_digest, sha256
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
+from nova_generator.application.use_cases.tiktok_shadowing import resolve_tiktok_shadowing
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.jobs import Job
-from nova_generator.domain.tiktok_media import MediaProject
+from nova_generator.domain.tiktok_media import MediaCaption, MediaProject
 from nova_generator.domain.voices import VoiceProfileSnapshot
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
@@ -48,6 +49,24 @@ def _voice_snapshot(raw: dict[str, Any]) -> VoiceProfileSnapshot:
     if snapshot.sha256 != raw["snapshot_sha256"]:
         raise ValueError("A voz selecionada mudou durante a exportação.")
     return snapshot
+
+
+def _probe_duration_ms(video: Path) -> int:
+    try:
+        result = subprocess.run(
+            [
+                get_settings().ffprobe_executable, "-v", "error",
+                "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1",
+                str(video),
+            ],
+            capture_output=True, text=True, check=False, timeout=30,
+        )
+        duration_ms = round(float(result.stdout.strip()) * 1000)
+        if result.returncode != 0 or duration_ms <= 0:
+            raise ValueError("FFprobe não confirmou a duração.")
+        return duration_ms
+    except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("Não foi possível validar a duração final do Shadowing.") from exc
 
 
 def _check_current_caption_approval(
@@ -192,6 +211,105 @@ def _render_video_source(
     return [output_duration], digest
 
 
+def _render_shadowing_source(
+    project: MediaProject,
+    payload: dict[str, Any],
+    snapshot_dir: Path,
+    execution: JobExecution,
+) -> tuple[list[int], str]:
+    """Assemble approved original speech + a silent repeat window per practice."""
+    source = (snapshot_dir / "source.mp4").resolve()
+    if not source.is_file():
+        raise ValueError("O recorte de Shadowing congelado não está disponível.")
+    with source.open("rb") as stream:
+        digest = file_digest(stream, "sha256").hexdigest()
+    if digest != payload.get("source_video_sha256"):
+        raise ValueError("O corte original mudou após solicitar o Shadowing.")
+    duration = payload.get("source_duration_ms")
+    blocks = payload.get("shadowing_blocks")
+    if not isinstance(duration, int) or not isinstance(blocks, list) or not blocks:
+        raise ValueError("O plano congelado de Shadowing está incompleto.")
+    if len(blocks) > 12:
+        raise ValueError("O Shadowing ultrapassa o limite de 12 práticas.")
+    durations: list[int] = []
+    segments: list[Path] = []
+    paper_colors = {"cream": "0xF4EBDD", "kraft": "0xCFAF87", "night": "0x172238"}
+    for index, block in enumerate(blocks):
+        execution.raise_if_cancelled()
+        start, end, pause = block["start_ms"], block["end_ms"], block["pause_duration_ms"]
+        if not (0 <= start < end <= duration and 2000 <= pause <= 9000):
+            raise ValueError("A janela de fala ou pausa do Shadowing é inválida.")
+        spoken_ms = end - start
+        for phase, segment_ms in (("listen", spoken_ms), ("repeat", pause)):
+            filename = f"{index:02d}-{phase}"
+            ass_name = f"{filename}.ass"
+            text = MediaCaption(
+                cue_id=uuid4(), start_ms=0, end_ms=segment_ms,
+                en=block["en"],
+                pt=block["pt"] if phase == "listen" else "SUA VEZ · REPITA AGORA",
+                note="OUÇA E IMITE" if phase == "listen" else "REPITA EM VOZ ALTA",
+            )
+            (snapshot_dir / ass_name).write_text(
+                render_ass(
+                    [text], project.caption_style,
+                    project.paper_theme if project.background_mode == "paper" else None,
+                ), encoding="utf-8"
+            )
+            seconds = f"{segment_ms / 1000:.3f}"
+            is_paper = project.background_mode == "paper"
+            if phase == "listen" and not is_paper:
+                args = [
+                    "-y", "-ss", f"{start / 1000:.3f}", "-t", seconds, "-i", str(source),
+                    "-map", "0:v:0", "-map", "0:a:0",
+                ]
+                visual = (
+                    "scale=1080:1920:force_original_aspect_ratio=increase,"
+                    f"crop=1080:1920,setsar=1,ass={ass_name},format=yuv420p"
+                )
+            else:
+                color = (
+                    paper_colors.get(project.paper_theme, "0x172238")
+                    if is_paper else "0x101A31"
+                )
+                args = [
+                    "-y", "-f", "lavfi", "-i", f"color=c={color}:s=1080x1920:r=30:d={seconds}",
+                ]
+                if phase == "listen":
+                    args += ["-ss", f"{start / 1000:.3f}", "-t", seconds, "-i", str(source)]
+                else:
+                    args += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
+                args += ["-map", "0:v:0", "-map", "1:a:0"]
+                visual = f"setsar=1,ass={ass_name},format=yuv420p"
+            segment = snapshot_dir / f"{filename}.mp4"
+            args += [
+                "-vf", visual, "-r", "30", "-t", seconds,
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
+                "-pix_fmt", "yuv420p", "-c:a", "aac", "-ar", "44100", "-ac", "2",
+                "-b:a", "192k", "-movflags", "+faststart", segment.name,
+            ]
+            _run_ffmpeg(args, cwd=snapshot_dir)
+            segments.append(segment)
+            durations.append(segment_ms)
+            execution.heartbeat()
+    expected = payload.get("shadowing_duration_ms")
+    if (
+        not isinstance(expected, int)
+        or sum(durations) != expected
+        or not 35_000 <= expected <= 60_000
+    ):
+        raise ValueError("A duração congelada do Shadowing é inválida.")
+    concat = snapshot_dir / "shadowing-segments.txt"
+    concat.write_text(
+        "".join(f"file '{part.name}'\n" for part in segments), encoding="utf-8"
+    )
+    _run_ffmpeg(
+        ["-y", "-f", "concat", "-safe", "0", "-i", concat.name,
+         "-t", f"{expected / 1000:.3f}", "-c", "copy", "-movflags", "+faststart", "final.mp4"],
+        cwd=snapshot_dir,
+    )
+    return durations, digest
+
+
 def make_media_render_handler(
     speech: SynthesizeSpeech, repository: SqlAlchemyEditorialProjectRepository
 ):
@@ -218,7 +336,18 @@ def make_media_render_handler(
                 raise ValueError("Áudio alterado depois de iniciar a renderização.")
         final = snapshot_dir / "final.mp4"
         source_digest = None
-        if payload.get("visual_mode", "slides") == "video_source":
+        visual_mode = payload.get("visual_mode", "slides")
+        if visual_mode == "shadowing":
+            current_blocks, current_duration = resolve_tiktok_shadowing(project, repository)
+            if (
+                current_blocks != payload.get("shadowing_blocks")
+                or current_duration != payload.get("shadowing_duration_ms")
+            ):
+                raise ValueError("O Shadowing mudou durante a preparação do vídeo.")
+            durations, source_digest = _render_shadowing_source(
+                project, payload, snapshot_dir, execution
+            )
+        elif visual_mode == "video_source":
             _check_current_caption_approval(project, repository)
             durations, source_digest = _render_video_source(
                 project, payload, snapshot_dir, uploaded_audio, execution
@@ -308,7 +437,18 @@ def make_media_render_handler(
                 os.replace(joined, final)
         if not final.is_file() or final.stat().st_size == 0:
             raise RuntimeError("A exportação gerou um arquivo vazio.")
-        if source_digest is not None:
+        final_duration_ms = sum(durations)
+        if visual_mode == "shadowing":
+            final_duration_ms = _probe_duration_ms(final)
+            if abs(final_duration_ms - sum(durations)) > 750:
+                raise RuntimeError(
+                    "A duração do MP4 não corresponde à prática selecionada. Refazer exportação."
+                )
+        if visual_mode == "shadowing":
+            current_blocks, _ = resolve_tiktok_shadowing(project, repository)
+            if current_blocks != payload["shadowing_blocks"]:
+                raise ValueError("O Shadowing mudou durante a renderização.")
+        elif source_digest is not None:
             # Manifest is the publication gate for download endpoints. Check
             # again after a long FFmpeg render, before making it accessible.
             _check_current_caption_approval(project, repository)
@@ -328,8 +468,12 @@ def make_media_render_handler(
             "caption_count": (
                 sum(1 for item in project.video_captions if item.enabled) if source_digest else 0
             ),
+            "shadowing_block_ids": (
+                list(project.shadowing_clip.block_ids)
+                if visual_mode == "shadowing" and project.shadowing_clip else []
+            ),
             "voice_sha256": voice.sha256 if voice else None,
-            "duration_ms": sum(durations),
+            "duration_ms": final_duration_ms,
             "slide_durations_ms": durations,
             "video_sha256": video_sha256,
             "source_snapshot_sha256": job.input["snapshot_sha256"],
@@ -340,7 +484,7 @@ def make_media_render_handler(
         return {
             "render_id": str(render_id),
             "project_id": str(project_id),
-            "duration_ms": sum(durations),
+            "duration_ms": final_duration_ms,
             "video_url": f"/api/tiktok-media/projects/{project_id}/renders/{render_id}/video",
         }
 

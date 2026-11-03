@@ -35,6 +35,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
 import { imageForSlide, paintSlide } from "./slide-canvas";
 import { MusicLessonComposer } from "./MusicLessonComposer";
+import { TikTokShadowingStudio } from "./TikTokShadowingStudio";
 import { lyricWords } from "./lyric-timing";
 import { captionGaps, lastCaptionEnd } from "./caption-coverage";
 import { proposeMaterialLessons } from "./material-lessons";
@@ -81,9 +82,10 @@ function titleOf(kind: MediaKind): string {
   }[kind];
 }
 
-type CreationMode = "music" | "dialogue" | "lesson" | "carousel";
+type CreationMode = "music" | "dialogue" | "lesson" | "carousel" | "shadowing";
 
 function modeFor(project: MediaProject): CreationMode {
+  if (project.format === "shadowing_video") return "shadowing";
   if (project.format === "carousel") return "carousel";
   if (project.format === "lyrics_video") return "music";
   return project.caption_style?.template === "impact" ? "lesson" : "dialogue";
@@ -94,6 +96,7 @@ const creationModes = [
   { id: "dialogue", label: "Diálogos", description: "Falas com tradução", icon: Subtitles },
   { id: "lesson", label: "Mini-aula", description: "Destaque educativo", icon: Sparkles },
   { id: "carousel", label: "Carrossel", description: "Quadros para deslizar", icon: Clapperboard },
+  { id: "shadowing", label: "Shadowing", description: "Ouça e repita · 35–60 s", icon: Play },
 ] as const;
 
 const effectPresets = [
@@ -283,7 +286,9 @@ export function TikTokMediaPage() {
       setSourceId(projectQuery.data.source_project_id ?? "");
       setSceneId(projectQuery.data.source_scene_id ?? "");
       setAudioMode(
-        projectQuery.data.source_scene_id || projectQuery.data.source_youtube_id
+        projectQuery.data.format === "shadowing_video" ||
+          projectQuery.data.source_scene_id ||
+          projectQuery.data.source_youtube_id
           ? "original"
           : "silent",
       );
@@ -294,7 +299,13 @@ export function TikTokMediaPage() {
       setProposalOrigin(null);
       if (changedProduction) {
         setInspectorTab("captions");
-        setRailTab(projectQuery.data.format === "carousel" ? "ideas" : "source");
+        setRailTab(
+          projectQuery.data.format === "shadowing_video"
+            ? "projects"
+            : projectQuery.data.format === "carousel"
+              ? "ideas"
+              : "source",
+        );
       }
     }
   }, [projectQuery.data, selectedId, dirty, draft?.revision]);
@@ -315,7 +326,13 @@ export function TikTokMediaPage() {
       void queryClient.invalidateQueries({ queryKey: ["tiktok-projects"] });
       loadedId.current = null;
       selectProject(project.id);
-      setRailTab(project.format === "carousel" ? "ideas" : "source");
+      setRailTab(
+        project.format === "shadowing_video"
+          ? "projects"
+          : project.format === "carousel"
+            ? "ideas"
+            : "source",
+      );
     },
   });
 
@@ -332,6 +349,7 @@ export function TikTokMediaPage() {
         source_youtube_id: value.source_youtube_id,
         source_cut_job_id: value.source_cut_job_id,
         video_captions: value.video_captions,
+        shadowing_clip: value.shadowing_clip,
         caption_style: value.caption_style,
         slides: value.slides,
         revision: value.revision,
@@ -399,9 +417,11 @@ export function TikTokMediaPage() {
     ? modeFor(draft)
     : newFormat === "carousel"
       ? "carousel"
-      : newFormat === "lyrics_video"
-        ? "music"
-        : "dialogue";
+      : newFormat === "shadowing_video"
+        ? "shadowing"
+        : newFormat === "lyrics_video"
+          ? "music"
+          : "dialogue";
   const videoMode = Boolean(
     (draft?.source_scene_id || draft?.source_youtube_id) && draft?.format !== "carousel",
   );
@@ -782,7 +802,13 @@ export function TikTokMediaPage() {
 
   function chooseCreationMode(mode: CreationMode) {
     const nextFormat: MediaFormat =
-      mode === "carousel" ? "carousel" : mode === "music" ? "lyrics_video" : "lesson_video";
+      mode === "carousel"
+        ? "carousel"
+        : mode === "music"
+          ? "lyrics_video"
+          : mode === "shadowing"
+            ? "shadowing_video"
+            : "lesson_video";
     setNewFormat(nextFormat);
     if (mode === "carousel" && audioMode === "original") setAudioMode("silent");
     if (mode !== "carousel" && draft?.source_youtube_id && audioMode === "silent") {
@@ -795,6 +821,16 @@ export function TikTokMediaPage() {
       edit((current) => ({
         ...current,
         format: nextFormat,
+        ...(mode === "shadowing" || current.format === "shadowing_video"
+          ? {
+              source_project_id: null,
+              source_scene_id: null,
+              source_youtube_id: null,
+              source_cut_job_id: null,
+              video_captions: [],
+              shadowing_clip: null,
+            }
+          : {}),
         caption_style: {
           ...DEFAULT_CAPTION_STYLE,
           ...current.caption_style,
@@ -805,7 +841,13 @@ export function TikTokMediaPage() {
       }));
     }
     const hasVideoSource = Boolean(draft?.source_youtube_id || draft?.source_scene_id);
-    setRailTab(mode === "carousel" || (mode === "lesson" && !hasVideoSource) ? "ideas" : "source");
+    setRailTab(
+      mode === "shadowing"
+        ? "projects"
+        : mode === "carousel" || (mode === "lesson" && !hasVideoSource)
+          ? "ideas"
+          : "source",
+    );
     setInspectorTab(mode === "carousel" ? "captions" : "style");
   }
 
@@ -854,7 +896,7 @@ export function TikTokMediaPage() {
     <section className="tm-page">
       <PageHeader
         title="TikTok Mídia"
-        description="Crie carrosséis, mini-aulas e vídeos verticais com inglês, tradução, voz e música."
+        description="Crie carrosséis, mini-aulas, Shadowing e vídeos verticais com inglês, tradução, voz e música."
         actions={
           <span className="tm-save-status">
             <Save size={16} />
@@ -897,6 +939,7 @@ export function TikTokMediaPage() {
               aria-pressed={railTab === "source"}
               className={railTab === "source" ? "tm-tab-active" : ""}
               onClick={() => setRailTab("source")}
+              disabled={creationMode === "shadowing"}
             >
               <Video size={16} /> Fonte
             </button>
@@ -911,7 +954,7 @@ export function TikTokMediaPage() {
               aria-pressed={railTab === "ideas"}
               className={railTab === "ideas" ? "tm-tab-active" : ""}
               onClick={() => setRailTab("ideas")}
-              disabled={!draft || videoMode}
+              disabled={!draft || videoMode || creationMode === "shadowing"}
             >
               <Sparkles size={16} /> Criar
             </button>
@@ -919,12 +962,12 @@ export function TikTokMediaPage() {
               aria-pressed={railTab === "reuse"}
               className={railTab === "reuse" ? "tm-tab-active" : ""}
               onClick={() => setRailTab("reuse")}
-              disabled={!draft}
+              disabled={!draft || creationMode === "shadowing"}
             >
               <Copy size={16} /> Importar
             </button>
           </nav>
-          {railTab === "source" && (
+          {railTab === "source" && creationMode !== "shadowing" && (
             <div className="tm-card tm-start-card">
               <h2>
                 <Video size={18} /> Começar com um vídeo
@@ -1072,6 +1115,7 @@ export function TikTokMediaPage() {
                   <option value="carousel">Carrossel</option>
                   <option value="lesson_video">Vídeo educativo</option>
                   <option value="lyrics_video">Lyrics + tradução</option>
+                  <option value="shadowing_video">Shadowing · 35–60 segundos</option>
                 </select>
                 <button
                   className="tm-accent"
@@ -1287,6 +1331,14 @@ export function TikTokMediaPage() {
             <p>Crie uma produção ao lado para começar. Seus projetos ficam salvos no Generator.</p>
             {projectQuery.isError && <p role="alert">{projectQuery.error.message}</p>}
           </div>
+        ) : draft.format === "shadowing_video" ? (
+          <TikTokShadowingStudio
+            project={draft}
+            persisted={projectQuery.data}
+            dirty={dirty}
+            saving={save.isPending}
+            onEdit={edit}
+          />
         ) : (
           <>
             <main className="tm-center" ref={centerRef} aria-label="Editor de vídeo e legendas">

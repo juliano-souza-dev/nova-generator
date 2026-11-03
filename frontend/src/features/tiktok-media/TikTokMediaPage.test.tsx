@@ -110,6 +110,16 @@ function renderStudio() {
 }
 
 describe("TikTok Media focused workstation", () => {
+  it("opens a dedicated Shadowing mode with a 35–60 second practice composer", async () => {
+    renderStudio();
+    await screen.findByRole("button", { name: "Editar fala 1 em 00:00.0" });
+    fireEvent.click(screen.getByRole("button", { name: /Shadowing.*35–60 s/ }));
+    expect(screen.getByLabelText("Projeto para Shadowing TikTok")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cena para Shadowing TikTok")).toBeDisabled();
+    expect(screen.getByText(/Ouça, imite e pratique/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Gerar Shadowing MP4/ })).toBeDisabled();
+  });
+
   it("offers creation modes and activates progressive music subtitles", async () => {
     renderStudio();
     await screen.findByRole("button", { name: "Editar fala 1 em 00:00.0" });

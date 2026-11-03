@@ -61,6 +61,9 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
   selecionar Música em produções existentes sem apagar legendas. No modo Música a prévia
   destaca as palavras conforme o tempo da fala, indicando que a duração por palavra é
   aproximada enquanto não houver alinhamento real.
+- Oferecer Shadowing como modo independente no TikTok Media: escolher blocos de um plano
+  aprovado, mostrar duração somada de fala e pausa (35–60 s), reproduzir a sequência
+  real no player e informar claramente quando o plano de origem estiver obsoleto.
 
 ## Limites
 

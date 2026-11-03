@@ -7,10 +7,28 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-MediaFormat = Literal["carousel", "lesson_video", "lyrics_video"]
+MediaFormat = Literal["carousel", "lesson_video", "lyrics_video", "shadowing_video"]
 MediaTheme = Literal["ihub", "midnight", "warm"]
 MediaBackground = Literal["video", "paper"]
 MediaPaperTheme = Literal["cream", "kraft", "night", "aurora"]
+
+
+class ShadowingClip(BaseModel):
+    """Selection of existing, approved Shadowing blocks; never copies editorial text."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    plan_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    block_ids: list[str] = Field(default_factory=list, max_length=12)
+
+    @model_validator(mode="after")
+    def unique_blocks(self) -> ShadowingClip:
+        if len(set(self.block_ids)) != len(self.block_ids):
+            raise ValueError("Um bloco de Shadowing não pode ser repetido na seleção")
+        if any(not block_id or len(block_id) > 80 for block_id in self.block_ids):
+            raise ValueError("Identificador de bloco inválido")
+        return self
 
 
 class MediaCaption(BaseModel):
@@ -77,6 +95,7 @@ class MediaProject(BaseModel):
     revision: int = Field(default=1, ge=1)
     slides: list[MediaSlide] = Field(min_length=1, max_length=30)
     video_captions: list[MediaCaption] = Field(default_factory=list, max_length=200)
+    shadowing_clip: ShadowingClip | None = None
     caption_style: MediaCaptionStyle = Field(default_factory=MediaCaptionStyle)
     audio_filename: Literal["audio.mp3", "audio.wav", "audio.ogg"] | None = None
 
@@ -104,6 +123,7 @@ class MediaProjectEdit(BaseModel):
     source_cut_job_id: UUID | None = None
     slides: list[MediaSlide] = Field(min_length=1, max_length=30)
     video_captions: list[MediaCaption] = Field(default_factory=list, max_length=200)
+    shadowing_clip: ShadowingClip | None = None
     caption_style: MediaCaptionStyle = Field(default_factory=MediaCaptionStyle)
 
 

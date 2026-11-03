@@ -1,9 +1,9 @@
 import { apiRequest, apiUrl } from "../../lib/api";
 
-export type MediaFormat = "carousel" | "lesson_video" | "lyrics_video";
+export type MediaFormat = "carousel" | "lesson_video" | "lyrics_video" | "shadowing_video";
 export type MediaTheme = "ihub" | "midnight" | "warm";
 export type MediaKind = "cover" | "lesson" | "example" | "challenge" | "lyric";
-export type MediaVisualMode = "slides" | "video_source";
+export type MediaVisualMode = "slides" | "video_source" | "shadowing";
 export type MediaBackground = "video" | "paper";
 export type PaperTheme = "cream" | "kraft" | "night" | "aurora";
 export type MediaAudioMode = "silent" | "uploaded" | "voice" | "original";
@@ -46,6 +46,11 @@ export type MediaSlide = {
   speaker: string;
   duration_ms: number;
 };
+export type ShadowingClip = {
+  source_sha256: string;
+  plan_sha256: string;
+  block_ids: string[];
+};
 export type MediaProject = {
   contract: "nova-tiktok-media/1";
   id: string;
@@ -59,6 +64,7 @@ export type MediaProject = {
   source_youtube_id?: string | null;
   source_cut_job_id?: string | null;
   video_captions?: MediaCaption[];
+  shadowing_clip?: ShadowingClip | null;
   caption_style?: MediaCaptionStyle;
   revision: number;
   slides: MediaSlide[];
@@ -76,6 +82,7 @@ export type MediaEdit = Pick<
   | "source_youtube_id"
   | "source_cut_job_id"
   | "video_captions"
+  | "shadowing_clip"
   | "caption_style"
   | "revision"
   | "slides"
