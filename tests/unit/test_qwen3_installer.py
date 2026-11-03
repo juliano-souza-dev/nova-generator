@@ -61,7 +61,7 @@ def test_local_install_prepares_environment_weights_and_tokenizer(tmp_path, monk
     )
     calls = []
 
-    def fake_step(argv, execution, log, timeout_seconds):
+    def fake_step(argv, execution, log, timeout_seconds, stop_event=None):
         calls.append(argv)
         if "pip" in argv:
             installed["value"] = True
