@@ -47,7 +47,10 @@ class ManageVoiceProfiles:
         snapshot = profile.snapshot()
         return self._jobs.enqueue(
             kind="synthesize_voice_preview",
-            input={"voice_snapshot": _payload(snapshot), "text": preview_text_for_model(snapshot.model_id)},
+            input={
+                "voice_snapshot": _payload(snapshot),
+                "text": preview_text_for_model(snapshot.model_id),
+            },
             idempotency_key=f"voice-preview:{snapshot.sha256}",
             max_attempts=3,
         )
