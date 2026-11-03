@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mic2, Plus, UploadCloud, Volume2 } from "lucide-react";
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
@@ -280,7 +280,25 @@ function VoiceForm({
   const model = useQuery({
     queryKey: ["voice-model", selectedModel],
     queryFn: () => studioApi.voiceModel(selectedModel),
+    refetchInterval: (query) =>
+      selectedModel.startsWith("qwen3-tts") && !query.state.data?.available ? 3000 : false,
   });
+  const requested = useRef(new Set<string>());
+  const prepareModel = useMutation({
+    mutationFn: studioApi.prepareVoiceModel,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["voice-model"] }),
+  });
+  useEffect(() => {
+    if (
+      !selectedModel.startsWith("qwen3-tts") ||
+      !model.data ||
+      model.data.available ||
+      model.data.install_stage === "failed" ||
+      requested.current.has(selectedModel)
+    ) return;
+    requested.current.add(selectedModel);
+    prepareModel.mutate(selectedModel);
+  }, [selectedModel, model.data, prepareModel.mutate]);
   const upload = useMutation({
     mutationFn: studioApi.uploadVoiceReference,
     onSuccess: (reference) => {
@@ -398,6 +416,21 @@ function VoiceForm({
             ? "Voz local pronta para gerar prévias."
             : (model.data?.message ?? model.error?.message)}
       </p>
+      {prepareModel.isError && (
+        <p className="field-error" role="alert">
+          Não foi possível iniciar a preparação da voz. Tente novamente.
+        </p>
+      )}
+      {model.data?.install_stage === "failed" && (
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => prepareModel.mutate(selectedModel)}
+          disabled={prepareModel.isPending}
+        >
+          Tentar preparar a voz novamente
+        </button>
+      )}
       {!isVoiceDesign && (
         <>
           <div className="voice-upload-field">
