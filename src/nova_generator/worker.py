@@ -44,6 +44,11 @@ from nova_generator.infrastructure.speech.chatterbox_nano_synthesizer import (
 )
 from nova_generator.infrastructure.speech.ffprobe_wav_probe import FfprobeWavProbe
 from nova_generator.infrastructure.speech.file_speech_cache import FileSpeechCache
+from nova_generator.infrastructure.speech.qwen3_installer import (
+    ensure_setup_queued,
+    make_setup_handler,
+    qwen_python,
+)
 from nova_generator.infrastructure.speech.routing_synthesizer import RoutingSpeechSynthesizer
 from nova_generator.infrastructure.worker.cards_only_handler import make_cards_only_handler
 from nova_generator.infrastructure.worker.editorial_assistance_handler import (
@@ -72,7 +77,7 @@ def main() -> None:
     )
     qwen = ChatterboxNanoSynthesizer(
         runner.parent / "qwen3_tts_runner.py",
-        executable=settings.qwen_tts_python or sys.executable,
+        executable=qwen_python(settings),
         reference_store=references,
         environment={
             "NOVA_GENERATOR_QWEN_MODEL_ROOT": str(settings.qwen_model_root.resolve()),
@@ -120,10 +125,14 @@ def main() -> None:
         MediaProjectStore(settings.media_cache_root), media_cache, downloader, ingestion
     )
     editorial_repository = SqlAlchemyEditorialProjectRepository(get_session_factory())
+    job_repository = SqlAlchemyJobRepository(get_session_factory())
+    # The normal Generator launch automatically prepares the default Qwen voice.
+    ensure_setup_queued(settings, job_repository)
     worker = PersistentWorker(
-        SqlAlchemyJobRepository(get_session_factory()),
+        job_repository,
         worker_id=f"local-{os.getpid()}",
         handlers={
+            "qwen.setup": make_setup_handler(settings),
             "synthesize_voice_preview": make_voice_preview_handler(speech),
             "tiktok.render": make_media_render_handler(speech, editorial_repository),
             "tiktok.download": tiktok_source.download,
