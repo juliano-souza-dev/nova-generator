@@ -29,6 +29,16 @@ describe("TikTok Media external AI draft", () => {
     expect(slides[0].id).toBeTruthy();
   });
 
+  it("accepts camera movements in imported scripts without trusting image paths", () => {
+    const [slide] = readExternalStoryboard(
+      JSON.stringify({
+        slides: [{ kind: "example", motion: "pan_left", background_image: "../outside.png" }],
+      }),
+    );
+    expect(slide.motion).toBe("pan_left");
+    expect(slide.background_image).toBeNull();
+  });
+
   it("blocks invalid durations and unsupported structures", () => {
     expect(() => readExternalStoryboard('{"slides":[{"duration_ms":999}]}')).toThrow();
     expect(() => readExternalStoryboard('{"slides":[]}')).toThrow();
@@ -76,5 +86,28 @@ describe("TikTok Media video source request", () => {
     expect(mediaApi.sourceUrl("production-1")).toBe(
       "/api/tiktok-media/projects/production-1/source",
     );
+  });
+});
+
+describe("TikTok Media animated scene requests", () => {
+  it("creates a local animated production and uploads the scene image with revision", async () => {
+    vi.mocked(apiRequest).mockClear();
+    await mediaApi.create("Watch", "lesson_video", true);
+    const [, createOptions] = vi.mocked(apiRequest).mock.calls[0];
+    expect(JSON.parse(String(createOptions?.body))).toMatchObject({ animated_scenes: true });
+    const image = new Blob(["png"], { type: "image/png" });
+    await mediaApi.uploadSlideImage("project-1", 2, "slide-1", image);
+    const [path, uploadOptions] = vi.mocked(apiRequest).mock.calls[1];
+    expect(path).toBe("/tiktok-media/projects/project-1/slides/slide-1/image");
+    const form = uploadOptions?.body as FormData;
+    expect(form.get("revision")).toBe("2");
+    expect(form.getAll("image")).toHaveLength(1);
+  });
+
+  it("sends balanced/full render quality independently of original video", async () => {
+    vi.mocked(apiRequest).mockClear();
+    await mediaApi.render("production-1", 5, [], "silent", "", "slides", false, false, "full");
+    const [, options] = vi.mocked(apiRequest).mock.calls[0];
+    expect((options?.body as FormData).get("render_quality")).toBe("full");
   });
 });

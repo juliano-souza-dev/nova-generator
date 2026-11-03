@@ -7,6 +7,7 @@ export type MediaVisualMode = "slides" | "video_source" | "shadowing";
 export type MediaBackground = "video" | "paper";
 export type PaperTheme = "cream" | "kraft" | "night" | "aurora";
 export type MediaAudioMode = "silent" | "uploaded" | "voice" | "original";
+export type SlideMotion = "still" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right";
 
 export type MediaCaption = {
   cue_id: string;
@@ -45,6 +46,8 @@ export type MediaSlide = {
   highlight: string;
   speaker: string;
   duration_ms: number;
+  motion?: SlideMotion;
+  background_image?: string | null;
 };
 export type ShadowingClip = {
   source_sha256: string;
@@ -59,6 +62,7 @@ export type MediaProject = {
   theme: MediaTheme;
   background_mode?: MediaBackground;
   paper_theme?: PaperTheme;
+  animated_scenes?: boolean;
   source_project_id: string | null;
   source_scene_id?: string | null;
   source_youtube_id?: string | null;
@@ -77,6 +81,7 @@ export type MediaEdit = Pick<
   | "theme"
   | "background_mode"
   | "paper_theme"
+  | "animated_scenes"
   | "source_project_id"
   | "source_scene_id"
   | "source_youtube_id"
@@ -108,10 +113,10 @@ export type MediaSourceStatus = {
 export const mediaApi = {
   list: () => apiRequest<MediaProject[]>("/tiktok-media/projects"),
   get: (id: string) => apiRequest<MediaProject>(`/tiktok-media/projects/${id}`),
-  create: (title: string, format: MediaFormat) =>
+  create: (title: string, format: MediaFormat, animatedScenes = false) =>
     apiRequest<MediaProject>("/tiktok-media/projects", {
       method: "POST",
-      body: JSON.stringify({ title, format }),
+      body: JSON.stringify({ title, format, animated_scenes: animatedScenes }),
     }),
   update: (id: string, payload: MediaEdit) =>
     apiRequest<MediaProject>(`/tiktok-media/projects/${id}`, {
@@ -127,6 +132,17 @@ export const mediaApi = {
     });
   },
   audioUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/audio`),
+  slideImageUrl: (id: string, filename: string) =>
+    apiUrl(`/tiktok-media/projects/${id}/images/${filename}`),
+  uploadSlideImage: (id: string, revision: number, slideId: string, image: Blob) => {
+    const body = new FormData();
+    body.append("revision", String(revision));
+    body.append("image", image, "cena.png");
+    return apiRequest<MediaProject>(`/tiktok-media/projects/${id}/slides/${slideId}/image`, {
+      method: "POST",
+      body,
+    });
+  },
   sourceUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/source`),
   originalUrl: (id: string) => apiUrl(`/tiktok-media/projects/${id}/source/original`),
   cutMp3Url: (id: string) => apiUrl(`/tiktok-media/projects/${id}/source/audio.mp3`),
@@ -178,6 +194,7 @@ export const mediaApi = {
     visualMode: MediaVisualMode = "slides",
     endAtLastCaption = false,
     addOutro = false,
+    renderQuality: "balanced" | "full" = "balanced",
   ) => {
     const body = new FormData();
     body.append("revision", String(revision));
@@ -185,6 +202,7 @@ export const mediaApi = {
     body.append("visual_mode", visualMode);
     body.append("end_at_last_caption", String(endAtLastCaption));
     body.append("add_outro", String(addOutro));
+    body.append("render_quality", renderQuality);
     if (audioMode === "voice") body.append("voice_profile_id", voiceProfileId);
     images.forEach((image, index) => body.append("images", image, `slide-${index + 1}.png`));
     return apiRequest<MediaRender>(`/tiktok-media/projects/${id}/render`, {
@@ -207,6 +225,8 @@ export function blankSlide(kind: MediaKind = "lesson"): MediaSlide {
     highlight: "",
     speaker: "",
     duration_ms: 4500,
+    motion: "still",
+    background_image: null,
   };
 }
 
@@ -255,6 +275,12 @@ export function readExternalStoryboard(value: string): MediaSlide[] {
       highlight: pick("highlight", 120),
       speaker: pick("speaker", 100),
       duration_ms: Number(duration),
+      motion: ["still", "zoom_in", "zoom_out", "pan_left", "pan_right"].includes(
+        String(value.motion),
+      )
+        ? (value.motion as SlideMotion)
+        : "still",
+      background_image: null,
     };
   });
 }

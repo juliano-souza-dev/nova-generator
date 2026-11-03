@@ -76,6 +76,8 @@ class MediaSlide(BaseModel):
     highlight: str = Field(default="", max_length=120)
     speaker: str = Field(default="", max_length=100)
     duration_ms: int = Field(default=4500, ge=1000, le=20000)
+    motion: Literal["still", "zoom_in", "zoom_out", "pan_left", "pan_right"] = "still"
+    background_image: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}\.png$")
 
 
 class MediaProject(BaseModel):
@@ -88,6 +90,7 @@ class MediaProject(BaseModel):
     theme: MediaTheme = "ihub"
     background_mode: MediaBackground = "video"
     paper_theme: MediaPaperTheme = "cream"
+    animated_scenes: bool = False
     source_project_id: UUID | None = None
     source_scene_id: UUID | None = None
     source_youtube_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{11}$")
@@ -117,6 +120,7 @@ class MediaProjectEdit(BaseModel):
     theme: MediaTheme
     background_mode: MediaBackground = "video"
     paper_theme: MediaPaperTheme = "cream"
+    animated_scenes: bool = False
     source_project_id: UUID | None = None
     source_scene_id: UUID | None = None
     source_youtube_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{11}$")
@@ -127,10 +131,13 @@ class MediaProjectEdit(BaseModel):
     caption_style: MediaCaptionStyle = Field(default_factory=MediaCaptionStyle)
 
 
-def new_media_project(title: str, format: MediaFormat) -> MediaProject:
+def new_media_project(
+    title: str, format: MediaFormat, *, animated_scenes: bool = False
+) -> MediaProject:
     return MediaProject(
         title=title,
         format=format,
+        animated_scenes=animated_scenes,
         caption_style=(
             MediaCaptionStyle(template="karaoke", position="center", animation="pop")
             if format == "lyrics_video"
@@ -143,6 +150,7 @@ def new_media_project(title: str, format: MediaFormat) -> MediaProject:
                 en="Your English, in context.",
                 pt="Inglês que faz sentido.",
                 note="Edite este quadro para começar.",
+                motion="zoom_in" if animated_scenes else "still",
             )
         ],
     )
