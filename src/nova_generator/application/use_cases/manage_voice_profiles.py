@@ -8,6 +8,14 @@ from nova_generator.application.ports.voice_profile_repository import VoiceProfi
 from nova_generator.domain.voices import VoiceProfile
 
 PREVIEW_TEXT = "Hello. This is a local voice preview."
+QWEN_PREVIEW_TEXT = (
+    "Você já percebeu como uma palavra muda de sentido dependendo do contexto? "
+    "É isso que torna o inglês tão interessante!"
+)
+
+
+def preview_text_for_model(model_id: str) -> str:
+    return QWEN_PREVIEW_TEXT if model_id.startswith("qwen3-tts-") else PREVIEW_TEXT
 
 
 class ManageVoiceProfiles:
@@ -39,7 +47,7 @@ class ManageVoiceProfiles:
         snapshot = profile.snapshot()
         return self._jobs.enqueue(
             kind="synthesize_voice_preview",
-            input={"voice_snapshot": _payload(snapshot), "text": PREVIEW_TEXT},
+            input={"voice_snapshot": _payload(snapshot), "text": preview_text_for_model(snapshot.model_id)},
             idempotency_key=f"voice-preview:{snapshot.sha256}",
             max_attempts=3,
         )
