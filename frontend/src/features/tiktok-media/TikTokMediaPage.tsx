@@ -2360,7 +2360,7 @@ export function TikTokMediaPage() {
                           type="file"
                           accept="image/jpeg,image/png,image/webp"
                           aria-label="Imagem da cena"
-                          disabled={dirty || save.isPending || uploadImage.isPending}
+                          disabled={save.isPending || uploadImage.isPending}
                           onChange={(event) => {
                             const file = event.target.files?.[0];
                             if (file) uploadImage.mutate(file);
