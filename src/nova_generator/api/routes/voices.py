@@ -185,7 +185,11 @@ def get_voice_preview(
     if profile is None:
         raise HTTPException(404, detail="voice profile not found")
     cache = FileSpeechCache(get_settings().media_cache_root)
-    key = cache.cache_key(text=preview_text_for_model(profile.model_id), profile=profile.snapshot(), parameters={})
+    key = cache.cache_key(
+        text=preview_text_for_model(profile.model_id),
+        profile=profile.snapshot(),
+        parameters={},
+    )
     speech = cache.find(key)
     if speech is None:
         raise HTTPException(404, detail="voice preview not ready")
@@ -195,7 +199,9 @@ def get_voice_preview(
 def _response(profile: VoiceProfile) -> VoiceResponse:
     snapshot = profile.snapshot()
     cache = FileSpeechCache(get_settings().media_cache_root)
-    key = cache.cache_key(text=preview_text_for_model(profile.model_id), profile=snapshot, parameters={})
+    key = cache.cache_key(
+        text=preview_text_for_model(profile.model_id), profile=snapshot, parameters={}
+    )
     reference_message = None
     try:
         validate_profile_reference(_references(), profile.reference_audio_sha256)
