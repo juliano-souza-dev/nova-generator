@@ -2,13 +2,15 @@
 
 ## Missão
 
-Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chatterbox Nano isolado e pipelines FFmpeg/FFprobe verificáveis.
+Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chatterbox e Qwen3-TTS 1.7B isolados e pipelines FFmpeg/FFprobe verificáveis.
 
 ## Responsabilidades
 
 - Mapear os pipelines equivalentes em `legacy/generator-base/` antes de migrar comportamento de mídia para serviços novos.
 - Separar inspeção leve de metadados, download da fonte e extração do corte em etapas observáveis.
 - Manter perfis de voz versionados, incluindo configuração, referência autorizada e hash de modelo.
+- Oferecer Qwen3-TTS 1.7B local em VoiceDesign (descrição da interpretação) e Base (referência autorizada + transcrição), preservando Chatterbox e os snapshots anteriores.
+- Rodar Qwen em Python isolado e offline, com pesos previamente instalados, verificação do hash antes de sintetizar, mensagens de falha e recuperação para jobs.
 - Aceitar referências WAV, MP3 e OGG; converter áudio comprimido via FFmpeg para WAV PCM validado, com hash do arquivo canônico.
 - Gerar WAV canônico por cue; APKG, manifesto e reel derivam exatamente desse mesmo áudio.
 - Criar reel MP4 com áudio sincronizado aos tempos publicados no contrato do Hub.
@@ -47,3 +49,5 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Todo artefato final informa origem textual, perfil de voz, configuração e hashes.
 - A prévia de vídeo e o MP4 usam o mesmo recorte e janelas de cue; gaps não contêm legenda, o áudio original não é substituído silenciosamente e um job com fonte alterada falha sem sobrescrever artefatos.
 - Cenas Animadas preserva o quadro e sua foto após salvar/reabrir; o MP4 registra movimentos e resolução, e um upload de revisão antiga não substitui imagens persistidas.
+
+- Perfis VoiceDesign geram prévia em português sem exigir referência; perfis Base só sintetizam com áudio validado e sua transcrição. A troca de motor não altera o WAV canônico nem o contrato iHub.
