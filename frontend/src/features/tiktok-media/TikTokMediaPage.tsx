@@ -2383,6 +2383,17 @@ export function TikTokMediaPage() {
                     onChange={(highlight) => updateSlide({ highlight })}
                     maxLength={120}
                   />
+                  <div className="tm-editor-separator" />
+                  <h3>Roteiro da narração</h3>
+                  <p className="tm-small">Escreva a fala natural deste quadro após finalizar o visual. O texto na tela permanece independente. A voz do Generator usa este roteiro na exportação.</p>
+                  <EditField
+                    label="Narração deste quadro"
+                    value={active.narration_text ?? ""}
+                    onChange={(narration_text) => updateSlide({ narration_text })}
+                    multiline
+                    maxLength={2000}
+                    hint="Inclua pausas e pontuação como falaria naturalmente. Se vazio, será usado o texto do quadro."
+                  />
                   <label className="tm-field">
                     <span>Duração: {(active.duration_ms / 1000).toFixed(1)}s</span>
                     <input
