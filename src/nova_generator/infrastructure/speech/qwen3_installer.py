@@ -95,7 +95,8 @@ def _python_has_qwen(executable: str) -> bool:
             [
                 executable, "-c",
                 "import importlib.util as u; "
-                "assert all(u.find_spec(x) for x in ('qwen_tts','torch','soundfile','huggingface_hub'))",
+                "assert all(u.find_spec(x) for x in "
+                "('qwen_tts','torch','soundfile','huggingface_hub'))",
             ],
             capture_output=True, timeout=20, check=False,
         )
