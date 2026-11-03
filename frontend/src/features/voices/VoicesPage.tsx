@@ -39,7 +39,11 @@ const schema = z
   .superRefine((values, ctx) => {
     if (values.model_id === "qwen3-tts-1.7b-voice-design") {
       if (values.instruct.trim().length < 10) {
-        ctx.addIssue({ code: "custom", path: ["instruct"], message: "Descreva a voz desejada." });
+        ctx.addIssue({
+          code: "custom",
+          path: ["instruct"],
+          message: "Descreva a voz desejada.",
+        });
       }
     } else if (!/^[a-f0-9]{64}$/.test(values.reference_audio_sha256)) {
       ctx.addIssue({
@@ -88,10 +92,16 @@ export function VoicesPage() {
         name: values.name,
         model_id: values.model_id,
         model_sha256: undefined,
-        reference_audio_sha256: values.model_id === "qwen3-tts-1.7b-voice-design"
-          ? undefined
-          : values.reference_audio_sha256 || undefined,
-        parameters: parametersFor(values),
+        reference_audio_sha256:
+          values.model_id === "qwen3-tts-1.7b-voice-design"
+            ? undefined
+            : values.reference_audio_sha256 || undefined,
+        parameters:
+          existing &&
+          existing.model_id === values.model_id &&
+          values.model_id.startsWith("chatterbox-")
+            ? existing.parameters
+            : parametersFor(values),
       };
       return existing
         ? studioApi.createVoiceVersion(existing.id, input)
@@ -337,7 +347,9 @@ function VoiceForm({
   const referenceTooShort = !!selectedReference && selectedReference.duration_ms < 6000;
   const referenceRequired = !isVoiceDesign;
   const cannotCreate =
-    busy || !model.data?.available || upload.isPending ||
+    busy ||
+    !model.data?.available ||
+    upload.isPending ||
     (referenceRequired && (!selectedReference || referenceTooShort)) ||
     (isVoiceDesign && form.watch("instruct").trim().length < 10) ||
     (isVoiceClone && !form.watch("reference_text").trim());
@@ -352,7 +364,9 @@ function VoiceForm({
         Tipo de voz
         <select {...form.register("model_id")}>
           {VOICE_MODELS.map((choice) => (
-            <option key={choice.id} value={choice.id}>{choice.label}</option>
+            <option key={choice.id} value={choice.id}>
+              {choice.label}
+            </option>
           ))}
         </select>
       </label>
@@ -387,7 +401,9 @@ function VoiceForm({
       {!isVoiceDesign && (
         <>
           <div className="voice-upload-field">
-            <span className="voice-upload-title">Enviar áudio de referência (6 a 30 segundos)</span>
+            <span className="voice-upload-title">
+              Enviar áudio de referência (6 a 30 segundos)
+            </span>
             <div
               className={`voice-dropzone${isDragging ? " is-dragging" : ""}${upload.isPending ? " is-uploading" : ""}`}
               onDragEnter={onDragEnter}
@@ -486,10 +502,7 @@ function VoiceForm({
           className="secondary-button"
           disabled={cannotCreate}
           onClick={() => {
-            onNewVersion(
-              { ...form.getValues(), name: selectedVoice.name },
-              selectedVoice,
-            );
+            onNewVersion({ ...form.getValues(), name: selectedVoice.name }, selectedVoice);
           }}
         >
           <Volume2 /> Criar nova versão de {selectedVoice.name}
