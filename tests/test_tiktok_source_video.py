@@ -21,6 +21,7 @@ from nova_generator.domain.tiktok_media import (
     MediaProject,
     MediaProjectEdit,
     MediaSlide,
+    MotionGraphic,
 )
 from nova_generator.infrastructure.exports.tiktok_captions import render_ass
 from nova_generator.infrastructure.filesystem.tiktok_media_store import MediaProjectStore
@@ -224,6 +225,7 @@ def test_video_worker_verifies_source_digest_before_running_ffmpeg(monkeypatch, 
         title="Video",
         slides=[MediaSlide()],
         video_captions=[caption],
+        motion_graphics=[MotionGraphic(start_ms=300, sound="pop")],
     )
     execution = SimpleNamespace(raise_if_cancelled=lambda: None, heartbeat=lambda: None)
     commands = []
@@ -250,6 +252,8 @@ def test_video_worker_verifies_source_digest_before_running_ffmpeg(monkeypatch, 
     assert verified == digest
     assert "ass=captions.ass" in " ".join(commands[0][0])
     assert "[0:a]" in commands[0][0]
+    assert "adelay=300|300" in commands[0][0]
+    assert "amix=inputs=2" in commands[0][0]
     assert str(source.resolve()) in commands[0][0]
     assert commands[0][0][-1] == "final.mp4"
     assert (tmp_path / "captions.ass").is_file()
