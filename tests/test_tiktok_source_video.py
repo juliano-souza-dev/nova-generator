@@ -473,7 +473,7 @@ def test_paper_render_uses_synthetic_background_and_source_audio(monkeypatch, tm
     calls.clear()
     payload["audio_mode"] = "uploaded"
     handler._render_video_source(project, payload, tmp_path, tmp_path / "uploaded.mp3", execution)
-    assert "2:a:0" in calls[0][0]
+    assert "[2:a]" in " ".join(calls[0][0])
 
 
 def test_paper_contract_accepts_saved_themes_and_old_project_defaults() -> None:
