@@ -19,6 +19,7 @@ from nova_generator.infrastructure.speech.qwen3_tts_models import (
     qwen_model_sha256,
     validate_qwen_voice,
 )
+from nova_generator.infrastructure.speech import qwen3_tts_runner
 from nova_generator.infrastructure.speech.qwen3_tts_runner import main, parse_narration
 from nova_generator.infrastructure.speech.routing_synthesizer import RoutingSpeechSynthesizer
 
@@ -123,8 +124,14 @@ def test_qwen_parameters_require_design_or_authorized_clone():
 def test_qwen_language_is_explicit_and_not_sent_to_legacy_engines():
     qwen = VoiceProfileSnapshot(uuid4(), "Qwen", 1, VOICE_DESIGN, "a" * 64, None, {})
     legacy = VoiceProfileSnapshot(uuid4(), "Legacy", 1, "chatterbox-turbo", "a" * 64, None, {})
-    assert synthesis_language_parameters(qwen, "English") == {"language": "English"}
-    assert synthesis_language_parameters(qwen, "Portuguese") == {"language": "Portuguese"}
+    assert synthesis_language_parameters(qwen, "English") == {
+        "language": "English",
+        "seed": 42,
+    }
+    assert synthesis_language_parameters(qwen, "Portuguese") == {
+        "language": "Portuguese",
+        "seed": 42,
+    }
     assert synthesis_language_parameters(legacy, "English") == {}
     with pytest.raises(ValueError, match="Idioma Qwen"):
         synthesis_language_parameters(qwen, "Spanish")
@@ -204,7 +211,13 @@ def test_runner_generates_portuguese_wav_offline_with_fake_model(tmp_path, monke
         Qwen3TTSModel=SimpleNamespace(from_pretrained=lambda *args, **kwargs: model)
     )
     cuda = SimpleNamespace(is_available=lambda: False)
-    torch = SimpleNamespace(cuda=cuda, float32="float32", float16="float16", bfloat16="bfloat16")
+    torch = SimpleNamespace(
+        cuda=cuda,
+        float32="float32",
+        float16="float16",
+        bfloat16="bfloat16",
+        manual_seed=lambda _seed: None,
+    )
     soundfile = SimpleNamespace(
         write=lambda path, wav, sr, **kwargs: Path(path).write_bytes(b"RIFF-test")
     )
@@ -287,6 +300,7 @@ def test_bilingual_runner_preserves_voice_and_inserts_only_between_segments(
     monkeypatch.setitem(sys.modules, "torch", torch)
     monkeypatch.setitem(sys.modules, "soundfile", soundfile)
     monkeypatch.setitem(sys.modules, "numpy", numpy)
+    monkeypatch.setattr(qwen3_tts_runner, "_smooth_segment_edges", lambda wave, _sr: wave)
     monkeypatch.setenv("NOVA_GENERATOR_QWEN_MODEL_ROOT", str(model_dir.parent))
     reference = None
     reference_root = None
@@ -328,6 +342,6 @@ def test_bilingual_runner_preserves_voice_and_inserts_only_between_segments(
 
 
 def test_bilingual_parser_limits_segment_count():
-    spoken = " ".join("[en]Hi![/en]" for _ in range(21))
-    with pytest.raises(ValueError, match="20 trechos"):
+    spoken = " ".join("[en]Hi![/en]" for _ in range(257))
+    with pytest.raises(ValueError, match="256 trechos"):
         parse_narration(spoken)

@@ -268,7 +268,9 @@ def main() -> None:
             flush=True,
         )
         if is_voice_design:
-            seed = segment.get("seed", runtime_params.get("seed", VOICE_DESIGN_SEED))
+            seed = segment.get("seed")
+            if seed is None:
+                seed = runtime_params.get("seed", VOICE_DESIGN_SEED)
             if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
                 raise ValueError("Seed de VoiceDesign inválida.")
             _set_seed(torch, seed, device)

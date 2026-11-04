@@ -83,21 +83,32 @@ def test_speech_chunks_are_cached_independently_by_text_language_and_profile(tmp
         parameters={"instruct": "Clear, natural, consistent voice."},
     ).snapshot()
     synthesizer = BatchFakeSynthesizer()
-    use_case = SynthesizeSpeech(FileSpeechCache(tmp_path), synthesizer)
+    cache = FileSpeechCache(tmp_path)
+    use_case = SynthesizeSpeech(cache, synthesizer)
     chunks = [
-        ("Watch this!", {"language": "English", "seed": 42}),
-        ("Olha isso!", {"language": "Portuguese", "seed": 42}),
-        ("Watch this!", {"language": "English", "seed": 42}),
+        ("Good morning!", {"language": "English", "seed": 42}),
+        ("Good morning!", {"language": "Portuguese", "seed": 42}),
+        ("Good morning!", {"language": "English", "seed": 43}),
+        ("Good morning!", {"language": "English", "seed": 42}),
     ]
 
     first = use_case.execute_many(segments=chunks, profile=profile)
     second = use_case.execute_many(segments=chunks, profile=profile)
 
     assert synthesizer.calls == 1
-    assert synthesizer.generated == ["Watch this!", "Olha isso!"]
-    assert first[0].audio_path == first[2].audio_path
+    assert synthesizer.generated == ["Good morning!"] * 3
+    assert first[0].audio_path == first[3].audio_path
+    assert first[0].audio_path != first[1].audio_path
+    assert first[0].audio_path != first[2].audio_path
     assert second[0].audio_path == first[0].audio_path
     assert second[1].audio_path == first[1].audio_path
+    assert cache.cache_key(
+        text="Good morning!", profile=profile,
+        parameters={"language": "English", "seed": 42},
+    ) != cache.cache_key(
+        text="Good morning!", profile=profile,
+        parameters={"language": "Portuguese", "seed": 42},
+    )
 
 
 
