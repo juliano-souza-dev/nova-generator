@@ -280,7 +280,13 @@ def test_bilingual_runner_preserves_voice_and_inserts_only_between_segments(
         Qwen3TTSModel=SimpleNamespace(from_pretrained=lambda *args, **kwargs: model)
     )
     cuda = SimpleNamespace(is_available=lambda: False)
-    torch = SimpleNamespace(cuda=cuda, float32="float32", float16="float16", bfloat16="bfloat16")
+    torch = SimpleNamespace(
+        cuda=cuda,
+        float32="float32",
+        float16="float16",
+        bfloat16="bfloat16",
+        manual_seed=lambda _seed: None,
+    )
     outputs = []
     soundfile = SimpleNamespace(
         write=lambda path, samples, rate, **kwargs: outputs.append((samples, rate))
