@@ -55,6 +55,7 @@ import {
   type MediaBackground,
   type PaperTheme,
   type MediaCaption,
+  type MediaMotionGraphic,
   type MediaCaptionStyle,
   type MediaFormat,
   type MediaKind,
@@ -117,6 +118,10 @@ const effectPresets = [
   { template: "impact", title: "Impacto", subtitle: "Grande e marcante", icon: Sparkles },
   { template: "clean", title: "Minimal", subtitle: "Limpo e legível", icon: Type },
 ] as const;
+
+const motionGlyphs: Record<MediaMotionGraphic["icon"], string> = {
+  check: "✓", cross: "✕", star: "★", idea: "✦", arrow: "➜", sound: "♫", sparkle: "✧", warning: "!",
+};
 
 const presetFontSizes: Record<MediaCaptionStyle["template"], number> = {
   clean: 58,
@@ -265,9 +270,9 @@ export function TikTokMediaPage() {
   const [jobId, setJobId] = useState("");
   const [renderId, setRenderId] = useState("");
   const [railTab, setRailTab] = useState<"source" | "projects" | "ideas" | "reuse">("source");
-  const [inspectorTab, setInspectorTab] = useState<"captions" | "style" | "export" | "settings">(
-    "captions",
-  );
+  const [inspectorTab, setInspectorTab] = useState<
+    "captions" | "style" | "motion" | "export" | "settings"
+  >("captions");
   const editVersion = useRef(0);
   const loadedId = useRef<string | null>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
@@ -383,6 +388,7 @@ export function TikTokMediaPage() {
         source_youtube_id: value.source_youtube_id,
         source_cut_job_id: value.source_cut_job_id,
         video_captions: value.video_captions,
+        motion_graphics: value.motion_graphics ?? [],
         shadowing_clip: value.shadowing_clip,
         caption_style: value.caption_style,
         slides: value.slides,
@@ -471,6 +477,9 @@ export function TikTokMediaPage() {
       ? "#233043"
       : captionStyle.text_color;
   const captions = draft?.video_captions ?? [];
+  const motionGraphics = draft?.motion_graphics ?? [];
+  const activeMotionGraphic = motionGraphics.find((graphic) => graphic.enabled &&
+    playheadMs >= graphic.start_ms && playheadMs < graphic.start_ms + graphic.duration_ms);
   const activeCaption = activeCaptionAt(captions, playheadMs);
   const selectedCaption =
     captions.find((caption) => caption.cue_id === selectedCaptionId) ?? activeCaption;
@@ -772,6 +781,23 @@ export function TikTokMediaPage() {
     } else {
       player.pause();
     }
+  }
+
+  function addMotionGraphic() {
+    const graphic: MediaMotionGraphic = {
+      id: crypto.randomUUID(), start_ms: Math.max(0, playheadMs), duration_ms: 900,
+      icon: "check", label: "", animation: "pop", sound: "pop", position: "top", enabled: true,
+    };
+    edit((current) => ({ ...current, motion_graphics: [...(current.motion_graphics ?? []), graphic] }));
+    setInspectorTab("motion");
+  }
+
+  function updateMotionGraphic(id: string, patch: Partial<MediaMotionGraphic>) {
+    edit((current) => ({ ...current, motion_graphics: (current.motion_graphics ?? []).map((g) => g.id === id ? { ...g, ...patch } : g) }));
+  }
+
+  function removeMotionGraphic(id: string) {
+    edit((current) => ({ ...current, motion_graphics: (current.motion_graphics ?? []).filter((g) => g.id !== id) }));
   }
 
   function updateCaption(cueId: string, patch: Partial<MediaCaption>) {
@@ -1603,6 +1629,14 @@ export function TikTokMediaPage() {
                         <span className="tm-paper-grain" />
                       </div>
                     )}
+                    {activeMotionGraphic && (
+                      <div key={activeMotionGraphic.id}
+                        className={`tm-motion-overlay tm-motion-${activeMotionGraphic.animation} tm-motion-position-${activeMotionGraphic.position}`}
+                        aria-hidden="true">
+                        <strong>{motionGlyphs[activeMotionGraphic.icon]}</strong>
+                        {activeMotionGraphic.label && <span>{activeMotionGraphic.label}</span>}
+                      </div>
+                    )}
                     {activeCaption && (
                       <div
                         key={activeCaption.cue_id}
@@ -1776,7 +1810,10 @@ export function TikTokMediaPage() {
                 <div className="tm-caption-timeline" aria-label="Linha do tempo das legendas">
                   <div className="tm-timeline-guide">
                     <span>VÍDEO</span>
-                    <span>LEGENDAS · arraste as bordas para sincronizar</span>
+                    <span>LEGENDAS + ELEMENTOS · sincronize na timeline</span>
+                    <button onClick={addMotionGraphic} disabled={!actualDurationMs}>
+                      <Sparkles size={14} /> Efeito
+                    </button>
                     <button
                       onClick={addCaptionAtPlayhead}
                       disabled={!draft.source_cut_job_id && !draft.source_scene_id}
@@ -1790,6 +1827,16 @@ export function TikTokMediaPage() {
                       className="tm-caption-track"
                       style={{ width: `${Math.max(780, (actualDurationMs / 1000) * 18)}px` }}
                     >
+                      {motionGraphics.map((graphic) => (
+                        <button key={graphic.id} type="button"
+                          className={`tm-motion-marker ${graphic.enabled ? "" : "tm-motion-marker-disabled"}`}
+                          style={{ left: `${(graphic.start_ms / Math.max(1, actualDurationMs)) * 100}%` }}
+                          title={`Motion Graphic: ${graphic.icon} · ${durationLabel(graphic.start_ms)}`}
+                          aria-label={`Editar elemento gráfico em ${durationLabel(graphic.start_ms)}`}
+                          onClick={() => { setInspectorTab("motion"); seekVideo(graphic.start_ms); }}>
+                          {motionGlyphs[graphic.icon]}
+                        </button>
+                      ))}
                       {captions.map((caption, index) => (
                         <div
                           key={caption.cue_id}
@@ -1887,6 +1934,10 @@ export function TikTokMediaPage() {
                   disabled={!videoMode}
                 >
                   <Palette size={15} /> Visual
+                </button>
+                <button className={inspectorTab === "motion" ? "tm-tab-active" : ""}
+                  onClick={() => setInspectorTab("motion")} disabled={!videoMode}>
+                  <Sparkles size={15} /> Movimento
                 </button>
                 <button
                   className={inspectorTab === "export" ? "tm-tab-active" : ""}
@@ -2335,6 +2386,31 @@ export function TikTokMediaPage() {
                         Selecione uma fala na timeline para editar inglês, tradução e timing.
                       </p>
                     ))}
+                </div>
+              )}
+              {videoMode && inspectorTab === "motion" && (
+                <div className="tm-card tm-motion-editor">
+                  <h2><Sparkles size={18} /> Motion Graphics</h2>
+                  <p className="tm-small">Ícones entram no instante escolhido e recebem um efeito sonoro sincronizado na exportação. A prévia acompanha a animação visual.</p>
+                  <button type="button" onClick={addMotionGraphic} disabled={!actualDurationMs}><Plus size={15} /> Adicionar elemento no playhead</button>
+                  {!motionGraphics.length && <p className="tm-small">Nenhum elemento adicionado. Posicione o playhead e crie o primeiro.</p>}
+                  {motionGraphics.map((g, index) => (
+                    <div className="tm-motion-item" key={g.id}>
+                      <div className="tm-motion-item-heading"><strong>{index + 1}. {motionGlyphs[g.icon]} {g.label || "Elemento gráfico"}</strong><button type="button" onClick={() => removeMotionGraphic(g.id)} aria-label="Remover elemento"><Trash2 size={14} /></button></div>
+                      <label className="tm-field"><span>Ícone</span><select value={g.icon} onChange={(e) => updateMotionGraphic(g.id, { icon: e.target.value as MediaMotionGraphic["icon"] })}>
+                        <option value="check">✓ Confirmação</option><option value="cross">✕ Erro / contraste</option><option value="star">★ Destaque</option><option value="idea">✦ Ideia</option><option value="arrow">➜ Direção</option><option value="sound">♫ Áudio</option><option value="sparkle">✧ Brilho</option><option value="warning">! Atenção</option>
+                      </select></label>
+                      <EditField label="Texto opcional" value={g.label} onChange={(label) => updateMotionGraphic(g.id, { label })} maxLength={80} />
+                      <div className="tm-motion-fields">
+                        <label className="tm-field"><span>Entrada (s)</span><input type="number" min={0} max={Math.max(0, actualDurationMs / 1000)} step={0.1} value={g.start_ms / 1000} onChange={(e) => updateMotionGraphic(g.id, { start_ms: Math.max(0, Math.round(Number(e.target.value) * 1000)) })} /></label>
+                        <label className="tm-field"><span>Duração (s)</span><input type="number" min={0.2} max={4} step={0.1} value={g.duration_ms / 1000} onChange={(e) => updateMotionGraphic(g.id, { duration_ms: Math.max(200, Math.min(4000, Math.round(Number(e.target.value) * 1000))) })} /></label>
+                      </div>
+                      <label className="tm-field"><span>Animação</span><select value={g.animation} onChange={(e) => updateMotionGraphic(g.id, { animation: e.target.value as MediaMotionGraphic["animation"] })}><option value="pop">Pop</option><option value="fade">Fade</option><option value="slide">Slide</option><option value="bounce">Bounce</option></select></label>
+                      <label className="tm-field"><span>Efeito sonoro</span><select value={g.sound} onChange={(e) => updateMotionGraphic(g.id, { sound: e.target.value as MediaMotionGraphic["sound"] })}><option value="pop">Pop</option><option value="success">Confirmação</option><option value="ding">Ding</option><option value="whoosh">Whoosh</option><option value="none">Sem som</option></select></label>
+                      <label className="tm-field"><span>Posição</span><select value={g.position} onChange={(e) => updateMotionGraphic(g.id, { position: e.target.value as MediaMotionGraphic["position"] })}><option value="top">Superior</option><option value="center">Centro</option><option value="bottom">Inferior</option><option value="left">Lateral esquerda</option><option value="right">Lateral direita</option></select></label>
+                      <label className="tm-motion-enabled"><input type="checkbox" checked={g.enabled} onChange={(e) => updateMotionGraphic(g.id, { enabled: e.target.checked })} /> Ativo na exportação</label>
+                    </div>
+                  ))}
                 </div>
               )}
               {!videoMode && active && inspectorTab === "captions" && (

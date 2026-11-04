@@ -89,6 +89,22 @@ class MediaSlide(BaseModel):
         return "" if value is None else value
 
 
+class MotionGraphic(BaseModel):
+    """A timed visual accent and optional sound cue for a TikTok export."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=80)
+    start_ms: int = Field(ge=0)
+    duration_ms: int = Field(default=900, ge=200, le=4000)
+    icon: Literal["check", "cross", "star", "idea", "arrow", "sound", "sparkle", "warning"] = "check"
+    label: str = Field(default="", max_length=80)
+    animation: Literal["pop", "fade", "slide", "bounce"] = "pop"
+    sound: Literal["none", "pop", "success", "whoosh", "ding"] = "pop"
+    position: Literal["top", "center", "bottom", "left", "right"] = "top"
+    enabled: bool = True
+
+
 class MediaProject(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -107,6 +123,7 @@ class MediaProject(BaseModel):
     revision: int = Field(default=1, ge=1)
     slides: list[MediaSlide] = Field(min_length=1, max_length=30)
     video_captions: list[MediaCaption] = Field(default_factory=list, max_length=200)
+    motion_graphics: list[MotionGraphic] = Field(default_factory=list, max_length=80)
     shadowing_clip: ShadowingClip | None = None
     caption_style: MediaCaptionStyle = Field(default_factory=MediaCaptionStyle)
     audio_filename: Literal["audio.mp3", "audio.wav", "audio.ogg"] | None = None
@@ -117,6 +134,8 @@ class MediaProject(BaseModel):
             raise ValueError("Cada quadro precisa de um ID diferente")
         if len({caption.cue_id for caption in self.video_captions}) != len(self.video_captions):
             raise ValueError("Cada fala deve ser usada apenas uma vez na legenda")
+        if len({graphic.id for graphic in self.motion_graphics}) != len(self.motion_graphics):
+            raise ValueError("Cada elemento gráfico precisa de um ID diferente")
         return self
 
 
@@ -136,6 +155,7 @@ class MediaProjectEdit(BaseModel):
     source_cut_job_id: UUID | None = None
     slides: list[MediaSlide] = Field(min_length=1, max_length=30)
     video_captions: list[MediaCaption] = Field(default_factory=list, max_length=200)
+    motion_graphics: list[MotionGraphic] = Field(default_factory=list, max_length=80)
     shadowing_clip: ShadowingClip | None = None
     caption_style: MediaCaptionStyle = Field(default_factory=MediaCaptionStyle)
 
