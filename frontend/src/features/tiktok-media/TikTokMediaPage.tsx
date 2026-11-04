@@ -478,7 +478,7 @@ export function TikTokMediaPage() {
       : captionStyle.text_color;
   const captions = draft?.video_captions ?? [];
   const motionGraphics = draft?.motion_graphics ?? [];
-  const activeMotionGraphic = motionGraphics.find((graphic) => graphic.enabled &&
+  const activeMotionGraphics = motionGraphics.filter((graphic) => graphic.enabled &&
     playheadMs >= graphic.start_ms && playheadMs < graphic.start_ms + graphic.duration_ms);
   const activeCaption = activeCaptionAt(captions, playheadMs);
   const selectedCaption =
@@ -1629,14 +1629,14 @@ export function TikTokMediaPage() {
                         <span className="tm-paper-grain" />
                       </div>
                     )}
-                    {activeMotionGraphic && (
-                      <div key={activeMotionGraphic.id}
-                        className={`tm-motion-overlay tm-motion-${activeMotionGraphic.animation} tm-motion-position-${activeMotionGraphic.position}`}
+                    {activeMotionGraphics.map((graphic) => (
+                      <div key={graphic.id}
+                        className={`tm-motion-overlay tm-motion-${graphic.animation} tm-motion-position-${graphic.position}`}
                         aria-hidden="true">
-                        <strong>{motionGlyphs[activeMotionGraphic.icon]}</strong>
-                        {activeMotionGraphic.label && <span>{activeMotionGraphic.label}</span>}
+                        <strong>{motionGlyphs[graphic.icon]}</strong>
+                        {graphic.label && <span>{graphic.label}</span>}
                       </div>
-                    )}
+                    ))}
                     {activeCaption && (
                       <div
                         key={activeCaption.cue_id}
