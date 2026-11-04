@@ -31,12 +31,7 @@ function LibraryCard({ video }: { video: MediaLibraryVideo }) {
   return (
     <article className="library-card panel">
       <div className="library-video">
-        <video
-          controls
-          preload="metadata"
-          src={videoUrl}
-          aria-label={"Assistir " + video.title}
-        >
+        <video controls preload="metadata" src={videoUrl} aria-label={"Assistir " + video.title}>
           Seu navegador não consegue reproduzir este vídeo.
         </video>
       </div>
@@ -108,10 +103,7 @@ export function LibraryPage() {
       </div>
       {library.isPending && <LoadingState label="Carregando biblioteca" />}
       {library.isError && (
-        <ErrorState
-          message={library.error.message}
-          retry={() => void library.refetch()}
-        />
+        <ErrorState message={library.error.message} retry={() => void library.refetch()} />
       )}
       {library.isSuccess && videos.length === 0 && (
         <EmptyState title={search ? "Nenhum vídeo com esse título" : "Sua biblioteca está vazia"}>
@@ -119,7 +111,8 @@ export function LibraryPage() {
             "Tente outra busca."
           ) : (
             <>
-              <Film aria-hidden="true" /> Os vídeos do TikTok Mídia aparecerão aqui após a exportação.
+              <Film aria-hidden="true" /> Os vídeos do TikTok Mídia aparecerão aqui após a
+              exportação.
               <Link to="/tiktok-media">Criar vídeo</Link>
             </>
           )}

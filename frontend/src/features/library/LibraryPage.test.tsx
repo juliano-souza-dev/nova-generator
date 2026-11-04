@@ -37,7 +37,9 @@ describe("LibraryPage", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    expect(await screen.findByRole("heading", { name: "SEE, LOOK e WATCH 🎬" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "SEE, LOOK e WATCH 🎬" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Assistir SEE, LOOK e WATCH 🎬")).toHaveAttribute(
       "src",
       expect.stringContaining("/renders/52d59a0e-99c2-49b9-b0e9-e4911dc6c713/video"),
