@@ -9,8 +9,8 @@ from nova_generator.domain.voices import VoiceProfile
 
 PREVIEW_TEXT = "Hello. This is a local voice preview."
 QWEN_PREVIEW_TEXT = (
-    "Você já percebeu como uma palavra muda de sentido dependendo do contexto? "
-    "É isso que torna o inglês tão interessante!"
+    "[pt]Aprender inglês fica mais simples quando você entende o contexto.[/pt] "
+    "[en]Let's learn English together, one scene at a time![/en]"
 )
 
 

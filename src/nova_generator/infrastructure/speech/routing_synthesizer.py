@@ -12,6 +12,7 @@ from nova_generator.infrastructure.speech.qwen3_tts_models import (
     QWEN_MODELS,
     qwen_model_sha256,
 )
+from nova_generator.infrastructure.speech.qwen3_tts_runner import has_language_tags
 
 
 class RoutingSpeechSynthesizer:
@@ -43,6 +44,11 @@ class RoutingSpeechSynthesizer:
                 )
             engine = self._qwen
         elif profile.model_id in {"chatterbox-turbo", "chatterbox-nano"}:
+            if has_language_tags(text):
+                raise ValueError(
+                    "Roteiros com [pt]/[en] exigem uma voz Qwen3-TTS. "
+                    "Selecione uma voz bilíngue na Biblioteca de vozes."
+                )
             engine = self._chatterbox
         else:
             raise ValueError(f"Modelo de voz não suportado: {profile.model_id}")
