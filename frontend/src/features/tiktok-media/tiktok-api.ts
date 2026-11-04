@@ -13,15 +13,7 @@ export type MediaMotionGraphic = {
   id: string;
   start_ms: number;
   duration_ms: number;
-  icon:
-    | "check"
-    | "cross"
-    | "star"
-    | "idea"
-    | "arrow"
-    | "sound"
-    | "sparkle"
-    | "warning";
+  icon: "check" | "cross" | "star" | "idea" | "arrow" | "sound" | "sparkle" | "warning";
   label: string;
   animation: "pop" | "fade" | "slide" | "bounce";
   sound: "none" | "pop" | "success" | "whoosh" | "ding";
