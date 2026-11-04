@@ -18,6 +18,7 @@ from nova_generator.infrastructure.speech.qwen3_tts_runner import (
 )
 
 MAX_SPEECH_CHUNK_CHARACTERS = 280
+MAX_COMPATIBILITY_CHUNK_CHARACTERS = 2000
 _LEGACY_LANGUAGE_TAGS = re.compile(
     r"\[/?(?:pt|en|es|fr|de|it|pl|tr|ru|nl|cs|ar|zh-cn|ja|hu|ko|hi)\]",
     re.IGNORECASE,

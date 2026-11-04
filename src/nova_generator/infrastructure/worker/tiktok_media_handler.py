@@ -24,6 +24,8 @@ from nova_generator.infrastructure.speech.qwen3_tts_models import QWEN_MODELS
 from nova_generator.infrastructure.worker.persistent_worker import JobExecution
 from nova_generator.infrastructure.worker.project_media_handler import _keep_lease
 from nova_generator.infrastructure.worker.tiktok_speech import (
+    MAX_COMPATIBILITY_CHUNK_CHARACTERS,
+    MAX_SPEECH_CHUNK_CHARACTERS,
     TikTokSpeechChunk,
     build_project_speech_chunks,
 )
@@ -542,8 +544,18 @@ def make_media_render_handler(
             )
         else:
             default_language = "en" if payload.get("voice_language") == "en" else "pt"
+            chunk_limit = (
+                MAX_SPEECH_CHUNK_CHARACTERS
+                if voice and voice.model_id in QWEN_MODELS
+                else MAX_COMPATIBILITY_CHUNK_CHARACTERS
+            )
             narration_chunks = (
-                build_project_speech_chunks(project.slides, voice, default_language)
+                build_project_speech_chunks(
+                    project.slides,
+                    voice,
+                    default_language,
+                    max_characters=chunk_limit,
+                )
                 if voice else []
             )
             rendered_chunks: list[Any] = []
@@ -556,12 +568,17 @@ def make_media_render_handler(
                 with _keep_lease(execution):
                     execute_many = getattr(speech, "execute_many", None)
                     if callable(execute_many):
-                        rendered_chunks = execute_many(
+                        batch_result = execute_many(
                             profile=voice,
                             segments=[
                                 (chunk.text, chunk.parameters) for chunk in narration_chunks
                             ],
                         )
+                        if not isinstance(batch_result, list):
+                            raise RuntimeError(
+                                "O sintetizador retornou um lote de chunks inválido."
+                            )
+                        rendered_chunks = batch_result
                     else:
                         rendered_chunks = [
                             speech.execute(

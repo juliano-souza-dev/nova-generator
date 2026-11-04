@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from nova_generator.application.ports.speech_cache import SpeechCache
 from nova_generator.application.ports.speech_synthesizer import (
@@ -74,7 +74,10 @@ class SynthesizeSpeech:
             batch_synthesizer = getattr(self._synthesizer, "synthesize_many", None)
             if callable(batch_synthesizer):
                 try:
-                    synthesized = batch_synthesizer(profile=profile, requests=requests)
+                    synthesized = cast(
+                        list[SynthesizedSpeech],
+                        batch_synthesizer(profile=profile, requests=requests),
+                    )
                 except PartialBatchSynthesisError as exc:
                     pending_keys = list(pending)
                     for request_index, speech in exc.completed:

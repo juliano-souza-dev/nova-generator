@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from nova_generator.application.ports.speech_synthesizer import SpeechSynthesizer
 from nova_generator.core.settings import Settings
@@ -72,7 +72,10 @@ class RoutingSpeechSynthesizer:
             self._validate_qwen_profile(profile)
             batch = getattr(self._qwen, "synthesize_many", None)
             if callable(batch):
-                return batch(profile=profile, requests=requests)
+                return cast(
+                    list[SynthesizedSpeech],
+                    batch(profile=profile, requests=requests),
+                )
             engine = self._qwen
         elif profile.model_id in {"chatterbox-turbo", "chatterbox-nano"}:
             if any(has_language_tags(str(request.get("text", ""))) for request in requests):
