@@ -8,6 +8,7 @@ import os
 import struct
 import subprocess
 import zlib
+from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, Literal
@@ -40,6 +41,9 @@ from nova_generator.infrastructure.database.editorial_project_repository import 
     SqlAlchemyEditorialProjectRepository,
 )
 from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
+from nova_generator.infrastructure.filesystem.tiktok_media_library import (
+    list_completed_tiktok_videos,
+)
 from nova_generator.infrastructure.filesystem.tiktok_media_package import (
     MAX_PACKAGE_BYTES,
     MediaPackageError,
@@ -91,6 +95,25 @@ def _valid_scene_png(content: bytes) -> bool:
 
 def _store() -> MediaProjectStore:
     return MediaProjectStore(get_settings().media_cache_root)
+
+
+class LibraryVideoResponse(BaseModel):
+    project_id: UUID
+    render_id: UUID
+    title: str
+    format: str
+    visual_mode: str
+    duration_ms: int = Field(ge=1)
+    size_bytes: int = Field(ge=1)
+    completed_at: datetime
+
+
+@router.get("/library", response_model=list[LibraryVideoResponse])
+def list_tiktok_video_library() -> list[LibraryVideoResponse]:
+    return [
+        LibraryVideoResponse.model_validate(item)
+        for item in list_completed_tiktok_videos(get_settings().media_cache_root)
+    ]
 
 
 def _get(project_id: UUID) -> MediaProject:
@@ -732,7 +755,7 @@ def _finished_render(project_id: UUID, render_id: UUID) -> Path:
 
 
 @router.get("/projects/{project_id}/renders/{render_id}/video")
-def download_media_video(project_id: UUID, render_id: UUID) -> FileResponse:
+def download_media_video(project_id: UUID, render_id: UUID, download: bool = False) -> FileResponse:
     path = _finished_render(project_id, render_id) / "final.mp4"
     if not path.is_file():
         raise HTTPException(404, "Vídeo indisponível.")
@@ -740,7 +763,7 @@ def download_media_video(project_id: UUID, render_id: UUID) -> FileResponse:
         path,
         media_type="video/mp4",
         filename="tiktok-media.mp4",
-        content_disposition_type="inline",
+        content_disposition_type="attachment" if download else "inline",
     )
 
 

@@ -30,7 +30,7 @@ import {
   Video,
 } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { PageHeader } from "../../components/PageHeader";
 import { studioApi } from "../../lib/studio-api";
@@ -190,6 +190,7 @@ function EditField({
 }
 
 export function TikTokMediaPage() {
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const projects = useQuery({
     queryKey: ["tiktok-projects"],
@@ -203,7 +204,7 @@ export function TikTokMediaPage() {
     queryKey: ["tiktok-voices"],
     queryFn: studioApi.voices,
   });
-  const [selectedId, selectProject] = useState<string | null>(null);
+  const [selectedId, selectProject] = useState<string | null>(searchParams.get("project"));
   const projectQuery = useQuery({
     queryKey: ["tiktok-project", selectedId],
     queryFn: () => mediaApi.get(selectedId!),
@@ -2641,10 +2642,16 @@ export function TikTokMediaPage() {
                         : "Gerar vídeo MP4"}
                   </button>
                   {jobId && (
-                    <p className="tm-small">
-                      Render: <Link to="/jobs">{job.data?.status ?? "aguardando"}</Link>
-                      {job.data?.error_message ? ` · ${job.data.error_message}` : ""}
-                    </p>
+                    <>
+                      <p className="tm-small">
+                        Render: <Link to="/jobs">{job.data?.status ?? "aguardando"}</Link>
+                        {job.data?.error_message ? ` · ${job.data.error_message}` : ""}
+                      </p>
+                      <p className="tm-small">
+                        Pode sair desta página: após a conclusão, o vídeo ficará na{" "}
+                        <Link to="/library">Biblioteca</Link>.
+                      </p>
+                    </>
                   )}
                   {job.data?.status === "succeeded" && renderId && (
                     <>
@@ -2655,7 +2662,7 @@ export function TikTokMediaPage() {
                       />
                       <a
                         className="tm-download"
-                        href={mediaApi.videoUrl(draft.id, renderId)}
+                        href={mediaApi.videoDownloadUrl(draft.id, renderId)}
                         download="tiktok-media.mp4"
                       >
                         <Download size={16} /> Baixar MP4

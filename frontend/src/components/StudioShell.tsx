@@ -1,5 +1,6 @@
 import {
   Clapperboard,
+  Film,
   FolderKanban,
   Languages,
   ListChecks,
@@ -23,6 +24,7 @@ const links = [
   { to: "/jobs", label: "Jobs", icon: ListChecks },
   { to: "/story", label: "História", icon: Clapperboard },
   { to: "/tiktok-media", label: "TikTok Mídia", icon: Video },
+  { to: "/library", label: "Biblioteca", icon: Film },
 ];
 
 export function StudioShell({ children }: { children: ReactNode }) {
