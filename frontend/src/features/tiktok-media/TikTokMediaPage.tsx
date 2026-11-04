@@ -120,7 +120,14 @@ const effectPresets = [
 ] as const;
 
 const motionGlyphs: Record<MediaMotionGraphic["icon"], string> = {
-  check: "✓", cross: "✕", star: "★", idea: "✦", arrow: "➜", sound: "♫", sparkle: "✧", warning: "!",
+  check: "✓",
+  cross: "✕",
+  star: "★",
+  idea: "✦",
+  arrow: "➜",
+  sound: "♫",
+  sparkle: "✧",
+  warning: "!",
 };
 
 const presetFontSizes: Record<MediaCaptionStyle["template"], number> = {
@@ -478,8 +485,12 @@ export function TikTokMediaPage() {
       : captionStyle.text_color;
   const captions = draft?.video_captions ?? [];
   const motionGraphics = draft?.motion_graphics ?? [];
-  const activeMotionGraphics = motionGraphics.filter((graphic) => graphic.enabled &&
-    playheadMs >= graphic.start_ms && playheadMs < graphic.start_ms + graphic.duration_ms);
+  const activeMotionGraphics = motionGraphics.filter(
+    (graphic) =>
+      graphic.enabled &&
+      playheadMs >= graphic.start_ms &&
+      playheadMs < graphic.start_ms + graphic.duration_ms,
+  );
   const activeCaption = activeCaptionAt(captions, playheadMs);
   const selectedCaption =
     captions.find((caption) => caption.cue_id === selectedCaptionId) ?? activeCaption;
@@ -785,19 +796,37 @@ export function TikTokMediaPage() {
 
   function addMotionGraphic() {
     const graphic: MediaMotionGraphic = {
-      id: crypto.randomUUID(), start_ms: Math.max(0, playheadMs), duration_ms: 900,
-      icon: "check", label: "", animation: "pop", sound: "pop", position: "top", enabled: true,
+      id: crypto.randomUUID(),
+      start_ms: Math.max(0, playheadMs),
+      duration_ms: 900,
+      icon: "check",
+      label: "",
+      animation: "pop",
+      sound: "pop",
+      position: "top",
+      enabled: true,
     };
-    edit((current) => ({ ...current, motion_graphics: [...(current.motion_graphics ?? []), graphic] }));
+    edit((current) => ({
+      ...current,
+      motion_graphics: [...(current.motion_graphics ?? []), graphic],
+    }));
     setInspectorTab("motion");
   }
 
   function updateMotionGraphic(id: string, patch: Partial<MediaMotionGraphic>) {
-    edit((current) => ({ ...current, motion_graphics: (current.motion_graphics ?? []).map((g) => g.id === id ? { ...g, ...patch } : g) }));
+    edit((current) => ({
+      ...current,
+      motion_graphics: (current.motion_graphics ?? []).map((graphic) =>
+        graphic.id === id ? { ...graphic, ...patch } : graphic,
+      ),
+    }));
   }
 
   function removeMotionGraphic(id: string) {
-    edit((current) => ({ ...current, motion_graphics: (current.motion_graphics ?? []).filter((g) => g.id !== id) }));
+    edit((current) => ({
+      ...current,
+      motion_graphics: (current.motion_graphics ?? []).filter((graphic) => graphic.id !== id),
+    }));
   }
 
   function updateCaption(cueId: string, patch: Partial<MediaCaption>) {
@@ -1630,9 +1659,11 @@ export function TikTokMediaPage() {
                       </div>
                     )}
                     {activeMotionGraphics.map((graphic) => (
-                      <div key={graphic.id}
+                      <div
+                        key={graphic.id}
                         className={`tm-motion-overlay tm-motion-${graphic.animation} tm-motion-position-${graphic.position}`}
-                        aria-hidden="true">
+                        aria-hidden="true"
+                      >
                         <strong>{motionGlyphs[graphic.icon]}</strong>
                         {graphic.label && <span>{graphic.label}</span>}
                       </div>
@@ -1828,12 +1859,20 @@ export function TikTokMediaPage() {
                       style={{ width: `${Math.max(780, (actualDurationMs / 1000) * 18)}px` }}
                     >
                       {motionGraphics.map((graphic) => (
-                        <button key={graphic.id} type="button"
+                        <button
+                          key={graphic.id}
+                          type="button"
                           className={`tm-motion-marker ${graphic.enabled ? "" : "tm-motion-marker-disabled"}`}
-                          style={{ left: `${(graphic.start_ms / Math.max(1, actualDurationMs)) * 100}%` }}
+                          style={{
+                            left: `${(graphic.start_ms / Math.max(1, actualDurationMs)) * 100}%`,
+                          }}
                           title={`Motion Graphic: ${graphic.icon} · ${durationLabel(graphic.start_ms)}`}
                           aria-label={`Editar elemento gráfico em ${durationLabel(graphic.start_ms)}`}
-                          onClick={() => { setInspectorTab("motion"); seekVideo(graphic.start_ms); }}>
+                          onClick={() => {
+                            setInspectorTab("motion");
+                            seekVideo(graphic.start_ms);
+                          }}
+                        >
                           {motionGlyphs[graphic.icon]}
                         </button>
                       ))}
@@ -1935,8 +1974,11 @@ export function TikTokMediaPage() {
                 >
                   <Palette size={15} /> Visual
                 </button>
-                <button className={inspectorTab === "motion" ? "tm-tab-active" : ""}
-                  onClick={() => setInspectorTab("motion")} disabled={!videoMode}>
+                <button
+                  className={inspectorTab === "motion" ? "tm-tab-active" : ""}
+                  onClick={() => setInspectorTab("motion")}
+                  disabled={!videoMode}
+                >
                   <Sparkles size={15} /> Movimento
                 </button>
                 <button
@@ -2390,25 +2432,167 @@ export function TikTokMediaPage() {
               )}
               {videoMode && inspectorTab === "motion" && (
                 <div className="tm-card tm-motion-editor">
-                  <h2><Sparkles size={18} /> Motion Graphics</h2>
-                  <p className="tm-small">Ícones entram no instante escolhido e recebem um efeito sonoro sincronizado na exportação. A prévia acompanha a animação visual.</p>
-                  <button type="button" onClick={addMotionGraphic} disabled={!actualDurationMs}><Plus size={15} /> Adicionar elemento no playhead</button>
-                  {!motionGraphics.length && <p className="tm-small">Nenhum elemento adicionado. Posicione o playhead e crie o primeiro.</p>}
-                  {motionGraphics.map((g, index) => (
-                    <div className="tm-motion-item" key={g.id}>
-                      <div className="tm-motion-item-heading"><strong>{index + 1}. {motionGlyphs[g.icon]} {g.label || "Elemento gráfico"}</strong><button type="button" onClick={() => removeMotionGraphic(g.id)} aria-label="Remover elemento"><Trash2 size={14} /></button></div>
-                      <label className="tm-field"><span>Ícone</span><select value={g.icon} onChange={(e) => updateMotionGraphic(g.id, { icon: e.target.value as MediaMotionGraphic["icon"] })}>
-                        <option value="check">✓ Confirmação</option><option value="cross">✕ Erro / contraste</option><option value="star">★ Destaque</option><option value="idea">✦ Ideia</option><option value="arrow">➜ Direção</option><option value="sound">♫ Áudio</option><option value="sparkle">✧ Brilho</option><option value="warning">! Atenção</option>
-                      </select></label>
-                      <EditField label="Texto opcional" value={g.label} onChange={(label) => updateMotionGraphic(g.id, { label })} maxLength={80} />
-                      <div className="tm-motion-fields">
-                        <label className="tm-field"><span>Entrada (s)</span><input type="number" min={0} max={Math.max(0, actualDurationMs / 1000)} step={0.1} value={g.start_ms / 1000} onChange={(e) => updateMotionGraphic(g.id, { start_ms: Math.max(0, Math.round(Number(e.target.value) * 1000)) })} /></label>
-                        <label className="tm-field"><span>Duração (s)</span><input type="number" min={0.2} max={4} step={0.1} value={g.duration_ms / 1000} onChange={(e) => updateMotionGraphic(g.id, { duration_ms: Math.max(200, Math.min(4000, Math.round(Number(e.target.value) * 1000))) })} /></label>
+                  <h2>
+                    <Sparkles size={18} /> Motion Graphics
+                  </h2>
+                  <p className="tm-small">
+                    Ícones entram no instante escolhido e recebem um efeito sonoro sincronizado
+                    na exportação. A prévia acompanha a animação visual.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={addMotionGraphic}
+                    disabled={!actualDurationMs}
+                  >
+                    <Plus size={15} /> Adicionar elemento no playhead
+                  </button>
+                  {!motionGraphics.length && (
+                    <p className="tm-small">
+                      Nenhum elemento adicionado. Posicione o playhead e crie o primeiro.
+                    </p>
+                  )}
+                  {motionGraphics.map((graphic, index) => (
+                    <div className="tm-motion-item" key={graphic.id}>
+                      <div className="tm-motion-item-heading">
+                        <strong>
+                          {index + 1}. {motionGlyphs[graphic.icon]}{" "}
+                          {graphic.label || "Elemento gráfico"}
+                        </strong>
+                        <button
+                          type="button"
+                          onClick={() => removeMotionGraphic(graphic.id)}
+                          aria-label="Remover elemento"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
-                      <label className="tm-field"><span>Animação</span><select value={g.animation} onChange={(e) => updateMotionGraphic(g.id, { animation: e.target.value as MediaMotionGraphic["animation"] })}><option value="pop">Pop</option><option value="fade">Fade</option><option value="slide">Slide</option><option value="bounce">Bounce</option></select></label>
-                      <label className="tm-field"><span>Efeito sonoro</span><select value={g.sound} onChange={(e) => updateMotionGraphic(g.id, { sound: e.target.value as MediaMotionGraphic["sound"] })}><option value="pop">Pop</option><option value="success">Confirmação</option><option value="ding">Ding</option><option value="whoosh">Whoosh</option><option value="none">Sem som</option></select></label>
-                      <label className="tm-field"><span>Posição</span><select value={g.position} onChange={(e) => updateMotionGraphic(g.id, { position: e.target.value as MediaMotionGraphic["position"] })}><option value="top">Superior</option><option value="center">Centro</option><option value="bottom">Inferior</option><option value="left">Lateral esquerda</option><option value="right">Lateral direita</option></select></label>
-                      <label className="tm-motion-enabled"><input type="checkbox" checked={g.enabled} onChange={(e) => updateMotionGraphic(g.id, { enabled: e.target.checked })} /> Ativo na exportação</label>
+                      <label className="tm-field">
+                        <span>Ícone</span>
+                        <select
+                          value={graphic.icon}
+                          onChange={(event) =>
+                            updateMotionGraphic(graphic.id, {
+                              icon: event.target.value as MediaMotionGraphic["icon"],
+                            })
+                          }
+                        >
+                          <option value="check">✓ Confirmação</option>
+                          <option value="cross">✕ Erro / contraste</option>
+                          <option value="star">★ Destaque</option>
+                          <option value="idea">✦ Ideia</option>
+                          <option value="arrow">➜ Direção</option>
+                          <option value="sound">♫ Áudio</option>
+                          <option value="sparkle">✧ Brilho</option>
+                          <option value="warning">! Atenção</option>
+                        </select>
+                      </label>
+                      <EditField
+                        label="Texto opcional"
+                        value={graphic.label}
+                        onChange={(label) => updateMotionGraphic(graphic.id, { label })}
+                        maxLength={80}
+                      />
+                      <div className="tm-motion-fields">
+                        <label className="tm-field">
+                          <span>Entrada (s)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={Math.max(0, actualDurationMs / 1000)}
+                            step={0.1}
+                            value={graphic.start_ms / 1000}
+                            onChange={(event) =>
+                              updateMotionGraphic(graphic.id, {
+                                start_ms: Math.max(
+                                  0,
+                                  Math.round(Number(event.target.value) * 1000),
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="tm-field">
+                          <span>Duração (s)</span>
+                          <input
+                            type="number"
+                            min={0.2}
+                            max={4}
+                            step={0.1}
+                            value={graphic.duration_ms / 1000}
+                            onChange={(event) =>
+                              updateMotionGraphic(graphic.id, {
+                                duration_ms: Math.max(
+                                  200,
+                                  Math.min(
+                                    4000,
+                                    Math.round(Number(event.target.value) * 1000),
+                                  ),
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                      <label className="tm-field">
+                        <span>Animação</span>
+                        <select
+                          value={graphic.animation}
+                          onChange={(event) =>
+                            updateMotionGraphic(graphic.id, {
+                              animation: event.target.value as MediaMotionGraphic["animation"],
+                            })
+                          }
+                        >
+                          <option value="pop">Pop</option>
+                          <option value="fade">Fade</option>
+                          <option value="slide">Slide</option>
+                          <option value="bounce">Bounce</option>
+                        </select>
+                      </label>
+                      <label className="tm-field">
+                        <span>Efeito sonoro</span>
+                        <select
+                          value={graphic.sound}
+                          onChange={(event) =>
+                            updateMotionGraphic(graphic.id, {
+                              sound: event.target.value as MediaMotionGraphic["sound"],
+                            })
+                          }
+                        >
+                          <option value="pop">Pop</option>
+                          <option value="success">Confirmação</option>
+                          <option value="ding">Ding</option>
+                          <option value="whoosh">Whoosh</option>
+                          <option value="none">Sem som</option>
+                        </select>
+                      </label>
+                      <label className="tm-field">
+                        <span>Posição</span>
+                        <select
+                          value={graphic.position}
+                          onChange={(event) =>
+                            updateMotionGraphic(graphic.id, {
+                              position: event.target.value as MediaMotionGraphic["position"],
+                            })
+                          }
+                        >
+                          <option value="top">Superior</option>
+                          <option value="center">Centro</option>
+                          <option value="bottom">Inferior</option>
+                          <option value="left">Lateral esquerda</option>
+                          <option value="right">Lateral direita</option>
+                        </select>
+                      </label>
+                      <label className="tm-motion-enabled">
+                        <input
+                          type="checkbox"
+                          checked={graphic.enabled}
+                          onChange={(event) =>
+                            updateMotionGraphic(graphic.id, { enabled: event.target.checked })
+                          }
+                        />
+                        Ativo na exportação
+                      </label>
                     </div>
                   ))}
                 </div>
