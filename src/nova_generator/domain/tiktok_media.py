@@ -97,7 +97,9 @@ class MotionGraphic(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=80)
     start_ms: int = Field(ge=0)
     duration_ms: int = Field(default=900, ge=200, le=4000)
-    icon: Literal["check", "cross", "star", "idea", "arrow", "sound", "sparkle", "warning"] = "check"
+    icon: Literal[
+        "check", "cross", "star", "idea", "arrow", "sound", "sparkle", "warning"
+    ] = "check"
     label: str = Field(default="", max_length=80)
     animation: Literal["pop", "fade", "slide", "bounce"] = "pop"
     sound: Literal["none", "pop", "success", "whoosh", "ding"] = "pop"
