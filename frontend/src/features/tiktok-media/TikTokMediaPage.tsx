@@ -2389,12 +2389,10 @@ export function TikTokMediaPage() {
                   <div className="tm-editor-separator" />
                   <h3>Narração automática</h3>
                   <p className="tm-small">
-                    A narração é montada automaticamente a partir dos campos Texto em inglês e
-                    Tradução em português. O Generator identifica o idioma de cada trecho, divide
-                    frases longas sem alterar o texto e reutiliza os áudios já sintetizados. Não
-                    precisa inserir marcações [pt] ou [en]. Para áudio bilíngue, selecione uma voz
-                    Qwen3-TTS VoiceDesign ou Base. Para áudio bilíngue, selecione uma voz
-                    Qwen3-TTS VoiceDesign ou Base.
+                    A narração é montada automaticamente a partir dos campos Texto em inglês e Tradução em
+                    português. O Generator identifica o idioma de cada trecho, divide frases longas sem
+                    alterar o texto e reutiliza os áudios já sintetizados. Não precisa inserir marcações
+                    [pt] ou [en]. Para áudio bilíngue, selecione uma voz Qwen3-TTS VoiceDesign ou Base.
                   </p>
                   <label className="tm-field">
                     <span>Duração: {(active.duration_ms / 1000).toFixed(1)}s</span>
