@@ -14,7 +14,10 @@ from pathlib import Path
 
 _LANGUAGE_TAG = re.compile(r"\[/?(?:pt|en)\]", re.IGNORECASE)
 _SEGMENT = re.compile(r"\[(pt|en)\](.*?)\[/\1\]", re.IGNORECASE | re.DOTALL)
-_ANY_LANGUAGE_TAG = re.compile(r"\[/?[a-z]{2}(?:-[a-z]{2})?\]", re.IGNORECASE)
+_ANY_LANGUAGE_TAG = re.compile(
+    r"\[/?(?:pt|en|es|fr|de|it|pl|tr|ru|nl|cs|ar|zh-cn|ja|hu|ko|hi)\]",
+    re.IGNORECASE,
+)
 LANGUAGES = {"pt": "Portuguese", "en": "English"}
 
 
@@ -46,7 +49,7 @@ def parse_narration(text: str) -> list[tuple[str, str]]:
 
 
 def has_language_tags(text: str) -> bool:
-    return bool(_LANGUAGE_TAG.search(text))
+    return bool(_ANY_LANGUAGE_TAG.search(text))
 
 
 MODELS = {
@@ -152,6 +155,8 @@ def main() -> None:
         sample_rate = sr
         waves.append(wavs[0])
 
+    if sample_rate is None:
+        raise RuntimeError("A voz não produziu nenhuma amostra de áudio.")
     if len(waves) == 1:
         combined = waves[0]
     else:
