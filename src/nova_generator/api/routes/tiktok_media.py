@@ -239,7 +239,9 @@ def _validate_video_captions(project: MediaProject, duration_ms: int) -> None:
         approved = {
             cue.id: cue
             for cue in repository.get_scene_cues(project.source_scene_id)
-            if cue.approved_en.strip()
+            if isinstance(cue.approved_en, str)
+            and cue.approved_en.strip()
+            and isinstance(cue.approved_pt, str)
             and cue.approved_pt.strip()
             and cue.provenance.get("approval") != "draft"
         }

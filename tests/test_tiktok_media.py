@@ -97,3 +97,19 @@ def test_bilingual_script_preserves_literal_tags_without_changing_visual_content
     assert restored.slides[0].narration_text == script
     assert restored.slides[0].en == "Did you see that?"
     assert restored.slides[0].pt == "Você viu aquilo?"
+
+
+def test_legacy_null_slide_texts_are_empty_without_changing_bilingual_narration():
+    bilingual = "[pt]Olha só![/pt] [en]Watch this![/en]"
+    project = MediaProject.model_validate({
+        "title": "Roteiro antigo",
+        "slides": [
+            {"en": "Watch this!", "pt": None, "narration_text": None},
+            {"en": None, "pt": None, "narration_text": bilingual},
+        ],
+    })
+    assert project.slides[0].narration_text == ""
+    assert project.slides[0].pt == ""
+    assert project.slides[1].en == ""
+    assert project.slides[1].narration_text == bilingual
+    assert MediaProject.model_validate_json(project.model_dump_json()) == project

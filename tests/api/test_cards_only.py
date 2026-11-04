@@ -140,7 +140,11 @@ def test_packaging_has_only_anki_cards_json_and_per_card_audio(tmp_path: Path, m
         cards_only_handler, "get_settings",
         lambda: SimpleNamespace(media_cache_root=tmp_path),
     )
-    monkeypatch.setattr(cards_only_handler, "_voice_snapshot", lambda _: object())
+    monkeypatch.setattr(
+        cards_only_handler,
+        "_voice_snapshot",
+        lambda _: SimpleNamespace(model_id="chatterbox-turbo"),
+    )
 
     def fake_writer(self, *, cues, output, deck_name):
         assert len(cues) == 1

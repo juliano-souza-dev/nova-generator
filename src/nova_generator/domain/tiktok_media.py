@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 MediaFormat = Literal["carousel", "lesson_video", "lyrics_video", "shadowing_video"]
 MediaTheme = Literal["ihub", "midnight", "warm"]
@@ -79,6 +79,14 @@ class MediaSlide(BaseModel):
     duration_ms: int = Field(default=4500, ge=1000, le=20000)
     motion: Literal["still", "zoom_in", "zoom_out", "pan_left", "pan_right"] = "still"
     background_image: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}\.png$")
+
+    @field_validator("narration_text", "en", "pt", mode="before")
+    @classmethod
+    def legacy_empty_text(cls, value: object) -> object:
+        # Some previously saved/AI-generated TikTok drafts use JSON null for
+        # unused text fields. An absent narration must behave like an empty
+        # field, without changing any nonempty editorial text or language tags.
+        return "" if value is None else value
 
 
 class MediaProject(BaseModel):

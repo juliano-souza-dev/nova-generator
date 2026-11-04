@@ -25,6 +25,11 @@ from nova_generator.infrastructure.worker.persistent_worker import JobExecution
 from nova_generator.infrastructure.worker.project_media_handler import _keep_lease
 
 
+def _optional_text(value: object) -> str:
+    """Read legacy nullable text without losing literal nonempty narration."""
+    return value.strip() if isinstance(value, str) else ""
+
+
 def _run_ffmpeg(arguments: list[str], *, cwd: Path | None = None) -> None:
     result = subprocess.run(
         [get_settings().ffmpeg_executable, "-hide_banner", "-loglevel", "error", *arguments],
@@ -93,8 +98,8 @@ def _check_current_caption_approval(
             cue is None
             or cue.scene_id != project.source_scene_id
             or cue.provenance.get("approval") == "draft"
-            or not cue.approved_en.strip()
-            or not cue.approved_pt.strip()
+            or not _optional_text(cue.approved_en)
+            or not _optional_text(cue.approved_pt)
         ):
             raise ValueError(
                 "Uma fala foi removida, alterou de cena ou voltou a rascunho. "
@@ -394,7 +399,11 @@ def make_media_render_handler(
                 duration = slide.duration_ms
                 args = ["-y", "-loop", "1", "-framerate", "30", "-i", str(image)]
                 if voice:
-                    spoken = slide.narration_text.strip() or slide.en.strip() or slide.pt.strip()
+                    spoken = (
+                        _optional_text(slide.narration_text)
+                        or _optional_text(slide.en)
+                        or _optional_text(slide.pt)
+                    )
                     if spoken:
                         narration_language = (
                             "English"
