@@ -368,12 +368,28 @@ def _render_video_source(
         )
         audio_inputs.append("[baseaudio]")
     sound_specs = {
-        "pop": ("sine=frequency=720:sample_rate=44100:duration=0.20", "volume=0.20,afade=t=out:st=0.04:d=0.16"),
-        "success": ("sine=frequency=1046:sample_rate=44100:duration=0.24", "volume=0.16,afade=t=out:st=0.08:d=0.16"),
-        "ding": ("sine=frequency=1320:sample_rate=44100:duration=0.28", "volume=0.17,afade=t=out:st=0.08:d=0.20"),
-        "whoosh": ("anoisesrc=color=white:sample_rate=44100:duration=0.26", "highpass=f=500,lowpass=f=4200,volume=0.13,afade=t=out:st=0.04:d=0.22"),
+        "pop": (
+            "sine=frequency=720:sample_rate=44100:duration=0.20",
+            "volume=0.20,afade=t=out:st=0.04:d=0.16",
+        ),
+        "success": (
+            "sine=frequency=1046:sample_rate=44100:duration=0.24",
+            "volume=0.16,afade=t=out:st=0.08:d=0.16",
+        ),
+        "ding": (
+            "sine=frequency=1320:sample_rate=44100:duration=0.28",
+            "volume=0.17,afade=t=out:st=0.08:d=0.20",
+        ),
+        "whoosh": (
+            "anoisesrc=color=white:sample_rate=44100:duration=0.26",
+            "highpass=f=500,lowpass=f=4200,volume=0.13,afade=t=out:st=0.04:d=0.22",
+        ),
     }
-    sound_events = [g for g in project.motion_graphics if g.enabled and g.sound != "none" and g.start_ms < output_duration]
+    sound_events = [
+        graphic
+        for graphic in project.motion_graphics
+        if graphic.enabled and graphic.sound != "none" and graphic.start_ms < output_duration
+    ]
     for index, graphic in enumerate(sound_events):
         source_spec, effect_filter = sound_specs[graphic.sound]
         args += ["-f", "lavfi", "-i", source_spec]
