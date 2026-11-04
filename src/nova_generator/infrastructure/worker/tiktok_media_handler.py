@@ -614,7 +614,9 @@ def make_media_render_handler(
                                 "audio_sha256": audio_sha256,
                                 "duration_ms": audio_duration_ms,
                                 "timeline_start_ms": slide_start_ms,
-                                "sample_rate": int(getattr(slide_chunks[0][1], "sample_rate", 24000)),
+                                "sample_rate": int(
+                                    getattr(slide_chunks[0][1], "sample_rate", 24000)
+                                ),
                                 "channels": 1,
                             }
                         )
@@ -719,7 +721,9 @@ def make_media_render_handler(
                 "contract": "nova-tiktok-media-narration/1",
                 "voice_profile_sha256": voice.sha256,
                 "voice_model_id": voice.model_id,
-                "voice_design_seed": 42 if voice.model_id == "qwen3-tts-1.7b-voice-design" else None,
+                "voice_design_seed": (
+                    42 if voice.model_id == "qwen3-tts-1.7b-voice-design" else None
+                ),
                 "slide_audio": slide_audio_records,
                 "chunks": narration_manifest_records,
             }
