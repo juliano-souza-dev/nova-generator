@@ -15,6 +15,7 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Isolar a fila de preparação da fila normal de mídia, manter cancelamento responsivo e não bloquear o uso de vozes anteriores durante o download.
 - Aceitar referências WAV, MP3 e OGG; converter áudio comprimido via FFmpeg para WAV PCM validado, com hash do arquivo canônico.
 - Gerar WAV canônico por cue; APKG, manifesto e reel derivam exatamente desse mesmo áudio.
+- Em narração independente, aceitar roteiros Qwen com trechos `[pt]`/`[en]`, selecionar o idioma em cada síntese e juntar as ondas em um WAV com pausas de 300 ms entre trechos. Preservar o comportamento sem marcações e bloquear tags nos motores sem seleção explícita de idioma.
 - Criar reel MP4 com áudio sincronizado aos tempos publicados no contrato do Hub.
 - Validar duração, codec, canais, seek e integridade com FFprobe.
 - Usar cache de áudio por conteúdo e permitir reprocessamento seletivo de artefatos inválidos.
@@ -53,6 +54,7 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Cenas Animadas preserva o quadro e sua foto após salvar/reabrir; o MP4 registra movimentos e resolução, e um upload de revisão antiga não substitui imagens persistidas.
 
 - Perfis VoiceDesign geram prévia em português sem exigir referência; perfis Base só sintetizam com áudio validado e sua transcrição. A troca de motor não altera o WAV canônico nem o contrato iHub.
+- Uma microaula bilíngue preserva ordem e caracteres literais dos trechos e mantém uma única voz por perfil em português e inglês, sem vazamento de tags no áudio nem mudança de legenda.
 - Vídeos TikTok Mídia concluídos permanecem acessíveis pela Biblioteca após fechar a edição ou reiniciar o aplicativo; manifestos publicados identificam cada exportação, e renders incompletos não são apresentados.
 
 - Uma instalação automática só libera o modelo após dependências, pesos e tokenizer completos; falhas não bloqueiam outros jobs e podem ser repetidas sem perder cache de mídia.

@@ -2393,8 +2393,20 @@ export function TikTokMediaPage() {
                     onChange={(narration_text) => updateSlide({ narration_text })}
                     multiline
                     maxLength={2000}
-                    hint="Inclua pausas e pontuação como falaria naturalmente. Se vazio, será usado o texto do quadro."
+                    hint="Para voz bilíngue, marque os trechos: [pt]Olá![/pt] [en]Hello![/en]. Use uma voz da Biblioteca com suporte a português e inglês. Se vazio, será usado o texto do quadro."
                   />
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!active.pt.trim() || !active.en.trim()}
+                    onClick={() =>
+                      updateSlide({
+                        narration_text: `[pt]${active.pt.trim()}[/pt]\n[en]${active.en.trim()}[/en]`,
+                      })
+                    }
+                  >
+                    Montar narração em português + inglês
+                  </button>
                   <label className="tm-field">
                     <span>Duração: {(active.duration_ms / 1000).toFixed(1)}s</span>
                     <input

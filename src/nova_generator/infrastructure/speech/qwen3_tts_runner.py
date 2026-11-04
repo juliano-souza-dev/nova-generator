@@ -12,6 +12,46 @@ from hashlib import file_digest
 from importlib import import_module
 from pathlib import Path
 
+_LANGUAGE_TAG = re.compile(r"\[/?(?:pt|en)\]", re.IGNORECASE)
+_SEGMENT = re.compile(r"\[(pt|en)\](.*?)\[/\1\]", re.IGNORECASE | re.DOTALL)
+_ANY_LANGUAGE_TAG = re.compile(
+    r"\[/?(?:pt|en|es|fr|de|it|pl|tr|ru|nl|cs|ar|zh-cn|ja|hu|ko|hi)\]",
+    re.IGNORECASE,
+)
+LANGUAGES = {"pt": "Portuguese", "en": "English"}
+
+
+def parse_narration(text: str) -> list[tuple[str, str]]:
+    """Preserve literal PT/EN spans and reject partially marked scripts."""
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("O texto da narração está vazio.")
+    if not _LANGUAGE_TAG.search(text):
+        if _ANY_LANGUAGE_TAG.search(text):
+            raise ValueError("Use apenas trechos marcados em português [pt] ou inglês [en].")
+        return [("pt", text.strip())]  # Preserve old unmarked Qwen behavior.
+    result: list[tuple[str, str]] = []
+    cursor = 0
+    for match in _SEGMENT.finditer(text):
+        if text[cursor : match.start()].strip():
+            raise ValueError("Use somente trechos completos [pt]...[/pt] ou [en]...[/en].")
+        spoken = match.group(2).strip()
+        if not spoken:
+            raise ValueError("Um trecho de narração não pode estar vazio.")
+        if _ANY_LANGUAGE_TAG.search(spoken):
+            raise ValueError("Não coloque marcações de idioma dentro de outro trecho.")
+        result.append((match.group(1).lower(), spoken))
+        cursor = match.end()
+    if not result or text[cursor:].strip():
+        raise ValueError("Feche todas as marcações de idioma do roteiro.")
+    if len(result) > 20:
+        raise ValueError("Divida o roteiro em até 20 trechos de idioma.")
+    return result
+
+
+def has_language_tags(text: str) -> bool:
+    return bool(_ANY_LANGUAGE_TAG.search(text))
+
+
 MODELS = {
     "qwen3-tts-1.7b-voice-design": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
     "qwen3-tts-1.7b-base": "Qwen3-TTS-12Hz-1.7B-Base",
@@ -38,6 +78,7 @@ def main() -> None:
     if model_id not in MODELS:
         raise ValueError("Modelo Qwen3-TTS não suportado.")
 
+    segments = parse_narration(request["text"])
     params = profile.get("parameters") or {}
     runtime_params = request.get("parameters") or {}
     if runtime_params and (model_id != "qwen3-tts-1.7b-voice-design"
@@ -78,33 +119,59 @@ def main() -> None:
         file=sys.stderr,
         flush=True,
     )
-    text = request["text"]
-    if not isinstance(text, str) or not text.strip():
-        raise ValueError("O texto da narração está vazio.")
+    digest = request.get("reference_audio_sha256")
     if model_id == "qwen3-tts-1.7b-voice-design":
-        if request.get("reference_audio_sha256"):
+        if digest:
             raise ValueError("VoiceDesign não aceita áudio de referência.")
         instruct = runtime_params.get("instruct", params.get("instruct"))
         if not isinstance(instruct, str) or not 10 <= len(instruct.strip()) <= 800:
             raise ValueError("Descrição de voz inválida.")
-        wavs, sr = model.generate_voice_design(
-            text=text, language="Portuguese", instruct=instruct
-        )
     else:
         transcript = params.get("reference_text")
         if not isinstance(transcript, str) or not transcript.strip():
             raise ValueError("A transcrição do áudio de referência é obrigatória.")
-        digest = request.get("reference_audio_sha256")
         if not isinstance(digest, str):
             raise ValueError("Áudio de referência ausente.")
         ref_path = _reference(digest, request.get("reference_root"))
-        wavs, sr = model.generate_voice_clone(
-            text=text, language="Portuguese", ref_audio=str(ref_path), ref_text=transcript
+
+    waves = []
+    sample_rate = None
+    for index, (language, spoken) in enumerate(segments):
+        print(
+            f"voice_stage=qwen_segment part={index + 1}/{len(segments)} language={language}",
+            file=sys.stderr, flush=True,
         )
+        if model_id == "qwen3-tts-1.7b-voice-design":
+            wavs, sr = model.generate_voice_design(
+                text=spoken, language=LANGUAGES[language], instruct=instruct
+            )
+        else:
+            wavs, sr = model.generate_voice_clone(
+                text=spoken, language=LANGUAGES[language],
+                ref_audio=str(ref_path), ref_text=transcript,
+            )
+        if sample_rate is not None and sr != sample_rate:
+            raise RuntimeError("Os trechos de voz foram gerados com frequências diferentes.")
+        sample_rate = sr
+        waves.append(wavs[0])
+
+    if sample_rate is None:
+        raise RuntimeError("A voz não produziu nenhuma amostra de áudio.")
+    if len(waves) == 1:
+        combined = waves[0]
+    else:
+        numpy = import_module("numpy")
+        gap = numpy.zeros(int(sample_rate * 0.3), dtype=numpy.float32)
+        parts = []
+        for index, wave in enumerate(waves):
+            if index:
+                parts.append(gap)
+            parts.append(numpy.asarray(wave, dtype=numpy.float32).reshape(-1))
+        combined = numpy.concatenate(parts)
 
     output = Path(request["output"])
     output.parent.mkdir(parents=True, exist_ok=True)
-    sf.write(str(output), wavs[0], sr, format="WAV", subtype="PCM_16")
+    sf.write(str(output), combined, sample_rate, format="WAV", subtype="PCM_16")
     print("voice_stage=qwen_completed", file=sys.stderr, flush=True)
 
 

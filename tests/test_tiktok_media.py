@@ -87,3 +87,13 @@ def test_narration_script_is_independent_of_on_screen_text():
     assert restored.slides[0].pt == "Acompanhar"
     with pytest.raises(ValidationError):
         MediaSlide(narration_text="x" * 2001)
+
+
+def test_bilingual_script_preserves_literal_tags_without_changing_visual_content():
+    script = "[pt]Você viu aquilo?[/pt] [en]Did you see that?[/en]"
+    slide = MediaSlide(en="Did you see that?", pt="Você viu aquilo?", narration_text=script)
+    project = MediaProject(title="Inglês em contexto", slides=[slide])
+    restored = MediaProject.model_validate_json(project.model_dump_json())
+    assert restored.slides[0].narration_text == script
+    assert restored.slides[0].en == "Did you see that?"
+    assert restored.slides[0].pt == "Você viu aquilo?"
