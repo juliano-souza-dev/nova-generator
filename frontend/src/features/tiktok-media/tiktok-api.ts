@@ -94,6 +94,16 @@ export type MediaEdit = Pick<
   | "slides"
 >;
 export type MediaRender = { job_id: string; render_id: string; status: string };
+export type MediaLibraryVideo = {
+  project_id: string;
+  render_id: string;
+  title: string;
+  format: MediaFormat;
+  visual_mode: MediaVisualMode;
+  duration_ms: number;
+  size_bytes: number;
+  completed_at: string;
+};
 export type MediaIdeas = {
   slides: MediaSlide[];
   provider: "groq";
@@ -112,6 +122,7 @@ export type MediaSourceStatus = {
 };
 
 export const mediaApi = {
+  library: () => apiRequest<MediaLibraryVideo[]>("/tiktok-media/library"),
   list: () => apiRequest<MediaProject[]>("/tiktok-media/projects"),
   get: (id: string) => apiRequest<MediaProject>(`/tiktok-media/projects/${id}`),
   create: (title: string, format: MediaFormat, animatedScenes = false) =>
@@ -221,6 +232,8 @@ export const mediaApi = {
   },
   videoUrl: (id: string, renderId: string) =>
     apiUrl(`/tiktok-media/projects/${id}/renders/${renderId}/video`),
+  videoDownloadUrl: (id: string, renderId: string) =>
+    apiUrl(`/tiktok-media/projects/${id}/renders/${renderId}/video?download=true`),
 };
 
 export function blankSlide(kind: MediaKind = "lesson"): MediaSlide {

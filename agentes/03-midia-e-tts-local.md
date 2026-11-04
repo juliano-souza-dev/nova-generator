@@ -53,5 +53,6 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Cenas Animadas preserva o quadro e sua foto após salvar/reabrir; o MP4 registra movimentos e resolução, e um upload de revisão antiga não substitui imagens persistidas.
 
 - Perfis VoiceDesign geram prévia em português sem exigir referência; perfis Base só sintetizam com áudio validado e sua transcrição. A troca de motor não altera o WAV canônico nem o contrato iHub.
+- Vídeos TikTok Mídia concluídos permanecem acessíveis pela Biblioteca após fechar a edição ou reiniciar o aplicativo; manifestos publicados identificam cada exportação, e renders incompletos não são apresentados.
 
 - Uma instalação automática só libera o modelo após dependências, pesos e tokenizer completos; falhas não bloqueiam outros jobs e podem ser repetidas sem perder cache de mídia.

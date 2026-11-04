@@ -6,6 +6,7 @@ import { EditorialPage } from "../features/editorial/EditorialPage";
 import { MediaPage } from "../features/media/MediaPage";
 import { MaterialsPage } from "../features/materials/MaterialsPage";
 import { JobsPage } from "../features/jobs/JobsPage";
+import { LibraryPage } from "../features/library/LibraryPage";
 import { ProjectsPage } from "../features/projects/ProjectsPage";
 import { StoryPage } from "../features/story/StoryPage";
 import { VoicesPage } from "../features/voices/VoicesPage";
@@ -22,6 +23,7 @@ export function App() {
         <Route path="/shadowing" element={<ShadowingPage />} />
         <Route path="/materials" element={<MaterialsPage />} />
         <Route path="/jobs" element={<JobsPage />} />
+        <Route path="/library" element={<LibraryPage />} />
         <Route path="/story" element={<StoryPage />} />
         <Route path="/voices" element={<VoicesPage />} />
         <Route path="/tiktok-media" element={<TikTokMediaPage />} />
