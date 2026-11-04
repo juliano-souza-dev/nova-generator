@@ -60,3 +60,6 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Vídeos TikTok Mídia concluídos permanecem acessíveis pela Biblioteca após fechar a edição ou reiniciar o aplicativo; manifestos publicados identificam cada exportação, e renders incompletos não são apresentados.
 
 - Uma instalação automática só libera o modelo após dependências, pesos e tokenizer completos; falhas não bloqueiam outros jobs e podem ser repetidas sem perder cache de mídia.
+
+- No TikTok Media, renderizar Motion Graphics temporizados como eventos ASS independentes das legendas e gerar efeitos sonoros locais via FFmpeg, sincronizados ao mesmo relógio do corte; mixar os efeitos à trilha selecionada sem substituir o áudio original. Manter a coleção opcional e compatível com projetos antigos.
+- Motion Graphics preserva instantes relativos ao corte, animação e posição entre prévia e MP4; cada efeito sonoro inicia no mesmo instante do ícone e é mixado à trilha existente sem apagá-la.

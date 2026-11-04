@@ -110,3 +110,5 @@ Tornar a correção de legendas, cues e palavras rápida, segura e auditável, p
 - Clique na waveform posiciona o vídeo sem mudar a seleção; somente arrastar IN/OUT altera limites. Manter intervalo mínimo de 100 ms e enviar milissegundos inteiros.
 - Ouvir seleção inicia no limite IN e pausa em OUT; zoom possui régua, navegação e retorno à visão completa. Restauro da seleção deve ser explícito.
 - Testar teclado, mouse, reprodução limitada, troca de projeto, carregamento com erro e preservação do último corte.
+
+- No TikTok Media, oferecer Motion Graphics como trilha própria: inserir ícones no playhead, configurar entrada/duração/animação/posição/efeito sonoro, visualizar o overlay e localizar cada evento na timeline sem misturar esses elementos ao texto editorial das legendas.

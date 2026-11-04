@@ -311,6 +311,7 @@ def _render_video_source(
             project.video_captions, project.caption_style,
             project.paper_theme if project.background_mode == "paper" else None,
             outro=outro,
+            motion_graphics=project.motion_graphics,
         ), encoding="utf-8"
     )
     execution.raise_if_cancelled()
@@ -350,18 +351,50 @@ def _render_video_source(
     mode = payload["audio_mode"]
     if mode == "uploaded":
         args += ["-stream_loop", "-1", "-i", str(uploaded_audio.resolve())]
-    args += ["-map", "0:v:0"]
-    if mode == "original":
-        args += ["-map", "1:a:0?" if paper else "0:a:0?"]
-    elif mode == "uploaded":
-        args += ["-map", "2:a:0" if paper else "1:a:0"]
-    args += [
-        "-vf", filter_graph, "-r", "30", "-c:v", "libx264",
-        "-preset", "medium", "-crf", "19",
-    ]
-    args += ["-pix_fmt", "yuv420p", "-movflags", "+faststart"]
-    if mode in {"original", "uploaded"}:
-        args += ["-c:a", "aac", "-ar", "44100", "-b:a", "192k"]
+
+    # Mix generated effects into the selected audio at cut-relative timestamps.
+    audio_inputs: list[str] = []
+    audio_filters: list[str] = []
+    base_audio_index = (1 if paper else 0) if mode == "original" else (
+        2 if paper else 1
+    ) if mode == "uploaded" else None
+    next_input = 2 if paper else 1
+    if mode == "uploaded":
+        next_input += 1
+    if base_audio_index is not None:
+        audio_filters.append(
+            f"[{base_audio_index}:a]aresample=44100,"
+            "aformat=sample_fmts=fltp:channel_layouts=stereo[baseaudio]"
+        )
+        audio_inputs.append("[baseaudio]")
+    sound_specs = {
+        "pop": ("sine=frequency=720:sample_rate=44100:duration=0.20", "volume=0.20,afade=t=out:st=0.04:d=0.16"),
+        "success": ("sine=frequency=1046:sample_rate=44100:duration=0.24", "volume=0.16,afade=t=out:st=0.08:d=0.16"),
+        "ding": ("sine=frequency=1320:sample_rate=44100:duration=0.28", "volume=0.17,afade=t=out:st=0.08:d=0.20"),
+        "whoosh": ("anoisesrc=color=white:sample_rate=44100:duration=0.26", "highpass=f=500,lowpass=f=4200,volume=0.13,afade=t=out:st=0.04:d=0.22"),
+    }
+    sound_events = [g for g in project.motion_graphics if g.enabled and g.sound != "none" and g.start_ms < output_duration]
+    for index, graphic in enumerate(sound_events):
+        source_spec, effect_filter = sound_specs[graphic.sound]
+        args += ["-f", "lavfi", "-i", source_spec]
+        delay = graphic.start_ms
+        audio_filters.append(
+            f"[{next_input}:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo,"
+            f"{effect_filter},adelay={delay}|{delay}[effect{index}]"
+        )
+        audio_inputs.append(f"[effect{index}]")
+        next_input += 1
+    args += ["-map", "0:v:0", "-vf", filter_graph, "-r", "30", "-c:v", "libx264",
+             "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
+    if audio_inputs:
+        audio_filters.append(
+            f"{''.join(audio_inputs)}amix=inputs={len(audio_inputs)}:"
+            f"duration={'first' if base_audio_index is not None else 'longest'}:"
+            "dropout_transition=0,apad,"
+            f"atrim=duration={output_duration / 1000:.3f}[aout]"
+        )
+        args += ["-filter_complex", ";".join(audio_filters), "-map", "[aout]",
+                 "-c:a", "aac", "-ar", "44100", "-b:a", "192k"]
     else:
         args += ["-an"]
     # final.mp4 is deliberately relative to cwd=snapshot_dir; source/audio
