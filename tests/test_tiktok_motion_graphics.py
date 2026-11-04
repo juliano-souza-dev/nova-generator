@@ -4,7 +4,12 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from nova_generator.domain.tiktok_media import MediaCaptionStyle, MediaProject, MediaSlide, MotionGraphic
+from nova_generator.domain.tiktok_media import (
+    MediaCaptionStyle,
+    MediaProject,
+    MediaSlide,
+    MotionGraphic,
+)
 from nova_generator.infrastructure.exports.tiktok_captions import render_ass
 
 
