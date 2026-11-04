@@ -11,7 +11,7 @@ O campo independente `narration_text` (ADR 0043) já existe no TikTok Mídia, ma
 - O Qwen3-TTS recebe `Portuguese` ou `English` a cada trecho, utilizando sempre o mesmo perfil, referência autorizada e snapshot de pesos.
 - Concatenar as ondas geradas em um único WAV PCM-16 canônico, com 300 ms de silêncio apenas **entre** os trechos. Rejeitar frequências de amostragem divergentes.
 - O texto sem marcação mantém o comportamento legado em português. Chatterbox, que não recebe idioma explicitamente, continua funcionando com texto comum e rejeita tags com orientação para selecionar Qwen.
-- A prévia de novos perfis Qwen demonstra ambos os idiomas. No editor TikTok, o proprietário pode montar um roteiro marcado a partir dos campos EN/PT sem modificar legendas aprovadas.
+- As prévias e caches dos perfis existentes permanecem intactos. No editor TikTok, o proprietário pode montar um roteiro marcado a partir dos campos EN/PT sem modificar legendas aprovadas.
 - Manter cache por texto literal, perfil e parâmetros; não mudar schemas públicos, IDs, exportações antigas, contratos iHub ou modelo de jobs.
 
 ## Aceite
