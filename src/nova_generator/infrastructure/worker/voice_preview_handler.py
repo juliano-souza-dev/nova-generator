@@ -8,6 +8,7 @@ from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpe
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.voices import VoiceProfileSnapshot
 from nova_generator.infrastructure.worker.persistent_worker import JobExecution
+from nova_generator.infrastructure.worker.project_media_handler import _keep_lease
 
 
 def make_voice_preview_handler(
@@ -31,8 +32,11 @@ def make_voice_preview_handler(
         )
         if snapshot.sha256 != raw.get("snapshot_sha256"):
             raise ValueError("voice snapshot hash mismatch")
-        speech = synthesis.execute(text=str(job.input["text"]), profile=snapshot)
-        execution.heartbeat()
+        # Qwen can take several minutes on CPU.  Keep the durable job lease
+        # alive while its subprocess synthesizes the preview, otherwise the
+        # setup worker may recover the still-running job as abandoned.
+        with _keep_lease(execution):
+            speech = synthesis.execute(text=str(job.input["text"]), profile=snapshot)
         return {
             "audio_path": speech.audio_path,
             "duration_ms": speech.duration_ms,
