@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from nova_generator.application.use_cases.speech_language import synthesis_language_parameters
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.application.use_cases.tiktok_shadowing import resolve_tiktok_shadowing
 from nova_generator.core.settings import get_settings
@@ -21,13 +20,166 @@ from nova_generator.infrastructure.database.editorial_project_repository import 
     SqlAlchemyEditorialProjectRepository,
 )
 from nova_generator.infrastructure.exports.tiktok_captions import render_ass
+from nova_generator.infrastructure.speech.qwen3_tts_models import QWEN_MODELS
 from nova_generator.infrastructure.worker.persistent_worker import JobExecution
 from nova_generator.infrastructure.worker.project_media_handler import _keep_lease
+from nova_generator.infrastructure.worker.tiktok_speech import (
+    TikTokSpeechChunk,
+    build_project_speech_chunks,
+)
 
 
 def _optional_text(value: object) -> str:
     """Read legacy nullable text without losing literal nonempty narration."""
     return value.strip() if isinstance(value, str) else ""
+
+
+def _pause_after_ms(text: str, language: str, next_language: str | None) -> int:
+    """Choose a natural pause from punctuation and add a small language-switch beat."""
+    if next_language is None:
+        return 0
+    ending = text.rstrip()
+    while ending and ending[-1] in "\"'”’)]}":
+        ending = ending[:-1].rstrip()
+    punctuation = ending[-1:] if ending else ""
+    if punctuation in {".", "!", "?", "…"}:
+        pause = 320
+    elif punctuation in {";", ":"}:
+        pause = 240
+    elif punctuation == ",":
+        pause = 170
+    else:
+        pause = 130
+    if next_language != language:
+        pause += 100
+    return pause
+
+
+def _assemble_voice_chunks(
+    items: list[tuple[TikTokSpeechChunk, Any]],
+    output: Path,
+    *,
+    slide_start_ms: int,
+    following_language: str | None = None,
+) -> tuple[int, list[dict[str, Any]], str]:
+    """Join cached WAV chunks, insert linguistic pauses and normalize the final level."""
+    if not items:
+        raise ValueError("Não há chunks de voz para montar.")
+    sample_rate = int(getattr(items[0][1], "sample_rate", 24000))
+    if sample_rate <= 0:
+        raise ValueError("Frequência de áudio dos chunks inválida.")
+
+    filters: list[str] = []
+    concat_inputs: list[str] = []
+    records: list[dict[str, Any]] = []
+    cursor_ms = 0
+    arguments = ["-y"]
+
+    for index, (chunk, speech_result) in enumerate(items):
+        audio_path = Path(speech_result.audio_path)
+        arguments.extend(["-i", str(audio_path)])
+        filters.append(
+            f"[{index}:a]aresample={sample_rate},"
+            f"aformat=sample_fmts=fltp:channel_layouts=mono[chunk{index}]"
+        )
+        concat_inputs.append(f"[chunk{index}]")
+
+        duration_ms = int(getattr(speech_result, "duration_ms", 0))
+        if duration_ms <= 0:
+            raise ValueError(f"O chunk {index + 1} não possui duração válida.")
+        next_language = (
+            items[index + 1][0].language
+            if index + 1 < len(items)
+            else following_language
+        )
+        pause_ms = _pause_after_ms(chunk.text, chunk.language, next_language)
+        if pause_ms:
+            filters.append(
+                f"anullsrc=r={sample_rate}:cl=mono,"
+                f"atrim=duration={pause_ms / 1000:.3f},"
+                f"asetpts=N/SR/TB[silence{index}]"
+            )
+            concat_inputs.append(f"[silence{index}]")
+
+        text_sha256 = getattr(speech_result, "text_sha256", None)
+        if not isinstance(text_sha256, str):
+            text_sha256 = sha256(chunk.text.encode("utf-8")).hexdigest()
+        cache_key = None
+        speech_profile = getattr(speech_result, "profile", None)
+        speech_parameters = getattr(speech_result, "parameters", None)
+        if speech_profile is not None and isinstance(speech_parameters, dict):
+            cache_payload = {
+                "text": chunk.text,
+                "profile": speech_profile.sha256,
+                "parameters": speech_parameters,
+            }
+            cache_key = sha256(
+                json.dumps(
+                    cache_payload,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+        audio_sha256 = None
+        if audio_path.is_file():
+            with audio_path.open("rb") as stream:
+                audio_sha256 = file_digest(stream, "sha256").hexdigest()
+
+        start_ms = cursor_ms
+        end_ms = start_ms + duration_ms
+        records.append(
+            {
+                "slide_index": chunk.slide_index,
+                "slide_id": chunk.slide_id,
+                "source_field": chunk.source_field,
+                "language": chunk.language,
+                "text": chunk.text,
+                "text_sha256": text_sha256,
+                "cache_key": cache_key if isinstance(cache_key, str) else None,
+                "audio_sha256": audio_sha256,
+                "duration_ms": duration_ms,
+                "sample_rate": int(getattr(speech_result, "sample_rate", sample_rate)),
+                "channels": int(getattr(speech_result, "channels", 1)),
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+                "timeline_start_ms": slide_start_ms + start_ms,
+                "timeline_end_ms": slide_start_ms + end_ms,
+                "pause_after_ms": pause_ms,
+            }
+        )
+        cursor_ms = end_ms + pause_ms
+
+    if len(concat_inputs) == 1:
+        audio_chain = f"{concat_inputs[0]}loudnorm=I=-16:TP=-1.5:LRA=11[out]"
+    else:
+        audio_chain = (
+            f"{''.join(concat_inputs)}concat=n={len(concat_inputs)}:v=0:a=1,"
+            "loudnorm=I=-16:TP=-1.5:LRA=11[out]"
+        )
+    filters.append(audio_chain)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    arguments.extend(
+        [
+            "-filter_complex",
+            ";".join(filters),
+            "-map",
+            "[out]",
+            "-c:a",
+            "pcm_s16le",
+            "-ar",
+            str(sample_rate),
+            "-ac",
+            "1",
+            str(output),
+        ]
+    )
+    _run_ffmpeg(arguments)
+    if not output.is_file() or output.stat().st_size == 0:
+        raise RuntimeError("A montagem dos chunks de narração gerou um WAV vazio.")
+    with output.open("rb") as stream:
+        combined_sha256 = file_digest(stream, "sha256").hexdigest()
+    return cursor_ms, records, combined_sha256
 
 
 def _run_ffmpeg(arguments: list[str], *, cwd: Path | None = None) -> None:
@@ -370,6 +522,8 @@ def make_media_render_handler(
                 raise ValueError("Áudio alterado depois de iniciar a renderização.")
         final = snapshot_dir / "final.mp4"
         source_digest = None
+        narration_manifest_records: list[dict[str, Any]] = []
+        slide_audio_records: list[dict[str, Any]] = []
         visual_mode = payload.get("visual_mode", "slides")
         if visual_mode == "shadowing":
             current_blocks, current_duration = resolve_tiktok_shadowing(project, repository)
@@ -387,6 +541,48 @@ def make_media_render_handler(
                 project, payload, snapshot_dir, uploaded_audio, execution
             )
         else:
+            default_language = "en" if payload.get("voice_language") == "en" else "pt"
+            narration_chunks = (
+                build_project_speech_chunks(project.slides, voice, default_language)
+                if voice else []
+            )
+            rendered_chunks: list[Any] = []
+            if voice and narration_chunks:
+                languages = {chunk.language for chunk in narration_chunks}
+                if len(languages) > 1 and voice.model_id not in QWEN_MODELS:
+                    raise ValueError(
+                        "Narração bilíngue EN/PT exige uma voz Qwen3-TTS VoiceDesign ou Base."
+                    )
+                with _keep_lease(execution):
+                    execute_many = getattr(speech, "execute_many", None)
+                    if callable(execute_many):
+                        rendered_chunks = execute_many(
+                            profile=voice,
+                            segments=[
+                                (chunk.text, chunk.parameters) for chunk in narration_chunks
+                            ],
+                        )
+                    else:
+                        rendered_chunks = [
+                            speech.execute(
+                                text=chunk.text,
+                                profile=voice,
+                                parameters=chunk.parameters,
+                            )
+                            for chunk in narration_chunks
+                        ]
+                if len(rendered_chunks) != len(narration_chunks):
+                    raise RuntimeError("A síntese retornou uma quantidade incorreta de chunks.")
+
+            chunks_by_slide: dict[int, list[tuple[TikTokSpeechChunk, Any]]] = {}
+            for chunk, rendered in zip(narration_chunks, rendered_chunks, strict=True):
+                chunks_by_slide.setdefault(chunk.slide_index, []).append((chunk, rendered))
+            following_language_by_slide: dict[int, str] = {}
+            for chunk_index, chunk in enumerate(narration_chunks[:-1]):
+                next_chunk = narration_chunks[chunk_index + 1]
+                if next_chunk.slide_index != chunk.slide_index:
+                    following_language_by_slide[chunk.slide_index] = next_chunk.language
+
             segments = []
             durations = []
             for index, slide in enumerate(project.slides):
@@ -399,30 +595,34 @@ def make_media_render_handler(
                 duration = slide.duration_ms
                 args = ["-y", "-loop", "1", "-framerate", "30", "-i", str(image)]
                 if voice:
-                    spoken = (
-                        _optional_text(slide.narration_text)
-                        or _optional_text(slide.en)
-                        or _optional_text(slide.pt)
-                    )
-                    if spoken:
-                        narration_language = (
-                            "English"
-                            if payload.get("voice_language") == "en"
-                            else "Portuguese"
+                    slide_chunks = chunks_by_slide.get(index, [])
+                    if slide_chunks:
+                        narration_file = snapshot_dir / f"{index:03d}-narration.wav"
+                        slide_start_ms = sum(durations)
+                        audio_duration_ms, chunk_records, audio_sha256 = _assemble_voice_chunks(
+                            slide_chunks,
+                            narration_file,
+                            slide_start_ms=slide_start_ms,
+                            following_language=following_language_by_slide.get(index),
                         )
-                        # Local Qwen synthesis can take more than the regular
-                        # two-minute lease on CPU. Renew it while the child
-                        # process produces this slide's narration.
-                        with _keep_lease(execution):
-                            rendered = speech.execute(
-                                text=spoken,
-                                profile=voice,
-                                parameters=synthesis_language_parameters(
-                                    voice, narration_language
-                                ),
-                            )
-                        duration = max(duration, rendered.duration_ms + 400)
-                        args += ["-i", rendered.audio_path]
+                        narration_manifest_records.extend(chunk_records)
+                        slide_audio_records.append(
+                            {
+                                "slide_index": index,
+                                "slide_id": slide.id,
+                                "filename": narration_file.name,
+                                "audio_sha256": audio_sha256,
+                                "duration_ms": audio_duration_ms,
+                                "timeline_start_ms": slide_start_ms,
+                                "sample_rate": int(getattr(slide_chunks[0][1], "sample_rate", 24000)),
+                                "channels": 1,
+                            }
+                        )
+                        tail_padding_ms = (
+                            100 if following_language_by_slide.get(index) else 400
+                        )
+                        duration = max(duration, audio_duration_ms + tail_padding_ms)
+                        args += ["-i", str(narration_file)]
                     else:
                         args += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono"]
                 secs = f"{duration / 1000:.3f}"
@@ -513,6 +713,26 @@ def make_media_render_handler(
             _check_current_caption_approval(project, repository)
         with final.open("rb") as output_stream:
             video_sha256 = file_digest(output_stream, "sha256").hexdigest()
+        narration_manifest_sha256 = None
+        if voice and narration_manifest_records:
+            narration_payload = {
+                "contract": "nova-tiktok-media-narration/1",
+                "voice_profile_sha256": voice.sha256,
+                "voice_model_id": voice.model_id,
+                "voice_design_seed": 42 if voice.model_id == "qwen3-tts-1.7b-voice-design" else None,
+                "slide_audio": slide_audio_records,
+                "chunks": narration_manifest_records,
+            }
+            narration_path = snapshot_dir / "narration-manifest.json"
+            narration_temporary = snapshot_dir / "narration-manifest.tmp"
+            narration_temporary.write_text(
+                json.dumps(narration_payload, ensure_ascii=False, sort_keys=True, indent=2),
+                encoding="utf-8",
+            )
+            os.replace(narration_temporary, narration_path)
+            with narration_path.open("rb") as stream:
+                narration_manifest_sha256 = file_digest(stream, "sha256").hexdigest()
+
         manifest = {
             "contract": "nova-tiktok-media-render/1",
             "project_id": str(project_id),
@@ -541,6 +761,8 @@ def make_media_render_handler(
                 if visual_mode == "shadowing" and project.shadowing_clip else []
             ),
             "voice_sha256": voice.sha256 if voice else None,
+            "narration_manifest_sha256": narration_manifest_sha256,
+            "narration_chunk_count": len(narration_manifest_records),
             "duration_ms": final_duration_ms,
             "slide_durations_ms": durations,
             "video_sha256": video_sha256,

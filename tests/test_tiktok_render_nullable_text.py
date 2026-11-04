@@ -81,7 +81,10 @@ def test_voice_render_uses_slide_text_when_legacy_narration_is_null(
 
     assert calls == [("Watch this!", {"language": "English"})]
     assert result["render_id"] == str(render_id)
-    assert (snapshot_dir / "manifest.json").is_file()
+    manifest = json.loads((snapshot_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["narration_chunk_count"] == 1
+    assert manifest["narration_manifest_sha256"]
+    assert (snapshot_dir / "narration-manifest.json").is_file()
 
 
 def test_render_text_reader_does_not_call_strip_on_null_fields() -> None:

@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -6,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 
+from nova_generator.application.ports.speech_synthesizer import PartialBatchSynthesisError
 from nova_generator.domain.voices import VoiceProfile
 from nova_generator.infrastructure.speech.chatterbox_nano_synthesizer import (
     ChatterboxNanoSynthesizer,
@@ -113,3 +115,96 @@ def test_voice_subprocess_missing_stderr_reports_original_failure(tmp_path) -> N
             ChatterboxNanoSynthesizer(Path("runner.py")).synthesize(
                 text="Hello", profile=profile, parameters={}, output=tmp_path / "out.wav"
             )
+
+
+
+def test_qwen_batch_synthesizes_all_uncached_chunks_in_one_subprocess(tmp_path) -> None:
+    profile = VoiceProfile(
+        uuid4(),
+        "Ana",
+        1,
+        "qwen3-tts-1.7b-voice-design",
+        "a" * 64,
+        parameters={"instruct": "Clear, natural, consistent voice."},
+    ).snapshot()
+    outputs = [tmp_path / "en.wav", tmp_path / "pt.wav"]
+
+    def runner(*_args, **kwargs):
+        request = __import__("json").loads(kwargs["input"])
+        assert len(request["segments"]) == 2
+        for segment in request["segments"]:
+            Path(segment["output"]).write_bytes(b"RIFF qwen chunk")
+        return Mock(returncode=0, stdout="", stderr="")
+
+    synthesizer = ChatterboxNanoSynthesizer(
+        Path("qwen3_tts_runner.py"),
+        executable=sys.executable,
+        wav_probe=FakeWavProbe(),
+        engine_name="Qwen3-TTS",
+    )
+    requests = [
+        {
+            "text": "Watch this!",
+            "parameters": {"language": "English", "seed": 42},
+            "output": outputs[0],
+        },
+        {
+            "text": "Olha isso!",
+            "parameters": {"language": "Portuguese", "seed": 42},
+            "output": outputs[1],
+        },
+    ]
+
+    with patch("subprocess.run", side_effect=runner) as run:
+        results = synthesizer.synthesize_many(profile=profile, requests=requests)
+
+    assert run.call_count == 1
+    assert len(results) == 2
+    assert all(output.is_file() for output in outputs)
+    assert [result.duration_ms for result in results] == [500, 500]
+
+
+
+def test_qwen_batch_keeps_completed_chunks_when_a_later_chunk_fails(tmp_path) -> None:
+    profile = VoiceProfile(
+        uuid4(),
+        "Ana",
+        1,
+        "qwen3-tts-1.7b-voice-design",
+        "a" * 64,
+        parameters={"instruct": "Clear, natural, consistent voice."},
+    ).snapshot()
+    outputs = [tmp_path / "first.wav", tmp_path / "second.wav"]
+
+    def runner(*_args, **kwargs):
+        request = json.loads(kwargs["input"])
+        Path(request["segments"][0]["output"]).write_bytes(b"RIFF completed chunk")
+        return Mock(returncode=1, stdout="", stderr="simulated failure after first chunk")
+
+    synthesizer = ChatterboxNanoSynthesizer(
+        Path("qwen3_tts_runner.py"),
+        executable=sys.executable,
+        wav_probe=FakeWavProbe(),
+        engine_name="Qwen3-TTS",
+    )
+    requests = [
+        {
+            "text": "First chunk.",
+            "parameters": {"language": "English", "seed": 42},
+            "output": outputs[0],
+        },
+        {
+            "text": "Second chunk.",
+            "parameters": {"language": "Portuguese", "seed": 42},
+            "output": outputs[1],
+        },
+    ]
+
+    with patch("subprocess.run", side_effect=runner) as run:
+        with pytest.raises(PartialBatchSynthesisError) as exc_info:
+            synthesizer.synthesize_many(profile=profile, requests=requests)
+
+    assert run.call_count == 1
+    assert len(exc_info.value.completed) == 1
+    assert exc_info.value.completed[0][0] == 0
+    assert exc_info.value.completed[0][1].audio_path == str(outputs[0])

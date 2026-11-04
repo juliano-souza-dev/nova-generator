@@ -2387,28 +2387,14 @@ export function TikTokMediaPage() {
                     maxLength={120}
                   />
                   <div className="tm-editor-separator" />
-                  <h3>Roteiro da narração</h3>
-                  <p className="tm-small">Escreva a fala natural deste quadro após finalizar o visual. O texto na tela permanece independente. Para alternar idioma no mesmo áudio Qwen, use <code>[pt]…[/pt]</code> e <code>[en]…[/en]</code>.</p>
-                  <EditField
-                    label="Narração deste quadro"
-                    value={active.narration_text ?? ""}
-                    onChange={(narration_text) => updateSlide({ narration_text })}
-                    multiline
-                    maxLength={2000}
-                    hint="Para voz bilíngue, marque os trechos: [pt]Olá![/pt] [en]Hello![/en]. Use uma voz da Biblioteca com suporte a português e inglês. Se vazio, será usado o texto do quadro."
-                  />
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={!active.pt.trim() || !active.en.trim()}
-                    onClick={() =>
-                      updateSlide({
-                        narration_text: `[pt]${active.pt.trim()}[/pt]\n[en]${active.en.trim()}[/en]`,
-                      })
-                    }
-                  >
-                    Montar narração em português + inglês
-                  </button>
+                  <h3>Narração automática</h3>
+                  <p className="tm-small">
+                    A narração é montada automaticamente a partir dos campos Texto em inglês e
+                    Tradução em português. O Generator identifica o idioma de cada trecho, divide
+                    frases longas sem alterar o texto e reutiliza os áudios já sintetizados. Não
+                    precisa inserir marcações [pt] ou [en]. Para áudio bilíngue, selecione uma voz
+                    Qwen3-TTS VoiceDesign ou Base.
+                  </p>
                   <label className="tm-field">
                     <span>Duração: {(active.duration_ms / 1000).toFixed(1)}s</span>
                     <input
@@ -2626,7 +2612,7 @@ export function TikTokMediaPage() {
                         <Link to="/voices">Gerenciar vozes</Link>
                       </label>
                       <label className="tm-field">
-                        <span>Idioma da narração</span>
+                        <span>Idioma de fallback para projetos antigos</span>
                         <select
                           value={voiceLanguage}
                           onChange={(event) => setVoiceLanguage(event.target.value as "pt-BR" | "en")}
