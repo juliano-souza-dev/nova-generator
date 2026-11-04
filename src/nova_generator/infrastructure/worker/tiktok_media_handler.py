@@ -21,6 +21,7 @@ from nova_generator.infrastructure.database.editorial_project_repository import 
 )
 from nova_generator.infrastructure.exports.tiktok_captions import render_ass
 from nova_generator.infrastructure.worker.persistent_worker import JobExecution
+from nova_generator.infrastructure.worker.project_media_handler import _keep_lease
 
 
 def _run_ffmpeg(arguments: list[str], *, cwd: Path | None = None) -> None:
@@ -394,7 +395,11 @@ def make_media_render_handler(
                 if voice:
                     spoken = slide.narration_text.strip() or slide.en.strip() or slide.pt.strip()
                     if spoken:
-                        rendered = speech.execute(text=spoken, profile=voice)
+                        # Local Qwen synthesis can take more than the regular
+                        # two-minute lease on CPU. Renew it while the child
+                        # process produces this slide's narration.
+                        with _keep_lease(execution):
+                            rendered = speech.execute(text=spoken, profile=voice)
                         duration = max(duration, rendered.duration_ms + 400)
                         args += ["-i", rendered.audio_path]
                     else:

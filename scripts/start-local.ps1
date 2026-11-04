@@ -30,6 +30,25 @@ function Refresh-ProcessPath {
     $env:Path = "$machine;$user"
 }
 
+function Find-SoxDirectory {
+    $command = Get-Command "sox.exe" -ErrorAction SilentlyContinue
+    if ($command) {
+        return Split-Path -Parent $command.Source
+    }
+    # The winget package is deliberately self-contained and does not add SoX
+    # to PATH. Find its executable rather than requiring Developer Mode or a
+    # manual system-wide PATH edit.
+    $packages = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
+    if (-not (Test-Path -LiteralPath $packages)) { return $null }
+    $package = Get-ChildItem -LiteralPath $packages -Directory -Filter "ChrisBagwell.SoX_*" |
+        Select-Object -First 1
+    if ($null -eq $package) { return $null }
+    $executable = Get-ChildItem -LiteralPath $package.FullName -Recurse -File -Filter "sox.exe" |
+        Select-Object -First 1
+    if ($null -eq $executable) { return $null }
+    return $executable.DirectoryName
+}
+
 function Find-Python312 {
     $launcher = Get-Command "py.exe" -ErrorAction SilentlyContinue
     if ($launcher) {
@@ -75,7 +94,7 @@ function Invoke-Python([object]$PythonCommand, [string[]]$Arguments) {
 }
 
 function Ensure-Prerequisites {
-    Write-Step "Verificando Python, Node.js e FFmpeg..."
+    Write-Step "Verificando Python, Node.js, FFmpeg e SoX..."
     $pythonCommand = Find-Python312
     if (-not $pythonCommand) {
         Install-WingetPackage "Python.Python.3.12" "Python 3.12"
@@ -90,11 +109,24 @@ function Ensure-Prerequisites {
     if (-not (Get-Command "ffmpeg.exe" -ErrorAction SilentlyContinue) -or -not (Get-Command "ffprobe.exe" -ErrorAction SilentlyContinue)) {
         Install-WingetPackage "Gyan.FFmpeg" "FFmpeg/FFprobe"
     }
+    # Qwen3-TTS uses SoX internally for audio normalization. Keep this
+    # dependency explicit so a fresh Windows setup can synthesize previews.
+    $soxDirectory = Find-SoxDirectory
+    if (-not $soxDirectory) {
+        Install-WingetPackage "ChrisBagwell.SoX" "SoX"
+        $soxDirectory = Find-SoxDirectory
+    }
     if (-not (Get-Command "node.exe" -ErrorAction SilentlyContinue) -or -not (Get-Command "npm.cmd" -ErrorAction SilentlyContinue)) {
         throw "Node.js foi instalado, mas ainda não está acessível. Reinicie o Windows e clique em INICIAR.bat."
     }
     if (-not (Get-Command "ffmpeg.exe" -ErrorAction SilentlyContinue) -or -not (Get-Command "ffprobe.exe" -ErrorAction SilentlyContinue)) {
         throw "FFmpeg foi instalado, mas ainda não está acessível. Reinicie o Windows e clique em INICIAR.bat."
+    }
+    if (-not $soxDirectory) {
+        throw "SoX foi instalado, mas ainda não está acessível. Reinicie o Windows e clique em INICIAR.bat."
+    }
+    if (($env:Path -split ";") -notcontains $soxDirectory) {
+        $env:Path = "$soxDirectory;$env:Path"
     }
     return $pythonCommand
 }
