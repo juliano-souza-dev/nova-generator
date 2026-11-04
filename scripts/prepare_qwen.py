@@ -6,6 +6,7 @@ when either supported Qwen model is incomplete.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -19,23 +20,58 @@ from nova_generator.infrastructure.speech.qwen3_tts_models import QWEN_MODELS
 
 
 DOWNLOAD_SCRIPT = r"""
+import os
 import sys
+import time
 from pathlib import Path
+
+# Xet's native transfer backend can fail on Windows with
+# "Internal Writer Error: Background writer channel closed". Set this before
+# importing huggingface_hub so it selects the regular HTTP download backend.
+os.environ["HF_HUB_DISABLE_XET"] = "1"
+
 from huggingface_hub import snapshot_download
 
 repo_id, target = sys.argv[1:3]
 target_path = Path(target)
 checkpoint = target_path / "model.safetensors"
+last_error = None
+
 if not checkpoint.is_file():
-    snapshot_download(
-        repo_id=repo_id,
-        local_dir=str(target_path),
-        max_workers=2,
-        force_download=False,
-    )
+    for attempt in range(1, 5):
+        try:
+            print(
+                f"Download HTTP do modelo {repo_id} (tentativa {attempt}/4). "
+                "Arquivos já concluídos serão reaproveitados.",
+                flush=True,
+            )
+            snapshot_download(
+                repo_id=repo_id,
+                local_dir=str(target_path),
+                max_workers=1,
+                force_download=False,
+            )
+            last_error = None
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt == 4:
+                break
+            delay = attempt * 8
+            print(
+                f"Download interrompido: {exc}. Nova tentativa em {delay}s...",
+                flush=True,
+            )
+            time.sleep(delay)
+
+if last_error is not None:
+    raise RuntimeError(
+        f"Não foi possível concluir o download de {repo_id} após 4 tentativas."
+    ) from last_error
 if not checkpoint.is_file():
     raise RuntimeError(f"Checkpoint Qwen ausente após o download: {checkpoint}")
-"""
+""
+
 
 
 def run(argv: list[str], *, label: str) -> None:
@@ -94,6 +130,9 @@ def ensure_runtime(settings) -> str:
 
 
 def ensure_model(executable: str, model_id: str, directory_name: str, root: Path) -> None:
+    # Disable Xet in the child process as well as in the embedded script.
+    # The environment setting must exist before huggingface_hub is imported.
+    os.environ["HF_HUB_DISABLE_XET"] = "1"
     target = root / directory_name
     checkpoint = target / "model.safetensors"
     config = target / "config.json"
@@ -131,6 +170,7 @@ def ensure_model(executable: str, model_id: str, directory_name: str, root: Path
 
 def main() -> int:
     settings = get_settings()
+    os.environ["HF_HUB_DISABLE_XET"] = "1"
     print(
         "O Nova Generator só será iniciado depois que todos os recursos Qwen "
         "estiverem instalados e validados.",
