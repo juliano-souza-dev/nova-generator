@@ -55,6 +55,7 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 
 - Perfis VoiceDesign geram prévia em português sem exigir referência; perfis Base só sintetizam com áudio validado e sua transcrição. A troca de motor não altera o WAV canônico nem o contrato iHub.
 - Uma microaula bilíngue preserva ordem e caracteres literais dos trechos e mantém uma única voz por perfil em português e inglês, sem vazamento de tags no áudio nem mudança de legenda.
+- Marcações PT/EN aninhadas por um roteiro já salvo ou por uma montagem automática são resolvidas na ordem de leitura, mantendo cada trecho no idioma correto; tags vazias, trocadas ou não fechadas continuam inválidas.
 - A saída de processos locais de voz, inclusive Qwen e Chatterbox no Windows, tolera bytes fora de UTF-8 e falhas sem `stderr`; o erro original é apresentado com o nome do motor, sem mascará-lo como `NoneType`.
 - Vídeos TikTok Mídia concluídos permanecem acessíveis pela Biblioteca após fechar a edição ou reiniciar o aplicativo; manifestos publicados identificam cada exportação, e renders incompletos não são apresentados.
 

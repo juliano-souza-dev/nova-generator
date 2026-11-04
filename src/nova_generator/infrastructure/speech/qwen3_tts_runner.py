@@ -13,7 +13,6 @@ from importlib import import_module
 from pathlib import Path
 
 _LANGUAGE_TAG = re.compile(r"\[/?(?:pt|en)\]", re.IGNORECASE)
-_SEGMENT = re.compile(r"\[(pt|en)\](.*?)\[/\1\]", re.IGNORECASE | re.DOTALL)
 _ANY_LANGUAGE_TAG = re.compile(
     r"\[/?(?:pt|en|es|fr|de|it|pl|tr|ru|nl|cs|ar|zh-cn|ja|hu|ko|hi)\]", re.IGNORECASE
 )
@@ -25,7 +24,7 @@ MODELS = {
 
 
 def parse_narration(text: str, default_language: str = "pt") -> list[tuple[str, str]]:
-    """Preserve literal PT/EN spans and reject partially marked scripts."""
+    """Resolve nested PT/EN spans, preserving text order and rejecting broken markup."""
     if not isinstance(text, str) or not text.strip():
         raise ValueError("O texto da narração está vazio.")
     if not _LANGUAGE_TAG.search(text):
@@ -35,18 +34,45 @@ def parse_narration(text: str, default_language: str = "pt") -> list[tuple[str, 
             raise ValueError("Idioma padrão da narração inválido.")
         return [(default_language, text.strip())]
     result: list[tuple[str, str]] = []
+    group: list[tuple[str, str]] = []
+    stack: list[tuple[str, bool]] = []
     cursor = 0
-    for match in _SEGMENT.finditer(text):
-        if text[cursor : match.start()].strip():
-            raise ValueError("Use somente trechos completos [pt]...[/pt] ou [en]...[/en].")
-        spoken = match.group(2).strip()
-        if not spoken:
-            raise ValueError("Um trecho de narração não pode estar vazio.")
-        if _ANY_LANGUAGE_TAG.search(spoken):
-            raise ValueError("Não coloque marcações de idioma dentro de outro trecho.")
-        result.append((match.group(1).lower(), spoken))
+
+    def add_text(chunk: str) -> None:
+        if not stack:
+            if chunk.strip():
+                raise ValueError("Use somente trechos completos [pt]...[/pt] ou [en]...[/en].")
+            return
+        language = stack[-1][0]
+        if group and group[-1][0] == language:
+            group[-1] = (language, group[-1][1] + chunk)
+        else:
+            group.append((language, chunk))
+        if chunk.strip():
+            for index, (tag_language, _) in enumerate(stack):
+                stack[index] = (tag_language, True)
+
+    for match in _ANY_LANGUAGE_TAG.finditer(text):
+        add_text(text[cursor : match.start()])
+        tag = match.group()[1:-1].lower()
+        closing = tag.startswith("/")
+        language = tag[1:] if closing else tag
+        if language not in LANGUAGES:
+            raise ValueError("Use apenas trechos marcados em português [pt] ou inglês [en].")
+        if closing:
+            if not stack or stack[-1][0] != language:
+                raise ValueError("Feche corretamente as marcações de idioma do roteiro.")
+            _, has_speech = stack.pop()
+            if not has_speech:
+                raise ValueError("Um trecho de narração não pode estar vazio.")
+            if not stack:
+                result.extend((lang, spoken.strip()) for lang, spoken in group if spoken.strip())
+                group = []
+        else:
+            stack.append((language, False))
         cursor = match.end()
-    if not result or text[cursor:].strip():
+    add_text(text[cursor:])
+    if stack or not result:
         raise ValueError("Feche todas as marcações de idioma do roteiro.")
     if len(result) > 20:
         raise ValueError("Divida o roteiro em até 20 trechos de idioma.")

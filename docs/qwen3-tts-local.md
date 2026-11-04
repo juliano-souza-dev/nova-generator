@@ -83,6 +83,8 @@ Não é necessário instalar outros modelos. No TikTok Media, abra o quadro e ut
 
 Use **Montar narração em português + inglês** para preencher automaticamente um rascunho a partir dos textos do quadro. A ordem dos trechos pode ser editada livremente. Escolha um perfil Qwen3-TTS na Biblioteca de Vozes; a voz de referência continua sendo a mesma em ambos os idiomas quando o perfil Base é usado. O sistema insere 300 ms de pausa entre trechos e produz um WAV contínuo, que acompanha o vídeo.
 
-Textos sem marcação continuam em português como antes. Se o texto tiver marcações incompletas ou mistura de texto fora das tags, o job exibe um erro para correção sem alterar sua produção. Perfis Chatterbox permanecem disponíveis para roteiros sem essas marcações, pois não oferecem a mesma escolha de idioma.
+Se um rascunho já tiver marcações internas, o Qwen também reconhece trechos aninhados, como `[pt]Você pode dizer [en]watch this[/en] em inglês.[/pt]`, dividindo a fala por idioma sem ler as marcações. Prefira blocos separados ao escrever do zero; tags vazias, trocadas ou incompletas continuam inválidas.
+
+Textos sem marcação usam o idioma selecionado para o job. Se houver mistura de texto fora das tags, o job exibe um erro para correção sem alterar sua produção. Perfis Chatterbox permanecem disponíveis para roteiros sem essas marcações, pois não oferecem a mesma escolha de idioma.
 
 A qualidade da pronúncia e o timbre dependem do perfil e da gravação de referência; não são garantidos pelo formato do roteiro. Em CPUs antigas, alternar vários trechos pode aumentar o tempo de geração.

@@ -32,10 +32,12 @@ blocos marcados:
 [pt]Significa: posso ajudar?[/pt]
 ```
 
-Cada bloco é sintetizado no idioma indicado e unido ao seguinte com 250 ms de
+Cada bloco é sintetizado no idioma indicado e unido ao seguinte com 300 ms de
 silêncio. Texto sem tags continua usando o idioma selecionado na tela. Não
 misture texto fora dos blocos marcados: isso é recusado para evitar pronúncia
-ambígua.
+ambígua. Caso um roteiro salvo inclua `[en]...[/en]` dentro de `[pt]...[/pt]`
+(ou o inverso), o parser alterna o idioma conforme a marcação mais interna,
+sem perder as frases. Marcações vazias ou fechamentos incorretos são recusados.
 
 ## Qualidade e consistência
 

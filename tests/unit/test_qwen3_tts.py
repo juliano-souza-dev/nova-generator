@@ -33,6 +33,31 @@ def test_bilingual_parser_keeps_language_order_and_old_plain_text():
     assert parse_narration("[EN]Watch out![/en]") == [("en", "Watch out!")]
 
 
+def test_bilingual_parser_resolves_nested_tags_without_changing_spoken_words():
+    assert parse_narration(
+        "[pt]Hoje usamos [en]watch[/en] para falar de assistir.[/pt]"
+    ) == [
+        ("pt", "Hoje usamos"),
+        ("en", "watch"),
+        ("pt", "para falar de assistir."),
+    ]
+    assert parse_narration(
+        "[pt][pt]Olá, pessoal![/pt] [en]Hello, everyone![/en][/pt]"
+    ) == [("pt", "Olá, pessoal!"), ("en", "Hello, everyone!")]
+    # The TikTok button may wrap text that was already tagged by an imported draft.
+    assert parse_narration("[pt][pt]Olá![/pt][/pt]\n[en][en]Hello![/en][/en]") == [
+        ("pt", "Olá!"),
+        ("en", "Hello!"),
+    ]
+    assert parse_narration("[pt]Hoje [pt]vamos[/pt] aprender.[/pt]") == [
+        ("pt", "Hoje vamos aprender.")
+    ]
+    assert parse_narration("[pt]Oi![/pt] [pt]Tudo bem?[/pt]") == [
+        ("pt", "Oi!"),
+        ("pt", "Tudo bem?"),
+    ]
+
+
 @pytest.mark.parametrize(
     "invalid",
     [
@@ -40,7 +65,9 @@ def test_bilingual_parser_keeps_language_order_and_old_plain_text():
         "[pt] [/pt]",
         "Texto sem marcação [en]Hello[/en]",
         "[pt]Olá[/pt] texto perdido",
-        "[pt]Olá [en]Hello[/en][/pt]",
+        "[pt]Olá [en]Hello[/pt][/en]",
+        "[pt][en] [/en]Olá[/pt]",
+        "[pt]Olá [es]Hola[/es][/pt]",
         "[en]Hello[/pt]",
         "[es]Hola[/es]",
     ],
@@ -273,7 +300,8 @@ def test_bilingual_runner_preserves_voice_and_inserts_only_between_segments(
         parameters = {"reference_text": "Este áudio é a minha voz."}
 
     request = {
-        "text": "[pt]Vamos aprender.[/pt] [en]Let's learn![/en] [pt]Continue comigo.[/pt]",
+        "text": "[pt][pt]Vamos aprender.[/pt] [en]Let's learn![/en]"
+        " [pt]Continue comigo.[/pt][/pt]",
         "profile": {"model_id": voice_mode, "parameters": parameters},
         "parameters": {},
         "output": str(tmp_path / "lesson.wav"),
