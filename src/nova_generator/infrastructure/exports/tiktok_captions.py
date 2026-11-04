@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from nova_generator.domain.tiktok_media import MediaCaption, MediaCaptionStyle
+from nova_generator.domain.tiktok_media import MediaCaption, MediaCaptionStyle, MotionGraphic
 
 
 def _ass_time(milliseconds: int) -> str:
@@ -105,11 +105,38 @@ def _karaoke_words(value: str, duration_ms: int) -> str:
     return "".join(result)
 
 
+def _motion_graphic_event(graphic: MotionGraphic) -> str:
+    symbols = {
+        "check": ("✓", "&H0056E69A&"), "cross": ("✕", "&H006B75FF&"),
+        "star": ("★", "&H0000D8FF&"), "idea": ("✦", "&H006FE8FF&"),
+        "arrow": ("➜", "&H00FFE17A&"), "sound": ("♫", "&H00A8D8FF&"),
+        "sparkle": ("✧", "&H00D6A5FF&"), "warning": ("!", "&H004A8CFF&"),
+    }
+    symbol, color = symbols[graphic.icon]
+    x, y = {"top": (540, 300), "center": (540, 960), "bottom": (540, 1530),
+            "left": (185, 960), "right": (895, 960)}[graphic.position]
+    start, end = _ass_time(graphic.start_ms), _ass_time(graphic.start_ms + graphic.duration_ms)
+    label = _literal(graphic.label)
+    if graphic.animation == "fade":
+        motion = r"\fad(180,120)"
+    elif graphic.animation == "slide":
+        motion = rf"\move({x - 150},{y},{x},{y},0,260)\fad(80,100)"
+    elif graphic.animation == "bounce":
+        motion = r"\fscx70\fscy70\t(0,150,\fscx118\fscy118)\t(150,300,\fscx100\fscy100)"
+    else:
+        motion = r"\fscx30\fscy30\t(0,190,\fscx112\fscy112)\t(190,280,\fscx100\fscy100)"
+    text = rf"{{\an5\pos({x},{y})\fs124\bord5\shad2\c{color}{motion}}}{symbol}"
+    if label:
+        text += r"\N{\fs43\bord3\c&H00FFFFFF&}" + label
+    return f"Dialogue: 1,{start},{end},Default,,0,0,0,,{text}"
+
+
 def render_ass(
     captions: list[MediaCaption],
     style: MediaCaptionStyle,
     paper_theme: str | None = None,
     outro: tuple[int, int] | None = None,
+    motion_graphics: list[MotionGraphic] | None = None,
 ) -> str:
     """Render video effects using ASS so the exported MP4 matches the editor."""
     template = style.template
@@ -163,6 +190,11 @@ def render_ass(
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
+    for graphic in sorted(
+        (item for item in (motion_graphics or []) if item.enabled), key=lambda item: item.start_ms
+    ):
+        lines.append(_motion_graphic_event(graphic))
+
     for caption in sorted(
         (item for item in captions if item.enabled), key=lambda item: item.start_ms
     ):

@@ -9,6 +9,18 @@ export type PaperTheme = "cream" | "kraft" | "night" | "aurora";
 export type MediaAudioMode = "silent" | "uploaded" | "voice" | "original";
 export type SlideMotion = "still" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right";
 
+export type MediaMotionGraphic = {
+  id: string;
+  start_ms: number;
+  duration_ms: number;
+  icon: "check" | "cross" | "star" | "idea" | "arrow" | "sound" | "sparkle" | "warning";
+  label: string;
+  animation: "pop" | "fade" | "slide" | "bounce";
+  sound: "none" | "pop" | "success" | "whoosh" | "ding";
+  position: "top" | "center" | "bottom" | "left" | "right";
+  enabled: boolean;
+};
+
 export type MediaCaption = {
   cue_id: string;
   start_ms: number;
@@ -69,6 +81,7 @@ export type MediaProject = {
   source_youtube_id?: string | null;
   source_cut_job_id?: string | null;
   video_captions?: MediaCaption[];
+  motion_graphics?: MediaMotionGraphic[];
   shadowing_clip?: ShadowingClip | null;
   caption_style?: MediaCaptionStyle;
   revision: number;
@@ -88,6 +101,7 @@ export type MediaEdit = Pick<
   | "source_youtube_id"
   | "source_cut_job_id"
   | "video_captions"
+  | "motion_graphics"
   | "shadowing_clip"
   | "caption_style"
   | "revision"

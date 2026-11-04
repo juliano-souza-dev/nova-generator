@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from nova_generator.domain.tiktok_media import MediaCaption, MediaCaptionStyle
+from nova_generator.domain.tiktok_media import MediaCaption, MediaCaptionStyle, MotionGraphic
 from nova_generator.infrastructure.exports.tiktok_captions import render_ass
 
 
@@ -22,7 +22,18 @@ def test_aurora_subtitles_and_outro_are_renderable_by_ffmpeg(tmp_path: Path) -> 
     (tmp_path / "captions.ass").write_text(
         render_ass(
             [caption], MediaCaptionStyle(template="handwriting", position="center"),
-            paper_theme="aurora", outro=(700, 1000),
+            paper_theme="aurora",
+            outro=(700, 1000),
+            motion_graphics=[
+                MotionGraphic(
+                    start_ms=200,
+                    duration_ms=500,
+                    icon="check",
+                    label="Great!",
+                    animation="pop",
+                    sound="none",
+                )
+            ],
         ),
         encoding="utf-8",
     )
