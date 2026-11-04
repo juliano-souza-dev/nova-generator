@@ -81,7 +81,7 @@ export type MediaProject = {
   source_youtube_id?: string | null;
   source_cut_job_id?: string | null;
   video_captions?: MediaCaption[];
-  motion_graphics: MediaMotionGraphic[];
+  motion_graphics?: MediaMotionGraphic[];
   shadowing_clip?: ShadowingClip | null;
   caption_style?: MediaCaptionStyle;
   revision: number;
