@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import Mock, patch
 from uuid import uuid4
@@ -74,3 +75,41 @@ def test_chatterbox_timeout_logs_captured_stderr_and_stdout(tmp_path) -> None:
     assert "chatterbox_subprocess_timeout" in log_error.call_args.args[0]
     assert "Traceback: model stalled" in log_error.call_args.args[3]
     assert "loading model..." in log_error.call_args.args[4]
+
+
+@pytest.mark.parametrize("exit_code", [0, 2])
+def test_voice_subprocess_handles_non_utf8_windows_output(tmp_path, exit_code: int) -> None:
+    """A local-codepage diagnostic must not break the subprocess reader thread."""
+    runner = tmp_path / "mixed_encoding.py"
+    runner.write_text(
+        "import json, pathlib, sys\n"
+        "request = json.load(sys.stdin)\n"
+        "sys.stderr.buffer.write(b'Erro: n\\xe3o foi poss\\xedvel\\n')\n"
+        f"if not {exit_code}:\n"
+        "    pathlib.Path(request['output']).write_bytes(b'RIFF wav')\n"
+        f"sys.exit({exit_code})\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "spoken.wav"
+    profile = VoiceProfile(uuid4(), "Ana", 1, "qwen3-tts-1.7b-base", "a" * 64).snapshot()
+    synthesizer = ChatterboxNanoSynthesizer(
+        runner, executable=sys.executable, wav_probe=FakeWavProbe(), engine_name="Qwen3-TTS"
+    )
+    if exit_code:
+        with pytest.raises(RuntimeError, match="Qwen3-TTS falhou: Erro: n") as exc_info:
+            synthesizer.synthesize(text="Olá!", profile=profile, parameters={}, output=output)
+        assert "NoneType" not in str(exc_info.value)
+    else:
+        speech = synthesizer.synthesize(
+            text="Olá!", profile=profile, parameters={}, output=output
+        )
+        assert speech.duration_ms == 500
+
+
+def test_voice_subprocess_missing_stderr_reports_original_failure(tmp_path) -> None:
+    profile = VoiceProfile(uuid4(), "Ana", 1, "nano", "a" * 64).snapshot()
+    with patch("subprocess.run", return_value=Mock(returncode=1, stderr=None, stdout=None)):
+        with pytest.raises(RuntimeError, match="Chatterbox falhou: erro não informado"):
+            ChatterboxNanoSynthesizer(Path("runner.py")).synthesize(
+                text="Hello", profile=profile, parameters={}, output=tmp_path / "out.wav"
+            )

@@ -19,6 +19,13 @@ from nova_generator.infrastructure.speech.ffprobe_wav_probe import FfprobeWavPro
 logger = logging.getLogger(__name__)
 
 
+def _decode_output(value: bytes | str | None) -> str:
+    """Decode subprocess diagnostics even when Windows/native libraries use a local code page."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value or ""
+
+
 class ChatterboxNanoSynthesizer:
     """Runs Chatterbox in a separate Python process; API workers never load the model."""
 
@@ -74,19 +81,15 @@ class ChatterboxNanoSynthesizer:
                 input=json.dumps(request, ensure_ascii=False),
                 text=True,
                 encoding="utf-8",
+                errors="replace",
                 capture_output=True,
                 check=False,
                 timeout=self._timeout_seconds,
                 env={**os.environ, **self._environment} if self._environment else None,
             )
         except subprocess.TimeoutExpired as exc:
-            def _decode(value: bytes | str | None) -> str:
-                if isinstance(value, bytes):
-                    return value.decode("utf-8", errors="replace")
-                return value or ""
-
-            stderr = _decode(exc.stderr).strip()
-            stdout = _decode(exc.stdout).strip()
+            stderr = _decode_output(exc.stderr).strip()
+            stdout = _decode_output(exc.stdout).strip()
             logger.error(
                 "chatterbox_subprocess_timeout runner=%s timeout=%s stderr=%r stdout=%r",
                 self._runner,
@@ -105,7 +108,11 @@ class ChatterboxNanoSynthesizer:
                 f"Não foi possível iniciar o processo isolado do {self._engine_name}."
             ) from exc
         if completed.returncode != 0:
-            detail = completed.stderr.strip() or "erro não informado"
+            detail = (
+                _decode_output(completed.stderr).strip()
+                or _decode_output(completed.stdout).strip()
+                or "erro não informado"
+            )
             raise RuntimeError(f"{self._engine_name} falhou: {detail}")
         if output.suffix.lower() != ".wav" or not output.is_file() or output.stat().st_size == 0:
             raise RuntimeError(f"{self._engine_name} não produziu WAV canônico válido.")
