@@ -13,13 +13,13 @@ import pytest
 from nova_generator.application.use_cases.speech_language import synthesis_language_parameters
 from nova_generator.core.settings import Settings
 from nova_generator.domain.voices import VoiceProfileSnapshot
+from nova_generator.infrastructure.speech import qwen3_tts_runner
 from nova_generator.infrastructure.speech.qwen3_tts_models import (
     VOICE_CLONE,
     VOICE_DESIGN,
     qwen_model_sha256,
     validate_qwen_voice,
 )
-from nova_generator.infrastructure.speech import qwen3_tts_runner
 from nova_generator.infrastructure.speech.qwen3_tts_runner import main, parse_narration
 from nova_generator.infrastructure.speech.routing_synthesizer import RoutingSpeechSynthesizer
 
