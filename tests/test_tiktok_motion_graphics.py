@@ -4,12 +4,12 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from nova_generator.domain.tiktok_media import MediaCaptionStyle, MediaProject, MotionGraphic
+from nova_generator.domain.tiktok_media import MediaCaptionStyle, MediaProject, MediaSlide, MotionGraphic
 from nova_generator.infrastructure.exports.tiktok_captions import render_ass
 
 
 def test_motion_graphics_are_optional_and_round_trip_with_legacy_projects() -> None:
-    legacy = MediaProject(title="Vídeo legado")
+    legacy = MediaProject(title="Vídeo legado", slides=[MediaSlide()])
     assert legacy.motion_graphics == []
     graphic = MotionGraphic(id="confirmacao-1", start_ms=2450, duration_ms=1100,
         icon="check", label="Correct!", animation="bounce", sound="success", position="top")
