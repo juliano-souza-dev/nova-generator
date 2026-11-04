@@ -70,8 +70,7 @@ if last_error is not None:
     ) from last_error
 if not checkpoint.is_file():
     raise RuntimeError(f"Checkpoint Qwen ausente após o download: {checkpoint}")
-""
-
+"""
 
 
 def run(argv: list[str], *, label: str) -> None:
