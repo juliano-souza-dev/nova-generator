@@ -261,6 +261,7 @@ export function TikTokMediaPage() {
   const [endingMode, setEndingMode] = useState<"trim" | "outro" | "full">("trim");
   const [renderQuality, setRenderQuality] = useState<"balanced" | "full">("balanced");
   const [voiceId, setVoiceId] = useState("");
+  const [voiceLanguage, setVoiceLanguage] = useState<"pt-BR" | "en">("pt-BR");
   const [jobId, setJobId] = useState("");
   const [renderId, setRenderId] = useState("");
   const [railTab, setRailTab] = useState<"source" | "projects" | "ideas" | "reuse">("source");
@@ -724,6 +725,7 @@ export function TikTokMediaPage() {
         visualMode === "video_source" && endingMode === "trim" && longTailMs >= 800,
         visualMode === "video_source" && endingMode === "outro" && longTailMs >= 1000,
         renderQuality,
+        voiceLanguage,
       );
     },
     onSuccess: (job) => {
@@ -2386,7 +2388,7 @@ export function TikTokMediaPage() {
                   />
                   <div className="tm-editor-separator" />
                   <h3>Roteiro da narração</h3>
-                  <p className="tm-small">Escreva a fala natural deste quadro após finalizar o visual. O texto na tela permanece independente. A voz do Generator usa este roteiro na exportação.</p>
+                  <p className="tm-small">Escreva a fala natural deste quadro após finalizar o visual. O texto na tela permanece independente. Para alternar idioma no mesmo áudio Qwen, use <code>[pt]…[/pt]</code> e <code>[en]…[/en]</code>.</p>
                   <EditField
                     label="Narração deste quadro"
                     value={active.narration_text ?? ""}
@@ -2610,18 +2612,30 @@ export function TikTokMediaPage() {
                     </label>
                   )}
                   {audioMode === "voice" && (
-                    <label className="tm-field">
-                      <span>Voz</span>
-                      <select value={voiceId} onChange={(event) => setVoiceId(event.target.value)}>
-                        <option value="">Selecione uma voz</option>
-                        {voices.data?.map((voice) => (
-                          <option key={voice.id} value={voice.id}>
-                            {voice.name} · v{voice.version}
-                          </option>
-                        ))}
-                      </select>
-                      <Link to="/voices">Gerenciar vozes</Link>
-                    </label>
+                    <>
+                      <label className="tm-field">
+                        <span>Voz</span>
+                        <select value={voiceId} onChange={(event) => setVoiceId(event.target.value)}>
+                          <option value="">Selecione uma voz</option>
+                          {voices.data?.map((voice) => (
+                            <option key={voice.id} value={voice.id}>
+                              {voice.name} · v{voice.version}
+                            </option>
+                          ))}
+                        </select>
+                        <Link to="/voices">Gerenciar vozes</Link>
+                      </label>
+                      <label className="tm-field">
+                        <span>Idioma da narração</span>
+                        <select
+                          value={voiceLanguage}
+                          onChange={(event) => setVoiceLanguage(event.target.value as "pt-BR" | "en")}
+                        >
+                          <option value="pt-BR">Português (Brasil)</option>
+                          <option value="en">English</option>
+                        </select>
+                      </label>
+                    </>
                   )}
                   {!videoMode && (
                     <button

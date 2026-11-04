@@ -215,6 +215,7 @@ export const mediaApi = {
     endAtLastCaption = false,
     addOutro = false,
     renderQuality: "balanced" | "full" = "balanced",
+    voiceLanguage: "pt-BR" | "en" = "pt-BR",
   ) => {
     const body = new FormData();
     body.append("revision", String(revision));
@@ -223,7 +224,10 @@ export const mediaApi = {
     body.append("end_at_last_caption", String(endAtLastCaption));
     body.append("add_outro", String(addOutro));
     body.append("render_quality", renderQuality);
-    if (audioMode === "voice") body.append("voice_profile_id", voiceProfileId);
+    if (audioMode === "voice") {
+      body.append("voice_profile_id", voiceProfileId);
+      body.append("voice_language", voiceLanguage);
+    }
     images.forEach((image, index) => body.append("images", image, `slide-${index + 1}.png`));
     return apiRequest<MediaRender>(`/tiktok-media/projects/${id}/render`, {
       method: "POST",

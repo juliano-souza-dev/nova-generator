@@ -31,7 +31,11 @@ def qwen_model_sha256(settings: Settings, model_id: str) -> str:
             f"Modelo Qwen3-TTS não instalado em {directory}. "
             "Baixe os pesos locais antes de criar a voz."
         )
-    weights = sorted(path for path in directory.rglob("*.safetensors") if path.is_file())
+    # ``snapshot_download(local_dir=...)`` leaves metadata, lock files and
+    # potentially partial cache blobs under ``.cache/huggingface``.  Those
+    # files are not loadable model weights.  Only root-level checkpoint files
+    # make a local Qwen installation usable by Transformers.
+    weights = sorted(path for path in directory.glob("*.safetensors") if path.is_file())
     if not weights:
         raise ValueError(f"Pesos .safetensors do Qwen3-TTS ausentes em {directory}.")
     files = [directory / "config.json", *weights]

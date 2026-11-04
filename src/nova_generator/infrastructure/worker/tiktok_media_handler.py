@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+from nova_generator.application.use_cases.speech_language import synthesis_language_parameters
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.application.use_cases.tiktok_shadowing import resolve_tiktok_shadowing
 from nova_generator.core.settings import get_settings
@@ -395,11 +396,22 @@ def make_media_render_handler(
                 if voice:
                     spoken = slide.narration_text.strip() or slide.en.strip() or slide.pt.strip()
                     if spoken:
+                        narration_language = (
+                            "English"
+                            if payload.get("voice_language") == "en"
+                            else "Portuguese"
+                        )
                         # Local Qwen synthesis can take more than the regular
                         # two-minute lease on CPU. Renew it while the child
                         # process produces this slide's narration.
                         with _keep_lease(execution):
-                            rendered = speech.execute(text=spoken, profile=voice)
+                            rendered = speech.execute(
+                                text=spoken,
+                                profile=voice,
+                                parameters=synthesis_language_parameters(
+                                    voice, narration_language
+                                ),
+                            )
                         duration = max(duration, rendered.duration_ms + 400)
                         args += ["-i", rendered.audio_path]
                     else:

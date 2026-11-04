@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pytest
 
+from nova_generator.application.use_cases.speech_language import synthesis_language_parameters
 from nova_generator.core.settings import Settings
 from nova_generator.domain.voices import VoiceProfileSnapshot
 from nova_generator.infrastructure.speech.qwen3_tts_models import (
@@ -72,15 +73,38 @@ def test_missing_qwen_weights_explains_offline_setup(tmp_path):
         qwen_model_sha256(Settings(qwen_model_root=tmp_path), VOICE_DESIGN)
 
 
+def test_qwen_model_hash_does_not_accept_huggingface_cache_metadata_as_weights(tmp_path):
+    root = tmp_path / "qwen"
+    model = root / "Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+    cache = model / ".cache" / "huggingface" / "download"
+    cache.mkdir(parents=True)
+    (model / "config.json").write_text("{}", encoding="utf-8")
+    (cache / "model.safetensors.incomplete").write_bytes(b"partial")
+    with pytest.raises(ValueError, match="Pesos .safetensors"):
+        qwen_model_sha256(Settings(qwen_model_root=root), VOICE_DESIGN)
+
+
 def test_qwen_parameters_require_design_or_authorized_clone():
     validate_qwen_voice(VOICE_DESIGN, None, {"instruct": "Voz brasileira muito natural."})
     validate_qwen_voice(VOICE_CLONE, "a" * 64, {"reference_text": "Olá, mundo."})
     with pytest.raises(ValueError, match="não utiliza áudio"):
-        validate_qwen_voice(
-            VOICE_DESIGN, "a" * 64, {"instruct": "Voz brasileira muito natural."}
-        )
+        validate_qwen_voice(VOICE_DESIGN, "a" * 64, {"instruct": "Voz brasileira muito natural."})
     with pytest.raises(ValueError, match="transcrição"):
         validate_qwen_voice(VOICE_CLONE, "a" * 64, {})
+
+
+def test_qwen_language_is_explicit_and_not_sent_to_legacy_engines():
+    qwen = VoiceProfileSnapshot(uuid4(), "Qwen", 1, VOICE_DESIGN, "a" * 64, None, {})
+    legacy = VoiceProfileSnapshot(uuid4(), "Legacy", 1, "chatterbox-turbo", "a" * 64, None, {})
+    assert synthesis_language_parameters(qwen, "English") == {"language": "English"}
+    assert synthesis_language_parameters(qwen, "Portuguese") == {"language": "Portuguese"}
+    assert synthesis_language_parameters(legacy, "English") == {}
+    with pytest.raises(ValueError, match="Idioma Qwen"):
+        synthesis_language_parameters(qwen, "Spanish")
+
+
+def test_qwen_default_language_can_be_english_without_tags():
+    assert parse_narration("Welcome", "en") == [("en", "Welcome")]
 
 
 def test_router_keeps_legacy_profiles(tmp_path):
@@ -94,59 +118,66 @@ def test_router_keeps_legacy_profiles(tmp_path):
     def profile(model_id, digest):
         return VoiceProfileSnapshot(uuid4(), "Ana", 1, model_id, digest, None, {})
 
-    assert router.synthesize(
-        text="Olá", profile=profile(VOICE_DESIGN, fingerprint),
-        parameters={}, output=tmp_path / "qwen.wav",
-    ) == "QWEN"
-    assert router.synthesize(
-        text="Hello", profile=profile("chatterbox-turbo", "a" * 64),
-        parameters={}, output=tmp_path / "legacy.wav",
-    ) == "CHATTERBOX"
+    assert (
+        router.synthesize(
+            text="Olá",
+            profile=profile(VOICE_DESIGN, fingerprint),
+            parameters={},
+            output=tmp_path / "qwen.wav",
+        )
+        == "QWEN"
+    )
+    assert (
+        router.synthesize(
+            text="Hello",
+            profile=profile("chatterbox-turbo", "a" * 64),
+            parameters={},
+            output=tmp_path / "legacy.wav",
+        )
+        == "CHATTERBOX"
+    )
     with pytest.raises(ValueError, match="exigem uma voz Qwen3-TTS"):
         router.synthesize(
             text="[pt]Oi![/pt][en]Hi![/en]",
             profile=profile("chatterbox-turbo", "a" * 64),
-            parameters={}, output=tmp_path / "unsupported.wav",
+            parameters={},
+            output=tmp_path / "unsupported.wav",
         )
     with pytest.raises(ValueError, match="exigem uma voz Qwen3-TTS"):
         router.synthesize(
             text="[es]Hola[/es]",
             profile=profile("chatterbox-turbo", "a" * 64),
-            parameters={}, output=tmp_path / "unknown-language.wav",
+            parameters={},
+            output=tmp_path / "unknown-language.wav",
         )
     with pytest.raises(ValueError, match="pesos locais"):
         router.synthesize(
-            text="Olá", profile=profile(VOICE_DESIGN, "a" * 64),
-            parameters={}, output=tmp_path / "qwen-stale.wav",
+            text="Olá",
+            profile=profile(VOICE_DESIGN, "a" * 64),
+            parameters={},
+            output=tmp_path / "qwen-stale.wav",
         )
 
 
 @pytest.mark.parametrize("voice_mode", [VOICE_DESIGN, VOICE_CLONE])
-def test_runner_generates_portuguese_wav_offline_with_fake_model(
-    tmp_path, monkeypatch, voice_mode
-):
+def test_runner_generates_portuguese_wav_offline_with_fake_model(tmp_path, monkeypatch, voice_mode):
     root = tmp_path / "qwen"
     variant = (
         "Qwen3-TTS-12Hz-1.7B-VoiceDesign"
-        if voice_mode == VOICE_DESIGN else "Qwen3-TTS-12Hz-1.7B-Base"
+        if voice_mode == VOICE_DESIGN
+        else "Qwen3-TTS-12Hz-1.7B-Base"
     )
     _fake_weights(root, variant)
     calls = []
     model = SimpleNamespace(
-        generate_voice_design=lambda **kwargs: (
-            calls.append(("design", kwargs)) or [[0.1]], 24000
-        ),
-        generate_voice_clone=lambda **kwargs: (
-            calls.append(("clone", kwargs)) or [[0.1]], 24000
-        ),
+        generate_voice_design=lambda **kwargs: (calls.append(("design", kwargs)) or [[0.1]], 24000),
+        generate_voice_clone=lambda **kwargs: (calls.append(("clone", kwargs)) or [[0.1]], 24000),
     )
     qwen = SimpleNamespace(
         Qwen3TTSModel=SimpleNamespace(from_pretrained=lambda *args, **kwargs: model)
     )
     cuda = SimpleNamespace(is_available=lambda: False)
-    torch = SimpleNamespace(
-        cuda=cuda, float32="float32", float16="float16", bfloat16="bfloat16"
-    )
+    torch = SimpleNamespace(cuda=cuda, float32="float32", float16="float16", bfloat16="bfloat16")
     soundfile = SimpleNamespace(
         write=lambda path, wav, sr, **kwargs: Path(path).write_bytes(b"RIFF-test")
     )
@@ -170,7 +201,7 @@ def test_runner_generates_portuguese_wav_offline_with_fake_model(
     request = {
         "text": "Hoje vamos aprender inglês.",
         "profile": {"model_id": voice_mode, "parameters": parameters},
-        "parameters": {},
+        "parameters": {"language": "English"},
         "output": str(output),
         "reference_audio_sha256": reference,
         "reference_root": str(reference_root) if reference_root else None,
@@ -179,7 +210,9 @@ def test_runner_generates_portuguese_wav_offline_with_fake_model(
     main()
     assert output.read_bytes() == b"RIFF-test"
     assert calls[0][0] == ("design" if voice_mode == VOICE_DESIGN else "clone")
-    assert calls[0][1]["language"] == "Portuguese"
+    assert calls[0][1]["language"] == "English"
+    if voice_mode == VOICE_DESIGN:
+        assert calls[0][1]["do_sample"] is True
 
 
 @pytest.mark.parametrize("voice_mode", [VOICE_DESIGN, VOICE_CLONE])
@@ -188,25 +221,26 @@ def test_bilingual_runner_preserves_voice_and_inserts_only_between_segments(
 ):
     variant = (
         "Qwen3-TTS-12Hz-1.7B-VoiceDesign"
-        if voice_mode == VOICE_DESIGN else "Qwen3-TTS-12Hz-1.7B-Base"
+        if voice_mode == VOICE_DESIGN
+        else "Qwen3-TTS-12Hz-1.7B-Base"
     )
     model_dir = _fake_weights(tmp_path / "qwen", variant)
     calls = []
     model = SimpleNamespace(
         generate_voice_design=lambda **kwargs: (
-            calls.append(("design", kwargs)) or [[0.25, 0.5]], 24000
+            calls.append(("design", kwargs)) or [[0.25, 0.5]],
+            24000,
         ),
         generate_voice_clone=lambda **kwargs: (
-            calls.append(("clone", kwargs)) or [[0.25, 0.5]], 24000
+            calls.append(("clone", kwargs)) or [[0.25, 0.5]],
+            24000,
         ),
     )
     qwen = SimpleNamespace(
         Qwen3TTSModel=SimpleNamespace(from_pretrained=lambda *args, **kwargs: model)
     )
     cuda = SimpleNamespace(is_available=lambda: False)
-    torch = SimpleNamespace(
-        cuda=cuda, float32="float32", float16="float16", bfloat16="bfloat16"
-    )
+    torch = SimpleNamespace(cuda=cuda, float32="float32", float16="float16", bfloat16="bfloat16")
     outputs = []
     soundfile = SimpleNamespace(
         write=lambda path, samples, rate, **kwargs: outputs.append((samples, rate))
@@ -249,10 +283,11 @@ def test_bilingual_runner_preserves_voice_and_inserts_only_between_segments(
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(request)))
     main()
     assert [call[1]["language"] for call in calls] == [
-        "Portuguese", "English", "Portuguese",
+        "Portuguese",
+        "English",
+        "Portuguese",
     ]
-    assert all(call[0] == ("design" if voice_mode == VOICE_DESIGN else "clone")
-               for call in calls)
+    assert all(call[0] == ("design" if voice_mode == VOICE_DESIGN else "clone") for call in calls)
     if voice_mode == VOICE_CLONE:
         assert all(call[1]["ref_audio"].endswith(f"{reference}.wav") for call in calls)
         assert all(call[1]["ref_text"] == parameters["reference_text"] for call in calls)

@@ -9,6 +9,7 @@ from nova_generator.application.use_cases.editorial_publication_snapshot import 
 )
 from nova_generator.application.use_cases.export_anki_reel import ExportAnkiReel
 from nova_generator.application.use_cases.materials_ai_exchange import MaterialsAiExchange
+from nova_generator.application.use_cases.speech_language import synthesis_language_parameters
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.exports import ExportCue
@@ -57,7 +58,11 @@ class MaterialsJobHandler:
         elif cue.approved_en != text:
             raise ValueError("approved cue changed; request fresh audio")
         voice = _snapshot(job.input["voice_snapshot"])
-        speech = self._synthesis.execute(text=text, profile=voice)
+        speech = self._synthesis.execute(
+            text=text,
+            profile=voice,
+            parameters=synthesis_language_parameters(voice, "English"),
+        )
         execution.heartbeat()
         return {
             "cue_id": str(cue_id),
@@ -98,7 +103,11 @@ class MaterialsJobHandler:
                 raise ValueError(
                     f"approved translation changed for card {raw_id}; enqueue a new export"
                 )
-            key = self._cache.cache_key(text=cue.approved_en, profile=voice, parameters={})
+            key = self._cache.cache_key(
+                text=cue.approved_en,
+                profile=voice,
+                parameters=synthesis_language_parameters(voice, "English"),
+            )
             speech = self._cache.find(key)
             if speech is None:
                 raise ValueError(f"canonical WAV missing for card {raw_id}; reprocess this card")
@@ -176,7 +185,9 @@ class MaterialsJobHandler:
             ):
                 raise ValueError(f"didactic card {card_id} text hash changed")
             key = self._cache.cache_key(
-                text=frozen["front_en"], profile=voice, parameters={}
+                text=frozen["front_en"],
+                profile=voice,
+                parameters=synthesis_language_parameters(voice, "English"),
             )
             speech = self._cache.find(key)
             if speech is None:

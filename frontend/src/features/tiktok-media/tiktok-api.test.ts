@@ -110,4 +110,15 @@ describe("TikTok Media animated scene requests", () => {
     const [, options] = vi.mocked(apiRequest).mock.calls[0];
     expect((options?.body as FormData).get("render_quality")).toBe("full");
   });
+
+  it("freezes the selected narration language for a Qwen voice render", async () => {
+    vi.mocked(apiRequest).mockClear();
+    await mediaApi.render(
+      "production-1", 5, [], "voice", "voice-1", "slides", false, false, "balanced", "en",
+    );
+    const [, options] = vi.mocked(apiRequest).mock.calls[0];
+    const form = options?.body as FormData;
+    expect(form.get("voice_profile_id")).toBe("voice-1");
+    expect(form.get("voice_language")).toBe("en");
+  });
 });

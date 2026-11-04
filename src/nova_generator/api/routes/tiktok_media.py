@@ -633,6 +633,7 @@ async def render_media_project(
     end_at_last_caption: Annotated[bool, Form()] = False,
     add_outro: Annotated[bool, Form()] = False,
     voice_profile_id: Annotated[str | None, Form()] = None,
+    voice_language: Annotated[Literal["pt-BR", "en"], Form()] = "pt-BR",
     render_quality: Annotated[Literal["balanced", "full"], Form()] = "balanced",
 ) -> dict[str, str]:
     project = _get(project_id)
@@ -723,6 +724,9 @@ async def render_media_project(
         "image_hashes": image_hashes,
         "audio_mode": audio_mode,
         "voice_snapshot": snapshot,
+        # Freeze the narration language with the render.  A later UI change
+        # must not silently change the Qwen pronunciation of a queued video.
+        "voice_language": voice_language,
         "audio_sha256": audio_hash,
         "source_video_sha256": source_sha256,
         "source_duration_ms": source_duration_ms,

@@ -10,6 +10,7 @@ from uuid import UUID
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from nova_generator.application.use_cases.cards_only import hub_item, normalize_cards
+from nova_generator.application.use_cases.speech_language import synthesis_language_parameters
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.exports import ExportCue
@@ -56,7 +57,11 @@ def make_cards_only_handler(speech: SynthesizeSpeech):
             execution.raise_if_cancelled()
             # Always pronounce the new pedagogical front_en, never a different
             # recording of the original source context.
-            speech_result = speech.execute(text=card["front_en"], profile=voice)
+            speech_result = speech.execute(
+                text=card["front_en"],
+                profile=voice,
+                parameters=synthesis_language_parameters(voice, "English"),
+            )
             card_id = UUID(card["card_id"])
             audio_path = audio_folder / f"anki_{card_id}.wav"
             shutil.copyfile(speech_result.audio_path, audio_path)

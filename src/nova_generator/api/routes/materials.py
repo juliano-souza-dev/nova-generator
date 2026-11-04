@@ -46,6 +46,7 @@ from nova_generator.application.use_cases.rebuild_anki_package import (
     AnkiPackageRebuildError,
     rebuild_didactic_apkg,
 )
+from nova_generator.application.use_cases.speech_language import synthesis_language_parameters
 from nova_generator.core.settings import get_settings
 from nova_generator.domain.projects.entities import Cue, WordTiming, utf8_sha256
 from nova_generator.domain.voices import VoiceProfileSnapshot
@@ -223,7 +224,11 @@ def _card(
     speech = None
     if voice is not None:
         cache = FileSpeechCache(get_settings().media_cache_root)
-        key = cache.cache_key(text=cue.approved_en, profile=voice, parameters={})
+        key = cache.cache_key(
+            text=cue.approved_en,
+            profile=voice,
+            parameters=synthesis_language_parameters(voice, "English"),
+        )
         speech = cache.find(key)
     repository = _repository()
     words = repository.get_cue_words(cue.id)
@@ -353,7 +358,11 @@ def stream_material_audio(
         raise HTTPException(404, detail="voice profile not found")
     cache = FileSpeechCache(get_settings().media_cache_root)
     speech = cache.find(
-        cache.cache_key(text=cue.approved_en, profile=profile.snapshot(), parameters={})
+        cache.cache_key(
+            text=cue.approved_en,
+            profile=profile.snapshot(),
+            parameters=synthesis_language_parameters(profile.snapshot(), "English"),
+        )
     )
     if speech is None:
         raise HTTPException(404, detail="canonical WAV not ready")
@@ -424,7 +433,11 @@ def export_materials(
     cache = FileSpeechCache(get_settings().media_cache_root)
     audio_hashes: dict[str, str] = {}
     for cue in selected:
-        speech = cache.find(cache.cache_key(text=cue.approved_en, profile=voice, parameters={}))
+        speech = cache.find(cache.cache_key(
+            text=cue.approved_en,
+            profile=voice,
+            parameters=synthesis_language_parameters(voice, "English"),
+        ))
         if speech is None:
             raise HTTPException(422, detail=f"canonical WAV not ready for cue {cue.id}")
         audio_hashes[str(cue.id)] = sha256(Path(speech.audio_path).read_bytes()).hexdigest()
@@ -485,7 +498,9 @@ def didactic_anki_audio_status(
                 "audio_ready": (
                     voice is not None
                     and cache.find(cache.cache_key(
-                        text=card["front_en"], profile=voice, parameters={}
+                        text=card["front_en"],
+                        profile=voice,
+                        parameters=synthesis_language_parameters(voice, "English"),
                     )) is not None
                 ),
                 "audio_url": (
@@ -493,7 +508,9 @@ def didactic_anki_audio_status(
                     f"{card['card_id']}/audio?voice_id={voice.profile_id}&voice_version={voice.version}"
                     if voice is not None
                     and cache.find(cache.cache_key(
-                        text=card["front_en"], profile=voice, parameters={}
+                        text=card["front_en"],
+                        profile=voice,
+                        parameters=synthesis_language_parameters(voice, "English"),
                     )) is not None else None
                 ),
             }
@@ -516,7 +533,9 @@ def stream_didactic_anki_audio(
         raise HTTPException(404, detail="voice profile not found")
     cache = FileSpeechCache(get_settings().media_cache_root)
     speech = cache.find(cache.cache_key(
-        text=card["front_en"], profile=voice.snapshot(), parameters={}
+        text=card["front_en"],
+        profile=voice.snapshot(),
+        parameters=synthesis_language_parameters(voice.snapshot(), "English"),
     ))
     if speech is None:
         raise HTTPException(404, detail="didactic card WAV not ready")
@@ -610,7 +629,11 @@ def export_didactic_anki(
                 409, detail=f"Source cue for card {card['card_id']} is not approved"
             )
         source_cues[str(cue_id)] = cue
-        speech = cache.find(cache.cache_key(text=card["front_en"], profile=voice, parameters={}))
+        speech = cache.find(cache.cache_key(
+            text=card["front_en"],
+            profile=voice,
+            parameters=synthesis_language_parameters(voice, "English"),
+        ))
         if speech is None:
             raise HTTPException(
                 422,
@@ -891,7 +914,9 @@ def download_complete_delivery(
         raise HTTPException(409, detail="Uma das cues originais não está disponível.")
     for card_id, sentence in records:
         speech = cache.find(cache.cache_key(
-            text=sentence, profile=snapshot, parameters={}
+            text=sentence,
+            profile=snapshot,
+            parameters=synthesis_language_parameters(snapshot, "English"),
         ))
         if speech is None:
             raise HTTPException(

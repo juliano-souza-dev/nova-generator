@@ -7,6 +7,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from nova_generator.application.ports.story_video_renderer import StoryVideoRenderer
+from nova_generator.application.use_cases.speech_language import synthesis_language_parameters
 from nova_generator.application.use_cases.synthesize_speech import SynthesizeSpeech
 from nova_generator.domain.stories import StoryPackage
 from nova_generator.domain.stories.render import (
@@ -61,7 +62,11 @@ class RenderStory:
                     )
                 )
                 continue
-            speech = self._speech.execute(text=cue.en, profile=voice)
+            speech = self._speech.execute(
+                text=cue.en,
+                profile=voice,
+                parameters=synthesis_language_parameters(voice, "English"),
+            )
             source_audio = Path(speech.audio_path)
             cue_dir.mkdir(parents=True, exist_ok=True)
             # The voice cache owns its WAV; the production owns a stable snapshot copy.

@@ -26,15 +26,29 @@ SETUP_KIND = "qwen.setup"
 # The repository IDs are fixed; user input can never choose arbitrary packages or commands.
 DOWNLOAD_SCRIPT = """
 import sys
+from pathlib import Path
 from huggingface_hub import snapshot_download
 repo_id, target = sys.argv[1:3]
 kwargs = {"repo_id": repo_id, "max_workers": 2}
-if target != "-":
+target_path = Path(target) if target != "-" else None
+if target_path is not None:
     kwargs["local_dir"] = target
-try:
-    snapshot_download(local_files_only=True, **kwargs)
-except Exception:
-    snapshot_download(local_files_only=False, **kwargs)
+
+def complete_snapshot():
+    return target_path is None or (target_path / "model.safetensors").is_file()
+
+# An interrupted Hugging Face download can leave a valid-looking local_dir
+# containing config/tokenizer files but no checkpoint.  Never let that
+# partial directory suppress the online download.
+if not complete_snapshot():
+    try:
+        snapshot_download(local_files_only=True, **kwargs)
+    except Exception:
+        pass
+if not complete_snapshot():
+    snapshot_download(local_files_only=False, force_download=True, **kwargs)
+if not complete_snapshot():
+    raise RuntimeError("O download do Qwen terminou sem model.safetensors.")
 """
 
 STAGES = {

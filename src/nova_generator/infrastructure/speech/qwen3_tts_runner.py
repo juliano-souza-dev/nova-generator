@@ -1,4 +1,4 @@
-"""Offline Qwen3-TTS 1.7B subprocess: one WAV per frozen text and voice profile."""
+"""Offline Qwen3-TTS subprocess with explicit Portuguese/English narration."""
 
 from __future__ import annotations
 
@@ -15,20 +15,25 @@ from pathlib import Path
 _LANGUAGE_TAG = re.compile(r"\[/?(?:pt|en)\]", re.IGNORECASE)
 _SEGMENT = re.compile(r"\[(pt|en)\](.*?)\[/\1\]", re.IGNORECASE | re.DOTALL)
 _ANY_LANGUAGE_TAG = re.compile(
-    r"\[/?(?:pt|en|es|fr|de|it|pl|tr|ru|nl|cs|ar|zh-cn|ja|hu|ko|hi)\]",
-    re.IGNORECASE,
+    r"\[/?(?:pt|en|es|fr|de|it|pl|tr|ru|nl|cs|ar|zh-cn|ja|hu|ko|hi)\]", re.IGNORECASE
 )
 LANGUAGES = {"pt": "Portuguese", "en": "English"}
+MODELS = {
+    "qwen3-tts-1.7b-voice-design": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "qwen3-tts-1.7b-base": "Qwen3-TTS-12Hz-1.7B-Base",
+}
 
 
-def parse_narration(text: str) -> list[tuple[str, str]]:
+def parse_narration(text: str, default_language: str = "pt") -> list[tuple[str, str]]:
     """Preserve literal PT/EN spans and reject partially marked scripts."""
     if not isinstance(text, str) or not text.strip():
         raise ValueError("O texto da narração está vazio.")
     if not _LANGUAGE_TAG.search(text):
         if _ANY_LANGUAGE_TAG.search(text):
             raise ValueError("Use apenas trechos marcados em português [pt] ou inglês [en].")
-        return [("pt", text.strip())]  # Preserve old unmarked Qwen behavior.
+        if default_language not in LANGUAGES:
+            raise ValueError("Idioma padrão da narração inválido.")
+        return [(default_language, text.strip())]
     result: list[tuple[str, str]] = []
     cursor = 0
     for match in _SEGMENT.finditer(text):
@@ -49,13 +54,8 @@ def parse_narration(text: str) -> list[tuple[str, str]]:
 
 
 def has_language_tags(text: str) -> bool:
+    """Tell non-Qwen engines to reject unsupported tagged narration."""
     return bool(_ANY_LANGUAGE_TAG.search(text))
-
-
-MODELS = {
-    "qwen3-tts-1.7b-voice-design": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
-    "qwen3-tts-1.7b-base": "Qwen3-TTS-12Hz-1.7B-Base",
-}
 
 
 def _reference(digest: str, raw_root: str | None) -> Path:
@@ -77,19 +77,21 @@ def main() -> None:
     model_id = profile["model_id"]
     if model_id not in MODELS:
         raise ValueError("Modelo Qwen3-TTS não suportado.")
-
-    segments = parse_narration(request["text"])
     params = profile.get("parameters") or {}
     runtime_params = request.get("parameters") or {}
-    if runtime_params and (model_id != "qwen3-tts-1.7b-voice-design"
-                           or set(runtime_params) != {"instruct"}):
+    allowed_runtime = (
+        {"instruct", "language"} if model_id == "qwen3-tts-1.7b-voice-design" else {"language"}
+    )
+    if not set(runtime_params).issubset(allowed_runtime):
         raise ValueError("Parâmetros de síntese Qwen não suportados.")
+    language = runtime_params.get("language", "Portuguese")
+    if language not in {"Portuguese", "English"}:
+        raise ValueError("Idioma Qwen não suportado. Use Portuguese ou English.")
+    segments = parse_narration(request["text"], "pt" if language == "Portuguese" else "en")
     model_root = os.environ.get("NOVA_GENERATOR_QWEN_MODEL_ROOT", "models/qwen3-tts")
     model_dir = Path(model_root).expanduser() / MODELS[model_id]
     if not (model_dir / "config.json").is_file():
         raise RuntimeError(f"Modelo Qwen3-TTS ausente: {model_dir}")
-
-    # No network requests are permitted from the synthesis process.
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
     try:
@@ -100,19 +102,16 @@ def main() -> None:
         raise RuntimeError(
             "Instale qwen-tts, torch e soundfile no Python escolhido para Qwen3-TTS."
         ) from exc
-
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     dtype = (
-        torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+        torch.bfloat16
+        if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
         else (torch.float16 if torch.cuda.is_available() else torch.float32)
     )
     started = time.monotonic()
     print(f"voice_stage=qwen_loading device={device}", file=sys.stderr, flush=True)
     model = qwen.Qwen3TTSModel.from_pretrained(
-        str(model_dir.resolve()),
-        device_map=device,
-        dtype=dtype,
-        attn_implementation="sdpa",
+        str(model_dir.resolve()), device_map=device, dtype=dtype, attn_implementation="sdpa"
     )
     print(
         f"voice_stage=qwen_ready elapsed_s={time.monotonic() - started:.1f}",
@@ -133,28 +132,33 @@ def main() -> None:
         if not isinstance(digest, str):
             raise ValueError("Áudio de referência ausente.")
         ref_path = _reference(digest, request.get("reference_root"))
-
     waves = []
     sample_rate = None
-    for index, (language, spoken) in enumerate(segments):
+    for index, (segment_language, spoken) in enumerate(segments):
+        segment_status = (
+            f"voice_stage=qwen_segment part={index + 1}/{len(segments)} "
+            f"language={segment_language}"
+        )
         print(
-            f"voice_stage=qwen_segment part={index + 1}/{len(segments)} language={language}",
-            file=sys.stderr, flush=True,
+            segment_status,
+            file=sys.stderr,
+            flush=True,
         )
         if model_id == "qwen3-tts-1.7b-voice-design":
             wavs, sr = model.generate_voice_design(
-                text=spoken, language=LANGUAGES[language], instruct=instruct
+                text=spoken, language=LANGUAGES[segment_language], instruct=instruct, do_sample=True
             )
         else:
             wavs, sr = model.generate_voice_clone(
-                text=spoken, language=LANGUAGES[language],
-                ref_audio=str(ref_path), ref_text=transcript,
+                text=spoken,
+                language=LANGUAGES[segment_language],
+                ref_audio=str(ref_path),
+                ref_text=transcript,
             )
         if sample_rate is not None and sr != sample_rate:
             raise RuntimeError("Os trechos de voz foram gerados com frequências diferentes.")
         sample_rate = sr
         waves.append(wavs[0])
-
     if sample_rate is None:
         raise RuntimeError("A voz não produziu nenhuma amostra de áudio.")
     if len(waves) == 1:
@@ -168,7 +172,6 @@ def main() -> None:
                 parts.append(gap)
             parts.append(numpy.asarray(wave, dtype=numpy.float32).reshape(-1))
         combined = numpy.concatenate(parts)
-
     output = Path(request["output"])
     output.parent.mkdir(parents=True, exist_ok=True)
     sf.write(str(output), combined, sample_rate, format="WAV", subtype="PCM_16")
