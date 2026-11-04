@@ -127,7 +127,7 @@ def _motion_graphic_event(graphic: MotionGraphic) -> str:
         motion = r"\fscx30\fscy30\t(0,190,\fscx112\fscy112)\t(190,280,\fscx100\fscy100)"
     text = rf"{{\an5\pos({x},{y})\fs124\bord5\shad2\c{color}{motion}}}{symbol}"
     if label:
-        text += rf"\N{{\fs43\bord3\c&H00FFFFFF&}}{label}"
+        text += r"\N{\fs43\bord3\c&H00FFFFFF&}" + label
     return f"Dialogue: 1,{start},{end},Default,,0,0,0,,{text}"
 
 
