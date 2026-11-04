@@ -41,12 +41,14 @@ from nova_generator.infrastructure.database.editorial_project_repository import 
     SqlAlchemyEditorialProjectRepository,
 )
 from nova_generator.infrastructure.database.job_repository import SqlAlchemyJobRepository
+from nova_generator.infrastructure.filesystem.tiktok_media_library import (
+    list_completed_tiktok_videos,
+)
 from nova_generator.infrastructure.filesystem.tiktok_media_package import (
     MAX_PACKAGE_BYTES,
     MediaPackageError,
     import_media_package,
 )
-from nova_generator.infrastructure.filesystem.tiktok_media_library import list_completed_tiktok_videos
 from nova_generator.infrastructure.filesystem.tiktok_media_store import (
     MediaConflict,
     MediaProjectStore,

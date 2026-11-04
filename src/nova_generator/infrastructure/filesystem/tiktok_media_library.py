@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -76,7 +76,7 @@ def list_completed_tiktok_videos(cache_root: Path) -> list[dict]:
                     if stream.read(12)[4:8] != b"ftyp":
                         continue
                 completed_at = datetime.fromtimestamp(
-                    manifest_file.stat().st_mtime, tz=timezone.utc
+                    manifest_file.stat().st_mtime, tz=UTC
                 ).isoformat()
             except OSError:
                 continue
