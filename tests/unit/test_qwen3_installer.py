@@ -40,7 +40,9 @@ def test_auto_setup_is_enqueued_once_when_worker_starts(tmp_path, monkeypatch):
     assert installer.setup_status(settings, VOICE_DESIGN)["stage"] == "queued"
 
 
-def test_local_install_prepares_environment_weights_and_tokenizer(tmp_path, monkeypatch):
+def test_local_install_prepares_environment_and_self_contained_model_snapshot(
+    tmp_path, monkeypatch
+):
     settings = Settings(
         qwen_model_root=tmp_path / "models", qwen_venv_root=tmp_path / "venv"
     )
@@ -83,7 +85,11 @@ def test_local_install_prepares_environment_weights_and_tokenizer(tmp_path, monk
     assert result["ready"] is True
     assert installer.setup_status(settings, VOICE_DESIGN)["stage"] == "ready"
     assert any("pip" in argv for argv in calls)
-    assert any(installer.TOKENIZER in argv for argv in calls)
+    # The model snapshot includes speech_tokenizer/, so the installer must not
+    # fetch a second tokenizer through Hugging Face's global symlink cache.
+    download_calls = [argv for argv in calls if installer.DOWNLOAD_SCRIPT in argv]
+    assert len(download_calls) == 1
+    assert download_calls[0][-1].endswith("VoiceDesign")
 
 
 def test_bad_setup_model_is_rejected_without_installing(tmp_path):

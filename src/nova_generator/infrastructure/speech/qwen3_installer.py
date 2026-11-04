@@ -23,7 +23,6 @@ from nova_generator.infrastructure.speech.qwen3_tts_models import (
 from nova_generator.infrastructure.worker.persistent_worker import JobCancelled, JobExecution
 
 SETUP_KIND = "qwen.setup"
-TOKENIZER = "Qwen/Qwen3-TTS-Tokenizer-12Hz"
 # The repository IDs are fixed; user input can never choose arbitrary packages or commands.
 DOWNLOAD_SCRIPT = """
 import sys
@@ -243,11 +242,14 @@ def make_setup_handler(settings: Settings, stop_event: Event | None = None):
                 ],
                 execution, log, 10800, stop_event,
             )
+            # The Qwen TTS model snapshot already contains its matching
+            # ``speech_tokenizer/`` directory.  Downloading the tokenizer a
+            # second time into Hugging Face's global cache is both redundant
+            # and unreliable on Windows: that cache tries to create symbolic
+            # links, which need Developer Mode or administrator privileges.
+            # Keeping every runtime file inside the model snapshot makes the
+            # later offline synthesis process self-contained.
             _write_status(settings, model_id, stage="tokenizer")
-            _step(
-                [python, "-c", DOWNLOAD_SCRIPT, TOKENIZER, "-"],
-                execution, log, 3600, stop_event,
-            )
             _write_status(settings, model_id, stage="verification")
             digest = qwen_model_sha256(settings, model_id)
             if not _python_has_qwen(python):
