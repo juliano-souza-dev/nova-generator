@@ -40,6 +40,7 @@ def test_bilingual_parser_keeps_language_order_and_old_plain_text():
         "[pt]Olá[/pt] texto perdido",
         "[pt]Olá [en]Hello[/en][/pt]",
         "[en]Hello[/pt]",
+        "[es]Hola[/es]",
     ],
 )
 def test_bilingual_parser_rejects_broken_markup(invalid):

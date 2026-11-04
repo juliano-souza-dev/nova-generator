@@ -14,6 +14,7 @@ from pathlib import Path
 
 _LANGUAGE_TAG = re.compile(r"\[/?(?:pt|en)\]", re.IGNORECASE)
 _SEGMENT = re.compile(r"\[(pt|en)\](.*?)\[/\1\]", re.IGNORECASE | re.DOTALL)
+_ANY_LANGUAGE_TAG = re.compile(r"\[/?[a-z]{2}(?:-[a-z]{2})?\]", re.IGNORECASE)
 LANGUAGES = {"pt": "Portuguese", "en": "English"}
 
 
@@ -22,6 +23,8 @@ def parse_narration(text: str) -> list[tuple[str, str]]:
     if not isinstance(text, str) or not text.strip():
         raise ValueError("O texto da narração está vazio.")
     if not _LANGUAGE_TAG.search(text):
+        if _ANY_LANGUAGE_TAG.search(text):
+            raise ValueError("Use apenas trechos marcados em português [pt] ou inglês [en].")
         return [("pt", text.strip())]  # Preserve old unmarked Qwen behavior.
     result: list[tuple[str, str]] = []
     cursor = 0
@@ -31,7 +34,7 @@ def parse_narration(text: str) -> list[tuple[str, str]]:
         spoken = match.group(2).strip()
         if not spoken:
             raise ValueError("Um trecho de narração não pode estar vazio.")
-        if _LANGUAGE_TAG.search(spoken):
+        if _ANY_LANGUAGE_TAG.search(spoken):
             raise ValueError("Não coloque marcações de idioma dentro de outro trecho.")
         result.append((match.group(1).lower(), spoken))
         cursor = match.end()
