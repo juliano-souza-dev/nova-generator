@@ -406,7 +406,7 @@ def _render_video_source(
         audio_filters.append(
             f"{''.join(audio_inputs)}amix=inputs={len(audio_inputs)}:"
             f"duration={'first' if base_audio_index is not None else 'longest'}:"
-            "dropout_transition=0,apad,"
+            "dropout_transition=0:normalize=0,alimiter=limit=0.95,apad,"
             f"atrim=duration={output_duration / 1000:.3f}[aout]"
         )
         args += ["-filter_complex", ";".join(audio_filters), "-map", "[aout]",
