@@ -4,17 +4,17 @@ Nova Generator é a reestruturação do sistema de produção de conteúdo para 
 
 ## Iniciar no Windows
 
-Dê duplo clique em **`INICIAR.bat`**, na raiz do projeto. Na primeira execução, o
-inicializador prepara Python, backend/ASR, Chatterbox Nano, frontend e banco de dados. Depois,
-inicia API, worker e interface e abre `http://127.0.0.1:5173` automaticamente. A instalação
-inicial pode demorar por causa do PyTorch e do modelo de voz; as próximas execuções reutilizam
-o ambiente.
+Dê duplo clique em **`INICIAR.bat`**, na raiz do projeto. O inicializador prepara Python,
+backend/ASR, Chatterbox, Qwen3-TTS (VoiceDesign e Base), frontend e banco de dados. **API,
+worker e interface só são iniciados depois que todas as dependências e os modelos obrigatórios
+passam pela validação.** Na primeira execução, essa etapa pode demorar e baixar vários gigabytes;
+nas próximas, os ambientes e pesos locais são reutilizados.
 
-Ao iniciar o worker, a voz expressiva Qwen3-TTS 1.7B também é verificada. Se ainda
-não estiver instalada, o próprio Generator baixa os recursos oficiais em segundo plano,
-enquanto as outras funções continuam disponíveis. A Biblioteca de vozes mostra as etapas
-da preparação; a voz de referência é preparada automaticamente quando escolhida.
-[Saiba mais sobre a preparação automática](docs/qwen3-tts-local.md).
+Se uma instalação ou validação falhar, o inicializador interrompe a abertura dos serviços,
+informa a etapa com problema e mantém os logs em `data/logs/`. Corrija a causa e execute
+`INICIAR.bat` novamente. A preparação dos dois modelos Qwen é feita antes de o servidor subir,
+não durante a primeira tentativa de gerar uma voz.
+[Saiba mais sobre a preparação local](docs/qwen3-tts-local.md).
 
 Mantenha a janela **Nova Generator - Inicializador** aberta. Fechá-la encerra os serviços.
 Se algo falhar, a janela mostra a causa e os detalhes ficam em `data/logs/`.

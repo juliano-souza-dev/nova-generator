@@ -324,11 +324,18 @@ try {
     & $BackendPython -m alembic upgrade head
     if ($LASTEXITCODE -ne 0) { throw "Falha ao aplicar as migrations Alembic." }
 
-    Write-Step "Preparando modelo local de voz..."
-    $prepareScript = Join-Path $ProjectRoot "scripts/prepare_chatterbox.py"
-    & $ttsExecutable $prepareScript
+    Write-Step "Preparando modelo local Chatterbox..."
+    $prepareChatterbox = Join-Path $ProjectRoot "scripts/prepare_chatterbox.py"
+    & $ttsExecutable $prepareChatterbox
     if ($LASTEXITCODE -ne 0) {
         throw "Preparação automática do Chatterbox falhou. Consulte os detalhes acima."
+    }
+
+    Write-Step "Validando ambiente e modelos Qwen3-TTS (VoiceDesign e Base)..."
+    $prepareQwen = Join-Path $ProjectRoot "scripts/prepare_qwen.py"
+    & $BackendPython $prepareQwen
+    if ($LASTEXITCODE -ne 0) {
+        throw "Preparação do Qwen3-TTS falhou. API, worker e interface não serão iniciados. Corrija a causa acima e execute INICIAR.bat novamente."
     }
 
     if ($CheckOnly) {
@@ -338,7 +345,7 @@ try {
 
     $env:NOVA_GENERATOR_TTS_PYTHON = $ttsExecutable
     Clear-PreviousFrontend
-    Write-Step "Iniciando API, worker e interface..."
+    Write-Step "Todas as dependências e modelos foram validados. Iniciando API, worker e interface..."
     $api = Start-ServiceProcess "api" $BackendPython @("-m", "uvicorn", "nova_generator.main:app", "--host", "127.0.0.1", "--port", "8000") $ProjectRoot
     $worker = Start-ServiceProcess "worker" $BackendPython @("-m", "nova_generator.worker") $ProjectRoot
     $frontend = Start-ServiceProcess "frontend" (Get-Command "npm.cmd").Source @("run", "dev", "--", "--host", "127.0.0.1", "--port", "5173", "--strictPort") $FrontendRoot

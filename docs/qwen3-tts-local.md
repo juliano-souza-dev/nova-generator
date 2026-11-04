@@ -1,32 +1,42 @@
-# Narração natural: preparação automática
+# Narração natural: preparação antes da inicialização
 
-O Generator agora verifica a disponibilidade da voz Qwen3-TTS 1.7B ao iniciar.
-Se o modelo ainda não estiver pronto, prepara os recursos automaticamente **em
-segundo plano**, sem comandos de instalação no terminal.
+O inicializador prepara e valida os recursos locais de voz **antes de iniciar a API,
+o worker ou a interface**. A ausência do Qwen3-TTS não deve mais aparecer como
+falha tardia quando você tenta criar uma voz.
 
-## Como funciona
+## O que é verificado
 
-1. Inicie normalmente o Generator e o worker local.
-2. O worker verifica se a voz expressiva padrão está pronta.
-3. Se não estiver, cria um ambiente Python isolado dentro da pasta de dados,
-   instala as dependências e baixa os pesos de voz e o tokenizer oficiais.
-4. Na Biblioteca de vozes, o status muda de preparação para voz disponível.
-   É possível continuar editando e exportando outras mídias enquanto baixa.
-5. A voz por referência utiliza um segundo modelo. Ele será baixado
-   automaticamente quando essa opção for selecionada pela primeira vez.
+1. O ambiente Python isolado do Qwen3-TTS e as bibliotecas `qwen-tts`, `torch`,
+   `soundfile` e `huggingface_hub`.
+2. O modelo **Qwen3-TTS-12Hz-1.7B-VoiceDesign**, usado para criar vozes por descrição.
+3. O modelo **Qwen3-TTS-12Hz-1.7B-Base**, usado para voz por referência.
+4. Os arquivos de configuração, pesos `.safetensors` e diretório do tokenizer de
+   cada modelo.
+5. O ambiente Chatterbox, seus pacotes e o checkpoint local, além dos requisitos
+   gerais de backend, ASR, FFmpeg/FFprobe, SoX, Node.js e frontend.
 
-**É necessário acesso à internet apenas durante a primeira preparação ou
-uma atualização.** A narração posterior funciona totalmente local, sem
-serviços pagos de voz. A instalação pode consumir vários gigabytes de
-disco e memória. O tempo depende da conexão e do hardware.
+O inicializador só libera a etapa que inicia os serviços quando todas essas
+verificações terminam com sucesso. Se houver falha, ele mostra a etapa que não
+foi concluída e encerra sem iniciar API, worker ou interface. Depois de corrigir
+a causa, basta executar `INICIAR.bat` novamente. Downloads já concluídos são
+reaproveitados.
 
-## Onde acompanhar
+## Primeira execução
 
-- **Biblioteca de vozes:** mostra em qual etapa está a preparação.
-- **Monitor de jobs:** acompanha a tarefa durável de preparação de voz.
-- Se a instalação falhar, a Biblioteca oferece a opção **Tentar novamente**.
-- Se o Generator for fechado no meio, a preparação poderá ser retomada na
-  próxima inicialização. Os arquivos de modelo já baixados são reaproveitados.
+A primeira preparação pode demorar e consumir vários gigabytes de disco,
+principalmente pelos pesos dos dois modelos Qwen e pelo PyTorch. É necessária
+conexão com a internet. As próximas inicializações verificam os recursos locais
+e não baixam novamente modelos completos que já estejam íntegros.
+
+Para validar sem abrir os serviços, execute:
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -CheckOnly
+~~~
+
+Os logs gerais ficam em `data/logs/`. O registro da instalação Qwen fica em
+`models/qwen3-tts/_setup/` (ou no diretório definido por
+`NOVA_GENERATOR_QWEN_MODEL_ROOT`).
 
 ## Configuração avançada (opcional)
 
