@@ -249,7 +249,7 @@ def test_video_worker_verifies_source_digest_before_running_ffmpeg(monkeypatch, 
     assert duration == [1000]
     assert verified == digest
     assert "ass=captions.ass" in " ".join(commands[0][0])
-    assert "0:a:0?" in commands[0][0]
+    assert "[0:a]" in commands[0][0]
     assert str(source.resolve()) in commands[0][0]
     assert commands[0][0][-1] == "final.mp4"
     assert (tmp_path / "captions.ass").is_file()
@@ -461,7 +461,7 @@ def test_paper_render_uses_synthetic_background_and_source_audio(monkeypatch, tm
     assert "color=c=0xF4EBDD" in " ".join(args)
     assert args.count("-i") == 2
     assert args[args.index("-map") + 1] == "0:v:0"
-    assert "1:a:0?" in args
+    assert "[1:a]" in args
     assert "ass=captions.ass" in " ".join(args)
     assert kwargs["cwd"] == tmp_path
     assert "doesn't bother you" in (tmp_path / "captions.ass").read_text()
