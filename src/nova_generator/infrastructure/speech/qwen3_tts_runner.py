@@ -232,9 +232,22 @@ def main() -> None:
         else (torch.float16 if torch.cuda.is_available() else torch.float32)
     )
     started = time.monotonic()
-    print(f"voice_stage=qwen_loading device={device}", file=sys.stderr, flush=True)
+    print(
+        f"voice_stage=qwen_loading device={device} dtype={dtype} low_cpu_mem_usage=True",
+        file=sys.stderr,
+        flush=True,
+    )
+    load_kwargs = {
+        "device_map": device,
+        "dtype": dtype,
+        "low_cpu_mem_usage": True,
+    }
+    # Reproduz a configuração validada no i5-3470: FP32 na CPU e sem
+    # forçar uma implementação de atenção diferente da configuração padrão.
+    if device.startswith("cuda"):
+        load_kwargs["attn_implementation"] = "sdpa"
     model = qwen.Qwen3TTSModel.from_pretrained(
-        str(model_dir.resolve()), device_map=device, dtype=dtype, attn_implementation="sdpa"
+        str(model_dir.resolve()), **load_kwargs
     )
     print(
         f"voice_stage=qwen_ready elapsed_s={time.monotonic() - started:.1f}",
