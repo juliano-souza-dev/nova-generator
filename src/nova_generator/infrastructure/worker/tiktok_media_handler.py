@@ -400,7 +400,7 @@ def _render_video_source(
                 raise ValueError("Identificador de efeito sonoro inválido.") from exc
             stored = SoundEffectLibrary(get_settings().media_cache_root).get(effect_id)
             if stored is None:
-                raise ValueError("Um efeito sonoro usado neste projeto não está mais na biblioteca.")
+                raise ValueError(\n                    "Um efeito sonoro usado neste projeto não está mais na biblioteca."\n                )
             _effect, effect_path = stored
             args += ["-i", str(effect_path.resolve())]
             effect_filter = "volume=0.85,afade=t=out:st=0.15:d=0.25"
