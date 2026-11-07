@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import struct
 import subprocess
-import zlib
-import shutil
 import tempfile
+import zlib
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
@@ -17,7 +17,7 @@ from typing import Annotated, Literal
 from uuid import UUID, uuid4
 from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field, ValidationError
@@ -378,7 +378,7 @@ def stream_tiktok_source(project_id: UUID) -> FileResponse:
 def render_media_preview_frame(
     project_id: UUID,
     input: MediaPreviewFrameRequest,
-    at_ms: Annotated[int, Field(ge=0)] = 0,
+    at_ms: Annotated[int, Query(ge=0)] = 0,
 ) -> FileResponse:
     """Render one exact FFmpeg/libass frame using the same ASS renderer as export."""
     from nova_generator.infrastructure.exports.tiktok_captions import render_ass
