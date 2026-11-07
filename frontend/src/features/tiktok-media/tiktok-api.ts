@@ -16,7 +16,7 @@ export type MediaMotionGraphic = {
   icon: "check" | "cross" | "star" | "idea" | "arrow" | "sound" | "sparkle" | "warning";
   label: string;
   animation: "pop" | "fade" | "slide" | "bounce";
-  sound: "none" | "pop" | "success" | "whoosh" | "ding";
+  sound: string;
   position: "top" | "center" | "bottom" | "left" | "right";
   enabled: boolean;
 };
@@ -108,6 +108,14 @@ export type MediaEdit = Pick<
   | "slides"
 >;
 export type MediaRender = { job_id: string; render_id: string; status: string };
+export type MediaSoundEffect = {
+  id: string;
+  name: string;
+  filename: string;
+  media_type: string;
+  size_bytes: number;
+};
+
 export type MediaLibraryVideo = {
   project_id: string;
   render_id: string;
@@ -137,6 +145,22 @@ export type MediaSourceStatus = {
 
 export const mediaApi = {
   library: () => apiRequest<MediaLibraryVideo[]>("/tiktok-media/library"),
+  soundEffects: () => apiRequest<MediaSoundEffect[]>("/tiktok-media/sound-effects"),
+  soundEffectUrl: (id: string) => apiUrl(`/tiktok-media/sound-effects/${id}/audio`),
+  addSoundEffect: (name: string, file: File) => {
+    const body = new FormData();
+    body.append("name", name);
+    body.append("file", file);
+    return apiRequest<MediaSoundEffect>("/tiktok-media/sound-effects", { method: "POST", body });
+  },
+  renameSoundEffect: (id: string, name: string) => {
+    const body = new FormData();
+    body.append("name", name);
+    return apiRequest<MediaSoundEffect>(`/tiktok-media/sound-effects/${id}`, { method: "PATCH", body });
+  },
+  deleteSoundEffect: (id: string) =>
+    apiRequest<void>(`/tiktok-media/sound-effects/${id}`, { method: "DELETE" }),
+
   list: () => apiRequest<MediaProject[]>("/tiktok-media/projects"),
   get: (id: string) => apiRequest<MediaProject>(`/tiktok-media/projects/${id}`),
   create: (title: string, format: MediaFormat, animatedScenes = false) =>
