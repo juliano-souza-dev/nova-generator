@@ -95,6 +95,23 @@ class SoundEffectLibrary:
         found = next((item for item in items if item.id == identifier), None)
         if found is None:
             raise FileNotFoundError("Efeito sonoro não encontrado.")
+        sound_value = f"library:{identifier.hex}"
+        for project_dir in self.root.parent.iterdir():
+            project_file = project_dir / "project.json"
+            if not project_dir.is_dir() or project_dir == self.root or not project_file.is_file():
+                continue
+            try:
+                project = json.loads(project_file.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            graphics = project.get("motion_graphics", []) if isinstance(project, dict) else []
+            if any(
+                isinstance(graphic, dict) and graphic.get("sound") == sound_value
+                for graphic in graphics
+            ):
+                raise ValueError(
+                    "Este efeito está associado a um projeto. Troque o som no Motion Graphics antes de excluí-lo."
+                )
         (self.root / found.filename).unlink(missing_ok=True)
         self._save([item for item in items if item.id != identifier])
 
