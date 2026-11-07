@@ -48,10 +48,7 @@ def test_effect_cannot_be_deleted_while_a_project_uses_it(tmp_path):
         encoding="utf-8",
     )
 
-    try:
+    with pytest.raises(ValueError, match="associado a um projeto"):
         library.delete(effect.id)
-        raise AssertionError("an effect referenced by a project must be protected")
-    except ValueError as error:
-        assert "associado a um projeto" in str(error)
 
     assert library.get(effect.id) is not None
