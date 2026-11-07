@@ -16,10 +16,10 @@ from nova_generator.core.settings import get_settings
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.tiktok_media import MediaCaption, MediaProject
 from nova_generator.domain.voices import VoiceProfileSnapshot
-from nova_generator.infrastructure.filesystem.tiktok_sound_effects import SoundEffectLibrary
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
 )
+from nova_generator.infrastructure.filesystem.tiktok_sound_effects import SoundEffectLibrary
 from nova_generator.infrastructure.exports.tiktok_captions import render_ass
 from nova_generator.infrastructure.speech.qwen3_tts_models import QWEN_MODELS
 from nova_generator.infrastructure.worker.persistent_worker import JobExecution
@@ -393,7 +393,6 @@ def _render_video_source(
     ]
     for index, graphic in enumerate(sound_events):
         if graphic.sound.startswith("library:"):
-
             try:
                 effect_id = UUID(hex=graphic.sound.removeprefix("library:"))
             except ValueError as exc:
