@@ -102,7 +102,7 @@ class MotionGraphic(BaseModel):
     ] = "check"
     label: str = Field(default="", max_length=80)
     animation: Literal["pop", "fade", "slide", "bounce"] = "pop"
-    sound: str = Field(default="pop", pattern=r"^(none|pop|success|whoosh|ding|library:[a-f0-9]{32})$")
+    sound: Literal["none", "pop", "success", "whoosh", "ding"] = "pop"
     position: Literal["top", "center", "bottom", "left", "right"] = "top"
     enabled: bool = True
 
