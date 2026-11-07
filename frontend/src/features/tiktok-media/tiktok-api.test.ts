@@ -121,7 +121,9 @@ describe("TikTok Media animated scene requests", () => {
     expect(form.get("voice_profile_id")).toBe("voice-1");
     expect(form.get("voice_language")).toBe("en");
   });
-});\n\ndescribe("TikTok Media global sound effects", () => {
+});
+
+describe("TikTok Media global sound effects", () => {
   it("uploads, lists, renames and deletes reusable sound effects", async () => {
     vi.mocked(apiRequest).mockClear();
     await mediaApi.soundEffects();
@@ -143,4 +145,4 @@ describe("TikTok Media animated scene requests", () => {
       "/api/tiktok-media/sound-effects/effect-1/audio",
     );
   });
-});\n
+});
