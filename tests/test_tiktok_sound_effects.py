@@ -1,3 +1,7 @@
+import json
+
+import pytest
+
 from uuid import UUID
 
 from nova_generator.infrastructure.filesystem.tiktok_sound_effects import SoundEffectLibrary
@@ -37,7 +41,6 @@ def test_global_sound_effects_reject_empty_names_and_unsupported_formats(tmp_pat
 
 
 def test_effect_cannot_be_deleted_while_a_project_uses_it(tmp_path):
-    import json
 
     library = SoundEffectLibrary(tmp_path)
     effect = library.add("Check", ".wav", b"audio")
