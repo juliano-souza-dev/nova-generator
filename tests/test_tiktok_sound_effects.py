@@ -34,3 +34,24 @@ def test_global_sound_effects_reject_empty_names_and_unsupported_formats(tmp_pat
         raise AssertionError("unsupported format should be rejected")
     except ValueError:
         pass
+
+
+def test_effect_cannot_be_deleted_while_a_project_uses_it(tmp_path):
+    import json
+
+    library = SoundEffectLibrary(tmp_path)
+    effect = library.add("Check", ".wav", b"audio")
+    project_dir = library.root.parent / "project-1"
+    project_dir.mkdir()
+    (project_dir / "project.json").write_text(
+        json.dumps({"motion_graphics": [{"sound": f"library:{effect.id.hex}"}]}),
+        encoding="utf-8",
+    )
+
+    try:
+        library.delete(effect.id)
+        raise AssertionError("an effect referenced by a project must be protected")
+    except ValueError as error:
+        assert "associado a um projeto" in str(error)
+
+    assert library.get(effect.id) is not None
