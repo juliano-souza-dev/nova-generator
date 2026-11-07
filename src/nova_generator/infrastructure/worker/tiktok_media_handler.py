@@ -391,8 +391,22 @@ def _render_video_source(
         if graphic.enabled and graphic.sound != "none" and graphic.start_ms < output_duration
     ]
     for index, graphic in enumerate(sound_events):
-        source_spec, effect_filter = sound_specs[graphic.sound]
-        args += ["-f", "lavfi", "-i", source_spec]
+        if graphic.sound.startswith("library:"):
+            from uuid import UUID
+            from nova_generator.infrastructure.filesystem.tiktok_sound_effects import SoundEffectLibrary
+            try:
+                effect_id = UUID(hex=graphic.sound.removeprefix("library:"))
+            except ValueError as exc:
+                raise ValueError("Identificador de efeito sonoro inválido.") from exc
+            stored = SoundEffectLibrary(get_settings().media_cache_root).get(effect_id)
+            if stored is None:
+                raise ValueError("Um efeito sonoro usado neste projeto não está mais na biblioteca.")
+            _effect, effect_path = stored
+            args += ["-i", str(effect_path.resolve())]
+            effect_filter = "volume=0.85,afade=t=out:st=0.15:d=0.25"
+        else:
+            source_spec, effect_filter = sound_specs[graphic.sound]
+            args += ["-f", "lavfi", "-i", source_spec]
         delay = graphic.start_ms
         audio_filters.append(
             f"[{next_input}:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo,"
