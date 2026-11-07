@@ -208,6 +208,10 @@ export function TikTokMediaPage() {
     queryKey: ["tiktok-projects"],
     queryFn: mediaApi.list,
   });
+  const soundEffects = useQuery({
+    queryKey: ["tiktok-sound-effects"],
+    queryFn: mediaApi.soundEffects,
+  });
   const sourceProjects = useQuery({
     queryKey: ["projects"],
     queryFn: () => studioApi.projects(),
@@ -1058,10 +1062,15 @@ export function TikTokMediaPage() {
         title="TikTok Mídia"
         description="Crie carrosséis, mini-aulas, Shadowing e vídeos verticais com inglês, tradução, voz e música."
         actions={
-          <span className="tm-save-status">
-            <Save size={16} />
-            {save.isPending ? "Salvando…" : dirty ? "Alterações pendentes" : "Salvo"}
-          </span>
+          <div className="tm-header-actions">
+            <Link className="tm-sound-library-link" to="/tiktok-media/sounds">
+              <Music2 size={15} /> Biblioteca de sons
+            </Link>
+            <span className="tm-save-status">
+              <Save size={16} />
+              {save.isPending ? "Salvando…" : dirty ? "Alterações pendentes" : "Salvo"}
+            </span>
+          </div>
         }
       />
       <div className="tm-workspace">
@@ -2563,6 +2572,13 @@ export function TikTokMediaPage() {
                           <option value="success">Confirmação</option>
                           <option value="ding">Ding</option>
                           <option value="whoosh">Whoosh</option>
+                          <optgroup label="Minha biblioteca">
+                            {(soundEffects.data ?? []).map((effect) => (
+                              <option key={effect.id} value={`library:${effect.id.replace(/-/g, "")}`}>
+                                {effect.name}
+                              </option>
+                            ))}
+                          </optgroup>
                           <option value="none">Sem som</option>
                         </select>
                       </label>
