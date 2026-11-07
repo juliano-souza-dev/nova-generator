@@ -392,7 +392,6 @@ def _render_video_source(
     ]
     for index, graphic in enumerate(sound_events):
         if graphic.sound.startswith("library:"):
-            from uuid import UUID
 
             try:
                 effect_id = UUID(hex=graphic.sound.removeprefix("library:"))
