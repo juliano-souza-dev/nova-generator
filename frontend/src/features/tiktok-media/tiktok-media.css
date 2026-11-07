@@ -2084,3 +2084,84 @@
     animation: none;
   }
 }
+
+
+/* Global sound-effects library and editor entry point. */
+.tm-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.tm-sound-library-link,
+.tm-sound-actions button,
+.tm-sound-rename button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #2c8e9a;
+  border-radius: 9px;
+  padding: 9px 12px;
+  color: #ddfffc;
+  background: #113b50;
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.tm-sound-library-link:hover,
+.tm-sound-actions button:hover,
+.tm-sound-rename button:hover {
+  background: #185a6b;
+}
+.tm-sound-library {
+  display: grid;
+  gap: 16px;
+}
+.tm-sound-upload {
+  max-width: 720px;
+}
+.tm-sound-upload button {
+  justify-self: start;
+}
+.tm-sound-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
+  gap: 12px;
+}
+.tm-sound-item {
+  align-content: start;
+}
+.tm-sound-item-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.tm-sound-item-title > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.tm-sound-item-title strong {
+  overflow-wrap: anywhere;
+}
+.tm-sound-item-title small {
+  color: #9db5c9;
+  font-size: 11px;
+}
+.tm-sound-actions,
+.tm-sound-rename {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.tm-sound-error {
+  color: #ffaaaa;
+  font-size: 12px;
+}
+.tm-sound-rename input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
