@@ -1,8 +1,7 @@
 import json
+from uuid import UUID
 
 import pytest
-
-from uuid import UUID
 
 from nova_generator.infrastructure.filesystem.tiktok_sound_effects import SoundEffectLibrary
 
