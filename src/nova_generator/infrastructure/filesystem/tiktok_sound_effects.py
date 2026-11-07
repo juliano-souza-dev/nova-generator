@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-_NAME = re.compile(r"[^\\w .()\\-]+", re.UNICODE)
+_NAME = re.compile(r"[^\w .()-]+", re.UNICODE)
 _ALLOWED = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg"}
 
 
