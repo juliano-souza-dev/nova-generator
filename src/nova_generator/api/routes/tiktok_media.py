@@ -175,6 +175,8 @@ def delete_sound_effect(effect_id: UUID) -> Response:
         _sound_library().delete(effect_id)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
     return Response(status_code=204)
 
 
