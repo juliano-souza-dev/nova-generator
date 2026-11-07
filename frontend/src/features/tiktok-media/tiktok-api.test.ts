@@ -1,3 +1,27 @@
+describe("TikTok Media global sound effects", () => {
+  it("uploads, lists, renames and deletes reusable sound effects", async () => {
+    vi.mocked(apiRequest).mockClear();
+    await mediaApi.soundEffects();
+    expect(apiRequest).toHaveBeenLastCalledWith("/tiktok-media/sound-effects");
+    const file = new File(["audio"], "check.wav", { type: "audio/wav" });
+    await mediaApi.addSoundEffect("Check", file);
+    const [uploadPath, uploadOptions] = vi.mocked(apiRequest).mock.calls[1];
+    expect(uploadPath).toBe("/tiktok-media/sound-effects");
+    expect((uploadOptions?.body as FormData).get("name")).toBe("Check");
+    expect((uploadOptions?.body as FormData).get("file")).toBe(file);
+    await mediaApi.renameSoundEffect("effect-1", "Check suave");
+    expect(vi.mocked(apiRequest).mock.calls[2][0]).toBe("/tiktok-media/sound-effects/effect-1");
+    await mediaApi.deleteSoundEffect("effect-1");
+    expect(vi.mocked(apiRequest).mock.calls[3]).toEqual([
+      "/tiktok-media/sound-effects/effect-1",
+      { method: "DELETE" },
+    ]);
+    expect(mediaApi.soundEffectUrl("effect-1")).toBe(
+      "/api/tiktok-media/sound-effects/effect-1/audio",
+    );
+  });
+});
+
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../lib/api", () => ({
