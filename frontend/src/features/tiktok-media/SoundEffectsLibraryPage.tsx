@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Pencil, Play, Plus, Trash2, Upload } from "lucide-react";
+import { AudioLines, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { PageHeader } from "../../components/PageHeader";
 import { mediaApi, type MediaSoundEffect } from "./tiktok-api";
