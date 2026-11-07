@@ -110,7 +110,8 @@ class SoundEffectLibrary:
                 for graphic in graphics
             ):
                 raise ValueError(
-                    "Este efeito está associado a um projeto. Troque o som no Motion Graphics antes de excluí-lo."
+                    "Este efeito está associado a um projeto. Troque o som no Motion "
+                    "Graphics antes de excluí-lo."
                 )
         (self.root / found.filename).unlink(missing_ok=True)
         self._save([item for item in items if item.id != identifier])
