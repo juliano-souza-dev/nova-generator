@@ -57,7 +57,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
             <NavLink
               key={to}
               to={to}
-              className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`}
+              end={to === "/tiktok-media"}\n              className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`}
               onClick={() => setMenuOpen(false)}
               title={label}
             >
