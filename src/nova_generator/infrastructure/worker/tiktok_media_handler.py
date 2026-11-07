@@ -16,7 +16,8 @@ from nova_generator.core.settings import get_settings
 from nova_generator.domain.jobs import Job
 from nova_generator.domain.tiktok_media import MediaCaption, MediaProject
 from nova_generator.domain.voices import VoiceProfileSnapshot
-from nova_generator.infrastructure.filesystem.tiktok_sound_effects import SoundEffectLibrary\nfrom nova_generator.infrastructure.database.editorial_project_repository import (
+from nova_generator.infrastructure.filesystem.tiktok_sound_effects import SoundEffectLibrary
+from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
 )
 from nova_generator.infrastructure.exports.tiktok_captions import render_ass
@@ -399,7 +400,9 @@ def _render_video_source(
                 raise ValueError("Identificador de efeito sonoro inválido.") from exc
             stored = SoundEffectLibrary(get_settings().media_cache_root).get(effect_id)
             if stored is None:
-                raise ValueError(\n                    "Um efeito sonoro usado neste projeto não está mais na biblioteca."\n                )
+                raise ValueError(
+                    "Um efeito sonoro usado neste projeto não está mais na biblioteca."
+                )
             _effect, effect_path = stored
             args += ["-i", str(effect_path.resolve())]
             effect_filter = "volume=0.85,afade=t=out:st=0.15:d=0.25"
