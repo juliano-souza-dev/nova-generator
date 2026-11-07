@@ -116,6 +116,14 @@ export type MediaSoundEffect = {
   size_bytes: number;
 };
 
+export type MediaPreviewFrameInput = {
+  video_captions: MediaCaption[];
+  caption_style: MediaCaptionStyle;
+  motion_graphics: MediaMotionGraphic[];
+  background_mode: MediaBackground;
+  paper_theme: PaperTheme;
+};
+
 export type MediaLibraryVideo = {
   project_id: string;
   render_id: string;
@@ -147,6 +155,33 @@ export const mediaApi = {
   library: () => apiRequest<MediaLibraryVideo[]>("/tiktok-media/library"),
   soundEffects: () => apiRequest<MediaSoundEffect[]>("/tiktok-media/sound-effects"),
   soundEffectUrl: (id: string) => apiUrl(`/tiktok-media/sound-effects/${id}/audio`),
+  previewFrame: async (
+    id: string,
+    atMs: number,
+    input: MediaPreviewFrameInput,
+    signal?: AbortSignal,
+  ): Promise<Blob> => {
+    const response = await fetch(
+      apiUrl(`/tiktok-media/projects/${id}/preview-frame?at_ms=${Math.max(0, Math.round(atMs))}`),
+      {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+        signal,
+      },
+    );
+    if (!response.ok) {
+      const body: unknown = await response.json().catch(() => undefined);
+      const detail =
+        typeof body === "object" && body !== null && "detail" in body
+          ? String(body.detail)
+          : `Erro ${response.status} ao renderizar a prévia`;
+      throw new Error(detail);
+    }
+    return response.blob();
+  },
+
   addSoundEffect: (name: string, file: File) => {
     const body = new FormData();
     body.append("name", name);
