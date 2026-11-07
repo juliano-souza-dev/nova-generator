@@ -9,7 +9,7 @@ import {
   Menu,
   Mic2,
   Sparkles,
-  Video,\n  AudioLines,
+  Video,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -23,7 +23,7 @@ const links = [
   { to: "/voices", label: "Vozes", icon: Mic2 },
   { to: "/jobs", label: "Jobs", icon: ListChecks },
   { to: "/story", label: "História", icon: Clapperboard },
-  { to: "/tiktok-media", label: "TikTok Mídia", icon: Video },\n  { to: "/tiktok-media/sounds", label: "Efeitos sonoros", icon: AudioLines },
+  { to: "/tiktok-media", label: "TikTok Mídia", icon: Video },
   { to: "/library", label: "Biblioteca", icon: Film },
 ];
 
@@ -57,7 +57,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
             <NavLink
               key={to}
               to={to}
-              end={to === "/tiktok-media"}\n              className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`}
+              className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`}
               onClick={() => setMenuOpen(false)}
               title={label}
             >
