@@ -5,10 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import shutil
 import struct
 import subprocess
-import tempfile
 import zlib
 from datetime import datetime
 from hashlib import sha256
@@ -17,9 +15,8 @@ from typing import Annotated, Literal
 from uuid import UUID, uuid4
 from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
-from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field, ValidationError
 
 from nova_generator.api.dependencies import (
@@ -39,9 +36,6 @@ from nova_generator.domain.tiktok_media import (
     MediaProject,
     MediaProjectEdit,
     MediaSlide,
-    MediaCaption,
-    MediaCaptionStyle,
-    MotionGraphic,
 )
 from nova_generator.infrastructure.database.editorial_project_repository import (
     SqlAlchemyEditorialProjectRepository,
@@ -112,14 +106,6 @@ class LibraryVideoResponse(BaseModel):
     duration_ms: int = Field(ge=1)
     size_bytes: int = Field(ge=1)
     completed_at: datetime
-
-
-class MediaPreviewFrameRequest(BaseModel):
-    video_captions: list[MediaCaption] = Field(max_length=200)
-    caption_style: MediaCaptionStyle
-    motion_graphics: list[MotionGraphic] = Field(default_factory=list, max_length=80)
-    background_mode: Literal["video", "paper"] = "video"
-    paper_theme: Literal["cream", "kraft", "night", "aurora"] = "cream"
 
 
 @router.get("/library", response_model=list[LibraryVideoResponse])
@@ -371,107 +357,6 @@ def stream_tiktok_source(project_id: UUID) -> FileResponse:
         media_type="video/mp4",
         filename="source-cut.mp4",
         content_disposition_type="inline",
-    )
-
-
-@router.post("/projects/{project_id}/preview-frame")
-def render_media_preview_frame(
-    project_id: UUID,
-    input: MediaPreviewFrameRequest,
-    at_ms: Annotated[int, Query(ge=0)] = 0,
-) -> FileResponse:
-    """Render one exact FFmpeg/libass frame using the same ASS renderer as export."""
-    from nova_generator.infrastructure.exports.tiktok_captions import render_ass
-
-    project = _get(project_id)
-    source, duration_ms = _video_cut(project)
-    if at_ms >= duration_ms:
-        at_ms = max(0, duration_ms - 1)
-    preview_dir = _store().directory(project_id) / "previews"
-    preview_dir.mkdir(parents=True, exist_ok=True)
-    temporary = Path(tempfile.mkdtemp(prefix="frame-", dir=preview_dir))
-    ass_path = temporary / "captions.ass"
-    output = temporary / "preview.png"
-    ass_path.write_text(
-        render_ass(
-            input.video_captions,
-            input.caption_style,
-            input.paper_theme if input.background_mode == "paper" else None,
-            motion_graphics=input.motion_graphics,
-        ),
-        encoding="utf-8",
-    )
-    seconds = at_ms / 1000
-    if input.background_mode == "paper":
-        if input.paper_theme == "aurora":
-            visual_source = (
-                "gradients=s=1080x1920:r=30:c0=0x0B1732:c1=0x21577B:"
-                f"c2=0x593B7A:n=3:t=spiral:speed=0.003:d={max(1, seconds + 1):.3f}"
-            )
-            filters = "setsar=1,vignette=PI/7,ass=captions.ass,format=yuv420p"
-        else:
-            page_colors = {
-                "cream": "0xF4EBDD",
-                "kraft": "0xCFAF87",
-                "night": "0x172238",
-            }
-            page_color = page_colors[input.paper_theme]
-            grid_color = (
-                "0xA6D2E4@0.10"
-                if input.paper_theme == "night"
-                else "0x6B7B83@0.13"
-            )
-            visual_source = (
-                f"color=c={page_color}:s=1080x1920:r=30:d={max(1, seconds + 1):.3f}"
-            )
-            filters = (
-                f"setsar=1,drawgrid=w=1080:h=75:t=1:c={grid_color},"
-                "noise=alls=5:allf=u,ass=captions.ass,format=yuv420p"
-            )
-        arguments = [
-            get_settings().ffmpeg_executable,
-            "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", visual_source,
-            "-ss", f"{seconds:.3f}",
-            "-frames:v", "1", "-vf", filters,
-            "-update", "1", str(output),
-        ]
-    else:
-        filters = (
-            "scale=1080:1920:force_original_aspect_ratio=increase,"
-            "crop=1080:1920,setsar=1,ass=captions.ass,format=yuv420p"
-        )
-        arguments = [
-            get_settings().ffmpeg_executable,
-            "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(source),
-            "-ss", f"{seconds:.3f}",
-            "-frames:v", "1", "-vf", filters,
-            "-update", "1", str(output),
-        ]
-    try:
-        result = subprocess.run(
-            arguments,
-            cwd=temporary,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=30,
-        )
-        if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
-            raise HTTPException(
-                422,
-                result.stderr[-1200:] or "Não foi possível gerar a prévia renderizada.",
-            )
-    except subprocess.TimeoutExpired as exc:
-        raise HTTPException(504, "A prévia demorou demais para ser renderizada.") from exc
-    except OSError as exc:
-        raise HTTPException(503, "Não foi possível iniciar o renderizador de prévia.") from exc
-    return FileResponse(
-        output,
-        media_type="image/png",
-        filename="preview.png",
-        background=BackgroundTask(shutil.rmtree, temporary, ignore_errors=True),
     )
 
 
