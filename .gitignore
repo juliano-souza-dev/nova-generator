@@ -31,6 +31,8 @@ dist/
 playwright-report/
 test-results/
 
+shared.config.json
+
 # Local configuration
 .env
 .env.*
