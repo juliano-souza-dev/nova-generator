@@ -20,6 +20,10 @@ on:
       - ".github/workflows/desktop-windows.yml"
   workflow_dispatch:
 
+concurrency:
+  group: desktop-windows-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
