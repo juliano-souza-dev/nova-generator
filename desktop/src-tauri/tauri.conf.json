@@ -36,7 +36,7 @@
     "active": true,
     "targets": ["nsis", "msi"],
     "resources": {
-      "resources/python/": "python/"
+      "resources/python/*": "python/"
     },
     "shortDescription": "Estúdio de criação e edição multimídia com IA",
     "category": "Multimedia",
