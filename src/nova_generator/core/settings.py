@@ -6,6 +6,8 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from nova_generator.core.shared_runtime import shared_directory, shared_resource
+
 
 def _global_resource_root() -> Path:
     """Return a per-user data directory outside the source checkout."""
@@ -35,28 +37,46 @@ class Settings(BaseSettings):
     app_name: str = "Nova Generator"
     environment: str = "development"
     database_url: str = "sqlite:///./data/nova-generator.db"
-    media_cache_root: Path = Path("media_cache")
+    media_cache_root: Path = Field(
+        default_factory=lambda: shared_directory("cache", "nova-generator-media")
+        or Path("media_cache")
+    )
     project_root: Path = Path("data/projects")
     whisper_model: str = "small"
     whisper_model_root: Path = Field(
-        default_factory=lambda: _global_resource_path("models", "whisper")
+        default_factory=lambda: shared_directory("models", "whisper")
+        or _global_resource_path("models", "whisper")
     )
     chatterbox_model_root: Path = Field(
-        default_factory=lambda: _global_resource_path("models", "chatterbox")
+        default_factory=lambda: shared_directory("models", "chatterbox")
+        or _global_resource_path("models", "chatterbox")
     )
     chatterbox_model_file: Path | None = None
     qwen_model_root: Path = Field(
-        default_factory=lambda: _global_resource_path("models", "qwen3-tts")
+        default_factory=lambda: shared_directory("models", "qwen3-tts")
+        or _global_resource_path("models", "qwen3-tts")
     )
     qwen_venv_root: Path = Field(
-        default_factory=lambda: _global_resource_path("environments", "qwen")
+        default_factory=lambda: shared_directory("runtimes", "qwen")
+        or _global_resource_path("environments", "qwen")
     )
     huggingface_cache_root: Path = Field(
-        default_factory=lambda: _global_resource_path("cache", "huggingface")
+        default_factory=lambda: shared_directory("cache", "huggingface")
+        or _global_resource_path("cache", "huggingface")
     )
     qwen_tts_python: str | None = None
-    ffmpeg_executable: str = "ffmpeg"
-    ffprobe_executable: str = "ffprobe"
+    ffmpeg_executable: str = Field(
+        default_factory=lambda: str(
+            shared_resource("ffmpeg", "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+            or "ffmpeg"
+        )
+    )
+    ffprobe_executable: str = Field(
+        default_factory=lambda: str(
+            shared_resource("ffmpeg", "ffprobe.exe" if os.name == "nt" else "ffprobe")
+            or "ffprobe"
+        )
+    )
     ytdlp_executable: str = "yt-dlp"
     cloudflared_executable: str = "cloudflared"
     cloudflared_enabled: bool = False
