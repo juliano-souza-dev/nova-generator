@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./app/App";
+import { DesktopBootstrap } from "./app/DesktopBootstrap";
 import "./styles/tokens.css";
 import "./styles/global.css";
 
@@ -15,7 +16,9 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <DesktopBootstrap>
+          <App />
+        </DesktopBootstrap>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,
