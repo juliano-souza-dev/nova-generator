@@ -16,7 +16,13 @@ const FFMPEG_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-esse
 const API_URL: &str = "http://127.0.0.1:8000/api/health";
 
 #[derive(Default)]
-struct RuntimeProcesses(Arc<Mutex<Vec<Child>>>);
+struct ServiceChildren {
+    api: Option<Child>,
+    worker: Option<Child>,
+}
+
+#[derive(Default)]
+struct RuntimeProcesses(Arc<Mutex<ServiceChildren>>);
 
 #[derive(Clone, Serialize)]
 struct SetupProgress {
@@ -308,27 +314,49 @@ fn start_services(
     }
 
     let mut children = processes.lock().map_err(|_| "Estado dos serviços indisponível.".to_string())?;
-    if !backend_healthy() {
-        let api = spawn_logged(
+    let api_running = children.api.as_mut()
+        .is_some_and(|child| child.try_wait().ok().flatten().is_none());
+    if !api_running && !backend_healthy() {
+        children.api = Some(spawn_logged(
             python,
             &["-m", "uvicorn", "nova_generator.main:app", "--host", "127.0.0.1", "--port", "8000"],
             root, &envs, &logs.join("api.log")
-        )?;
-        children.push(api);
+        )?);
     }
-    let worker = spawn_logged(
-        python,
-        &["-m", "nova_generator.worker"],
-        root, &envs, &logs.join("worker.log")
-    )?;
-    children.push(worker);
+
+    let worker_running = children.worker.as_mut()
+        .is_some_and(|child| child.try_wait().ok().flatten().is_none());
+    if !worker_running {
+        children.worker = Some(spawn_logged(
+            python,
+            &["-m", "nova_generator.worker"],
+            root, &envs, &logs.join("worker.log")
+        )?);
+    }
     Ok(())
 }
 
-fn stop_processes(processes: &Arc<Mutex<Vec<Child>>>) {
+fn check_services(processes: &Arc<Mutex<ServiceChildren>>) -> Result<(), String> {
+    let mut children = processes.lock().map_err(|_| "Estado dos serviços indisponível.".to_string())?;
+    for (name, child) in [("API", &mut children.api), ("worker", &mut children.worker)] {
+        if let Some(process) = child.as_mut() {
+            if let Some(status) = process.try_wait().map_err(|e| e.to_string())? {
+                *child = None;
+                return Err(format!("{name} encerrou durante a inicialização ({status}). Consulte a pasta de logs do Nova Generator."));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn stop_processes(processes: &Arc<Mutex<ServiceChildren>>) {
     if let Ok(mut children) = processes.lock() {
-        for child in children.iter_mut() { let _ = child.kill(); let _ = child.wait(); }
-        children.clear();
+        for child in [&mut children.api, &mut children.worker].into_iter().flatten() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        children.api = None;
+        children.worker = None;
     }
 }
 
@@ -347,6 +375,7 @@ async fn prepare_runtime(app: AppHandle, state: State<'_, RuntimeProcesses>) -> 
         progress(&app, "starting", "Atualizando o banco e iniciando API e worker...", 91);
         start_services(&python, &chatterbox, &root, &ffmpeg, &backend, &processes)?;
         for attempt in 0..60 {
+            check_services(&processes)?;
             if backend_healthy() {
                 progress(&app, "ready", "Nova Generator está pronto. A preparação do Qwen continuará em segundo plano.", 100);
                 return Ok(());
