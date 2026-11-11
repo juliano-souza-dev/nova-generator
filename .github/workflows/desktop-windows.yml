@@ -49,7 +49,8 @@ jobs:
         run: npm ci --prefix frontend
 
       - name: Install desktop tooling
-        run: npm install --prefix desktop
+        working-directory: desktop
+        run: npm install
 
       - name: Build backend wheel for the installer
         shell: pwsh
@@ -62,7 +63,8 @@ jobs:
           Compress-Archive -Path desktop/src-tauri/resources/backend/* -DestinationPath desktop/src-tauri/resources/backend-assets.zip -Force
 
       - name: Build Windows installers
-        run: npm run tauri --prefix desktop -- build
+        working-directory: desktop
+        run: npm run tauri -- build
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
