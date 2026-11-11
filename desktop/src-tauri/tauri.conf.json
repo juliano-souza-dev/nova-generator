@@ -36,7 +36,8 @@
     "active": true,
     "targets": ["nsis", "msi"],
     "resources": {
-      "resources/python/*": "python/"
+      "resources/python/*": "python/",
+      "resources/backend-assets.zip": "backend-assets.zip"
     },
     "shortDescription": "Estúdio de criação e edição multimídia com IA",
     "category": "Multimedia",
