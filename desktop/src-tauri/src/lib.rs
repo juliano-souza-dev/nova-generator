@@ -203,6 +203,45 @@ fn prepare_chatterbox(app: &AppHandle, root: &Path, python: &Path) -> Result<Pat
     Ok(executable)
 }
 
+fn find_sox() -> Option<PathBuf> {
+    if let Ok(output) = Command::new("where.exe").arg("sox.exe").output() {
+        if output.status.success() {
+            if let Some(path) = String::from_utf8_lossy(&output.stdout).lines().next() {
+                let executable = PathBuf::from(path.trim());
+                if executable.exists() { return executable.parent().map(Path::to_path_buf); }
+            }
+        }
+    }
+    let packages = std::env::var_os("LOCALAPPDATA").map(PathBuf::from)?
+        .join("Microsoft/WinGet/Packages");
+    for entry in walkdir::WalkDir::new(packages).into_iter().filter_map(Result::ok) {
+        if entry.file_name() == "sox.exe" {
+            return entry.path().parent().map(Path::to_path_buf);
+        }
+    }
+    None
+}
+
+fn prepare_sox(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Some(directory) = find_sox() { return Ok(directory); }
+    progress(app, "audio", "Instalando o componente de áudio SoX...", 89);
+    let winget = which::which("winget.exe")
+        .map_err(|_| "O SoX não está instalado e o Gerenciador de Aplicativos do Windows (winget) não está disponível. Instale o App Installer do Windows e tente novamente.".to_string())?;
+    let output = Command::new(winget)
+        .args([
+            "install", "--id", "ChrisBagwell.SoX", "--exact", "--silent",
+            "--accept-package-agreements", "--accept-source-agreements",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("Não foi possível instalar SoX: {e}"))?;
+    if !output.status.success() {
+        return Err(format!("A instalação do SoX falhou: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    find_sox().ok_or_else(|| "O SoX foi instalado, mas seu executável não foi localizado.".to_string())
+}
+
 fn prepare_ffmpeg(app: &AppHandle, root: &Path) -> Result<PathBuf, String> {
     let bin = root.join("tools/ffmpeg/bin");
     let ffmpeg = bin.join("ffmpeg.exe");
@@ -230,11 +269,11 @@ fn prepare_ffmpeg(app: &AppHandle, root: &Path) -> Result<PathBuf, String> {
     Ok(bin)
 }
 
-fn runtime_environment(root: &Path, python: &Path, chatterbox: &Path, ffmpeg_bin: &Path) -> Vec<(String, String)> {
+fn runtime_environment(root: &Path, python: &Path, chatterbox: &Path, ffmpeg_bin: &Path, sox_bin: &Path) -> Vec<(String, String)> {
     let data = root.join("data");
     let database = format!("sqlite:///{}", data.join("nova-generator.db").to_string_lossy().replace('\\', "/"));
     let python_scripts = python.parent().unwrap_or(root).join("Scripts");
-    let path = format!("{};{};{};{}", ffmpeg_bin.display(), python_scripts.display(), chatterbox.parent().unwrap_or(root).join("Scripts").display(), std::env::var("PATH").unwrap_or_default());
+    let path = format!("{};{};{};{};{}", ffmpeg_bin.display(), sox_bin.display(), python_scripts.display(), chatterbox.parent().unwrap_or(root).join("Scripts").display(), std::env::var("PATH").unwrap_or_default());
     vec![
         ("NOVA_GENERATOR_HOME".into(), root.display().to_string()),
         ("NOVA_GENERATOR_DATABASE_URL".into(), database),
@@ -295,6 +334,7 @@ fn start_services(
     chatterbox: &Path,
     root: &Path,
     ffmpeg_bin: &Path,
+    sox_bin: &Path,
     backend_dir: &Path,
     processes: &Arc<Mutex<Vec<Child>>>,
 ) -> Result<(), String> {
@@ -302,7 +342,7 @@ fn start_services(
     let logs = root.join("logs");
     fs::create_dir_all(&data).map_err(|e| e.to_string())?;
     fs::create_dir_all(&logs).map_err(|e| e.to_string())?;
-    let envs = runtime_environment(root, python, chatterbox, ffmpeg_bin);
+    let envs = runtime_environment(root, python, chatterbox, ffmpeg_bin, sox_bin);
     let database = envs.iter().find(|(key, _)| key == "NOVA_GENERATOR_DATABASE_URL").unwrap().1.clone();
     let mut migration = Command::new(python);
     migration.args(["-m", "alembic", "-c"])
@@ -374,9 +414,10 @@ async fn prepare_runtime(app: AppHandle, state: State<'_, RuntimeProcesses>) -> 
         let python = prepare_python(&app, &root)?;
         let chatterbox = prepare_chatterbox(&app, &root, &python)?;
         let ffmpeg = prepare_ffmpeg(&app, &root)?;
+        let sox = prepare_sox(&app)?;
         let backend = migrate_database(&python, &root, &resources)?;
         progress(&app, "starting", "Atualizando o banco e iniciando API e worker...", 91);
-        start_services(&python, &chatterbox, &root, &ffmpeg, &backend, &processes)?;
+        start_services(&python, &chatterbox, &root, &ffmpeg, &sox, &backend, &processes)?;
         for attempt in 0..60 {
             check_services(&processes)?;
             if backend_healthy() {
