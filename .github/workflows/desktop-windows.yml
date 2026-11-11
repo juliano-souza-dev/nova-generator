@@ -17,6 +17,8 @@ on:
       - "frontend/**"
       - "src/nova_generator/**"
       - "pyproject.toml"
+      - "alembic.ini"
+      - "migrations/**"
       - ".github/workflows/desktop-windows.yml"
   workflow_dispatch:
 
