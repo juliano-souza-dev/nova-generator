@@ -27,6 +27,25 @@ São necessários Windows 10/11 e conexão com a internet na primeira execução
 3.12+, Node.js ou FFmpeg não estiverem presentes, o inicializador tenta instalá-los pelo
 Winget. O modo manual abaixo continua disponível para desenvolvimento e diagnóstico.
 
+## Integração com Shared Runtime
+
+O Nova Generator pode consumir recursos globais do Shared Runtime Manager por meio do arquivo
+`shared.config.json`, localizado na raiz deste projeto. Cadastre a aplicação no Shared Runtime
+com o identificador `nova-generator` e informe o caminho absoluto desta pasta. O gerenciador
+cria o manifesto e mantém os caminhos dos recursos compartilhados vinculados à aplicação.
+
+Na inicialização, `scripts/start-local.ps1` lê o manifesto e direciona os modelos Whisper,
+Chatterbox e Qwen3-TTS, o cache compartilhado e o ambiente Qwen para os diretórios declarados.
+Quando FFmpeg ou SoX estiverem vinculados à aplicação no Shared Runtime, o inicializador usa
+essas instalações em vez de procurar cópias locais ou instalar outra versão. Sem manifesto,
+o comportamento anterior é preservado.
+
+O backend também possui um leitor reutilizável em
+`nova_generator.core.shared_runtime` para resolver diretórios, arquivos e recursos pelo
+manifesto. O arquivo contém somente caminhos e identificação da aplicação. Segredos de API
+continuam fora dele; a integração segura com as credenciais do Shared Runtime depende de uma
+interface local protegida e não deve copiar chaves para `.env` ou para arquivos do projeto.
+
 ## Base de referência
 
 O código atual foi importado em `legacy/generator-base/`. Ele é uma **referência de comportamento e regras de negócio** para a migração; novos módulos não devem ser adicionados nele.
