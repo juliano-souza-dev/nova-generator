@@ -14,6 +14,7 @@ use zip::ZipArchive;
 const PYTHON_INSTALLER_URL: &str = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe";
 const FFMPEG_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
 const API_URL: &str = "http://127.0.0.1:8000/api/health";
+const MIGRATION_BUNDLE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Default)]
 struct ServiceChildren {
@@ -253,14 +254,16 @@ fn runtime_environment(root: &Path, python: &Path, chatterbox: &Path, ffmpeg_bin
 fn migrate_database(python: &Path, root: &Path, resources: &Path) -> Result<PathBuf, String> {
     let backend = root.join("backend");
     let marker = backend.join(".nova-migrations-ready");
-    if !marker.exists() {
+    let marker_value = format!("migrations-{MIGRATION_BUNDLE_VERSION}");
+    let current = fs::read_to_string(&marker).unwrap_or_default();
+    if current.trim() != marker_value || !backend.join("alembic.ini").exists() {
         let archive = resources.join("backend-assets.zip");
         if !archive.exists() {
             return Err("O instalador não contém as migrações do banco de dados.".into());
         }
         if backend.exists() { fs::remove_dir_all(&backend).map_err(|e| e.to_string())?; }
         extract_zip(&archive, &backend)?;
-        fs::write(&marker, "bundled-migrations-v1").map_err(|e| e.to_string())?;
+        fs::write(&marker, marker_value).map_err(|e| e.to_string())?;
     }
     Ok(backend)
 }
