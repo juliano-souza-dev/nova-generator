@@ -32,7 +32,15 @@ Winget. O modo manual abaixo continua disponível para desenvolvimento e diagnó
 O Nova Generator pode consumir recursos globais do Shared Runtime Manager por meio do arquivo
 `shared.config.json`, localizado na raiz deste projeto. Cadastre a aplicação no Shared Runtime
 com o identificador `nova-generator` e informe o caminho absoluto desta pasta. O gerenciador
-cria o manifesto e mantém os caminhos dos recursos compartilhados vinculados à aplicação.
+cria o manifesto e mantém os caminhos dos recursos compartilhados vinculados à aplicação:
+
+```powershell
+srm register nova-generator --name "Nova Generator" --path "C:\\Projects\\nova-generator"
+srm install ffmpeg --app nova-generator
+srm install sox --app nova-generator
+```
+
+Os comandos de instalação também atualizam o manifesto com os diretórios dos recursos vinculados.
 
 Na inicialização, `scripts/start-local.ps1` lê o manifesto e direciona os modelos Whisper,
 Chatterbox e Qwen3-TTS, o cache compartilhado e os ambientes Chatterbox e Qwen para os
