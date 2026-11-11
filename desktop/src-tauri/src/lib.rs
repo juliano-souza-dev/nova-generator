@@ -1,11 +1,10 @@
 use serde::Serialize;
 use std::{
     fs,
-    io::{Read, Write},
-    net::TcpStream,
+    io::Write,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -18,7 +17,7 @@ const FFMPEG_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-esse
 const API_URL: &str = "http://127.0.0.1:8000/api/health";
 
 #[derive(Default)]
-struct BackendProcess(Mutex<Option<Child>>);
+struct BackendProcess(Arc<Mutex<Option<Child>>>);
 
 #[derive(Clone, Serialize)]
 struct SetupProgress {
@@ -47,14 +46,14 @@ fn download(url: &str, destination: &Path) -> Result<(), String> {
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let response = reqwest::blocking::Client::builder()
+    let mut response = reqwest::blocking::Client::builder()
         .user_agent("NovaGenerator/0.1")
         .build().map_err(|e| e.to_string())?
         .get(url).send().and_then(|r| r.error_for_status())
         .map_err(|e| format!("Não foi possível baixar {url}: {e}"))?;
-    let bytes = response.bytes().map_err(|e| e.to_string())?;
     let mut file = fs::File::create(destination).map_err(|e| e.to_string())?;
-    file.write_all(&bytes).map_err(|e| e.to_string())
+    std::io::copy(&mut response, &mut file).map_err(|e| e.to_string())?;
+    file.flush().map_err(|e| e.to_string())
 }
 
 fn extract_zip(archive_path: &Path, destination: &Path) -> Result<(), String> {
@@ -78,14 +77,17 @@ fn extract_zip(archive_path: &Path, destination: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn run_checked(executable: &Path, args: &[&str], cwd: Option<&Path>) -> Result<(), String> {
-    let mut command = Command::new(executable);
-    command.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
-    if let Some(directory) = cwd { command.current_dir(directory); }
-    let output = command.output().map_err(|e| format!("Não foi possível executar {}: {e}", executable.display()))?;
+fn run_checked(executable: &Path, args: &[&str]) -> Result<(), String> {
+    let output = Command::new(executable)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("Não foi possível executar {}: {e}", executable.display()))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Falha ao executar {}: {}", executable.display(), stderr.chars().rev().take(1800).collect::<String>().chars().rev().collect::<String>()));
+        let detail = stderr.chars().rev().take(1800).collect::<String>().chars().rev().collect::<String>();
+        return Err(format!("Falha ao executar {}: {detail}", executable.display()));
     }
     Ok(())
 }
@@ -111,18 +113,26 @@ fn prepare_python(app: &AppHandle, root: &Path) -> Result<PathBuf, String> {
     progress(app, "python", "Preparando o instalador de bibliotecas Python...", 18);
     let get_pip = root.join("downloads/get-pip.py");
     download(GET_PIP_URL, &get_pip)?;
-    run_checked(&python, &[get_pip.to_string_lossy().as_ref(), "--disable-pip-version-check"], None)?;
-    run_checked(&python, &["-m", "pip", "install", "--upgrade", "pip"], None)?;
+    run_checked(&python, &[get_pip.to_string_lossy().as_ref(), "--disable-pip-version-check"])?;
+    run_checked(&python, &["-m", "pip", "install", "--upgrade", "pip"])?;
 
     progress(app, "python", "Instalando o backend e o reconhecimento de voz...", 35);
     let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
     let wheel_dir = resource_dir.join("python");
-    let wheel = fs::read_dir(&wheel_dir).map_err(|e| format!("Pacote do backend não encontrado em {}: {e}", wheel_dir.display()))?
-        .filter_map(Result::ok).map(|entry| entry.path())
+    let wheel = fs::read_dir(&wheel_dir)
+        .map_err(|e| format!("Pacote do backend não encontrado em {}: {e}", wheel_dir.display()))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
         .find(|path| path.extension().is_some_and(|extension| extension == "whl"))
         .ok_or_else(|| "O instalador não contém o pacote do backend Nova Generator.".to_string())?;
-    run_checked(&python, &["-m", "pip", "install", "--disable-pip-version-check", wheel.to_string_lossy().as_ref()], None)?;
-    run_checked(&python, &["-m", "pip", "install", "--disable-pip-version-check", "faster-whisper>=1.1,<2", "av>=11,<19"], None)?;
+    run_checked(&python, &[
+        "-m", "pip", "install", "--disable-pip-version-check",
+        wheel.to_string_lossy().as_ref()
+    ])?;
+    run_checked(&python, &[
+        "-m", "pip", "install", "--disable-pip-version-check",
+        "faster-whisper>=1.1,<2", "av>=11,<19"
+    ])?;
 
     fs::write(marker, "python-3.12.10;backend;asr").map_err(|e| e.to_string())?;
     Ok(python)
@@ -156,26 +166,35 @@ fn prepare_ffmpeg(app: &AppHandle, root: &Path) -> Result<PathBuf, String> {
 }
 
 fn backend_healthy() -> bool {
-    TcpStream::connect_timeout(&"127.0.0.1:8000".parse().unwrap(), Duration::from_millis(250)).is_ok()
+    reqwest::blocking::get(API_URL)
+        .and_then(|response| response.error_for_status())
+        .is_ok()
 }
 
-fn start_backend(python: &Path, root: &Path, ffmpeg_bin: &Path, state: &BackendProcess) -> Result<(), String> {
+fn start_backend(
+    python: &Path,
+    root: &Path,
+    ffmpeg_bin: &Path,
+    process: &Arc<Mutex<Option<Child>>>,
+) -> Result<(), String> {
     if backend_healthy() { return Ok(()); }
-    let mut guard = state.0.lock().map_err(|_| "Estado do backend indisponível.".to_string())?;
+    let mut guard = process.lock().map_err(|_| "Estado do backend indisponível.".to_string())?;
     if let Some(child) = guard.as_mut() {
         if child.try_wait().map_err(|e| e.to_string())?.is_none() { return Ok(()); }
     }
+
     let data = root.join("data");
     let logs = root.join("logs");
     fs::create_dir_all(&data).map_err(|e| e.to_string())?;
     fs::create_dir_all(&logs).map_err(|e| e.to_string())?;
-    let log = fs::OpenOptions::new().create(true).append(true).open(logs.join("backend.log")).map_err(|e| e.to_string())?;
+    let log = fs::OpenOptions::new().create(true).append(true)
+        .open(logs.join("backend.log")).map_err(|e| e.to_string())?;
     let error_log = log.try_clone().map_err(|e| e.to_string())?;
     let python_dir = python.parent().ok_or("Pasta do Python inválida")?;
     let scripts = python_dir.join("Scripts");
-    let mut path = std::env::var("PATH").unwrap_or_default();
-    path = format!("{};{};{}", ffmpeg_bin.display(), scripts.display(), path);
+    let path = format!("{};{};{}", ffmpeg_bin.display(), scripts.display(), std::env::var("PATH").unwrap_or_default());
     let database = format!("sqlite:///{}", data.join("nova-generator.db").to_string_lossy().replace('\\', "/"));
+
     let child = Command::new(python)
         .args(["-m", "uvicorn", "nova_generator.main:app", "--host", "127.0.0.1", "--port", "8000"])
         .current_dir(root)
@@ -199,6 +218,7 @@ fn start_backend(python: &Path, root: &Path, ffmpeg_bin: &Path, state: &BackendP
 
 #[tauri::command]
 async fn prepare_runtime(app: AppHandle, state: State<'_, BackendProcess>) -> Result<(), String> {
+    let process = state.0.clone();
     tauri::async_runtime::spawn_blocking(move || {
         progress(&app, "checking", "Verificando os componentes do Nova Generator...", 3);
         let root = global_root()?;
@@ -206,13 +226,13 @@ async fn prepare_runtime(app: AppHandle, state: State<'_, BackendProcess>) -> Re
         let python = prepare_python(&app, &root)?;
         let ffmpeg = prepare_ffmpeg(&app, &root)?;
         progress(&app, "starting", "Iniciando os serviços do aplicativo...", 88);
-        start_backend(&python, &root, &ffmpeg, &state)?;
-        for attempt in 0..40 {
+        start_backend(&python, &root, &ffmpeg, &process)?;
+        for attempt in 0..60 {
             if backend_healthy() {
                 progress(&app, "ready", "Nova Generator está pronto.", 100);
                 return Ok(());
             }
-            if attempt == 39 { break; }
+            if attempt == 59 { break; }
             thread::sleep(Duration::from_millis(500));
         }
         Err(format!("O backend não respondeu. Consulte o log em {}.", root.join("logs/backend.log").display()))
