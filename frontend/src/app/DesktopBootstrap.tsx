@@ -13,7 +13,10 @@ declare global {
     __TAURI__?: {
       core: { invoke<T>(command: string): Promise<T> };
       event: {
-        listen<T>(event: string, handler: (event: { payload: T }) => void): Promise<() => void>;
+        listen<T>(
+          event: string,
+          handler: (event: { payload: T }) => void,
+        ): Promise<() => void>;
       };
     };
   }
@@ -43,9 +46,12 @@ export function DesktopBootstrap({ children }: { children: ReactNode }) {
       setError(null);
       setReady(false);
       try {
-        unlisten = await tauri.event.listen<SetupProgress>("nova-setup-progress", (event) => {
-          if (active) setProgress(event.payload);
-        });
+        unlisten = await tauri.event.listen<SetupProgress>(
+          "nova-setup-progress",
+          (event) => {
+            if (active) setProgress(event.payload);
+          },
+        );
         if (!prepareRuntimePromise) {
           prepareRuntimePromise = tauri.core.invoke<void>("prepare_runtime").catch((cause) => {
             prepareRuntimePromise = null;
@@ -55,7 +61,9 @@ export function DesktopBootstrap({ children }: { children: ReactNode }) {
         await prepareRuntimePromise;
         if (active) setReady(true);
       } catch (cause) {
-        if (active) setError(cause instanceof Error ? cause.message : String(cause));
+        if (active) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
       }
     };
 
@@ -74,9 +82,13 @@ export function DesktopBootstrap({ children }: { children: ReactNode }) {
       <section style={styles.panel}>
         <div style={styles.logo}>N</div>
         <p style={styles.eyebrow}>NOVA GENERATOR</p>
-        <h1 style={styles.title}>{error ? "Não foi possível preparar o aplicativo" : "Preparando seu ambiente"}</h1>
+        <h1 style={styles.title}>
+          {error ? "Não foi possível preparar o aplicativo" : "Preparando seu ambiente"}
+        </h1>
         <p style={styles.message}>
-          {error ? "O Nova Generator encontrou um problema durante a configuração." : progress.message}
+          {error
+            ? "O Nova Generator encontrou um problema durante a configuração."
+            : progress.message}
         </p>
         {error ? (
           <>
@@ -94,7 +106,10 @@ export function DesktopBootstrap({ children }: { children: ReactNode }) {
               <span>Configuração inicial e verificações</span>
               <strong>{progress.percent}%</strong>
             </div>
-            <p style={styles.note}>Na primeira abertura, alguns componentes serão baixados. Isso pode levar alguns minutos.</p>
+            <p style={styles.note}>
+              Na primeira abertura, alguns componentes serão baixados. Isso pode levar alguns
+              minutos.
+            </p>
           </>
         )}
       </section>
@@ -130,13 +145,46 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 26,
     fontWeight: 800,
   },
-  eyebrow: { margin: "24px 0 8px", color: "#9da9c2", fontSize: 11, letterSpacing: 2, fontWeight: 700 },
+  eyebrow: {
+    margin: "24px 0 8px",
+    color: "#9da9c2",
+    fontSize: 11,
+    letterSpacing: 2,
+    fontWeight: 700,
+  },
   title: { margin: 0, fontSize: 25, lineHeight: 1.25 },
   message: { margin: "12px 0 26px", color: "#c1cbe0", lineHeight: 1.6 },
   track: { height: 8, overflow: "hidden", borderRadius: 20, background: "#29354e" },
-  fill: { height: "100%", borderRadius: 20, background: "#8275ff", transition: "width 250ms ease" },
-  meta: { display: "flex", justifyContent: "space-between", marginTop: 12, color: "#9da9c2", fontSize: 12 },
+  fill: {
+    height: "100%",
+    borderRadius: 20,
+    background: "#8275ff",
+    transition: "width 250ms ease",
+  },
+  meta: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: 12,
+    color: "#9da9c2",
+    fontSize: 12,
+  },
   note: { marginTop: 28, color: "#8492ad", fontSize: 12, lineHeight: 1.6 },
-  error: { whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 180, overflow: "auto", color: "#ffb4b4", fontSize: 12 },
-  button: { marginTop: 18, border: 0, borderRadius: 10, padding: "12px 18px", background: "#7567ff", color: "white", fontWeight: 700, cursor: "pointer" },
+  error: {
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+    maxHeight: 180,
+    overflow: "auto",
+    color: "#ffb4b4",
+    fontSize: 12,
+  },
+  button: {
+    marginTop: 18,
+    border: 0,
+    borderRadius: 10,
+    padding: "12px 18px",
+    background: "#7567ff",
+    color: "white",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
 };
