@@ -96,12 +96,20 @@ fn prepare_python(app: &AppHandle, root: &Path) -> Result<PathBuf, String> {
     let python_dir = root.join("runtime/python");
     let python = python_dir.join("python.exe");
     let marker = python_dir.join(".nova-python-ready");
-    if python.exists() && marker.exists() { return Ok(python); }
+    let wheel_name = wheel.file_name().and_then(|name| name.to_str()).unwrap_or("backend.whl");
+    let expected_marker = format!("python-3.12.10;{wheel_name};asr-v1");
+    if python.exists()
+        && fs::read_to_string(&marker).is_ok_and(|value| value.trim() == expected_marker)
+    {
+        return Ok(python);
+    }
 
-    progress(app, "python", "Baixando o Python portátil...", 8);
-    let archive = root.join("downloads/python-3.12.10-embed-amd64.zip");
-    download(PYTHON_URL, &archive)?;
-    extract_zip(&archive, &python_dir)?;
+    if !python.exists() {
+        progress(app, "python", "Baixando o Python portátil...", 8);
+        let archive = root.join("downloads/python-3.12.10-embed-amd64.zip");
+        download(PYTHON_URL, &archive)?;
+        extract_zip(&archive, &python_dir)?;
+    }
 
     let pth = python_dir.join("python312._pth");
     let mut pth_text = fs::read_to_string(&pth).map_err(|e| e.to_string())?;
@@ -134,7 +142,7 @@ fn prepare_python(app: &AppHandle, root: &Path) -> Result<PathBuf, String> {
         "faster-whisper>=1.1,<2", "av>=11,<19"
     ])?;
 
-    fs::write(marker, "python-3.12.10;backend;asr").map_err(|e| e.to_string())?;
+    fs::write(marker, expected_marker).map_err(|e| e.to_string())?;
     Ok(python)
 }
 
