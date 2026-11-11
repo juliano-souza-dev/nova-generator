@@ -273,7 +273,7 @@ fn runtime_environment(root: &Path, python: &Path, chatterbox: &Path, ffmpeg_bin
     let data = root.join("data");
     let database = format!("sqlite:///{}", data.join("nova-generator.db").to_string_lossy().replace('\\', "/"));
     let python_scripts = python.parent().unwrap_or(root).join("Scripts");
-    let path = format!("{};{};{};{};{}", ffmpeg_bin.display(), sox_bin.display(), python_scripts.display(), chatterbox.parent().unwrap_or(root).join("Scripts").display(), std::env::var("PATH").unwrap_or_default());
+    let path = format!("{};{};{};{};{}", ffmpeg_bin.display(), sox_bin.display(), python_scripts.display(), chatterbox.parent().unwrap_or(root).display(), std::env::var("PATH").unwrap_or_default());
     vec![
         ("NOVA_GENERATOR_HOME".into(), root.display().to_string()),
         ("NOVA_GENERATOR_DATABASE_URL".into(), database),
@@ -336,7 +336,7 @@ fn start_services(
     ffmpeg_bin: &Path,
     sox_bin: &Path,
     backend_dir: &Path,
-    processes: &Arc<Mutex<Vec<Child>>>,
+    processes: &Arc<Mutex<ServiceChildren>>,
 ) -> Result<(), String> {
     let data = root.join("data");
     let logs = root.join("logs");
