@@ -34,7 +34,7 @@ if (Test-Path -LiteralPath $SharedConfigPath) {
 $RuntimeRoot = Join-Path $GlobalRoot "registry"
 $LogRoot = Join-Path $ProjectRoot "data\logs"
 $BackendVenv = Join-Path $GlobalRoot "environments\backend"
-$TtsVenv = Join-Path $GlobalRoot "environments\chatterbox"
+$TtsVenv = if ($SharedConfig) { Join-Path $SharedConfig.shared.directories.runtimes "chatterbox" } else { Join-Path $GlobalRoot "environments\chatterbox" }
 $QwenVenv = if ($SharedConfig) { Join-Path $SharedConfig.shared.directories.runtimes "qwen" } else { Join-Path $GlobalRoot "environments\qwen" }
 $ModelRoot = if ($SharedConfig) { $SharedConfig.shared.directories.models } else { Join-Path $GlobalRoot "models" }
 $CacheRoot = if ($SharedConfig) { $SharedConfig.shared.directories.cache } else { Join-Path $GlobalRoot "cache" }
