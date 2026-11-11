@@ -40,9 +40,11 @@ Os logs gerais ficam em `data/logs/`. O registro da instalação Qwen fica em
 
 ## Configuração avançada (opcional)
 
-O local padrão dos modelos é %LOCALAPPDATA%/NovaGenerator/models/qwen3-tts. O ambiente Python gerenciado
-é criado em %LOCALAPPDATA%/NovaGenerator/environments/qwen. Esses locais podem ser alterados no arquivo
-.env com:
+Por padrão, os modelos e o ambiente Python ficam fora do repositório, em
+%LOCALAPPDATA%/NovaGenerator/models/qwen3-tts e
+%LOCALAPPDATA%/NovaGenerator/environments/qwen. O inicializador migra os diretórios
+legados para esses locais somente quando o destino ainda não existe. Você pode
+personalizar os caminhos no arquivo .env com:
 
 ~~~dotenv
 NOVA_GENERATOR_QWEN_MODEL_ROOT=C:\NovaGeneratorData\models\qwen3-tts

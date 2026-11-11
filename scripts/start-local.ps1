@@ -53,6 +53,15 @@ function Initialize-GlobalResources {
     }
     if (-not $env:HF_HUB_CACHE) { $env:HF_HUB_CACHE = Join-Path $env:HF_HOME "hub" }
 
+    # Move first: creating destination folders before this step would
+    # make an empty destination look like an existing installation.
+    Move-ExistingResource (Join-Path $ProjectRoot ".venv") $BackendVenv "ambiente Python do backend"
+    Move-ExistingResource (Join-Path $ProjectRoot ".venv-tts") $TtsVenv "ambiente Python Chatterbox"
+    Move-ExistingResource (Join-Path $ProjectRoot "data\tts\qwen-venv") $QwenVenv "ambiente Python Qwen"
+    Move-ExistingResource (Join-Path $ProjectRoot "models\whisper") $env:NOVA_GENERATOR_WHISPER_MODEL_ROOT "modelos Whisper"
+    Move-ExistingResource (Join-Path $ProjectRoot "models\chatterbox") $env:NOVA_GENERATOR_CHATTERBOX_MODEL_ROOT "modelos Chatterbox"
+    Move-ExistingResource (Join-Path $ProjectRoot "models\qwen3-tts") $env:NOVA_GENERATOR_QWEN_MODEL_ROOT "modelos Qwen3-TTS"
+
     New-Item -ItemType Directory -Force -Path @(
         $GlobalRoot, $RuntimeRoot, $ModelRoot, $CacheRoot,
         (Join-Path $CacheRoot "pip"), (Join-Path $CacheRoot "torch"),
@@ -61,13 +70,6 @@ function Initialize-GlobalResources {
         $env:NOVA_GENERATOR_CHATTERBOX_MODEL_ROOT,
         $env:NOVA_GENERATOR_QWEN_MODEL_ROOT
     ) | Out-Null
-
-    Move-ExistingResource (Join-Path $ProjectRoot ".venv") $BackendVenv "ambiente Python do backend"
-    Move-ExistingResource (Join-Path $ProjectRoot ".venv-tts") $TtsVenv "ambiente Python Chatterbox"
-    Move-ExistingResource (Join-Path $ProjectRoot "data\tts\qwen-venv") $QwenVenv "ambiente Python Qwen"
-    Move-ExistingResource (Join-Path $ProjectRoot "models\whisper") $env:NOVA_GENERATOR_WHISPER_MODEL_ROOT "modelos Whisper"
-    Move-ExistingResource (Join-Path $ProjectRoot "models\chatterbox") $env:NOVA_GENERATOR_CHATTERBOX_MODEL_ROOT "modelos Chatterbox"
-    Move-ExistingResource (Join-Path $ProjectRoot "models\qwen3-tts") $env:NOVA_GENERATOR_QWEN_MODEL_ROOT "modelos Qwen3-TTS"
 }
 
 function Move-ExistingResource([string]$Source, [string]$Destination, [string]$Label) {

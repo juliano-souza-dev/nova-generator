@@ -71,10 +71,6 @@ class Settings(BaseSettings):
             raise ValueError(f"Diretório inválido: {value}")
         return value
 
-    def model_post_init(self, __context) -> None:
-        os.environ.setdefault("HF_HOME", str(self.huggingface_cache_root.expanduser()))
-        os.environ.setdefault("TORCH_HOME", str(_global_resource_path("cache", "torch")))
-
     def validate_runtime(self) -> None:
         """Fail with an actionable message for tools required by the selected deployment."""
         required = ("ffmpeg_executable", "ffprobe_executable", "ytdlp_executable")
