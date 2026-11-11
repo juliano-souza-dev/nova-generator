@@ -55,7 +55,7 @@ function Initialize-GlobalResources {
     $env:NOVA_GENERATOR_QWEN_MODEL_ROOT = Join-Path $ModelRoot "qwen3-tts"
     $env:NOVA_GENERATOR_QWEN_VENV_ROOT = $QwenVenv
     $env:NOVA_GENERATOR_MEDIA_CACHE_ROOT = Join-Path $CacheRoot "nova-generator-media"
-    if ($SharedConfig -and $SharedConfig.shared.resources.ffmpeg) {
+    if ($SharedConfig -and $SharedConfig.shared.resources -and $SharedConfig.shared.resources.PSObject.Properties["ffmpeg"]) {
         $sharedFfmpeg = $SharedConfig.shared.resources.ffmpeg
         $ffmpegExecutable = Join-Path $sharedFfmpeg "ffmpeg.exe"
         $ffprobeExecutable = Join-Path $sharedFfmpeg "ffprobe.exe"
@@ -66,7 +66,7 @@ function Initialize-GlobalResources {
         $env:NOVA_GENERATOR_FFPROBE_EXECUTABLE = $ffprobeExecutable
         $env:Path = "$sharedFfmpeg;$env:Path"
     }
-    if ($SharedConfig -and $SharedConfig.shared.resources.sox) {
+    if ($SharedConfig -and $SharedConfig.shared.resources -and $SharedConfig.shared.resources.PSObject.Properties["sox"]) {
         $sharedSox = $SharedConfig.shared.resources.sox
         if (-not (Test-Path -LiteralPath (Join-Path $sharedSox "sox.exe"))) {
             throw "SoX foi vinculado no Shared, mas sox.exe não foi encontrado em $sharedSox."
