@@ -1,5 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
+let prepareRuntimePromise: Promise<void> | null = null;
+
 type SetupProgress = {
   phase: string;
   message: string;
@@ -44,7 +46,13 @@ export function DesktopBootstrap({ children }: { children: ReactNode }) {
         unlisten = await tauri.event.listen<SetupProgress>("nova-setup-progress", (event) => {
           if (active) setProgress(event.payload);
         });
-        await tauri.core.invoke("prepare_runtime");
+        if (!prepareRuntimePromise) {
+          prepareRuntimePromise = tauri.core.invoke<void>("prepare_runtime").catch((cause) => {
+            prepareRuntimePromise = null;
+            throw cause;
+          });
+        }
+        await prepareRuntimePromise;
         if (active) setReady(true);
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : String(cause));
