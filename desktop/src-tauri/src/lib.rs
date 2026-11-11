@@ -395,6 +395,14 @@ fn check_services(processes: &Arc<Mutex<ServiceChildren>>) -> Result<(), String>
 fn stop_processes(processes: &Arc<Mutex<ServiceChildren>>) {
     if let Ok(mut children) = processes.lock() {
         for child in [&mut children.api, &mut children.worker].into_iter().flatten() {
+            #[cfg(target_os = "windows")]
+            if let Some(pid) = child.id().to_string().as_str().get(..) {
+                let _ = Command::new("taskkill")
+                    .args(["/PID", pid, "/T", "/F"])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
             let _ = child.kill();
             let _ = child.wait();
         }
