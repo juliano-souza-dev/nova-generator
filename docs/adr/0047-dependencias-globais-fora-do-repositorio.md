@@ -25,6 +25,8 @@ No Windows, o diretório global padrão será
 - Registro de instalação e hashes ficam em `registry/`.
 - FFmpeg, FFprobe, SoX, Python e Node.js continuam instalados no sistema,
   preferencialmente detectados pelo PATH ou pelo gerenciador de pacotes do Windows.
+- Dependências npm do frontend ficam em `environments/node/frontend-node_modules`;
+  o checkout recebe apenas uma junction para manter a resolução de módulos do Node/Vite.
 - Dados de projetos, banco, logs de execução e mídia produzida não são dependências
   e permanecem nos locais de dados configurados pelo aplicativo.
 
@@ -39,8 +41,7 @@ novamente os modelos. Diferentes cópias do Nova-Generator no mesmo usuário pod
 reutilizar os mesmos recursos. Ambientes Python separados continuam sendo usados
 quando há requisitos incompatíveis entre backend, Chatterbox e Qwen.
 
-## Fora do escopo desta etapa
-
-As dependências npm do frontend continuam gerenciadas pelo lockfile do próprio
-frontend; sua externalização por junction será tratada separadamente para não
-comprometer a resolução de módulos do Node/Vite sem validação no Windows.
+O inicializador mantém o lockfile no repositório como fonte de versões, mas instala
+os pacotes npm no diretório global e cria uma junction em `frontend/node_modules`.
+Ao atualizar o lockfile, instala a nova árvore antes de substituir a anterior e
+restaura a cópia anterior se a instalação falhar.

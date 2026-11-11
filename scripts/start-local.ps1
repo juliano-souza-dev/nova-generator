@@ -26,6 +26,8 @@ $TtsVenv = Join-Path $GlobalRoot "environments\chatterbox"
 $QwenVenv = Join-Path $GlobalRoot "environments\qwen"
 $ModelRoot = Join-Path $GlobalRoot "models"
 $CacheRoot = Join-Path $GlobalRoot "cache"
+$GlobalFrontendModules = Join-Path $GlobalRoot "environments\node\frontend-node_modules"
+$FrontendModules = Join-Path $FrontendRoot "node_modules"
 $BackendPython = Join-Path $BackendVenv "Scripts\python.exe"
 $TtsPython = Join-Path $TtsVenv "Scripts\python.exe"
 $Processes = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
@@ -280,21 +282,86 @@ function Ensure-Tts([object]$PythonCommand) {
     return $TtsPython
 }
 
+function Test-ReparsePoint([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    $item = Get-Item -Force -LiteralPath $Path
+    return (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+}
+
 function Ensure-Frontend {
-    Write-Step "Preparando interface..."
+    Write-Step "Preparando interface fora do repositório..."
     $lock = Join-Path $FrontendRoot "package-lock.json"
     $expected = Get-ManifestHash @($lock, (Join-Path $FrontendRoot "package.json"))
     $stamp = Join-Path $RuntimeRoot "frontend.sha256"
     $current = if (Test-Path -LiteralPath $stamp) { (Get-Content -Raw $stamp).Trim() } else { "" }
-    if ($current -ne $expected -or -not (Test-Path -LiteralPath (Join-Path $FrontendRoot "node_modules"))) {
-        Push-Location $FrontendRoot
-        try {
-            & npm.cmd ci
-            if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar dependências do frontend." }
-        } finally {
-            Pop-Location
-        }
+    $globalExists = Test-Path -LiteralPath $GlobalFrontendModules
+    $localExists = Test-Path -LiteralPath $FrontendModules
+    $localIsLink = if ($localExists) { Test-ReparsePoint $FrontendModules } else { $false }
+
+    # First migration reuses the existing node_modules without downloading it again.
+    if ($localExists -and -not $localIsLink -and -not $globalExists) {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $GlobalFrontendModules) | Out-Null
+        Move-Item -LiteralPath $FrontendModules -Destination $GlobalFrontendModules
+        $globalExists = $true
         Set-Content -LiteralPath $stamp -Value $expected -Encoding ASCII
+        $current = $expected
+    }
+
+    if ($current -ne $expected -or -not $globalExists) {
+        if ($localIsLink) {
+            Remove-Item -LiteralPath $FrontendModules -Force
+            $localExists = $false
+        } elseif ($localExists) {
+            $legacy = Join-Path $GlobalRoot "registry\frontend-node_modules-legacy"
+            if (Test-Path -LiteralPath $legacy) {
+                throw "Existe uma cópia antiga de node_modules em $legacy. Preserve-a ou remova-a manualmente antes de atualizar."
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $legacy) | Out-Null
+            Move-Item -LiteralPath $FrontendModules -Destination $legacy
+            $localExists = $false
+        }
+
+        $backup = Join-Path $GlobalRoot "registry\frontend-node_modules-previous"
+        if (Test-Path -LiteralPath $backup) {
+            throw "Existe uma cópia anterior de dependências em $backup. Não será apagada automaticamente."
+        }
+        if (Test-Path -LiteralPath $GlobalFrontendModules) {
+            Move-Item -LiteralPath $GlobalFrontendModules -Destination $backup
+        }
+        try {
+            Push-Location $FrontendRoot
+            try {
+                & npm.cmd ci
+                if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar dependências do frontend." }
+            } finally {
+                Pop-Location
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $GlobalFrontendModules) | Out-Null
+            Move-Item -LiteralPath $FrontendModules -Destination $GlobalFrontendModules
+            if (Test-Path -LiteralPath $backup) {
+                Remove-Item -LiteralPath $backup -Recurse -Force
+            }
+            Set-Content -LiteralPath $stamp -Value $expected -Encoding ASCII
+            $globalExists = $true
+        } catch {
+            if (-not (Test-Path -LiteralPath $GlobalFrontendModules) -and (Test-Path -LiteralPath $backup)) {
+                Move-Item -LiteralPath $backup -Destination $GlobalFrontendModules
+            }
+            throw
+        }
+    } elseif ($localExists -and -not $localIsLink) {
+        # A valid global installation wins; keep no duplicate dependency tree in the checkout.
+        $legacy = Join-Path $GlobalRoot "registry\frontend-node_modules-legacy"
+        if (Test-Path -LiteralPath $legacy) {
+            throw "Existe uma cópia antiga de node_modules em $legacy. Preserve-a ou remova-a manualmente."
+        }
+        Move-Item -LiteralPath $FrontendModules -Destination $legacy
+    }
+
+    if (-not (Test-Path -LiteralPath $FrontendModules)) {
+        New-Item -ItemType Junction -Path $FrontendModules -Target $GlobalFrontendModules | Out-Null
+    } elseif (-not (Test-ReparsePoint $FrontendModules)) {
+        throw "node_modules não foi externalizado com segurança. Verifique $FrontendModules."
     }
 }
 
