@@ -19,6 +19,17 @@ def test_settings_defaults_and_runtime_directories(tmp_path, monkeypatch) -> Non
     assert (tmp_path / "data/projects").is_dir()
 
 
+def test_model_and_runtime_defaults_are_outside_checkout(tmp_path, monkeypatch) -> None:
+    global_root = tmp_path / "NovaGeneratorData"
+    monkeypatch.setenv("NOVA_GENERATOR_HOME", str(global_root))
+    settings = Settings(_env_file=None)
+    assert settings.whisper_model_root == global_root / "models" / "whisper"
+    assert settings.chatterbox_model_root == global_root / "models" / "chatterbox"
+    assert settings.qwen_model_root == global_root / "models" / "qwen3-tts"
+    assert settings.qwen_venv_root == global_root / "environments" / "qwen"
+    assert settings.huggingface_cache_root == global_root / "cache" / "huggingface"
+
+
 def test_invalid_database_url_and_missing_executable(tmp_path, monkeypatch) -> None:
     with pytest.raises(ValidationError, match="DATABASE_URL"):
         Settings(_env_file=None, database_url="postgresql://localhost/test")

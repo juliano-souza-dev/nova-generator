@@ -12,16 +12,73 @@ $OutputEncoding = [Text.UTF8Encoding]::new($false)
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $FrontendRoot = Join-Path $ProjectRoot "frontend"
-$RuntimeRoot = Join-Path $ProjectRoot ".local-runtime"
+$GlobalRoot = if ($env:NOVA_GENERATOR_HOME) {
+    [IO.Path]::GetFullPath($env:NOVA_GENERATOR_HOME)
+} elseif ($env:LOCALAPPDATA) {
+    Join-Path $env:LOCALAPPDATA "NovaGenerator"
+} else {
+    Join-Path $env:USERPROFILE "AppData\Local\NovaGenerator"
+}
+$RuntimeRoot = Join-Path $GlobalRoot "registry"
 $LogRoot = Join-Path $ProjectRoot "data\logs"
-$BackendVenv = Join-Path $ProjectRoot ".venv"
-$TtsVenv = Join-Path $ProjectRoot ".venv-tts"
+$BackendVenv = Join-Path $GlobalRoot "environments\backend"
+$TtsVenv = Join-Path $GlobalRoot "environments\chatterbox"
+$QwenVenv = Join-Path $GlobalRoot "environments\qwen"
+$ModelRoot = Join-Path $GlobalRoot "models"
+$CacheRoot = Join-Path $GlobalRoot "cache"
 $BackendPython = Join-Path $BackendVenv "Scripts\python.exe"
 $TtsPython = Join-Path $TtsVenv "Scripts\python.exe"
 $Processes = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
 
 function Write-Step([string]$Message) {
     Write-Host "`n[Nova Generator] $Message" -ForegroundColor Cyan
+}
+
+function Initialize-GlobalResources {
+    $env:NOVA_GENERATOR_HOME = $GlobalRoot
+    $env:NOVA_GENERATOR_WHISPER_MODEL_ROOT = Join-Path $ModelRoot "whisper"
+    $env:NOVA_GENERATOR_CHATTERBOX_MODEL_ROOT = Join-Path $ModelRoot "chatterbox"
+    $env:NOVA_GENERATOR_QWEN_MODEL_ROOT = Join-Path $ModelRoot "qwen3-tts"
+    $env:NOVA_GENERATOR_QWEN_VENV_ROOT = $QwenVenv
+    $env:PIP_CACHE_DIR = Join-Path $CacheRoot "pip"
+    $env:TORCH_HOME = Join-Path $CacheRoot "torch"
+
+    if (-not $env:HF_HOME) {
+        $legacyHuggingFace = Join-Path $env:USERPROFILE ".cache\huggingface"
+        $env:HF_HOME = if (Test-Path -LiteralPath $legacyHuggingFace) {
+            $legacyHuggingFace
+        } else {
+            Join-Path $CacheRoot "huggingface"
+        }
+    }
+    if (-not $env:HF_HUB_CACHE) { $env:HF_HUB_CACHE = Join-Path $env:HF_HOME "hub" }
+
+    New-Item -ItemType Directory -Force -Path @(
+        $GlobalRoot, $RuntimeRoot, $ModelRoot, $CacheRoot,
+        (Join-Path $CacheRoot "pip"), (Join-Path $CacheRoot "torch"),
+        $env:HF_HOME, $env:HF_HUB_CACHE,
+        $env:NOVA_GENERATOR_WHISPER_MODEL_ROOT,
+        $env:NOVA_GENERATOR_CHATTERBOX_MODEL_ROOT,
+        $env:NOVA_GENERATOR_QWEN_MODEL_ROOT
+    ) | Out-Null
+
+    Move-ExistingResource (Join-Path $ProjectRoot ".venv") $BackendVenv "ambiente Python do backend"
+    Move-ExistingResource (Join-Path $ProjectRoot ".venv-tts") $TtsVenv "ambiente Python Chatterbox"
+    Move-ExistingResource (Join-Path $ProjectRoot "data\tts\qwen-venv") $QwenVenv "ambiente Python Qwen"
+    Move-ExistingResource (Join-Path $ProjectRoot "models\whisper") $env:NOVA_GENERATOR_WHISPER_MODEL_ROOT "modelos Whisper"
+    Move-ExistingResource (Join-Path $ProjectRoot "models\chatterbox") $env:NOVA_GENERATOR_CHATTERBOX_MODEL_ROOT "modelos Chatterbox"
+    Move-ExistingResource (Join-Path $ProjectRoot "models\qwen3-tts") $env:NOVA_GENERATOR_QWEN_MODEL_ROOT "modelos Qwen3-TTS"
+}
+
+function Move-ExistingResource([string]$Source, [string]$Destination, [string]$Label) {
+    if (-not (Test-Path -LiteralPath $Source)) { return }
+    if (Test-Path -LiteralPath $Destination) {
+        Write-Step "A origem antiga de $Label foi preservada porque o destino global já existe: $Source"
+        return
+    }
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Destination) | Out-Null
+    Write-Step "Movendo $Label para fora do projeto..."
+    Move-Item -LiteralPath $Source -Destination $Destination
 }
 
 function Refresh-ProcessPath {
@@ -310,7 +367,8 @@ function Start-ServiceProcess(
 
 try {
     Set-Location $ProjectRoot
-    New-Item -ItemType Directory -Force -Path $RuntimeRoot, $LogRoot | Out-Null
+    New-Item -ItemType Directory -Force -Path $LogRoot | Out-Null
+    Initialize-GlobalResources
     $pythonCommand = Ensure-Prerequisites
     Ensure-Backend $pythonCommand
     $ttsExecutable = Ensure-Tts $pythonCommand

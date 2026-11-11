@@ -35,18 +35,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -CheckOnly
 ~~~
 
 Os logs gerais ficam em `data/logs/`. O registro da instalação Qwen fica em
-`models/qwen3-tts/_setup/` (ou no diretório definido por
+`%LOCALAPPDATA%/NovaGenerator/models/qwen3-tts/_setup/` (ou no diretório definido por
 `NOVA_GENERATOR_QWEN_MODEL_ROOT`).
 
 ## Configuração avançada (opcional)
 
-O local padrão dos modelos é models/qwen3-tts. O ambiente Python gerenciado
-é criado em data/tts/qwen-venv. Esses locais podem ser alterados no arquivo
+O local padrão dos modelos é %LOCALAPPDATA%/NovaGenerator/models/qwen3-tts. O ambiente Python gerenciado
+é criado em %LOCALAPPDATA%/NovaGenerator/environments/qwen. Esses locais podem ser alterados no arquivo
 .env com:
 
 ~~~dotenv
-NOVA_GENERATOR_QWEN_MODEL_ROOT=models/qwen3-tts
-NOVA_GENERATOR_QWEN_VENV_ROOT=data/tts/qwen-venv
+NOVA_GENERATOR_QWEN_MODEL_ROOT=C:\NovaGeneratorData\models\qwen3-tts
+NOVA_GENERATOR_QWEN_VENV_ROOT=C:\NovaGeneratorData\environments\qwen
 ~~~
 
 Não é necessário configurar um Python separado nem instalar pacotes manualmente.

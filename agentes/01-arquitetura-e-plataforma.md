@@ -38,6 +38,8 @@ Construir uma base modular, testável e resiliente para o Generator, aplicando s
 - Logs correlacionam projeto, job, fonte de mídia e artefato.
 - Configuração tipada falha com mensagem acionável para executáveis ou diretórios indisponíveis.
 - Uma instalação local limpa pode preparar e iniciar API, worker e frontend por um único clique.
+- Ambientes Python, modelos e caches gerenciados nunca são criados dentro do checkout; caminhos
+  globais podem ser sobrescritos por configuração e instalações anteriores são preservadas.
 - Logs JSON e métricas de jobs, cache e exportação não incluem tokens, texto editorial ou payloads.
 - Falha, indisponibilidade ou limite da Groq encaminha a cena ao fallback externo e mantém a
   bancada fechada até existir um rascunho completo; nenhuma IA transforma rascunho em conteúdo

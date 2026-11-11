@@ -10,7 +10,9 @@ Produzir mídia local confiável e voz consistente para Anki e iHub, usando Chat
 - Separar inspeção leve de metadados, download da fonte e extração do corte em etapas observáveis.
 - Manter perfis de voz versionados, incluindo configuração, referência autorizada e hash de modelo.
 - Oferecer Qwen3-TTS 1.7B local em VoiceDesign (descrição da interpretação) e Base (referência autorizada + transcrição), preservando Chatterbox e os snapshots anteriores.
-- Rodar Qwen em Python isolado e offline na geração, com pesos verificados por hash, mensagens de falha e recuperação para jobs.
+- Rodar Qwen em Python isolado e offline na geração, com pesos verificados por hash, mensagens
+  de falha e recuperação para jobs; o ambiente e os pesos ficam no diretório global do usuário,
+  fora do repositório, compartilhados entre módulos e projetos.
 - Ao iniciar o worker, instalar automaticamente em segundo plano o VoiceDesign ausente; preparar Base na primeira seleção, com ambiente Python gerenciado, download retomável e status observável.
 - Isolar a fila de preparação da fila normal de mídia, manter cancelamento responsivo e não bloquear o uso de vozes anteriores durante o download.
 - Aceitar referências WAV, MP3 e OGG; converter áudio comprimido via FFmpeg para WAV PCM validado, com hash do arquivo canônico.

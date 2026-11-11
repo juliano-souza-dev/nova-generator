@@ -1,9 +1,26 @@
+import os
 import shutil
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _global_resource_root() -> Path:
+    """Return a per-user data directory outside the source checkout."""
+    configured = os.environ.get("NOVA_GENERATOR_HOME")
+    if configured:
+        return Path(configured).expanduser()
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA")
+        return (Path(base) if base else Path.home() / "AppData" / "Local") / "NovaGenerator"
+    base = os.environ.get("XDG_DATA_HOME")
+    return (Path(base).expanduser() if base else Path.home() / ".local" / "share") / "NovaGenerator"
+
+
+def _global_resource_path(*parts: str) -> Path:
+    return _global_resource_root().joinpath(*parts)
 
 
 class Settings(BaseSettings):
@@ -21,11 +38,12 @@ class Settings(BaseSettings):
     media_cache_root: Path = Path("media_cache")
     project_root: Path = Path("data/projects")
     whisper_model: str = "small"
-    whisper_model_root: Path = Path("models/whisper")
-    chatterbox_model_root: Path = Path("models/chatterbox")
+    whisper_model_root: Path = Field(default_factory=lambda: _global_resource_path("models", "whisper"))
+    chatterbox_model_root: Path = Field(default_factory=lambda: _global_resource_path("models", "chatterbox"))
     chatterbox_model_file: Path | None = None
-    qwen_model_root: Path = Path("models/qwen3-tts")
-    qwen_venv_root: Path = Path("data/tts/qwen-venv")
+    qwen_model_root: Path = Field(default_factory=lambda: _global_resource_path("models", "qwen3-tts"))
+    qwen_venv_root: Path = Field(default_factory=lambda: _global_resource_path("environments", "qwen"))
+    huggingface_cache_root: Path = Field(default_factory=lambda: _global_resource_path("cache", "huggingface"))
     qwen_tts_python: str | None = None
     ffmpeg_executable: str = "ffmpeg"
     ffprobe_executable: str = "ffprobe"
@@ -45,13 +63,17 @@ class Settings(BaseSettings):
 
     @field_validator(
         "media_cache_root", "project_root", "whisper_model_root", "chatterbox_model_root",
-        "qwen_model_root", "qwen_venv_root"
+        "qwen_model_root", "qwen_venv_root", "huggingface_cache_root"
     )
     @classmethod
     def validate_path(cls, value: Path) -> Path:
         if not str(value).strip() or value.exists() and not value.is_dir():
             raise ValueError(f"Diretório inválido: {value}")
         return value
+
+    def model_post_init(self, __context) -> None:
+        os.environ.setdefault("HF_HOME", str(self.huggingface_cache_root.expanduser()))
+        os.environ.setdefault("TORCH_HOME", str(_global_resource_path("cache", "torch")))
 
     def validate_runtime(self) -> None:
         """Fail with an actionable message for tools required by the selected deployment."""
