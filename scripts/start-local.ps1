@@ -397,9 +397,10 @@ function Clear-PreviousFrontend {
     if ($owners.Count -eq 0) { return }
 
     $viteScriptPath = (Join-Path $FrontendRoot "node_modules\vite\bin\vite.js").Replace("/", "\")
-    # npm commonly launches Vite through node_modules\.bin\..\vite\bin\vite.js.
-    # Resolve that form before comparing so a prior Nova session can be restarted.
     $viteScriptPathViaBin = (Join-Path $FrontendRoot "node_modules\.bin\..\vite\bin\vite.js").Replace("/", "\")
+    # Node may report the real target of the junction instead of the checkout path.
+    $viteScriptPathGlobal = (Join-Path $GlobalFrontendModules "vite\bin\vite.js").Replace("/", "\")
+    $viteScriptPathGlobalViaBin = (Join-Path $GlobalFrontendModules ".bin\..\vite\bin\vite.js").Replace("/", "\")
     foreach ($owningProcessId in $owners) {
         $instance = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $owningProcessId" -ErrorAction SilentlyContinue
         $commandLine = if ($null -eq $instance) { "" } else { [string]$instance.CommandLine }
@@ -408,7 +409,9 @@ function Clear-PreviousFrontend {
             $null -eq $instance -or
             $instance.Name -ne "node.exe" -or
             $normalizedCommand.IndexOf($viteScriptPath, [StringComparison]::OrdinalIgnoreCase) -lt 0 -and
-            $normalizedCommand.IndexOf($viteScriptPathViaBin, [StringComparison]::OrdinalIgnoreCase) -lt 0
+            $normalizedCommand.IndexOf($viteScriptPathViaBin, [StringComparison]::OrdinalIgnoreCase) -lt 0 -and
+            $normalizedCommand.IndexOf($viteScriptPathGlobal, [StringComparison]::OrdinalIgnoreCase) -lt 0 -and
+            $normalizedCommand.IndexOf($viteScriptPathGlobalViaBin, [StringComparison]::OrdinalIgnoreCase) -lt 0
         ) {
             throw "Porta 5173 ocupada pelo processo $owningProcessId, que não foi identificado como Vite deste projeto. Feche o aplicativo que usa a porta antes de executar INICIAR.bat."
         }
