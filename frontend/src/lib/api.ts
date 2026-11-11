@@ -1,3 +1,9 @@
+declare global {
+  interface Window {
+    __TAURI__?: unknown;
+  }
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -8,14 +14,14 @@ export class ApiError extends Error {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const API_BASE_URL = window.__TAURI__
+  ? "http://127.0.0.1:8000/api"
+  : (import.meta.env.VITE_API_BASE_URL ?? "/api");
 
 export const apiUrl = (path: string) => `${API_BASE_URL}${path}`;
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(apiUrl(path), {
-    // Editorial imports mutate the scene and immediately re-read its cues. Do
-    // not let a browser reuse the pre-import response for that read.
     cache: "no-store",
     headers: {
       ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
