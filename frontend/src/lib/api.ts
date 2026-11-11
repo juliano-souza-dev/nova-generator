@@ -1,9 +1,3 @@
-declare global {
-  interface Window {
-    __TAURI__?: unknown;
-  }
-}
-
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -14,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-const API_BASE_URL = window.__TAURI__
+const API_BASE_URL = (window as Window & { __TAURI__?: unknown }).__TAURI__
   ? "http://127.0.0.1:8000/api"
   : (import.meta.env.VITE_API_BASE_URL ?? "/api");
 
