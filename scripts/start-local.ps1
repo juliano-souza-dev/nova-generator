@@ -43,6 +43,7 @@ function Initialize-GlobalResources {
     $env:NOVA_GENERATOR_QWEN_MODEL_ROOT = Join-Path $ModelRoot "qwen3-tts"
     $env:NOVA_GENERATOR_QWEN_VENV_ROOT = $QwenVenv
     $env:PIP_CACHE_DIR = Join-Path $CacheRoot "pip"
+    $env:npm_config_cache = Join-Path $CacheRoot "npm"
     $env:TORCH_HOME = Join-Path $CacheRoot "torch"
 
     if (-not $env:HF_HOME) {
@@ -66,7 +67,8 @@ function Initialize-GlobalResources {
 
     New-Item -ItemType Directory -Force -Path @(
         $GlobalRoot, $RuntimeRoot, $ModelRoot, $CacheRoot,
-        (Join-Path $CacheRoot "pip"), (Join-Path $CacheRoot "torch"),
+        (Join-Path $CacheRoot "pip"), (Join-Path $CacheRoot "npm"),
+        (Join-Path $CacheRoot "torch"),
         $env:HF_HOME, $env:HF_HUB_CACHE,
         $env:NOVA_GENERATOR_WHISPER_MODEL_ROOT,
         $env:NOVA_GENERATOR_CHATTERBOX_MODEL_ROOT,
@@ -344,6 +346,9 @@ function Ensure-Frontend {
             Set-Content -LiteralPath $stamp -Value $expected -Encoding ASCII
             $globalExists = $true
         } catch {
+            if ((Test-Path -LiteralPath $FrontendModules) -and -not (Test-ReparsePoint $FrontendModules)) {
+                Remove-Item -LiteralPath $FrontendModules -Recurse -Force
+            }
             if (-not (Test-Path -LiteralPath $GlobalFrontendModules) -and (Test-Path -LiteralPath $backup)) {
                 Move-Item -LiteralPath $backup -Destination $GlobalFrontendModules
             }

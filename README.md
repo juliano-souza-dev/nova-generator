@@ -6,8 +6,8 @@ Nova Generator é a reestruturação do sistema de produção de conteúdo para 
 
 Dê duplo clique em **`INICIAR.bat`**, na raiz do projeto. O inicializador prepara Python,
 backend/ASR, Chatterbox, Qwen3-TTS (VoiceDesign e Base), frontend e banco de dados.
-Executáveis instalados pelo Winget, ambientes Python, modelos e caches ficam fora do
-repositório, por padrão em `%LOCALAPPDATA%\\NovaGenerator`; o inicializador reaproveita
+Executáveis instalados pelo Winget, ambientes Python, dependências npm, modelos e caches
+ficam fora do repositório, por padrão em `%LOCALAPPDATA%\\NovaGenerator`; o inicializador reaproveita
 instalações existentes e migra diretórios legados apenas quando o destino global está vazio.
 **API,
 worker e interface só são iniciados depois que todas as dependências e os modelos obrigatórios
