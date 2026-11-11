@@ -15,14 +15,14 @@ A partir da raiz do repositório:
 
 ```powershell
 npm ci --prefix frontend
-npm install --prefix desktop
+Set-Location desktop`nnpm install
 New-Item -ItemType Directory -Force desktop/src-tauri/resources/python | Out-Null
 python -m pip wheel --no-deps . --wheel-dir desktop/src-tauri/resources/python
 New-Item -ItemType Directory -Force desktop/src-tauri/resources/backend | Out-Null
 Copy-Item alembic.ini desktop/src-tauri/resources/backend/alembic.ini
 Copy-Item migrations desktop/src-tauri/resources/backend/migrations -Recurse
 Compress-Archive -Path desktop/src-tauri/resources/backend/* -DestinationPath desktop/src-tauri/resources/backend-assets.zip -Force
-npm run tauri --prefix desktop -- dev
+npm run tauri -- dev
 ```
 
 ## Instalador Windows
