@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from nova_generator.api.routes.cards_only import router as cards_only_router
 from nova_generator.api.routes.editorial import router as editorial_router
@@ -32,6 +33,17 @@ def create_app() -> FastAPI:
     settings = get_settings()
     logger = configure_json_logging()
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://tauri.localhost",
+            "https://tauri.localhost",
+            "tauri://localhost",
+        ],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.middleware("http")
     async def correlate_request(request: Request, call_next):
