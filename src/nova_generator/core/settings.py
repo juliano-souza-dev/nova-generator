@@ -38,12 +38,22 @@ class Settings(BaseSettings):
     media_cache_root: Path = Path("media_cache")
     project_root: Path = Path("data/projects")
     whisper_model: str = "small"
-    whisper_model_root: Path = Field(default_factory=lambda: _global_resource_path("models", "whisper"))
-    chatterbox_model_root: Path = Field(default_factory=lambda: _global_resource_path("models", "chatterbox"))
+    whisper_model_root: Path = Field(
+        default_factory=lambda: _global_resource_path("models", "whisper")
+    )
+    chatterbox_model_root: Path = Field(
+        default_factory=lambda: _global_resource_path("models", "chatterbox")
+    )
     chatterbox_model_file: Path | None = None
-    qwen_model_root: Path = Field(default_factory=lambda: _global_resource_path("models", "qwen3-tts"))
-    qwen_venv_root: Path = Field(default_factory=lambda: _global_resource_path("environments", "qwen"))
-    huggingface_cache_root: Path = Field(default_factory=lambda: _global_resource_path("cache", "huggingface"))
+    qwen_model_root: Path = Field(
+        default_factory=lambda: _global_resource_path("models", "qwen3-tts")
+    )
+    qwen_venv_root: Path = Field(
+        default_factory=lambda: _global_resource_path("environments", "qwen")
+    )
+    huggingface_cache_root: Path = Field(
+        default_factory=lambda: _global_resource_path("cache", "huggingface")
+    )
     qwen_tts_python: str | None = None
     ffmpeg_executable: str = "ffmpeg"
     ffprobe_executable: str = "ffprobe"
