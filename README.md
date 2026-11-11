@@ -35,7 +35,8 @@ com o identificador `nova-generator` e informe o caminho absoluto desta pasta. O
 cria o manifesto e mantém os caminhos dos recursos compartilhados vinculados à aplicação.
 
 Na inicialização, `scripts/start-local.ps1` lê o manifesto e direciona os modelos Whisper,
-Chatterbox e Qwen3-TTS, o cache compartilhado e o ambiente Qwen para os diretórios declarados.
+Chatterbox e Qwen3-TTS, o cache compartilhado e os ambientes Chatterbox e Qwen para os
+diretórios declarados.
 Quando FFmpeg ou SoX estiverem vinculados à aplicação no Shared Runtime, o inicializador usa
 essas instalações em vez de procurar cópias locais ou instalar outra versão. Sem manifesto,
 o comportamento anterior é preservado.
