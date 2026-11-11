@@ -16,6 +16,7 @@
     "frontendDist": "../../frontend/dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Nova Generator",
@@ -34,6 +35,9 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "msi"],
+    "resources": {
+      "resources/python/": "python/"
+    },
     "shortDescription": "Estúdio de criação e edição multimídia com IA",
     "category": "Multimedia",
     "icon": []
