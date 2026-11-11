@@ -4,9 +4,15 @@
   "version": "0.1.0",
   "identifier": "com.julianosouza.novagenerator",
   "build": {
-    "beforeDevCommand": "npm run dev --prefix ../frontend",
+    "beforeDevCommand": {
+      "script": "npm run dev -- --host 127.0.0.1 --port 5173",
+      "cwd": "../../frontend"
+    },
     "devUrl": "http://127.0.0.1:5173",
-    "beforeBuildCommand": "npm run build --prefix ../frontend",
+    "beforeBuildCommand": {
+      "script": "npm run build",
+      "cwd": "../../frontend"
+    },
     "frontendDist": "../../frontend/dist"
   },
   "app": {
