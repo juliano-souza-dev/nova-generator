@@ -19,13 +19,25 @@ $GlobalRoot = if ($env:NOVA_GENERATOR_HOME) {
 } else {
     Join-Path $env:USERPROFILE "AppData\Local\NovaGenerator"
 }
+$SharedConfigPath = Join-Path $ProjectRoot "shared.config.json"
+$SharedConfig = $null
+if (Test-Path -LiteralPath $SharedConfigPath) {
+    try {
+        $SharedConfig = Get-Content -LiteralPath $SharedConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+        throw "O arquivo shared.config.json existe, mas não contém uma configuração válida: $($_.Exception.Message)"
+    }
+    if ($SharedConfig.schemaVersion -ne "1.0" -or $SharedConfig.application.id -ne "nova-generator" -or -not $SharedConfig.shared.enabled) {
+        throw "O shared.config.json não corresponde a uma conexão ativa do Nova Generator. Confira o cadastro no Shared Runtime Manager."
+    }
+}
 $RuntimeRoot = Join-Path $GlobalRoot "registry"
 $LogRoot = Join-Path $ProjectRoot "data\logs"
 $BackendVenv = Join-Path $GlobalRoot "environments\backend"
 $TtsVenv = Join-Path $GlobalRoot "environments\chatterbox"
-$QwenVenv = Join-Path $GlobalRoot "environments\qwen"
-$ModelRoot = Join-Path $GlobalRoot "models"
-$CacheRoot = Join-Path $GlobalRoot "cache"
+$QwenVenv = if ($SharedConfig) { Join-Path $SharedConfig.shared.directories.runtimes "qwen" } else { Join-Path $GlobalRoot "environments\qwen" }
+$ModelRoot = if ($SharedConfig) { $SharedConfig.shared.directories.models } else { Join-Path $GlobalRoot "models" }
+$CacheRoot = if ($SharedConfig) { $SharedConfig.shared.directories.cache } else { Join-Path $GlobalRoot "cache" }
 $GlobalFrontendModules = Join-Path $GlobalRoot "environments\node\frontend-node_modules"
 $FrontendModules = Join-Path $FrontendRoot "node_modules"
 $BackendPython = Join-Path $BackendVenv "Scripts\python.exe"
@@ -42,6 +54,25 @@ function Initialize-GlobalResources {
     $env:NOVA_GENERATOR_CHATTERBOX_MODEL_ROOT = Join-Path $ModelRoot "chatterbox"
     $env:NOVA_GENERATOR_QWEN_MODEL_ROOT = Join-Path $ModelRoot "qwen3-tts"
     $env:NOVA_GENERATOR_QWEN_VENV_ROOT = $QwenVenv
+    $env:NOVA_GENERATOR_MEDIA_CACHE_ROOT = Join-Path $CacheRoot "nova-generator-media"
+    if ($SharedConfig -and $SharedConfig.shared.resources.ffmpeg) {
+        $sharedFfmpeg = $SharedConfig.shared.resources.ffmpeg
+        $ffmpegExecutable = Join-Path $sharedFfmpeg "ffmpeg.exe"
+        $ffprobeExecutable = Join-Path $sharedFfmpeg "ffprobe.exe"
+        if (-not (Test-Path -LiteralPath $ffmpegExecutable) -or -not (Test-Path -LiteralPath $ffprobeExecutable)) {
+            throw "FFmpeg foi vinculado no Shared, mas ffmpeg.exe/ffprobe.exe não foram encontrados em $sharedFfmpeg."
+        }
+        $env:NOVA_GENERATOR_FFMPEG_EXECUTABLE = $ffmpegExecutable
+        $env:NOVA_GENERATOR_FFPROBE_EXECUTABLE = $ffprobeExecutable
+        $env:Path = "$sharedFfmpeg;$env:Path"
+    }
+    if ($SharedConfig -and $SharedConfig.shared.resources.sox) {
+        $sharedSox = $SharedConfig.shared.resources.sox
+        if (-not (Test-Path -LiteralPath (Join-Path $sharedSox "sox.exe"))) {
+            throw "SoX foi vinculado no Shared, mas sox.exe não foi encontrado em $sharedSox."
+        }
+        $env:Path = "$sharedSox;$env:Path"
+    }
     $env:PIP_CACHE_DIR = Join-Path $CacheRoot "pip"
     $env:npm_config_cache = Join-Path $CacheRoot "npm"
     $env:TORCH_HOME = Join-Path $CacheRoot "torch"
