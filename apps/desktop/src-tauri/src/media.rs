@@ -126,7 +126,7 @@ fn inspect(s: &Shared, raw: &str) -> Result<YoutubeInspection, String> {
         thumbnail: v.get("thumbnail").and_then(Value::as_str).map(str::to_string), qualities
     })
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Progress { project_id: String, status: String, percent: f32, message: String }
 
