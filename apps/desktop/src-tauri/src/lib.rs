@@ -129,7 +129,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             list_projects, create_project, duplicate_project, delete_project, update_project_status,
-            media::inspect_youtube, media::prepare_youtube_cache, media::list_project_media,
+            media::inspect_youtube, media::prepare_youtube_cache, media::authorize_youtube_preview, media::list_project_media,
             media::import_media_files, media::trim_youtube_cache,
             shared_runtime::get_shared_runtime_status
         ])
