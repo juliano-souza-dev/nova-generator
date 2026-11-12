@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import MediaWorkspace from "./features/media/MediaWorkspace";
 import { invoke } from "@tauri-apps/api/core";
 import {
   ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy,
@@ -117,11 +118,7 @@ export default function App() {
           <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <div className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></div>; })}</div>
           <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {activeProject.stage}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
         </section>
-        <section className="workspace-empty">
-          <div className="empty-orbit"><Sparkles size={24}/></div>
-          <h2>Seu espaço de trabalho</h2>
-          <p>O projeto está criado e salvo localmente. As ferramentas específicas de criação serão abertas aqui, mantendo o foco no conteúdo e liberando espaço para trabalhar.</p>
-        </section>
+        <MediaWorkspace projectId={activeProject.id} />
       </main>
     </div>;
   }
