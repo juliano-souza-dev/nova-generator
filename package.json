@@ -9,6 +9,7 @@
     "build": "npm run tauri --workspace @nova-generator/desktop -- build",
     "dev": "node scripts/start-dev.mjs",
     "build-web": "npm run build --workspace @nova-generator/desktop",
-    "tauri": "npm run tauri --workspace @nova-generator/desktop"
+    "tauri": "npm run tauri --workspace @nova-generator/desktop",
+    "shared:init": "node scripts/prepare-shared-config.mjs"
   }
 }

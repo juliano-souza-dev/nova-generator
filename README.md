@@ -13,6 +13,16 @@ Node.js, npm e Rust estável são necessários para construir a aplicação. Rec
 
 O Nova Generator consome o vínculo local `shared.config.json`, provisionado pelo Shared Runtime Manager. Esse arquivo é específico da instalação e permanece fora do Git.
 
+### Preparar o vínculo
+
+Na raiz do repositório, execute uma vez:
+
+```bash
+npm run shared:init
+```
+
+O comando cria `shared.config.json` a partir de `shared.config.example.json`, mas nunca sobrescreve um arquivo existente. Depois, registre o diretório do Nova Generator no Shared Runtime Manager e sincronize suas dependências. O Shared preserva as declarações de dependências e provedores e provisiona os caminhos resolvidos.
+
 - O identificador registrado da aplicação é `nova-generator`.
 - Dependências e provedores permitidos são declarados pelo Nova; caminhos resolvidos e provedores autorizados são provisionados pelo Shared.
 - O diretório global de vídeos originais é lido exclusivamente de `shared.directories.mediaShared`.
@@ -20,6 +30,6 @@ O Nova Generator consome o vínculo local `shared.config.json`, provisionado pel
 - Endpoints, modelos e credenciais autorizadas são lidos pelo SDK Rust oficial `shared-runtime-manager`. Credenciais descriptografadas permanecem no backend nativo e nunca são enviadas ao React.
 - O Shared Runtime Manager não precisa permanecer aberto depois de provisionar/sincronizar o vínculo.
 
-Para configurar uma instalação, registre o Nova Generator no Shared Runtime Manager usando o diretório da aplicação e sincronize suas dependências. Para provedores de API, autorize a aplicação no provedor desejado e sincronize novamente.
+Para provedores de API, autorize o Nova Generator no provedor desejado pelo Shared Runtime Manager e sincronize novamente a aplicação. Em uma instalação distribuída, o Shared deve ser vinculado ao diretório de instalação do aplicativo para provisionar o arquivo local nesse ambiente.
 
 Consulte `ARCHITECTURE.md` antes de introduzir novas funcionalidades.
