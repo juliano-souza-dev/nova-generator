@@ -1,5 +1,132 @@
+use serde::{Deserialize, Serialize};
+use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+use tauri::Manager;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Project {
+    id: String,
+    name: String,
+    status: String,
+    stage: String,
+    created_at: String,
+    updated_at: String,
+}
+
+fn projects_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let mut dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    dir.push("projects.json");
+    Ok(dir)
+}
+
+fn read_projects(app: &tauri::AppHandle) -> Result<Vec<Project>, String> {
+    let path = projects_file(app)?;
+    if !path.exists() { return Ok(Vec::new()); }
+    let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    if content.trim().is_empty() { return Ok(Vec::new()); }
+    serde_json::from_str(&content).map_err(|e| format!("Não foi possível ler a lista de projetos: {e}"))
+}
+
+fn write_projects(app: &tauri::AppHandle, projects: &[Project]) -> Result<(), String> {
+    let path = projects_file(app)?;
+    let content = serde_json::to_string_pretty(projects).map_err(|e| e.to_string())?;
+    fs::write(path, content).map_err(|e| format!("Não foi possível salvar os projetos: {e}"))
+}
+
+fn now() -> String {
+    let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let millis = duration.as_millis();
+    let seconds = (millis / 1000) as i64;
+    let days = seconds / 86400;
+    let day_seconds = seconds % 86400;
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+    let mut year = yoe + era * 400;
+    let doy = doe - (365*yoe + yoe/4 - yoe/100);
+    let mp = (5*doy + 2)/153;
+    let day = doy - (153*mp+2)/5 + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    year += if month <= 2 { 1 } else { 0 };
+    let hour = day_seconds / 3600;
+    let minute = (day_seconds % 3600) / 60;
+    let second = day_seconds % 60;
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{:03}Z", millis % 1000)
+}
+
+fn new_id() -> String {
+    let n = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    format!("{:032x}", n)
+}
+
+#[tauri::command]
+fn list_projects(app: tauri::AppHandle) -> Result<Vec<Project>, String> {
+    let mut projects = read_projects(&app)?;
+    projects.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    Ok(projects)
+}
+
+#[tauri::command]
+fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String> {
+    let name = name.trim();
+    if name.is_empty() { return Err("Informe um nome para o projeto.".into()); }
+    if name.chars().count() > 80 { return Err("O nome deve ter no máximo 80 caracteres.".into()); }
+    let timestamp = now();
+    let project = Project {
+        id: new_id(), name: name.to_string(), status: "in_progress".into(),
+        stage: "Planejamento".into(), created_at: timestamp.clone(), updated_at: timestamp,
+    };
+    let mut projects = read_projects(&app)?;
+    projects.push(project.clone());
+    write_projects(&app, &projects)?;
+    Ok(project)
+}
+
+#[tauri::command]
+fn duplicate_project(app: tauri::AppHandle, id: String) -> Result<Project, String> {
+    let mut projects = read_projects(&app)?;
+    let original = projects.iter().find(|p| p.id == id).cloned().ok_or("Projeto não encontrado.")?;
+    let timestamp = now();
+    let copy = Project {
+        id: new_id(), name: format!("{} (cópia)", original.name),
+        status: "in_progress".into(), stage: "Planejamento".into(),
+        created_at: timestamp.clone(), updated_at: timestamp,
+    };
+    projects.push(copy.clone());
+    write_projects(&app, &projects)?;
+    Ok(copy)
+}
+
+#[tauri::command]
+fn delete_project(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let mut projects = read_projects(&app)?;
+    let previous = projects.len();
+    projects.retain(|p| p.id != id);
+    if projects.len() == previous { return Err("Projeto não encontrado.".into()); }
+    write_projects(&app, &projects)
+}
+
+#[tauri::command]
+fn update_project_status(app: tauri::AppHandle, id: String, status: String) -> Result<Project, String> {
+    if status != "in_progress" && status != "completed" {
+        return Err("Status de projeto inválido.".into());
+    }
+    let mut projects = read_projects(&app)?;
+    let project = projects.iter_mut().find(|p| p.id == id).ok_or("Projeto não encontrado.")?;
+    project.status = status;
+    project.updated_at = now();
+    let updated = project.clone();
+    write_projects(&app, &projects)?;
+    Ok(updated)
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            list_projects, create_project, duplicate_project, delete_project, update_project_status
+        ])
         .run(tauri::generate_context!())
         .expect("failed to run Nova Generator");
 }
