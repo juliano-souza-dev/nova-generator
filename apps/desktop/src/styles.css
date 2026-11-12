@@ -59,3 +59,6 @@
 .media-asset-info small{font-size:9px;color:#898491;margin-top:4px}
 .media-asset-state{display:flex;align-items:center;gap:5px;font-size:9px;color:#8dcba1}
 @media(max-width:900px){.youtube-inspection{flex-wrap:wrap}.youtube-info{min-width:55%}.trim-fields{flex-wrap:wrap}.media-section-heading{align-items:flex-start}.media-section-heading .primary-button{white-space:nowrap}}
+
+@keyframes media-progress-slide{0%{transform:translateX(-110%)}100%{transform:translateX(320%)}}
+.media-progress>i span{width:28%;animation:media-progress-slide 1.35s ease-in-out infinite}
