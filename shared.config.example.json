@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "1.0",
+  "application": {
+    "id": "nova-generator",
+    "name": "Nova Generator"
+  },
+  "shared": {
+    "enabled": true,
+    "dependencies": [
+      {
+        "id": "ffmpeg",
+        "required": true
+      },
+      {
+        "id": "yt-dlp",
+        "required": true
+      },
+      {
+        "id": "ffprobe",
+        "required": true
+      },
+      {
+        "id": "python",
+        "required": true
+      },
+      {
+        "id": "faster-whisper",
+        "required": false,
+        "version": ">=1.1,<2"
+      },
+      {
+        "id": "pyav",
+        "required": false,
+        "version": ">=11,<19"
+      },
+      {
+        "id": "whisper-models",
+        "required": false
+      }
+    ],
+    "providers": [
+      {
+        "id": "groq",
+        "required": false
+      }
+    ],
+    "resources": {}
+  }
+}
