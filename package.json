@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "workspaces": ["apps/desktop"],
   "scripts": {
-    "start-dev": "npm run tauri --workspace @nova-generator/desktop -- dev",
+    "start-dev": "node scripts/start-dev.mjs",
     "build": "npm run tauri --workspace @nova-generator/desktop -- build",
     "dev": "npm run dev --workspace @nova-generator/desktop",
     "build-web": "npm run build --workspace @nova-generator/desktop",

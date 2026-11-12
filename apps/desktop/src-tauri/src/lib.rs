@@ -121,26 +121,11 @@ fn update_project_status(app: tauri::AppHandle, id: String, status: String) -> R
     Ok(updated)
 }
 
-#[tauri::command]
-fn update_project_stage(app: tauri::AppHandle, id: String, stage: String) -> Result<Project, String> {
-    let allowed = ["Planejamento", "Editorial", "Transcrição", "Tradução", "Materiais", "Exportação"];
-    if !allowed.contains(&stage.as_str()) {
-        return Err("Etapa de projeto inválida.".into());
-    }
-    let mut projects = read_projects(&app)?;
-    let project = projects.iter_mut().find(|p| p.id == id).ok_or("Projeto não encontrado.")?;
-    project.stage = stage;
-    project.updated_at = now();
-    let updated = project.clone();
-    write_projects(&app, &projects)?;
-    Ok(updated)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            list_projects, create_project, duplicate_project, delete_project, update_project_status, update_project_stage
+            list_projects, create_project, duplicate_project, delete_project, update_project_status
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Nova Generator");

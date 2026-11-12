@@ -84,14 +84,6 @@ export default function App() {
       await refreshProjects();
     } catch (e) { setError(String(e)); }
   }
-  async function updateStage(stage: string) {
-    if (!activeProject) return;
-    try {
-      const updated = await invoke<Project>("update_project_stage", { id: activeProject.id, stage });
-      setActiveProject(updated);
-      await refreshProjects();
-    } catch (e) { setError(String(e)); }
-  }
   async function toggleStatus(project: Project) {
     const status: ProjectStatus = project.status === "completed" ? "in_progress" : "completed";
     try {
@@ -122,7 +114,7 @@ export default function App() {
         </div>
         <section className="stage-panel">
           <div className="panel-heading"><div><span className="eyebrow">ACOMPANHAMENTO</span><h2>Etapas do projeto</h2></div><span className="stage-count">{currentStage + 1} de {stages.length}</span></div>
-          <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <button type="button" className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage} onClick={() => void updateStage(stage)} title={"Definir etapa: " + stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></button>; })}</div>
+          <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <div className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></div>; })}</div>
           <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {activeProject.stage}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
         </section>
         <section className="workspace-empty">
