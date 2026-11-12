@@ -1,3 +1,4 @@
+mod media;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 use tauri::Manager;
@@ -124,8 +125,11 @@ fn update_project_status(app: tauri::AppHandle, id: String, status: String) -> R
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            list_projects, create_project, duplicate_project, delete_project, update_project_status
+            list_projects, create_project, duplicate_project, delete_project, update_project_status,
+            media::inspect_youtube, media::prepare_youtube_cache, media::list_project_media,
+            media::import_media_files, media::trim_youtube_cache
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Nova Generator");
