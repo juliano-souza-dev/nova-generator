@@ -1,0 +1,41 @@
+import { useCallback, useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
+import { CheckCircle2, FileImage, Film, FolderInput, LoaderCircle, Music2, Scissors, Video, X } from "lucide-react";
+
+type Asset = { id:string; name:string; kind:string; sizeBytes:number; source:string; sourceVideoId?:string|null; sourceStartMs?:number|null; sourceEndMs?:number|null };
+type Inspection = { videoId:string; url:string; title:string; channel?:string|null; durationMs?:number|null; thumbnail?:string|null; qualities:number[] };
+type Cache = { videoId:string; title:string; durationMs?:number|null; reused:boolean };
+type Progress = { projectId:string; status:string; percent:number; message:string };
+const time = (ms?:number|null) => ms == null ? "--:--" : \`\${Math.floor(ms/60000).toString().padStart(2,"0")}:\${Math.floor(ms/1000%60).toString().padStart(2,"0")}\`;
+const size = (n:number) => n < 1048576 ? \`\${Math.round(n/1024)} KB\` : \`\${(n/1048576).toFixed(1)} MB\`;
+
+export default function MediaWorkspace({projectId}:{projectId:string}) {
+ const [assets,setAssets]=useState<Asset[]>([]),[url,setUrl]=useState(""),[info,setInfo]=useState<Inspection|null>(null),[cache,setCache]=useState<Cache|null>(null);
+ const [quality,setQuality]=useState(1080),[start,setStart]=useState(0),[end,setEnd]=useState(0),[busy,setBusy]=useState(false);
+ const [error,setError]=useState(""),[notice,setNotice]=useState(""),[progress,setProgress]=useState<Progress|null>(null);
+ const refresh=useCallback(async()=>{try{setAssets(await invoke<Asset[]>("list_project_media",{projectId}));}catch(e){setError(String(e));}},[projectId]);
+ useEffect(()=>{void refresh();},[refresh]);
+ useEffect(()=>{let stop:(()=>void)|undefined;listen<Progress>("media-task-progress",e=>{if(e.payload.projectId===projectId)setProgress(e.payload);}).then(fn=>stop=fn);return()=>stop?.();},[projectId]);
+ async function importLocal(){
+  setError(""); const selected=await open({multiple:true,directory:false,title:"Importar mídias",filters:[{name:"Mídias",extensions:["mp4","mov","mkv","webm","mp3","wav","m4a","aac","ogg","flac","jpg","jpeg","png","webp","gif"]}]});
+  if(!selected)return;setBusy(true);try{const paths=Array.isArray(selected)?selected:[selected];const result=await invoke<Asset[]>("import_media_files",{projectId,paths});setAssets(v=>[...result,...v]);setNotice(\`\${result.length} mídia(s) importada(s).\`);}catch(e){setError(String(e));}finally{setBusy(false);}
+ }
+ async function inspectYoutube(){if(!url.trim()||busy)return;setBusy(true);setError("");setInfo(null);setCache(null);try{const v=await invoke<Inspection>("inspect_youtube",{url});setInfo(v);setQuality(v.qualities.find(h=>h<=1080)??v.qualities[0]??0);}catch(e){setError(String(e));}finally{setBusy(false);}}
+ async function download(){if(!info||busy)return;setBusy(true);setError("");setProgress({projectId,status:"running",percent:1,message:"Verificando a biblioteca compartilhada..."});try{const c=await invoke<Cache>("prepare_youtube_cache",{projectId,url:info.url,maxHeight:quality});setCache(c);setStart(0);setEnd((c.durationMs??info.durationMs??0)/1000);setNotice(c.reused?"Vídeo original reutilizado da biblioteca compartilhada.":"Download concluído. O original foi preservado.");}catch(e){setError(String(e));}finally{setBusy(false);}}
+ async function createClip(){if(!cache||busy)return;setBusy(true);setError("");try{const asset=await invoke<Asset>("trim_youtube_cache",{projectId,videoId:cache.videoId,startMs:Math.round(start*1000),endMs:Math.round(end*1000)});setAssets(v=>[asset,...v]);setNotice("Trecho adicionado ao projeto. O original permanece na biblioteca compartilhada.");setCache(null);setInfo(null);setUrl("");setProgress({projectId,status:"completed",percent:100,message:"Importação concluída."});}catch(e){setError(String(e));}finally{setBusy(false);}}
+ return <section className="media-workspace">
+  <div className="media-section-heading"><div><span className="eyebrow">BIBLIOTECA DO PROJETO</span><h2>Mídias</h2><p>Importe arquivos locais ou baixe um vídeo para selecionar um trecho.</p></div><button className="primary-button" onClick={()=>void importLocal()} disabled={busy}><FolderInput size={16}/> Importar mídias</button></div>
+  {error&&<div className="media-feedback error">{error}<button onClick={()=>setError("")}><X size={14}/></button></div>}
+  {notice&&<div className="media-feedback success"><CheckCircle2 size={15}/>{notice}<button onClick={()=>setNotice("")}><X size={14}/></button></div>}
+  <div className="media-youtube-panel"><div className="media-panel-title"><span className="media-icon"><Video size={17}/></span><div><strong>Importar do YouTube</strong><small>O vídeo original fica na biblioteca compartilhada do Shared Runtime.</small></div></div>
+   <div className="youtube-url-row"><input value={url} onChange={e=>setUrl(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")void inspectYoutube();}} placeholder="Cole o link do YouTube"/><button className="secondary-button" disabled={!url.trim()||busy} onClick={()=>void inspectYoutube()}>Consultar vídeo</button></div>
+   {info&&!cache&&<div className="youtube-inspection">{info.thumbnail&&<img src={info.thumbnail} alt=""/>}<div className="youtube-info"><strong>{info.title}</strong><span>{info.channel??"Canal"} · {time(info.durationMs)}</span></div><label>Qualidade <select value={quality} onChange={e=>setQuality(Number(e.target.value))}><option value={0}>Melhor disponível</option>{info.qualities.map(h=><option key={h} value={h}>{h}p</option>)}</select></label><button className="primary-button" disabled={busy} onClick={()=>void download()}><Video size={15}/> Baixar / reutilizar</button></div>}
+   {cache&&<div className="youtube-trim"><div className="trim-header"><div><span className="eyebrow">SELEÇÃO DO TRECHO</span><strong>{cache.title}</strong><small>{cache.reused?"Original reutilizado":"Original recém-baixado"}</small></div><button className="icon-button" onClick={()=>setCache(null)}><X size={16}/></button></div><div className="trim-fields"><label>Início (s)<input type="number" min="0" step=".1" value={start} onChange={e=>setStart(Number(e.target.value))}/></label><label>Fim (s)<input type="number" min="0" step=".1" value={end} onChange={e=>setEnd(Number(e.target.value))}/></label><span>Trecho: {time((end-start)*1000)}</span></div><div className="trim-range"><input aria-label="Início" type="range" min="0" max={(cache.durationMs??0)/1000} step=".1" value={start} onChange={e=>setStart(Math.min(Number(e.target.value),end-.3))}/><input aria-label="Fim" type="range" min="0" max={(cache.durationMs??0)/1000} step=".1" value={end} onChange={e=>setEnd(Math.max(Number(e.target.value),start+.3))}/></div><button className="primary-button" disabled={busy||end-start<.3} onClick={()=>void createClip()}><Scissors size={15}/> Criar trecho no projeto</button></div>}
+   {progress?.status==="running"&&<div className="media-progress"><div><LoaderCircle className="spin" size={14}/><span>{progress.message}</span><b>{Math.round(progress.percent)}%</b></div><i><span style={{width:\`\${progress.percent}%\`}}/></i></div>}
+  </div>
+  <div className="media-library-heading"><div><span className="eyebrow">ARQUIVOS VINCULADOS</span><h3>Conteúdo do projeto <small>{assets.length}</small></h3></div></div>
+  {!assets.length?<div className="media-empty"><div><Film size={23}/></div><strong>Nenhuma mídia neste projeto</strong><span>Importe um arquivo local ou consulte um vídeo do YouTube.</span></div>:<div className="media-asset-list">{assets.map(a=><article className="media-asset" key={a.id}><span className="media-asset-icon">{a.kind==="video"?<Film size={17}/>:a.kind==="audio"?<Music2 size={17}/>:<FileImage size={17}/>}</span><div className="media-asset-info"><strong>{a.name}</strong><small>{a.kind.toUpperCase()} · {size(a.sizeBytes)} · {a.source==="youtube"?"YouTube":"Arquivo local"}</small>{a.sourceVideoId&&<small>Trecho {time(a.sourceStartMs)}–{time(a.sourceEndMs)} · ID {a.sourceVideoId}</small>}</div><span className="media-asset-state"><CheckCircle2 size={14}/> Importada</span></article>)}</div>}
+ </section>;
+}
