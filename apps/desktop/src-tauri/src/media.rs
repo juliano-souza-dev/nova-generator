@@ -88,6 +88,9 @@ fn shared(app: &AppHandle) -> Result<Shared, String> {
        config.pointer("/shared/enabled").and_then(Value::as_bool) != Some(true) {
         return Err("O vínculo Shared Runtime está ausente, desativado ou incompatível. Sincronize o Nova Generator pelo Shared Runtime Manager.".into());
     }
+    if config.pointer("/application/id").and_then(Value::as_str) != Some("nova-generator") {
+        return Err("O shared.config.json não pertence ao Nova Generator. Verifique o vínculo no Shared Runtime Manager.".into());
+    }
     let media = config.pointer("/shared/directories/mediaShared").and_then(Value::as_str)
         .ok_or("O Shared Runtime não forneceu shared.directories.mediaShared. Sincronize o vínculo desta aplicação.")?;
     let media = PathBuf::from(media);
