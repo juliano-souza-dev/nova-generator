@@ -12,11 +12,11 @@ async function recordFailure(command, label, exitCode, output, error) {
   const entry = [
     "",
     "=".repeat(90),
-    \`DATA: \${timestamp}\`,
-    \`ETAPA: \${label}\`,
-    \`COMANDO: \${command}\`,
-    \`CÓDIGO DE SAÍDA: \${exitCode ?? "não iniciado"}\`,
-    \`ERRO: \${error?.stack ?? error?.message ?? String(error)}\`,
+    "DATA: " + timestamp,
+    "ETAPA: " + label,
+    "COMANDO: " + command,
+    "CÓDIGO DE SAÍDA: " + (exitCode ?? "não iniciado"),
+    "ERRO: " + (error?.stack ?? error?.message ?? String(error)),
     "",
     "SAÍDA DO PROCESSO:",
     output || "(sem saída capturada)",
@@ -49,6 +49,7 @@ async function run(command, args, label) {
     });
 
     let output = "";
+    let settled = false;
     const capture = chunk => {
       const value = chunk.toString();
       process.stdout.write(value);
@@ -63,16 +64,20 @@ async function run(command, args, label) {
     child.stdout.on("data", capture);
     child.stderr.on("data", captureError);
     child.once("error", async error => {
+      if (settled) return;
+      settled = true;
       await recordFailure(printable, label, null, output, error);
       reject(error);
     });
     child.once("close", async (code, signal) => {
+      if (settled) return;
+      settled = true;
       if (code === 0) {
         resolve();
         return;
       }
       const error = new Error(
-        \`\${label} falhou. Código: \${code ?? "indisponível"}; sinal: \${signal ?? "nenhum"}.\`
+        label + " falhou. Código: " + (code ?? "indisponível") + "; sinal: " + (signal ?? "nenhum") + "."
       );
       await recordFailure(printable, label, code, output, error);
       reject(error);
@@ -83,11 +88,6 @@ async function run(command, args, label) {
 async function main() {
   try {
     await access(path.join(root, "package.json"));
-  } catch {
-    throw new Error("Execute este comando na raiz do repositório Nova Generator.");
-  }
-
-  try {
     await run("git", ["switch", "main"], "1/4 · Selecionando a branch principal");
     await run("git", ["pull", "--ff-only", "origin", "main"], "2/4 · Atualizando o código do GitHub");
     await run("npm", ["install", "--no-audit", "--no-fund", "--no-package-lock"], "3/4 · Preparando dependências");
@@ -100,6 +100,9 @@ async function main() {
       "Inicializando o aplicativo desktop"
     );
   } catch (error) {
+    if (error.message.startsWith("Execute este comando")) {
+      await recordFailure("npm run start-dev", "Validação da pasta do projeto", null, "", error);
+    }
     console.error("\nInicialização interrompida:", error.message);
     process.exitCode = 1;
   }
