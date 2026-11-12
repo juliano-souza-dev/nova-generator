@@ -141,7 +141,7 @@ pub async fn prepare_youtube_cache(app: AppHandle, project_id: String, url: Stri
         send("running", 2.0, "Consultando o vídeo e verificando a biblioteca compartilhada...");
         let s = shared(&app)?;
         let info = inspect(&s, &url)?;
-        fs::create_dir_all(&s.media).map_err(|e| format!("Não foi possível acessar mediaShared: {e}"))?;
+        if !s.media.is_dir() { return Err("O Shared Runtime informou mediaShared, mas a pasta ainda não existe. Abra o Shared Runtime Manager e sincronize a aplicação.".into()); }
         let video = s.media.join(format!("{}.mp4", info.video_id));
         let manifest = s.media.join(format!("{}.json", info.video_id));
         let reused = video.is_file() && fs::metadata(&video).map(|m| m.len() > 0).unwrap_or(false);
