@@ -1,4 +1,5 @@
 mod media;
+mod shared_runtime;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 use tauri::Manager;
@@ -129,7 +130,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_projects, create_project, duplicate_project, delete_project, update_project_status,
             media::inspect_youtube, media::prepare_youtube_cache, media::list_project_media,
-            media::import_media_files, media::trim_youtube_cache
+            media::import_media_files, media::trim_youtube_cache,
+            shared_runtime::get_shared_runtime_status
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Nova Generator");

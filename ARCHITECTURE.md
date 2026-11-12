@@ -11,7 +11,7 @@ O Nova Generator é um monólito desktop modular. A modularização organiza o c
 5. Serviços de aplicação orquestram casos de uso.
 6. Infraestrutura implementa persistência, sistema de arquivos, processos e integrações externas.
 7. Arquivos originais nunca são sobrescritos.
-8. Segredos nunca entram em projetos, configurações locais, logs ou argumentos de processo.
+8. Segredos nunca entram em projetos, configurações próprias da aplicação, logs ou argumentos de processo.
 
 ## Direção das dependências
 
@@ -32,20 +32,17 @@ A estrutura será criada progressivamente. Não criaremos arquivos vazios para s
 
 ## Shared Runtime Manager
 
-O Shared é a fonte central para dependências de execução, ferramentas, runtimes, armazenamento de modelos e configuração de provedores autorizados.
+O Shared Runtime Manager é a fonte central para dependências de execução, ferramentas, modelos, diretórios globais e configuração de provedores autorizados.
 
-- O projeto declara necessidades em shared.config.json.
-- Caminhos são lidos da configuração gerada pelo Shared; nunca são codificados no código-fonte.
-- O aplicativo não baixa, instala, atualiza ou mantém cópias privadas de recursos gerenciados pelo Shared.
-- Projetos, banco local, logs e arquivos do usuário permanecem nos diretórios exclusivos da aplicação.
-- Segredos ficam no armazenamento protegido do sistema operacional sob controle do Shared.
-- A aplicação não deve ler arquivos internos de credenciais nem duplicar chaves em suas configurações.
+- O projeto declara dependências em `shared.dependencies` e provedores desejados em `shared.providers`.
+- O Shared provisiona caminhos resolvidos em `shared.resources`, diretórios globais em `shared.directories` e provedores autorizados em `shared.apiProviders`.
+- O vínculo gerado é local, específico da instalação e fica em `shared.config.json`, ignorado pelo Git.
+- O aplicativo lê os caminhos provisionados; nunca codifica o diretório de instalação do Shared nem mantém cópias privadas de recursos gerenciados.
+- O diretório de vídeos originais é sempre `shared.directories.mediaShared`. Recortes de trabalho e dados dos projetos permanecem no diretório próprio do Nova.
+- O SDK Rust oficial `shared-runtime-manager` valida o identificador da aplicação, carrega endpoints/modelos e descriptografa credenciais autorizadas somente no backend nativo.
+- O Shared Runtime Manager não precisa permanecer aberto depois do provisionamento.
 
-### Limite atual da integração
-
-A versão atual do Shared oferece configuração global, autorização por aplicação e armazenamento de credenciais no Windows Credential Manager. O SDK/IPC público para resolução de segredos por aplicações ainda está no roadmap. Até esse contrato existir, a integração ficará isolada atrás de uma porta/adaptador. Não implementaremos armazenamento paralelo de chaves no Nova.
-
-O Shared ainda não faz resolução automática de compatibilidade nem atualização coordenada de todas as dependências. A aplicação deverá validar recursos resolvidos e apresentar erros acionáveis.
+O identificador de aplicação deste repositório é `nova-generator`. O vínculo provisionado deve declarar o mesmo identificador em `application.id`.
 
 ## Contratos de projeto
 

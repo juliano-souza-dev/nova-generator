@@ -5,8 +5,21 @@ Aplicação desktop para criação, edição e exportação de materiais educaci
 - Desktop: Tauri 2 + React 19 + TypeScript + Vite.
 - Backend nativo: Rust.
 - Arquitetura: monólito modular.
-- Dependências de execução, ferramentas, modelos e provedores: Shared Runtime Manager.
+- Dependências de execução, ferramentas, modelos, diretórios globais e provedores de API: Shared Runtime Manager.
 
-Node.js, npm e Rust estável são necessários para construir a aplicação. Recursos de execução como FFmpeg, FFprobe e Python são declarados em shared.config.json e resolvidos pelo Shared.
+Node.js, npm e Rust estável são necessários para construir a aplicação. Recursos de execução como FFmpeg, FFprobe, Python, faster-whisper e yt-dlp são declarados em `shared.config.example.json` e resolvidos pelo Shared Runtime Manager.
 
-Consulte ARCHITECTURE.md antes de introduzir novas funcionalidades.
+## Shared Runtime Manager
+
+O Nova Generator consome o vínculo local `shared.config.json`, provisionado pelo Shared Runtime Manager. Esse arquivo é específico da instalação e permanece fora do Git.
+
+- O identificador registrado da aplicação é `nova-generator`.
+- Dependências e provedores permitidos são declarados pelo Nova; caminhos resolvidos e provedores autorizados são provisionados pelo Shared.
+- O diretório global de vídeos originais é lido exclusivamente de `shared.directories.mediaShared`.
+- FFmpeg e yt-dlp são executados a partir dos caminhos registrados em `shared.resources`.
+- Endpoints, modelos e credenciais autorizadas são lidos pelo SDK Rust oficial `shared-runtime-manager`. Credenciais descriptografadas permanecem no backend nativo e nunca são enviadas ao React.
+- O Shared Runtime Manager não precisa permanecer aberto depois de provisionar/sincronizar o vínculo.
+
+Para configurar uma instalação, registre o Nova Generator no Shared Runtime Manager usando o diretório da aplicação e sincronize suas dependências. Para provedores de API, autorize a aplicação no provedor desejado e sincronize novamente.
+
+Consulte `ARCHITECTURE.md` antes de introduzir novas funcionalidades.
