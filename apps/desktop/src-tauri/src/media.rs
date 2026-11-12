@@ -88,15 +88,30 @@ fn shared(app: &AppHandle) -> Result<Shared, String> {
        config.pointer("/shared/enabled").and_then(Value::as_bool) != Some(true) {
         return Err("O vínculo Shared Runtime está ausente, desativado ou incompatível. Sincronize o Nova Generator pelo Shared Runtime Manager.".into());
     }
-    if config.pointer("/application/id").and_then(Value::as_str) != Some("nova-generator") {
-        return Err("O shared.config.json não pertence ao Nova Generator. Verifique o vínculo no Shared Runtime Manager.".into());
-    }
     let media = config.pointer("/shared/directories/mediaShared").and_then(Value::as_str)
         .ok_or("O Shared Runtime não forneceu shared.directories.mediaShared. Sincronize o vínculo desta aplicação.")?;
     let media = PathBuf::from(media);
     if !media.is_absolute() { return Err("shared.directories.mediaShared precisa ser absoluto.".into()); }
     Ok(Shared { media, ytdlp: shared_resource(&config, "yt-dlp")?, ffmpeg: shared_resource(&config, "ffmpeg")? })
 }
+
+#[tauri::command]
+pub fn authorize_youtube_preview(app: AppHandle, video_id: String) -> Result<String, String> {
+    if video_id.len() != 11 || !video_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err("ID do vídeo inválido.".into());
+    }
+    let s = shared(&app)?;
+    let canonical_root = s.media.canonicalize().map_err(|e| format!("Biblioteca compartilhada indisponível: {e}"))?;
+    let canonical_video = s.media.join(format!("{video_id}.mp4")).canonicalize()
+        .map_err(|_| "Vídeo original não encontrado na biblioteca compartilhada.".to_string())?;
+    if !canonical_video.starts_with(&canonical_root) || !canonical_video.is_file() {
+        return Err("Arquivo de pré-visualização inválido.".into());
+    }
+    app.asset_protocol_scope().allow_file(&canonical_video)
+        .map_err(|e| format!("Não foi possível liberar a pré-visualização do vídeo: {e}"))?;
+    Ok(canonical_video.to_string_lossy().into_owned())
+}
+
 fn run_ytdlp(s: &Shared, args: &[String]) -> Result<std::process::Output, String> {
     let mut cmd = Command::new(&s.ytdlp); cmd.args(args);
     if let Some(parent) = s.ffmpeg.parent() { cmd.arg("--ffmpeg-location").arg(parent); }
