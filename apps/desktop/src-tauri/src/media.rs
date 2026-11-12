@@ -67,7 +67,11 @@ fn shared_manifest_path(app: &AppHandle) -> Result<PathBuf, String> {
     Err("O Nova Generator não está vinculado ao Shared Runtime Manager. Vincule ou sincronize o projeto para receber os caminhos compartilhados.".into())
 }
 fn shared_resource(config: &Value, id: &str) -> Result<PathBuf, String> {
-    let raw = config.pointer(&format!("/shared/resources/{id}")).and_then(Value::as_str)
+    // Dependencies provisioned by Shared are published here. The resources
+    // map remains a supported fallback for manager-owned tools registered there.
+    let raw = config.pointer(&format!("/shared/resolvedDependencies/{id}"))
+        .or_else(|| config.pointer(&format!("/shared/resources/{id}")))
+        .and_then(Value::as_str)
         .ok_or_else(|| format!("O recurso '{id}' não está resolvido pelo Shared Runtime Manager. Atualize o vínculo desta aplicação."))?;
     let p = PathBuf::from(raw);
     if !p.is_absolute() { return Err(format!("O caminho do recurso '{id}' precisa ser absoluto.")); }
