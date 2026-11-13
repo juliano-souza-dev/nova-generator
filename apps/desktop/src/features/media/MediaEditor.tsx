@@ -98,7 +98,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     try {
       await runTrackedTask("export", "Salvar transcrição e tradução", async () => {
         await invoke("save_project_subtitles", { projectId, assetId: asset.id, cues });
-        if (editorialResult) {
+        if (editorialResult?.approval === "draft") {
           const approved = { ...editorialResult, suggestions: (editorialResult.suggestions ?? []).map((item: any) => ({
             ...item, approved_pt: translations.find(t => t.id === item.cue_id)?.text ?? item.approved_pt
           })) };
@@ -149,9 +149,23 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     finally { setTranslating(false); }
   }
 
+  async function approveEditorial() {
+    if (!editorialResult || editorialResult.approval !== "draft") return;
+    if (dirty || translationDirty) {
+      setError("Salve a transcrição e as traduções antes de aprovar o resultado editorial.");
+      return;
+    }
+    setError("");
+    try {
+      const approved = await invoke<Record<string, any>>("approve_project_editorial_result", { projectId, assetId: asset.id, cues });
+      setEditorialResult(approved);
+      setTranslationInfo("Resultado editorial aprovado. A aprovação humana foi registrada no histórico do projeto.");
+    } catch (e) { setError("Não foi possível aprovar o resultado editorial: " + String(e)); }
+  }
+
   async function resetEditorialDraft() {
     if (!editorialResult) return;
-    if (!window.confirm("Isso remove o rascunho editorial salvo, mas mantém a transcrição e as traduções de linha. Continuar?")) return;
+    if (!window.confirm("Isso remove o resultado editorial salvo, mas mantém a transcrição e as traduções de linha. Continuar?")) return;
     try {
       await invoke("clear_project_editorial_result", { projectId, assetId: asset.id });
       setEditorialResult(null);
@@ -175,6 +189,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
 
   function updateTranslation(id: string, text: string) {
     setTranslations(items => items.map(item => item.id === id ? { ...item, text } : item));
+    setEditorialResult(current => current ? { ...current, approval: "draft" } : null);
     setTranslationDirty(true); setDirty(true); setSaved(false);
   }
 
@@ -351,6 +366,10 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
               </div>
               <button className="primary-button media-editor-transcribe-button" onClick={() => void translateAll()} disabled={loading || translating || cues.length === 0}><Languages size={15}/>{translating ? "Traduzindo..." : translations.length ? "Gerar tradução novamente" : "Traduzir com Groq"}</button>
               <button className="media-editor-secondary-action" onClick={() => void downloadExternalPackage()} disabled={loading || preparingExternalPackage || cues.length === 0}><Download size={14}/>{preparingExternalPackage ? "Preparando pacote..." : "Baixar pacote para IA externa"}</button>
+              {editorialResult && <div className="media-editor-editorial-status">
+                <span>{editorialResult.approval === "approved" ? "Resultado aprovado" : "Resultado aguardando revisão humana"}</span>
+                {editorialResult.approval === "draft" && <button className="media-editor-secondary-action" onClick={() => void approveEditorial()} disabled={loading || saving || dirty || translationDirty}>Aprovar resultado revisado</button>}
+              </div>}
               <input ref={translationFileInput} type="file" accept=".json,application/json" hidden onChange={e => void importTranslations(e.target.files?.[0])}/>
               <button className="media-editor-secondary-action" onClick={() => translationFileInput.current?.click()} disabled={loading || cues.length === 0}>Importar resultado JSON</button>
               {translationInfo && <p className="media-editor-transcription-info">{translationInfo}</p>}
@@ -361,7 +380,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
               <label className="media-editor-text-label">Tradução em português<textarea value={translations.find(t => t.id === chosen.id)?.text ?? ""} onChange={e => {
                 const existing = translations.find(t => t.id === chosen.id);
                 if (existing) updateTranslation(chosen.id, e.target.value);
-                else { setTranslations(items => [...items, { id: chosen.id, startMs: chosen.startMs, endMs: chosen.endMs, text: e.target.value }].sort((a,b) => a.startMs-b.startMs)); setTranslationDirty(true); setDirty(true); setSaved(false); }
+                else { setTranslations(items => [...items, { id: chosen.id, startMs: chosen.startMs, endMs: chosen.endMs, text: e.target.value }].sort((a,b) => a.startMs-b.startMs)); setEditorialResult(current => current ? { ...current, approval: "draft" } : null); setTranslationDirty(true); setDirty(true); setSaved(false); }
               }} placeholder="A tradução deste trecho aparecerá aqui..."/></label>
               <div className="media-editor-inspector-note">Editar esta tradução não modifica o texto reconhecido nem os tempos da transcrição.</div>
             </div> : <div className="media-editor-no-cue"><Languages size={22}/><strong>Nenhum trecho selecionado</strong><span>Selecione um bloco na faixa de tradução ou na transcrição.</span></div>}
