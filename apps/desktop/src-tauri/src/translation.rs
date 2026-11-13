@@ -243,7 +243,7 @@ pub fn save_project_translations(app: AppHandle, project_id: String, asset_id: S
 }
 
 fn translate_batch(model: &str, key: &str, endpoint: &str, full_input: &Value, batch: &[crate::media::SubtitleCue], include_words: bool, include_units: bool) -> Result<Value, String> {
-    let batch_input = crate::translation_contract::build_editorial_input(
+    let mut batch_input = crate::translation_contract::build_editorial_input(
         full_input["project_id"].as_str().unwrap_or(""), full_input["asset_id"].as_str().unwrap_or(""),
         batch, include_words, include_units
     )?;
