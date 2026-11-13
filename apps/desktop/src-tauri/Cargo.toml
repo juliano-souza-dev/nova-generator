@@ -16,7 +16,7 @@ tauri-build = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls", "multipart"] }
-shared-runtime-manager = { git = "https://github.com/juliano-souza-dev/shared-runtime-manager-", rev = "1129a083f2c91e5e0b15c59fbf33b10c9570bf5e", version = "0.6.0" }
+shared-runtime-manager = { git = "https://github.com/juliano-souza-dev/shared-runtime-manager-", rev = "6aeadf2baf8d2b10c8c193105897082c3c84c23c", version = "0.6.0" }
 tauri = { version = "2", features = ["protocol-asset"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
