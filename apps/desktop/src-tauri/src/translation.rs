@@ -156,6 +156,7 @@ fn persist_editorial_result(app: &AppHandle, project_id: &str, asset_id: &str, r
         "approval": "draft",
         "revision": revision,
         "source_hash": hash,
+        "predictions": {"word_translations": include_words, "semantic_units": include_units},
         "suggestions": suggestions
     });
     atomic_write(&path, &serde_json::to_vec_pretty(&stored).map_err(|e| e.to_string())?)
