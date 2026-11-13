@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{fs, path::{Path, PathBuf}, process::Command, time::{SystemTime, UNIX_EPOCH}};
+use std::{fs, path::{Path, PathBuf}, time::{SystemTime, UNIX_EPOCH}};
 use tauri::{AppHandle, Emitter, Manager};
 
 const TTL_MS: u64 = 7 * 24 * 60 * 60 * 1000;
@@ -113,7 +113,7 @@ pub fn authorize_youtube_preview(app: AppHandle, video_id: String) -> Result<Str
 }
 
 fn run_ytdlp(s: &Shared, args: &[String]) -> Result<std::process::Output, String> {
-    let mut cmd = Command::new(&s.ytdlp); cmd.args(args);
+    let mut cmd = crate::process::hidden_command(&s.ytdlp); cmd.args(args);
     if let Some(parent) = s.ffmpeg.parent() { cmd.arg("--ffmpeg-location").arg(parent); }
     cmd.output().map_err(|e| format!("Não foi possível iniciar o yt-dlp compartilhado: {e}"))
 }
