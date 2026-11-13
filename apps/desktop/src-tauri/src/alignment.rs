@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
@@ -9,6 +10,7 @@ use std::{
 use tauri::{AppHandle, Emitter};
 
 const PADDING_MS: u64 = 350;
+const ALIGNMENT_MODEL_KEY: &str = "whisperx-default-aligner-v1";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -179,6 +181,28 @@ fn extract_block(
     Ok(())
 }
 
+fn block_fingerprint(audio: &Path, text: &str, language: &str, runner_bytes: &[u8]) -> Result<String, String> {
+    let audio_bytes = fs::read(audio).map_err(|e| format!("Não foi possível calcular a impressão digital do áudio: {e}"))?;
+    let mut digest = Sha256::new();
+    digest.update(ALIGNMENT_MODEL_KEY.as_bytes());
+    digest.update([0]);
+    digest.update(language.as_bytes());
+    digest.update([0]);
+    digest.update(text.as_bytes());
+    digest.update([0]);
+    digest.update(&audio_bytes);
+    digest.update([0]);
+    digest.update(runner_bytes);
+    Ok(format!("{:x}", digest.finalize()))
+}
+
+struct PendingBlock {
+    index: usize,
+    clip: PathBuf,
+    language: String,
+    fingerprint: String,
+}
+
 fn emit_progress(app: &AppHandle, project_id: &str, asset_id: &str, completed: usize, total: usize, message: &str) {
     let _ = app.emit("alignment-progress", AlignmentProgress {
         project_id: project_id.into(),
@@ -202,58 +226,83 @@ pub async fn align_project_subtitles(
         if cues.is_empty() {
             return Err("Este projeto ainda não possui blocos de transcrição para alinhar.".into());
         }
-        let pending = cues.iter().filter(|cue| {
-            cue.word_alignment.as_deref() != Some("whisperx") && !cue.text.trim().is_empty()
-        }).count();
-        let skipped = cues.iter().filter(|cue| cue.word_alignment.as_deref() == Some("whisperx")).count();
-        if pending == 0 {
-            return Ok(AlignmentResult {
-                aligned: 0,
-                skipped,
-                total: cues.len(),
-                language: language,
-            });
+        let total = cues.iter().filter(|cue| !cue.text.trim().is_empty()).count();
+        if total == 0 {
+            return Err("Não há blocos com texto para alinhar.".into());
         }
 
         let (python, runner) = crate::shared_runtime::forced_alignment_paths(&app)?;
+        let runner_bytes = fs::read(&runner).map_err(|e| format!("Não foi possível verificar a versão do alinhador: {e}"))?;
         let ffmpeg = crate::media::shared_ffmpeg(&app)?;
         let source = project_source(&app, &project_id, &asset_id)?;
         let temp = std::env::temp_dir().join(format!("nova-alignment-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&temp).map_err(|e| e.to_string())?;
 
         let result = (|| {
-            emit_progress(&app, &project_id, &asset_id, 0, pending, "Preparando o WhisperX e os blocos pendentes");
-            let mut worker = AlignmentWorker::start(&python, &runner)?;
-            let mut aligned = 0usize;
-            let mut resolved_language = None::<String>;
+            let mut pending = Vec::<PendingBlock>::new();
+            let mut skipped = 0usize;
 
+            emit_progress(&app, &project_id, &asset_id, 0, total, "Verificando quais blocos já possuem alinhamento válido");
             for index in 0..cues.len() {
-                if cues[index].word_alignment.as_deref() == Some("whisperx") || cues[index].text.trim().is_empty() {
+                if cues[index].text.trim().is_empty() {
                     continue;
                 }
-                let raw_language = cues[index].language.as_deref()
-                    .or(language.as_deref())
+                let raw_language = language.as_deref()
+                    .filter(|value| !value.trim().is_empty())
+                    .or(cues[index].language.as_deref())
                     .ok_or_else(|| format!("O bloco {} não possui idioma registrado. Selecione o idioma da fala e tente novamente.", index + 1))?;
                 let lang = language_code(raw_language)?;
-                resolved_language = Some(lang.clone());
-
                 let clip_start = cues[index].start_ms.saturating_sub(PADDING_MS);
                 let clip_end = cues[index].end_ms.saturating_add(PADDING_MS);
                 let clip = temp.join(format!("block-{index:05}.flac"));
+                extract_block(&ffmpeg, &source, &clip, clip_start, clip_end)?;
+                let fingerprint = block_fingerprint(&clip, &cues[index].text, &lang, &runner_bytes)?;
+
+                if cues[index].word_alignment.as_deref() == Some("whisperx")
+                    && cues[index].word_alignment_hash.as_deref() == Some(fingerprint.as_str()) {
+                    skipped += 1;
+                } else {
+                    pending.push(PendingBlock { index, clip, language: lang, fingerprint });
+                }
                 emit_progress(
                     &app,
                     &project_id,
                     &asset_id,
-                    aligned,
-                    pending,
-                    &format!("Alinhando bloco {} de {}", aligned + 1, pending),
+                    skipped,
+                    total,
+                    &format!("Verificado bloco {} de {}", index + 1, total),
                 );
-                extract_block(&ffmpeg, &source, &clip, clip_start, clip_end)?;
-                let words = worker.align(&clip, &cues[index].text, &lang)?;
+            }
+
+            if pending.is_empty() {
+                return Ok(AlignmentResult {
+                    aligned: 0,
+                    skipped,
+                    total,
+                    language,
+                });
+            }
+
+            let mut worker = AlignmentWorker::start(&python, &runner)?;
+            let mut aligned = 0usize;
+            let mut resolved_language = None::<String>;
+
+            for block in pending {
+                let index = block.index;
+                emit_progress(
+                    &app,
+                    &project_id,
+                    &asset_id,
+                    skipped + aligned,
+                    total,
+                    &format!("Alinhando bloco {} de {}", index + 1, cues.len()),
+                );
+                let words = worker.align(&block.clip, &cues[index].text, &block.language)?;
                 if words.is_empty() {
-                    return Err(format!("O WhisperX não encontrou palavras alinháveis no bloco {}. O bloco anterior permanece salvo.", index + 1));
+                    return Err(format!("O WhisperX não encontrou palavras alinháveis no bloco {}. Os blocos concluídos anteriormente permanecem salvos.", index + 1));
                 }
 
+                let clip_start = cues[index].start_ms.saturating_sub(PADDING_MS);
                 let cue_start = cues[index].start_ms;
                 let cue_end = cues[index].end_ms;
                 let mut mapped = Vec::with_capacity(words.len());
@@ -272,16 +321,18 @@ pub async fn align_project_subtitles(
                 }
 
                 cues[index].words = Some(mapped);
-                cues[index].language = Some(lang);
+                cues[index].language = Some(block.language.clone());
                 cues[index].word_alignment = Some("whisperx".into());
+                cues[index].word_alignment_hash = Some(block.fingerprint);
                 crate::media::save_project_subtitles(app.clone(), project_id.clone(), asset_id.clone(), cues.clone())?;
                 aligned += 1;
+                resolved_language = Some(block.language);
                 emit_progress(
                     &app,
                     &project_id,
                     &asset_id,
-                    aligned,
-                    pending,
+                    skipped + aligned,
+                    total,
                     &format!("Bloco {} alinhado e salvo", index + 1),
                 );
             }
@@ -289,7 +340,7 @@ pub async fn align_project_subtitles(
             Ok(AlignmentResult {
                 aligned,
                 skipped,
-                total: cues.len(),
+                total,
                 language: resolved_language.or(language),
             })
         })();
@@ -300,9 +351,9 @@ pub async fn align_project_subtitles(
                 &app,
                 &project_id,
                 &asset_id,
-                summary.aligned,
-                pending,
-                "Alinhamento concluído. Todos os blocos processados foram salvos.",
+                summary.total,
+                summary.total,
+                "Alinhamento concluído. Os blocos processados foram salvos.",
             );
         }
         result
