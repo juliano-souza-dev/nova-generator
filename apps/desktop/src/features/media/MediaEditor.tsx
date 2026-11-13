@@ -144,6 +144,68 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     setSaved(false);
     setDirty(true);
   }
+  async function splitCueAtWord(wordIndex: number) {
+    if (!chosen || !chosen.words || wordIndex <= 0 || wordIndex >= chosen.words.length || saving || aligning) return;
+    const before = chosen.words[wordIndex - 1];
+    const after = chosen.words[wordIndex];
+    const rawSplitMs = Math.round((before.endMs + after.startMs) / 2);
+    const splitMs = Math.max(chosen.startMs + 1, Math.min(chosen.endMs - 1, rawSplitMs));
+    if (!Number.isFinite(splitMs) || splitMs <= chosen.startMs || splitMs >= chosen.endMs) {
+      setError("Não foi possível dividir este trecho: os tempos das palavras não permitem criar dois segmentos válidos.");
+      return;
+    }
+
+    const firstWords = chosen.words.slice(0, wordIndex);
+    const secondWords = chosen.words.slice(wordIndex);
+    const firstText = firstWords.map(word => word.text.trim()).filter(Boolean).join(" ");
+    const secondText = secondWords.map(word => word.text.trim()).filter(Boolean).join(" ");
+    if (!firstText || !secondText) {
+      setError("Não foi possível dividir: um dos lados ficaria sem texto. Confira o alinhamento das palavras.");
+      return;
+    }
+
+    const hadTranslation = translations.some(item => item.id === chosen.id);
+    try {
+      if (editorialResult) {
+        await invoke("clear_project_editorial_result", { projectId, assetId: asset.id });
+      }
+    } catch (e) {
+      setError("Não foi possível invalidar o resultado editorial anterior. O trecho não foi dividido: " + String(e));
+      return;
+    }
+
+    const secondCue: Cue = {
+      ...chosen,
+      id: `cue-${Date.now()}-${cues.length}-split`,
+      startMs: splitMs,
+      text: secondText,
+      words: secondWords
+    };
+    const firstCue: Cue = {
+      ...chosen,
+      endMs: splitMs,
+      text: firstText,
+      words: firstWords
+    };
+
+    setCues(items => items.flatMap(item => item.id === chosen.id ? [firstCue, secondCue] : [item]).sort((a, b) => a.startMs - b.startMs));
+    // A tradução do trecho original não pode ser repartida automaticamente sem
+    // alterar o sentido. Mantemos as demais traduções e solicitamos nova tradução
+    // apenas para os segmentos resultantes na próxima geração.
+    setTranslations(items => items.filter(item => item.id !== chosen.id));
+    setTranslationDirty(true);
+    setEditorialResult(null);
+    setSelected(secondCue.id);
+    setCurrent(splitMs);
+    if (video.current) video.current.currentTime = splitMs / 1000;
+    setSaved(false);
+    setDirty(true);
+    setError("");
+    setTranslationInfo(hadTranslation
+      ? "Trecho dividido. A tradução anterior desse trecho foi removida para evitar uma associação incorreta. Gere novamente a tradução para os dois novos trechos."
+      : "Trecho dividido. Os tempos das palavras foram preservados.");
+  }
+
   async function save(): Promise<boolean> {
     setSaving(true); setError("");
     try {
@@ -493,6 +555,14 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                   <label>Fim (ms)<input type="number" min="1" value={chosen.endMs} onChange={e => updateCue(chosen.id, { endMs: Math.max(chosen.startMs + 100, Number(e.target.value)) })}/></label>
                 </div>
                 <label className="media-editor-text-label">Texto reconhecido<textarea value={chosen.text} onChange={e => updateCue(chosen.id, { text: e.target.value })} placeholder="Texto da transcrição..."/></label>
+                {chosen.words && chosen.words.length > 1 ? <div className="media-editor-inspector-section" style={{ marginTop: 12 }}>
+                  <div className="media-editor-section-title"><strong>Dividir este trecho</strong><span className="media-editor-translation-count">{chosen.words.length} palavras</span></div>
+                  <p className="media-editor-translation-help">Escolha a palavra que inicia a próxima fala. O corte será feito entre as palavras e os tempos originais serão preservados.</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {chosen.words.slice(1).map((word, index) => <button key={chosen.id + "-split-" + index} type="button" className="media-editor-secondary-action" onClick={() => void splitCueAtWord(index + 1)} disabled={saving || aligning} title={`Dividir antes de "${word.text.trim()}"`}>Dividir antes de “{word.text.trim()}”</button>)}
+                  </div>
+                </div> : <div className="media-editor-inspector-note">Para dividir com precisão, alinhe este trecho com o WhisperX. Depois, escolha a palavra que inicia a próxima fala.</div>}
+
                 <div className="media-editor-cue-buttons"><button onClick={() => seek(chosen.startMs)}><Clock3 size={13}/> Ir ao início</button><button className="danger" onClick={() => { setCues(items => items.filter(c => c.id !== chosen.id)); setEditorialResult(null); setSelected(null); setSaved(false); setDirty(true); }}><Trash2 size={13}/> Excluir trecho</button></div>
                 <div className="media-editor-inspector-note">{chosen.wordAlignment === "whisperx" ? (chosen.words?.length ?? 0) + " palavras alinhadas pelo WhisperX." : (chosen.words?.length ?? 0) + " palavras identificadas pelo mecanismo de transcrição. O alinhamento preciso ainda está pendente."}</div>
               </> : <div className="media-editor-no-cue"><Captions size={22}/><strong>Nenhum trecho selecionado</strong><span>Selecione um bloco na faixa ou crie um novo trecho.</span></div>}
