@@ -10,6 +10,7 @@ type AlignmentProgress = { projectId: string; assetId: string; completed: number
 type AlignmentResult = { aligned: number; skipped: number; total: number; language?: string | null };
 type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: Cue[] };
 type TranslationCue = { id: string; startMs: number; endMs: number; text: string };
+type SharedRuntimeStatus = { providers: { id: string; name: string; model: string }[] };
 type Asset = { id: string; name: string; durationMs?: number | null; sourceStartMs?: number | null; sourceEndMs?: number | null };
 function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: number) {
   const text = String(suggestion?.approved_en || fallback || "");
@@ -75,6 +76,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   const [includeSemanticUnits, setIncludeSemanticUnits] = useState(true);
   const [translationInfo, setTranslationInfo] = useState("");
   const [translationStream, setTranslationStream] = useState<{ cueId: string; text: string } | null>(null);
+  const [groqChatModel, setGroqChatModel] = useState("Consultando Shared Runtime...");
   const [current, setCurrent] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(asset.durationMs ?? 0);
@@ -123,6 +125,20 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     })();
     return () => { alive = false; video.current?.pause(); };
   }, [projectId, asset.id]);
+
+  useEffect(() => {
+    let alive = true;
+    invoke<SharedRuntimeStatus>("get_shared_runtime_status")
+      .then(status => {
+        if (!alive) return;
+        const groq = status.providers?.find(provider => provider.id === "groq");
+        setGroqChatModel(groq?.model || "Modelo não informado no Shared Runtime");
+      })
+      .catch(() => {
+        if (alive) setGroqChatModel("Não foi possível consultar o Shared Runtime");
+      });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -701,6 +717,14 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             <div className="media-editor-inspector-section">
               <div className="media-editor-section-title"><strong>Tradução para PT-BR</strong><span className="media-editor-translation-count">{translations.length}/{cues.length}</span></div>
               <p className="media-editor-translation-help">A Groq recebe um trecho pequeno por vez em streaming. O Nova Generator reconstrói e valida localmente o contrato editorial 1.3.</p>
+              <div className="media-editor-inspector-note" style={{ marginTop: 6 }}>
+                <strong>Modelos por etapa</strong><br/>
+                Tradução + marcações de palavras e expressões: <code>{groqChatModel}</code><br/>
+                Transcrição na nuvem: <code>whisper-large-v3-turbo</code> (Groq Whisper)<br/>
+                Transcrição local: <code>Faster-Whisper {transcriptionModel}</code><br/>
+                Alinhamento palavra por palavra: <code>WhisperX</code> (runtime local do Shared Runtime)<br/>
+                Anki: sem chamada de IA separada nesta etapa; os dados editoriais são organizados pelo aplicativo.
+              </div>
               <div className="media-editor-contract-options">
                 <label><input type="checkbox" checked={includeWordTranslations} disabled={Boolean(editorialResult)} onChange={e => { setIncludeWordTranslations(e.target.checked); if (!e.target.checked) setIncludeSemanticUnits(false); }}/> Traduções palavra por palavra</label>
                 <label><input type="checkbox" checked={includeSemanticUnits} disabled={!includeWordTranslations || Boolean(editorialResult)} onChange={e => setIncludeSemanticUnits(e.target.checked)}/> Sugestões de unidades semânticas</label>
