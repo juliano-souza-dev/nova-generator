@@ -131,6 +131,7 @@ pub fn run() {
             list_projects, create_project, duplicate_project, delete_project, update_project_status,
             media::inspect_youtube, media::prepare_youtube_cache, media::authorize_youtube_preview, media::list_project_media,
             media::import_media_files, media::trim_youtube_cache,
+            media::open_project_media, media::load_project_subtitles, media::save_project_subtitles,
             shared_runtime::get_shared_runtime_status
         ])
         .run(tauri::generate_context!())
