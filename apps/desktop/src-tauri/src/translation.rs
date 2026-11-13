@@ -193,6 +193,13 @@ pub fn save_project_editorial_result(app: AppHandle, project_id: String, asset_i
 }
 
 #[tauri::command]
+pub fn clear_project_editorial_result(app: AppHandle, project_id: String, asset_id: String) -> Result<(), String> {
+    let path = editorial_file(&app, &project_id, &asset_id)?;
+    if path.exists() { fs::remove_file(path).map_err(|e| format!("Não foi possível remover o rascunho editorial: {e}"))?; }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn save_project_translations(app: AppHandle, project_id: String, asset_id: String, translations: Vec<TranslationCue>) -> Result<(), String> {
     if translations.len() > 5000 { return Err("O projeto excede o limite de 5.000 traduções.".into()); }
     let path = translation_file(&app, &project_id, &asset_id)?;
