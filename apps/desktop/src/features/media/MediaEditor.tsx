@@ -11,6 +11,33 @@ type AlignmentResult = { aligned: number; skipped: number; total: number; langua
 type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: Cue[] };
 type TranslationCue = { id: string; startMs: number; endMs: number; text: string };
 type Asset = { id: string; name: string; durationMs?: number | null; sourceStartMs?: number | null; sourceEndMs?: number | null };
+function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: number) {
+  const text = String(suggestion?.approved_en || fallback || "");
+  const words = Array.isArray(suggestion?.word_translations) ? suggestion.word_translations : [];
+  const matches = [...text.matchAll(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*/gu)];
+  if (!words.length || matches.length !== words.length) return text;
+
+  const activeIndex = words.findIndex((word: any) => {
+    const start = Number(word.start_ms ?? word.startMs);
+    const end = Number(word.end_ms ?? word.endMs);
+    return Number.isFinite(start) && Number.isFinite(end) && currentMs >= start && currentMs <= end;
+  });
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  matches.forEach((match, index) => {
+    const start = match.index ?? cursor;
+    if (start > cursor) parts.push(text.slice(cursor, start));
+    parts.push(<span key={String(words[index]?.word_id ?? index)} style={index === activeIndex ? {
+      color: "#f4cf72",
+      fontWeight: 900,
+      textShadow: "0 0 12px rgba(244,207,114,.28)"
+    } : undefined}>{match[0]}</span>);
+    cursor = start + match[0].length;
+  });
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return <>{parts}</>;
+}
+
 const fmt = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 1000));
   return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0") + "." + String(Math.floor(ms % 1000 / 100));
@@ -328,13 +355,6 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     if (!activeCue || !Array.isArray(editorialResult?.suggestions)) return null;
     return editorialResult.suggestions.find((item: any) => item.cue_id === activeCue.id) ?? null;
   }, [activeCue, editorialResult]);
-  const selectedEditorialWords = Array.isArray(selectedEditorialSuggestion?.word_translations)
-    ? selectedEditorialSuggestion.word_translations
-    : [];
-  const selectedSemanticUnits = Array.isArray(selectedEditorialSuggestion?.semantic_units)
-    ? selectedEditorialSuggestion.semantic_units
-    : [];
-
   const trackNames = [
     { id: "video" as const, label: "Video", icon: Film },
     { id: "transcript" as const, label: "Transcrição", icon: Captions },
@@ -364,13 +384,9 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                   onLoadedMetadata={e => { const ms = e.currentTarget.duration * 1000; setDuration(ms); }}
                   onTimeUpdate={e => setCurrent(e.currentTarget.currentTime * 1000)} />
                 {activeCue?.text && <div className="media-editor-caption">
-                  <div>{activeEditorialSuggestion?.approved_en || activeCue.text}</div>
-                  {activeEditorialSuggestion?.approved_pt && <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,.28)", fontWeight: 600 }}>{activeEditorialSuggestion.approved_pt}</div>}
-                  {Array.isArray(activeEditorialSuggestion?.word_translations) && activeEditorialSuggestion.word_translations.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "4px 8px", marginTop: 7, fontSize: 11, lineHeight: 1.35 }}>
-                    {activeEditorialSuggestion.word_translations.map((word: any) => <span key={word.word_id} style={{ display: "inline-flex", flexDirection: "column", alignItems: "center" }}>
-                      <span>{word.leading || ""}{word.surface || ""}</span>
-                      <span style={{ opacity: .82 }}>{word.semantic_group_role === "member" ? (word.pt_original || word.pt || "") : (word.pt || "")}</span>
-                    </span>)}
+                  <div>{renderEditorialEnglish(activeEditorialSuggestion, activeCue.text, current)}</div>
+                  {(activeEditorialSuggestion?.approved_pt || translations.find(t => t.id === activeCue.id)?.text) && <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,.28)", fontWeight: 600 }}>
+                    {activeEditorialSuggestion?.approved_pt || translations.find(t => t.id === activeCue.id)?.text}
                   </div>}
                 </div>}
               </div>
@@ -476,22 +492,6 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                 <div className="media-editor-section-title"><strong>Prévia da tradução editorial</strong><span className="media-editor-translation-count">Contrato 1.3</span></div>
                 <div className="media-editor-source-text" style={{ marginTop: 8 }}>{selectedEditorialSuggestion.approved_en || chosen.text}</div>
                 <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5, fontWeight: 600 }}>{selectedEditorialSuggestion.approved_pt || translations.find(t => t.id === chosen.id)?.text || "Tradução ainda não disponível"}</div>
-                {selectedSemanticUnits.length > 0 && <div style={{ marginTop: 12 }}>
-                  <div className="media-editor-inspector-note" style={{ marginBottom: 6 }}>Unidades semânticas</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {selectedSemanticUnits.map((unit: any) => <span key={unit.semantic_group_id} style={{ padding: "5px 9px", borderRadius: 7, background: "var(--surface-elevated, #252b36)", fontSize: 12 }}>{unit.pt}</span>)}
-                  </div>
-                </div>}
-                {selectedEditorialWords.length > 0 && <div style={{ marginTop: 12 }}>
-                  <div className="media-editor-inspector-note" style={{ marginBottom: 6 }}>Tradução palavra por palavra</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 6 }}>
-                    {selectedEditorialWords.map((word: any) => <div key={word.word_id} style={{ minWidth: 0, padding: "7px 8px", borderRadius: 7, background: "var(--surface-elevated, #252b36)", border: word.semantic_group_role === "lead" ? "1px solid var(--accent, #6d8cff)" : "1px solid transparent" }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, overflowWrap: "anywhere" }}>{word.leading || ""}{word.surface || ""}</div>
-                      <div style={{ fontSize: 12, marginTop: 3, opacity: 0.88, overflowWrap: "anywhere" }}>{word.semantic_group_role === "member" ? (word.pt_original || word.pt || "") : (word.pt || "")}</div>
-                      <div style={{ fontSize: 10, opacity: 0.55, marginTop: 4 }}>{Number(word.start_ms ?? 0)}–{Number(word.end_ms ?? 0)} ms</div>
-                    </div>)}
-                  </div>
-                </div>}
               </div>}
               <label className="media-editor-text-label">Tradução em português<textarea value={translations.find(t => t.id === chosen.id)?.text ?? ""} onChange={e => {
                 const existing = translations.find(t => t.id === chosen.id);
