@@ -61,6 +61,10 @@ fn validate_editorial_result(result: &Value, cues: &[crate::media::SubtitleCue],
     if result.get("approval").and_then(Value::as_str) != Some("draft") {
         return Err("O resultado precisa permanecer como rascunho para revisão humana.".into());
     }
+    if result.pointer("/predictions/word_translations").and_then(Value::as_bool) != Some(include_words)
+        || result.pointer("/predictions/semantic_units").and_then(Value::as_bool) != Some(include_units) {
+        return Err("As predições do JSON não correspondem às opções selecionadas para este contrato.".into());
+    }
     let suggestions = result.get("suggestions").and_then(Value::as_array).ok_or("O JSON não contém a lista suggestions.")?;
     if suggestions.len() != cues.len() { return Err(format!("O resultado contém {} sugestões para {} trechos.", suggestions.len(), cues.len())); }
 
@@ -248,11 +252,11 @@ pub async fn translate_project_subtitles(
         for (index, batch) in batches.iter().enumerate() {
             emit(&app2, &project_id, "translating", index as f32 / total as f32 * 100.0, index, total, &format!("Executando contrato editorial 1.3, lote {} de {}", index + 1, total));
             let result = translate_batch(&cfg.model, &key, &endpoint, &full_input, batch, include_word_translations, include_semantic_units)?;
-            let batch_result = json!({"contract":crate::translation_contract::OUTPUT_CONTRACT,"approval":"draft","suggestions":result["suggestions"]});
+            let batch_result = json!({"contract":crate::translation_contract::OUTPUT_CONTRACT,"approval":"draft","predictions":result["predictions"],"suggestions":result["suggestions"]});
             suggestions.extend(validate_editorial_result(&batch_result, batch, include_word_translations, include_semantic_units)?);
             emit(&app2, &project_id, "translating", (index + 1) as f32 / total as f32 * 100.0, index + 1, total, &format!("Lote {} de {} validado", index + 1, total));
         }
-        let final_result = json!({"contract":crate::translation_contract::OUTPUT_CONTRACT,"approval":"draft","suggestions":suggestions});
+        let final_result = json!({"contract":crate::translation_contract::OUTPUT_CONTRACT,"approval":"draft","predictions":{"word_translations":include_word_translations,"semantic_units":include_semantic_units},"suggestions":suggestions});
         persist_editorial_result(&app2, &project_id, &asset_id, &final_result, &ordered, include_word_translations, include_semantic_units)?;
         let by_id = final_result["suggestions"].as_array().unwrap().iter().filter_map(|s| {
             Some((s["cue_id"].as_str()?.to_string(), s["approved_pt"].as_str()?.to_string()))
