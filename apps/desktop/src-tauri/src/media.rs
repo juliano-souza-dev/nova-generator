@@ -238,7 +238,7 @@ pub async fn trim_youtube_cache(app: AppHandle, project_id: String, video_id: St
             if data.duration_ms.is_some_and(|duration| end_ms > duration) { return Err("O fim do trecho ultrapassa a duração do vídeo.".into()); }
         }
         let id = uuid::Uuid::new_v4().to_string(); let output = root.join("media").join(format!("{id}.mp4"));
-        let result = Command::new(&s.ffmpeg).args(["-y","-hide_banner","-loglevel","error","-ss"])
+        let result = crate::process::hidden_command(&s.ffmpeg).args(["-y","-hide_banner","-loglevel","error","-ss"])
             .arg(format!("{:.3}", start_ms as f64 / 1000.0)).arg("-i").arg(&canonical_source)
             .arg("-t").arg(format!("{:.3}", (end_ms-start_ms) as f64 / 1000.0))
             .args(["-map","0:v:0","-map","0:a?","-c:v","libx264","-preset","veryfast","-crf","20","-c:a","aac","-b:a","192k","-movflags","+faststart"])
