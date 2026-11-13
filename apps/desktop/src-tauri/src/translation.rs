@@ -157,11 +157,18 @@ pub fn load_project_translations(app: AppHandle, project_id: String, asset_id: S
 }
 
 #[tauri::command]
-pub fn load_project_editorial_result(app: AppHandle, project_id: String, asset_id: String) -> Result<Option<Value>, String> {
+pub fn load_project_editorial_result(app: AppHandle, project_id: String, asset_id: String, cues: Vec<crate::media::SubtitleCue>) -> Result<Option<Value>, String> {
     let path = editorial_file(&app, &project_id, &asset_id)?;
     if !path.exists() { return Ok(None); }
     let raw = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&raw).map(Some).map_err(|e| format!("Resultado editorial salvo inválido: {e}"))
+    let stored: Value = serde_json::from_str(&raw).map_err(|e| format!("Resultado editorial salvo inválido: {e}"))?;
+    let include_words = stored.pointer("/predictions/word_translations").and_then(Value::as_bool).unwrap_or(false);
+    let include_units = stored.pointer("/predictions/semantic_units").and_then(Value::as_bool).unwrap_or(false);
+    let input = crate::translation_contract::build_editorial_input(&project_id, &asset_id, &cues, include_words, include_units);
+    if stored.get("source_hash").and_then(Value::as_str) != Some(source_hash(&input)?.as_str()) {
+        return Ok(None);
+    }
+    Ok(Some(stored))
 }
 
 #[tauri::command]
