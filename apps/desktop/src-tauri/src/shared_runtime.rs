@@ -162,3 +162,30 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
         providers,
     })
 }
+
+
+/// Resolve the isolated WhisperX runtime provisioned and owned by Shared Runtime Manager.
+pub(crate) fn forced_alignment_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
+    let (_, config) = load_config(app)?;
+    let runtime = config.pointer("/shared/resources/forced-alignment")
+        .or_else(|| config.pointer("/shared/resolvedDependencies/forced-alignment"))
+        .and_then(Value::as_str)
+        .ok_or("O WhisperX não está instalado ou vinculado no Shared Runtime Manager. Instale o recurso 'forced-alignment' e sincronize o Nova Generator.")?;
+    let runtime = PathBuf::from(runtime);
+    if !runtime.is_absolute() {
+        return Err("O caminho do WhisperX no Shared Runtime precisa ser absoluto.".into());
+    }
+    let python = if cfg!(windows) {
+        runtime.join("venv").join("Scripts").join("python.exe")
+    } else {
+        runtime.join("venv").join("bin").join("python")
+    };
+    let runner = runtime.join("runner.py");
+    if !python.is_file() || !runner.is_file() {
+        return Err(format!(
+            "O runtime do WhisperX está incompleto em {}. Reinstale ou sincronize o recurso forced-alignment pelo Shared Runtime Manager.",
+            runtime.display()
+        ));
+    }
+    Ok((python, runner))
+}
