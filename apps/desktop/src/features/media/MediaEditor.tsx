@@ -176,6 +176,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       if (!result) return result;
       return {
         ...result,
+        approval: "draft",
         suggestions: (result.suggestions ?? []).map((suggestion: any) => {
           if (suggestion.cue_id !== cueId) return suggestion;
           const wordTranslations = (suggestion.word_translations ?? []).map((word: any, index: number, all: any[]) => ({
@@ -219,17 +220,14 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       const neighborAfter = cues.filter(item => item.id !== cue.id && item.startMs >= initialEnd).sort((a, b) => a.startMs - b.startMs)[0];
       let nextStart = initialStart;
       let nextEnd = initialEnd;
-      let appliedDelta = deltaMs;
       if (mode === "move") {
-        appliedDelta = Math.max((neighborBefore?.endMs ?? 0) - initialStart, Math.min((neighborAfter?.startMs ?? duration) - initialEnd, deltaMs));
-        nextStart = initialStart + appliedDelta;
-        nextEnd = initialEnd + appliedDelta;
+        const clampedDelta = Math.max((neighborBefore?.endMs ?? 0) - initialStart, Math.min((neighborAfter?.startMs ?? duration) - initialEnd, deltaMs));
+        nextStart = initialStart + clampedDelta;
+        nextEnd = initialEnd + clampedDelta;
       } else if (mode === "start") {
         nextStart = Math.max(neighborBefore?.endMs ?? 0, Math.min(initialEnd - 100, initialStart + deltaMs));
-        appliedDelta = nextStart - initialStart;
       } else {
         nextEnd = Math.min(neighborAfter?.startMs ?? duration, Math.max(initialStart + 100, initialEnd + deltaMs));
-        appliedDelta = nextEnd - initialEnd;
       }
       const incrementalDelta = mode === "move" ? nextStart - lastStart : mode === "start" ? nextStart - lastStart : nextEnd - lastEnd;
       lastStart = nextStart;
