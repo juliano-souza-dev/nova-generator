@@ -126,12 +126,23 @@ fn update_project_status(app: tauri::AppHandle, id: String, status: String) -> R
     Ok(updated)
 }
 
+#[tauri::command]
+fn save_external_translation_package(path: String, bytes: Vec<u8>) -> Result<(), String> {
+    if !path.to_ascii_lowercase().ends_with(".zip") {
+        return Err("O pacote precisa ser salvo como arquivo .zip.".into());
+    }
+    if bytes.is_empty() || bytes.len() > 100 * 1024 * 1024 {
+        return Err("O pacote ZIP está vazio ou excede o limite de 100 MB.".into());
+    }
+    fs::write(&path, bytes).map_err(|e| format!("Não foi possível gravar o pacote ZIP: {e}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            list_projects, create_project, duplicate_project, delete_project, update_project_status,
+            list_projects, create_project, duplicate_project, delete_project, update_project_status, save_external_translation_package,
             media::inspect_youtube, media::prepare_youtube_cache, media::authorize_youtube_preview, media::list_project_media,
             media::import_media_files, media::trim_youtube_cache,
             media::open_project_media, media::load_project_subtitles, media::save_project_subtitles,
