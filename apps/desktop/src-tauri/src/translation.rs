@@ -530,8 +530,15 @@ fn build_contract_suggestion(
         if include_units {
             let units = response.get("semantic_units").and_then(Value::as_array)
                 .ok_or("A resposta não contém semantic_units.")?;
+            // O modelo às vezes representa palavras isoladas como grupos semânticos.
+            // O contrato exige unidades com pelo menos duas palavras; palavras isoladas
+            // continuam com sua tradução individual e não precisam de grupo.
+            let valid_units = units.iter()
+                .filter(|unit| unit.get("word_ids").and_then(Value::as_array).map(|ids| ids.len() >= 2).unwrap_or(false))
+                .cloned()
+                .collect::<Vec<_>>();
             let mut group_map: HashMap<String, (String, String)> = HashMap::new();
-            for unit in units {
+            for unit in &valid_units {
                 let group_id = unit["semantic_group_id"].as_str().unwrap_or("").to_string();
                 let phrase_pt = unit["pt"].as_str().unwrap_or("").to_string();
                 let ids = unit["word_ids"].as_array().ok_or("Uma unidade semântica não contém word_ids.")?;
@@ -565,7 +572,10 @@ fn build_contract_suggestion(
     }
 
     if include_units {
-        suggestion["semantic_units"] = response.get("semantic_units").cloned().unwrap_or_else(|| json!([]));
+        let units = response.get("semantic_units").and_then(Value::as_array).cloned().unwrap_or_default();
+        suggestion["semantic_units"] = json!(units.into_iter()
+            .filter(|unit| unit.get("word_ids").and_then(Value::as_array).map(|ids| ids.len() >= 2).unwrap_or(false))
+            .collect::<Vec<_>>());
     }
     Ok(suggestion)
 }
