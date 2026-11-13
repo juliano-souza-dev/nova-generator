@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowLeft, Captions, Check, Clock3, Download, Film, Languages, Pause, Play, Plus, Save, SkipBack, SkipForward, Trash2, X } from "lucide-react";
@@ -144,6 +144,103 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     setSaved(false);
     setDirty(true);
   }
+  function applyTimelineCueTiming(cueId: string, startMs: number, endMs: number, mode: "move" | "start" | "end", deltaMs: number) {
+    const target = cues.find(item => item.id === cueId);
+    if (!target) return;
+    const nextStart = Math.max(0, Math.round(startMs));
+    const nextEnd = Math.min(duration || endMs, Math.round(endMs));
+    if (nextEnd - nextStart < 100) return;
+
+    const shiftWord = (word: { text: string; startMs: number; endMs: number }) => ({
+      ...word, startMs: word.startMs + deltaMs, endMs: word.endMs + deltaMs
+    });
+    setCues(items => items.map(item => {
+      if (item.id !== cueId) return item;
+      let words = item.words ?? [];
+      if (mode === "move") words = words.map(shiftWord);
+      else if (words.length) {
+        words = words.map((word, index) => ({
+          ...word,
+          ...(mode === "start" && index === 0 ? { startMs: nextStart } : {}),
+          ...(mode === "end" && index === words.length - 1 ? { endMs: nextEnd } : {})
+        }));
+      }
+      return { ...item, startMs: nextStart, endMs: nextEnd, words };
+    }).sort((a, b) => a.startMs - b.startMs));
+
+    setTranslations(items => items.map(item => item.id === cueId
+      ? { ...item, startMs: nextStart, endMs: nextEnd }
+      : item));
+    setEditorialResult(result => {
+      if (!result) return result;
+      return {
+        ...result,
+        suggestions: (result.suggestions ?? []).map((suggestion: any) => {
+          if (suggestion.cue_id !== cueId) return suggestion;
+          const wordTranslations = (suggestion.word_translations ?? []).map((word: any, index: number, all: any[]) => ({
+            ...word,
+            ...(mode === "move" ? {
+              start_ms: Number(word.start_ms ?? word.startMs) + deltaMs,
+              end_ms: Number(word.end_ms ?? word.endMs) + deltaMs
+            } : {}),
+            ...(mode === "start" && index === 0 ? { start_ms: nextStart } : {}),
+            ...(mode === "end" && index === all.length - 1 ? { end_ms: nextEnd } : {})
+          }));
+          return { ...suggestion, start_ms: nextStart, end_ms: nextEnd, word_translations: wordTranslations };
+        })
+      };
+    });
+    setCurrent(value => mode === "move" ? Math.max(0, value + deltaMs) : value);
+    if (mode === "move" && video.current) video.current.currentTime = Math.max(0, video.current.currentTime + deltaMs / 1000);
+    setSaved(false);
+    setDirty(true);
+    setTranslationDirty(true);
+  }
+
+  function beginCueDrag(event: ReactPointerEvent<HTMLButtonElement>, cue: Cue, mode: "move" | "start" | "end") {
+    if (saving || aligning || !duration) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const lane = event.currentTarget.parentElement;
+    if (!lane) return;
+    const laneWidth = lane.getBoundingClientRect().width;
+    if (!laneWidth) return;
+    const initialX = event.clientX;
+    const initialStart = cue.startMs;
+    const initialEnd = cue.endMs;
+    const initialDuration = initialEnd - initialStart;
+    const target = event.currentTarget;
+    target.setPointerCapture(event.pointerId);
+    const onMove = (moveEvent: globalThis.PointerEvent) => {
+      const deltaMs = (moveEvent.clientX - initialX) / laneWidth * duration;
+      const neighborBefore = cues.filter(item => item.id !== cue.id && item.endMs <= initialStart).sort((a, b) => b.endMs - a.endMs)[0];
+      const neighborAfter = cues.filter(item => item.id !== cue.id && item.startMs >= initialEnd).sort((a, b) => a.startMs - b.startMs)[0];
+      let nextStart = initialStart;
+      let nextEnd = initialEnd;
+      let appliedDelta = deltaMs;
+      if (mode === "move") {
+        appliedDelta = Math.max((neighborBefore?.endMs ?? 0) - initialStart, Math.min((neighborAfter?.startMs ?? duration) - initialEnd, deltaMs));
+        nextStart = initialStart + appliedDelta;
+        nextEnd = initialEnd + appliedDelta;
+      } else if (mode === "start") {
+        nextStart = Math.max(neighborBefore?.endMs ?? 0, Math.min(initialEnd - 100, initialStart + deltaMs));
+        appliedDelta = nextStart - initialStart;
+      } else {
+        nextEnd = Math.min(neighborAfter?.startMs ?? duration, Math.max(initialStart + 100, initialEnd + deltaMs));
+        appliedDelta = nextEnd - initialEnd;
+      }
+      applyTimelineCueTiming(cue.id, nextStart, nextEnd, mode, appliedDelta);
+    };
+    const onUp = () => {
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", onUp);
+    };
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp, { once: true });
+    target.addEventListener("pointercancel", onUp, { once: true });
+  }
+
   async function splitCueAtWord(wordIndex: number) {
     if (!chosen || !chosen.words || wordIndex <= 0 || wordIndex >= chosen.words.length || saving || aligning) return;
     const before = chosen.words[wordIndex - 1];
@@ -521,7 +618,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                 </button>
                 <div className="media-editor-track-lane" onClick={() => setActiveTrack(id)}>
                   {id === "video" && <button className={`media-editor-track-clip video-clip ${activeTrack === "video" ? "selected" : ""}`} style={{ left: "0%", width: "100%" }} onClick={() => { setActiveTrack("video"); setSelected(null); seek(0); }} title={asset.name}><Film size={12}/><span>{asset.name}</span></button>}
-                  {id === "transcript" && cues.map(c => <button key={c.id} className={`media-editor-track-clip transcript-clip ${selected === c.id ? "selected" : ""}`} style={{ left: `${pct(c.startMs)}%`, width: `${Math.max(.7, pct(c.endMs - c.startMs))}%` }} onClick={() => { setActiveTrack("transcript"); setSelected(c.id); seek(c.startMs); }} title={c.text || "Trecho sem texto"}><span>{c.text || "Trecho"}</span></button>)}
+                  {id === "transcript" && cues.map(c => <button key={c.id} type="button" className={`media-editor-track-clip transcript-clip ${selected === c.id ? "selected" : ""} media-editor-draggable-clip`} style={{ left: `${pct(c.startMs)}%`, width: `${Math.max(.7, pct(c.endMs - c.startMs))}%`, touchAction: "none", cursor: "grab" }} onClick={() => { setActiveTrack("transcript"); setSelected(c.id); seek(c.startMs); }} onPointerDown={e => beginCueDrag(e, c, "move")} title={c.text || "Trecho sem texto"}><span>{c.text || "Trecho"}</span><span role="presentation" title="Ajustar início" onPointerDown={e => { e.stopPropagation(); beginCueDrag(e as unknown as ReactPointerEvent<HTMLButtonElement>, c, "start"); }} style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize", zIndex: 2, background: "rgba(255,255,255,.22)", borderRadius: "inherit" }}/><span role="presentation" title="Ajustar fim" onPointerDown={e => { e.stopPropagation(); beginCueDrag(e as unknown as ReactPointerEvent<HTMLButtonElement>, c, "end"); }} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize", zIndex: 2, background: "rgba(255,255,255,.22)", borderRadius: "inherit" }}/></button>)}
                   {id === "translation" && (translations.length ? translations.map(t => <button key={t.id} className={"media-editor-track-clip translation-clip " + (selected === t.id ? "selected" : "")} style={{ left: pct(t.startMs) + "%", width: Math.max(.7, pct(t.endMs - t.startMs)) + "%" }} onClick={() => { setActiveTrack("translation"); setSelected(t.id); seek(t.startMs); }} title={t.text}><span>{t.text}</span></button>) : <span className="media-editor-track-empty">Traduções aparecerão aqui</span>)}
                   {id === "wordbyword" && (cues.some(c => c.wordAlignment === "whisperx" && c.words?.length) ? cues.filter(c => c.wordAlignment === "whisperx").flatMap(c => (c.words ?? []).map((word, index) => ({ cue: c, word, index }))).map(({ cue, word, index }) => <button key={cue.id + "-word-" + index} className="media-editor-track-clip wordbyword-clip" style={{ left: pct(word.startMs) + "%", width: Math.max(.35, pct(word.endMs - word.startMs)) + "%" }} onClick={() => { setActiveTrack("wordbyword"); setSelected(cue.id); seek(word.startMs); }} title={word.text}><span>{word.text}</span></button>) : <span className="media-editor-track-empty">Alinhe os blocos para exibir as palavras</span>)}
                   <div className="media-editor-lane-playhead" style={{ left: `${pct(current)}%` }}/>
