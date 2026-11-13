@@ -213,7 +213,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     let lastEnd = initialEnd;
     timelineDragMoved.current = false;
     target.setPointerCapture(event.pointerId);
-    const onMove = (moveEvent: globalThis.PointerEvent) => {
+    const onMove = (moveEvent: PointerEvent) => {
       const deltaMs = (moveEvent.clientX - initialX) / laneWidth * duration;
       if (Math.abs(moveEvent.clientX - initialX) > 3) timelineDragMoved.current = true;
       const neighborBefore = cues.filter(item => item.id !== cue.id && item.endMs <= initialStart).sort((a, b) => b.endMs - a.endMs)[0];
