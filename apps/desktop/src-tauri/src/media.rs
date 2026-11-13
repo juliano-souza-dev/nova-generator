@@ -325,7 +325,7 @@ pub fn save_project_subtitles(app: AppHandle, project_id: String, asset_id: Stri
 
 
 pub(crate) fn project_media_root(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
-    Ok(project_dir(app, project_id)?.join("media"))
+    project_dir(app, project_id)
 }
 
 pub(crate) fn shared_ffmpeg(app: &AppHandle) -> Result<PathBuf, String> {
