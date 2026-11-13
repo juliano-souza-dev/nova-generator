@@ -8,12 +8,6 @@ use tauri::{AppHandle, Emitter};
 #[serde(rename_all = "camelCase")]
 pub struct TranslationCue { pub id: String, pub start_ms: u64, pub end_ms: u64, pub text: String }
 
-#[derive(Debug, Deserialize)]
-struct StreamResponse { choices: Vec<StreamChoice> }
-#[derive(Debug, Deserialize)]
-struct StreamChoice { delta: StreamDelta }
-#[derive(Debug, Deserialize)]
-struct StreamDelta { content: Option<String> }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Progress { project_id: String, asset_id: String, stage: String, percent: f32, completed_chunks: usize, total_chunks: usize, message: String }
@@ -301,7 +295,7 @@ fn translate_cue_streaming(
     );
     if include_words {
         system.push_str(
-            " Inclua word_translations como um objeto JSON cujas chaves sejam exatamente os word_id recebidos e cujos valores sejam traduções contextuais curtas de cada palavra. Inclua todas as palavras uma única vez. Não devolva leading, surface, order ou tempos."
+            " Inclua word_translations como um array de strings, com uma tradução contextual curta para cada palavra, rigorosamente na mesma ordem do array words recebido. Inclua todas as palavras uma única vez. Não devolva IDs, leading, surface, order ou tempos."
         );
     }
     if include_units {
@@ -369,16 +363,13 @@ fn translate_cue_streaming(
         return Err(format!("A Groq não devolveu a tradução do trecho '{}'.", cue.id));
     }
     if include_words {
-        let translations = parsed.get("word_translations").and_then(Value::as_object)
+        let translations = parsed.get("word_translations").and_then(Value::as_array)
             .ok_or_else(|| format!("A Groq não devolveu word_translations para '{}'.", cue.id))?;
         if translations.len() != words.len() {
             return Err(format!("A Groq devolveu {} traduções de palavras para '{}' mas eram esperadas {}.", translations.len(), cue.id, words.len()));
         }
-        for word in &words {
-            let id = word["word_id"].as_str().unwrap_or("");
-            if translations.get(id).and_then(Value::as_str).unwrap_or("").trim().is_empty() {
-                return Err(format!("A tradução da palavra '{id}' está ausente ou vazia."));
-            }
+        if translations.iter().any(|value| value.as_str().unwrap_or("").trim().is_empty()) {
+            return Err(format!("A Groq devolveu uma tradução de palavra vazia em '{}'.", cue.id));
         }
     }
     if include_units && !parsed.get("semantic_units").map(Value::is_array).unwrap_or(false) {
@@ -403,14 +394,17 @@ fn build_contract_suggestion(
 
     if include_words {
         let source_words = cue.words.as_deref().unwrap_or(&[]);
-        let raw_translations = response.get("word_translations").and_then(Value::as_object)
-            .ok_or("A resposta não contém o mapa de traduções por palavra.")?;
+        let raw_translations = response.get("word_translations").and_then(Value::as_array)
+            .ok_or("A resposta não contém a lista de traduções por palavra.")?;
+        if raw_translations.len() != source_words.len() {
+            return Err(format!("A resposta contém {} traduções de palavras, mas eram esperadas {}.", raw_translations.len(), source_words.len()));
+        }
         let mut word_translations = Vec::with_capacity(source_words.len());
         for (index, word) in source_words.iter().enumerate() {
             let (leading, surface) = crate::translation_contract::split_leading(&word.text);
             let word_id = format!("{}:word:{:04}", cue.id, index + 1);
-            let pt = raw_translations.get(&word_id).and_then(Value::as_str)
-                .ok_or_else(|| format!("A tradução da palavra '{word_id}' não foi retornada."))?;
+            let pt = raw_translations[index].as_str()
+                .ok_or_else(|| format!("A tradução da palavra '{word_id}' não é um texto válido."))?;
             word_translations.push(json!({
                 "word_id": word_id,
                 "order": index + 1,
