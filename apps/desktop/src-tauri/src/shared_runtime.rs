@@ -21,6 +21,10 @@ pub struct SharedRuntimeStatus {
     pub application_id: String,
     pub media_shared_path: String,
     pub media_shared_ready: bool,
+    pub forced_alignment_path: Option<String>,
+    pub forced_alignment_python_path: Option<String>,
+    pub forced_alignment_runner_path: Option<String>,
+    pub forced_alignment_ready: bool,
     pub providers: Vec<SharedProviderSummary>,
 }
 
@@ -119,6 +123,21 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
         return Err("shared.directories.mediaShared precisa conter um caminho absoluto.".into());
     }
 
+    let alignment_runtime = config.pointer("/shared/resources/forced-alignment")
+        .and_then(Value::as_str).map(PathBuf::from);
+    if let Some(runtime) = alignment_runtime.as_ref() {
+        if !runtime.is_absolute() {
+            return Err("shared.resources.forced-alignment precisa conter um caminho absoluto.".into());
+        }
+    }
+    let alignment_python = alignment_runtime.as_ref().map(|runtime| {
+        if cfg!(windows) { runtime.join("venv").join("Scripts").join("python.exe") }
+        else { runtime.join("venv").join("bin").join("python") }
+    });
+    let alignment_runner = alignment_runtime.as_ref().map(|runtime| runtime.join("runner.py"));
+    let alignment_ready = alignment_python.as_ref().is_some_and(|python| python.is_file())
+        && alignment_runner.as_ref().is_some_and(|runner| runner.is_file());
+
     let providers = shared_runtime_manager::api::get_authorized_providers_from_config(&path, APPLICATION_ID)
         .map_err(|error| format!("Não foi possível ler os provedores autorizados pelo Shared Runtime: {error}"))?
         .into_iter()
@@ -135,6 +154,10 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
         application_id: APPLICATION_ID.into(),
         media_shared_ready: media_path.is_dir(),
         media_shared_path: media_path.to_string_lossy().into_owned(),
+        forced_alignment_path: alignment_runtime.map(|value| value.to_string_lossy().into_owned()),
+        forced_alignment_python_path: alignment_python.map(|value| value.to_string_lossy().into_owned()),
+        forced_alignment_runner_path: alignment_runner.map(|value| value.to_string_lossy().into_owned()),
+        forced_alignment_ready: alignment_ready,
         providers,
     })
 }
