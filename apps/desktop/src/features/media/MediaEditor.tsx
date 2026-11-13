@@ -63,6 +63,7 @@ const fmt = (ms: number) => {
 export default function MediaEditor({ projectId, asset, onClose }: { projectId: string; asset: Asset; onClose: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const translationFileInput = useRef<HTMLInputElement>(null);
+  const timelineDragMoved = useRef(false);
   const [src, setSrc] = useState("");
   const [cues, setCues] = useState<Cue[]>([]);
   const [translations, setTranslations] = useState<TranslationCue[]>([]);
@@ -190,8 +191,6 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         })
       };
     });
-    setCurrent(value => mode === "move" ? Math.max(0, value + deltaMs) : value);
-    if (mode === "move" && video.current) video.current.currentTime = Math.max(0, video.current.currentTime + deltaMs / 1000);
     setSaved(false);
     setDirty(true);
     setTranslationDirty(true);
@@ -201,18 +200,21 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     if (saving || aligning || !duration) return;
     event.preventDefault();
     event.stopPropagation();
-    const lane = event.currentTarget.parentElement;
-    if (!lane) return;
+    const target = event.currentTarget.closest("button") as HTMLButtonElement | null;
+    const lane = target?.parentElement;
+    if (!target || !lane) return;
     const laneWidth = lane.getBoundingClientRect().width;
     if (!laneWidth) return;
     const initialX = event.clientX;
     const initialStart = cue.startMs;
     const initialEnd = cue.endMs;
-    const initialDuration = initialEnd - initialStart;
-    const target = event.currentTarget;
+    let lastStart = initialStart;
+    let lastEnd = initialEnd;
+    timelineDragMoved.current = false;
     target.setPointerCapture(event.pointerId);
     const onMove = (moveEvent: globalThis.PointerEvent) => {
       const deltaMs = (moveEvent.clientX - initialX) / laneWidth * duration;
+      if (Math.abs(moveEvent.clientX - initialX) > 3) timelineDragMoved.current = true;
       const neighborBefore = cues.filter(item => item.id !== cue.id && item.endMs <= initialStart).sort((a, b) => b.endMs - a.endMs)[0];
       const neighborAfter = cues.filter(item => item.id !== cue.id && item.startMs >= initialEnd).sort((a, b) => a.startMs - b.startMs)[0];
       let nextStart = initialStart;
@@ -229,7 +231,10 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         nextEnd = Math.min(neighborAfter?.startMs ?? duration, Math.max(initialStart + 100, initialEnd + deltaMs));
         appliedDelta = nextEnd - initialEnd;
       }
-      applyTimelineCueTiming(cue.id, nextStart, nextEnd, mode, appliedDelta);
+      const incrementalDelta = mode === "move" ? nextStart - lastStart : mode === "start" ? nextStart - lastStart : nextEnd - lastEnd;
+      lastStart = nextStart;
+      lastEnd = nextEnd;
+      applyTimelineCueTiming(cue.id, nextStart, nextEnd, mode, incrementalDelta);
     };
     const onUp = () => {
       target.removeEventListener("pointermove", onMove);
@@ -618,7 +623,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                 </button>
                 <div className="media-editor-track-lane" onClick={() => setActiveTrack(id)}>
                   {id === "video" && <button className={`media-editor-track-clip video-clip ${activeTrack === "video" ? "selected" : ""}`} style={{ left: "0%", width: "100%" }} onClick={() => { setActiveTrack("video"); setSelected(null); seek(0); }} title={asset.name}><Film size={12}/><span>{asset.name}</span></button>}
-                  {id === "transcript" && cues.map(c => <button key={c.id} type="button" className={`media-editor-track-clip transcript-clip ${selected === c.id ? "selected" : ""} media-editor-draggable-clip`} style={{ left: `${pct(c.startMs)}%`, width: `${Math.max(.7, pct(c.endMs - c.startMs))}%`, touchAction: "none", cursor: "grab" }} onClick={() => { setActiveTrack("transcript"); setSelected(c.id); seek(c.startMs); }} onPointerDown={e => beginCueDrag(e, c, "move")} title={c.text || "Trecho sem texto"}><span>{c.text || "Trecho"}</span><span role="presentation" title="Ajustar início" onPointerDown={e => { e.stopPropagation(); beginCueDrag(e as unknown as ReactPointerEvent<HTMLButtonElement>, c, "start"); }} style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize", zIndex: 2, background: "rgba(255,255,255,.22)", borderRadius: "inherit" }}/><span role="presentation" title="Ajustar fim" onPointerDown={e => { e.stopPropagation(); beginCueDrag(e as unknown as ReactPointerEvent<HTMLButtonElement>, c, "end"); }} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize", zIndex: 2, background: "rgba(255,255,255,.22)", borderRadius: "inherit" }}/></button>)}
+                  {id === "transcript" && cues.map(c => <button key={c.id} type="button" className={`media-editor-track-clip transcript-clip ${selected === c.id ? "selected" : ""} media-editor-draggable-clip`} style={{ left: `${pct(c.startMs)}%`, width: `${Math.max(.7, pct(c.endMs - c.startMs))}%`, touchAction: "none", cursor: "grab" }} onClick={() => { if (timelineDragMoved.current) { timelineDragMoved.current = false; return; } setActiveTrack("transcript"); setSelected(c.id); seek(c.startMs); }} onPointerDown={e => beginCueDrag(e, c, "move")} title={c.text || "Trecho sem texto"}><span>{c.text || "Trecho"}</span><span role="presentation" title="Ajustar início" onPointerDown={e => { e.stopPropagation(); beginCueDrag(e as unknown as ReactPointerEvent<HTMLButtonElement>, c, "start"); }} style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize", zIndex: 2, background: "rgba(255,255,255,.22)", borderRadius: "inherit" }}/><span role="presentation" title="Ajustar fim" onPointerDown={e => { e.stopPropagation(); beginCueDrag(e as unknown as ReactPointerEvent<HTMLButtonElement>, c, "end"); }} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize", zIndex: 2, background: "rgba(255,255,255,.22)", borderRadius: "inherit" }}/></button>)}
                   {id === "translation" && (translations.length ? translations.map(t => <button key={t.id} className={"media-editor-track-clip translation-clip " + (selected === t.id ? "selected" : "")} style={{ left: pct(t.startMs) + "%", width: Math.max(.7, pct(t.endMs - t.startMs)) + "%" }} onClick={() => { setActiveTrack("translation"); setSelected(t.id); seek(t.startMs); }} title={t.text}><span>{t.text}</span></button>) : <span className="media-editor-track-empty">Traduções aparecerão aqui</span>)}
                   {id === "wordbyword" && (cues.some(c => c.wordAlignment === "whisperx" && c.words?.length) ? cues.filter(c => c.wordAlignment === "whisperx").flatMap(c => (c.words ?? []).map((word, index) => ({ cue: c, word, index }))).map(({ cue, word, index }) => <button key={cue.id + "-word-" + index} className="media-editor-track-clip wordbyword-clip" style={{ left: pct(word.startMs) + "%", width: Math.max(.35, pct(word.endMs - word.startMs)) + "%" }} onClick={() => { setActiveTrack("wordbyword"); setSelected(cue.id); seek(word.startMs); }} title={word.text}><span>{word.text}</span></button>) : <span className="media-editor-track-empty">Alinhe os blocos para exibir as palavras</span>)}
                   <div className="media-editor-lane-playhead" style={{ left: `${pct(current)}%` }}/>
