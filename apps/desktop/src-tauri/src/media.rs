@@ -331,5 +331,13 @@ pub(crate) fn project_media_root(app: &AppHandle, project_id: &str) -> Result<Pa
 }
 
 pub(crate) fn shared_ffmpeg(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(shared(app)?.ffmpeg)
+    let path = shared_manifest_path(app)?;
+    let raw = fs::read(&path).map_err(|e| e.to_string())?;
+    let config: Value = serde_json::from_slice(&raw)
+        .map_err(|e| format!("shared.config.json inválido: {e}"))?;
+    if config.get("schemaVersion").and_then(Value::as_str) != Some("1.0")
+        || config.pointer("/shared/enabled").and_then(Value::as_bool) != Some(true) {
+        return Err("O vínculo Shared Runtime está ausente, desativado ou incompatível. Sincronize o Nova Generator pelo Shared Runtime Manager.".into());
+    }
+    shared_resource(&config, "ffmpeg")
 }
