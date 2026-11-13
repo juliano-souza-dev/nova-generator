@@ -25,7 +25,7 @@ pub struct ExternalPackage {
     pub files: std::collections::BTreeMap<String, String>,
 }
 
-fn split_leading(value: &str) -> (String, String) {
+pub(crate) fn split_leading(value: &str) -> (String, String) {
     let split = value.char_indices().find(|(_, c)| !c.is_whitespace()).map(|(i, _)| i).unwrap_or(value.len());
     (value[..split].to_string(), value[split..].to_string())
 }
