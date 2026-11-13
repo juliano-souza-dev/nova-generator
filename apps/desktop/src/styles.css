@@ -65,7 +65,7 @@
 
 
 /* Global processing center: visual standard adapted from TTK Creator */
-.nova-task-center{position:fixed;z-index:30;top:18px;right:5.2%}
+.nova-task-center{position:fixed;z-index:60;top:18px;right:5.2%;pointer-events:auto}
 .nova-task-trigger{height:38px;display:flex;align-items:center;gap:9px;padding:0 12px;border:1px solid #393342;border-radius:8px;background:#1b1921;color:#aaa4b3;font-size:11px;box-shadow:0 8px 24px #0003}
 .nova-task-trigger:hover,.nova-task-trigger.is-active{border-color:#8065ac;color:#e4d8f8;background:#282231}
 .nova-task-trigger b{min-width:18px;height:18px;display:grid;place-items:center;padding:0 5px;border-radius:10px;background:#a98bed;color:#17121f;font:700 10px 'DM Mono'}
