@@ -136,7 +136,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
-      const items = Array.isArray(parsed) ? parsed : parsed.translations;
+      const items = Array.isArray(parsed) ? parsed : (parsed.translations ?? parsed.suggestions ?? parsed.cues);
       if (!Array.isArray(items)) throw new Error("O JSON precisa conter uma lista de traduções.");
       const byId = new Map<string, string>();
       for (const item of items) {
@@ -193,7 +193,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
           <button className="primary-button" onClick={() => void save()} disabled={saving || loading}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button>
-          <button className="icon-button" title="Fechar editor" onClick={() => { if (!dirty || window.confirm("Há alterações de legendas não salvas. Fechar mesmo assim?")) onClose(); }}><X size={18}/></button>
+          <button className="icon-button" title="Fechar editor" onClick={() => { if (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?")) onClose(); }}><X size={18}/></button>
         </div>
       </header>
       {error && <div className="media-editor-error">{error}</div>}
