@@ -41,6 +41,11 @@ O Shared Runtime Manager é a fonte central para dependências de execução, fe
 - O diretório de vídeos originais é sempre `shared.directories.mediaShared`. Recortes de trabalho e dados dos projetos permanecem no diretório próprio do Nova.
 - O SDK Rust oficial `shared-runtime-manager` valida o identificador da aplicação, carrega endpoints/modelos e descriptografa credenciais autorizadas somente no backend nativo.
 - O Shared Runtime Manager não precisa permanecer aberto depois do provisionamento.
+- O Shared é o único proprietário de runtimes Python compartilhados, pacotes, workers, modelos acústicos e caches. Aplicações consumidoras nunca instalam ou copiam esses recursos em suas pastas.
+- Recursos opcionais são declarados em `shared.dependencies` com `required: false`, instalados sob demanda e disponibilizados em `shared.resources` após a sincronização.
+- O Forced Alignment será provisionado como recurso compartilhado `forced-alignment`, em ambiente virtual Python próprio dentro do Shared. O caminho resolvido é `shared.resources.forced-alignment`.
+- O Nova Generator deve iniciar e consumir o worker por esse caminho provisionado. O worker mantém modelos carregados por idioma e recebe requisições incrementais por bloco.
+- A instalação do Forced Alignment é explícita: `srm install forced-alignment --app nova-generator`. O registro normal do Nova não deve disparar o download de PyTorch/WhisperX.
 
 O identificador de aplicação deste repositório é `nova-generator`. O vínculo provisionado deve declarar o mesmo identificador em `application.id`.
 
