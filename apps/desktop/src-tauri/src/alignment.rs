@@ -160,10 +160,10 @@ fn extract_block(
     let duration = (end_ms - start_ms) as f64 / 1000.0;
     let start = start_ms as f64 / 1000.0;
     let result = Command::new(ffmpeg)
-        .args(["-y", "-hide_banner", "-loglevel", "error", "-i"])
-        .arg(source)
-        .arg("-ss")
+        .args(["-y", "-hide_banner", "-loglevel", "error", "-ss"])
         .arg(format!("{start:.3}"))
+        .arg("-i")
+        .arg(source)
         .arg("-t")
         .arg(format!("{duration:.3}"))
         .args(["-vn", "-ac", "1", "-ar", "16000", "-c:a", "flac"])
@@ -205,7 +205,7 @@ pub async fn align_project_subtitles(
         let pending = cues.iter().filter(|cue| {
             cue.word_alignment.as_deref() != Some("whisperx") && !cue.text.trim().is_empty()
         }).count();
-        let skipped = cues.len().saturating_sub(pending);
+        let skipped = cues.iter().filter(|cue| cue.word_alignment.as_deref() == Some("whisperx")).count();
         if pending == 0 {
             return Ok(AlignmentResult {
                 aligned: 0,
@@ -240,6 +240,14 @@ pub async fn align_project_subtitles(
                 let clip_start = cues[index].start_ms.saturating_sub(PADDING_MS);
                 let clip_end = cues[index].end_ms.saturating_add(PADDING_MS);
                 let clip = temp.join(format!("block-{index:05}.flac"));
+                emit_progress(
+                    &app,
+                    &project_id,
+                    &asset_id,
+                    aligned,
+                    pending,
+                    &format!("Alinhando bloco {} de {}", aligned + 1, pending),
+                );
                 extract_block(&ffmpeg, &source, &clip, clip_start, clip_end)?;
                 let words = worker.align(&clip, &cues[index].text, &lang)?;
                 if words.is_empty() {
