@@ -124,6 +124,7 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
     }
 
     let alignment_runtime = config.pointer("/shared/resources/forced-alignment")
+        .or_else(|| config.pointer("/shared/resolvedDependencies/forced-alignment"))
         .and_then(Value::as_str).map(PathBuf::from);
     if let Some(runtime) = alignment_runtime.as_ref() {
         if !runtime.is_absolute() {
