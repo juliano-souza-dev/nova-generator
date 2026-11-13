@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, Captions, Check, Clock3, Film, Languages, Pause, Play, Plus, Save, SkipBack, SkipForward, Trash2, X } from "lucide-react";
+import { ArrowLeft, Captions, Check, Clock3, Download, Film, Languages, Pause, Play, Plus, Save, SkipBack, SkipForward, Trash2, X } from "lucide-react";
 import { runTrackedTask } from "../tasks/TaskCenter";
+import { downloadExternalTranslationPackage, type ExternalTranslationPackage } from "./translationPackage";
 
 type Cue = { id: string; startMs: number; endMs: number; text: string; words?: { text: string; startMs: number; endMs: number }[] };
 type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: Cue[] };
@@ -20,6 +21,9 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   const [translations, setTranslations] = useState<TranslationCue[]>([]);
   const [translationDirty, setTranslationDirty] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [preparingExternalPackage, setPreparingExternalPackage] = useState(false);
+  const [includeWordTranslations, setIncludeWordTranslations] = useState(true);
+  const [includeSemanticUnits, setIncludeSemanticUnits] = useState(true);
   const [translationInfo, setTranslationInfo] = useState("");
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(asset.durationMs ?? 0);
@@ -125,6 +129,19 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       setTranslationInfo(result.length + " trechos traduzidos para português brasileiro. Revise e salve.");
     } catch (e) { setError(String(e)); }
     finally { setTranslating(false); }
+  }
+
+  async function downloadExternalPackage() {
+    if (preparingExternalPackage || loading || cues.length === 0) return;
+    setPreparingExternalPackage(true); setError("");
+    try {
+      const pkg = await invoke<ExternalTranslationPackage>("prepare_external_translation_package", {
+        projectId, assetId: asset.id, cues, includeWordTranslations, includeSemanticUnits
+      });
+      downloadExternalTranslationPackage(pkg);
+      setTranslationInfo("Pacote editorial 1.3 preparado. Envie o ZIP para a IA externa e importe o output.json retornado.");
+    } catch (e) { setError("Não foi possível preparar o pacote externo: " + String(e)); }
+    finally { setPreparingExternalPackage(false); }
   }
 
   function updateTranslation(id: string, text: string) {
@@ -286,10 +303,15 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
           {activeTrack === "translation" && <div className="media-editor-inspector-content">
             <div className="media-editor-inspector-section">
               <div className="media-editor-section-title"><strong>Tradução para PT-BR</strong><span className="media-editor-translation-count">{translations.length}/{cues.length}</span></div>
-              <p className="media-editor-translation-help">A IA considera a transcrição completa para manter contexto e continuidade entre os trechos.</p>
+              <p className="media-editor-translation-help">A tradução e as predições editoriais seguem o contrato 1.3. Groq e IA externa recebem a mesma entrada e as mesmas regras.</p>
+              <div className="media-editor-contract-options">
+                <label><input type="checkbox" checked={includeWordTranslations} onChange={e => setIncludeWordTranslations(e.target.checked)}/> Traduções palavra por palavra</label>
+                <label><input type="checkbox" checked={includeSemanticUnits} onChange={e => setIncludeSemanticUnits(e.target.checked)}/> Sugestões de unidades semânticas</label>
+              </div>
               <button className="primary-button media-editor-transcribe-button" onClick={() => void translateAll()} disabled={loading || translating || cues.length === 0}><Languages size={15}/>{translating ? "Traduzindo..." : translations.length ? "Gerar tradução novamente" : "Traduzir com Groq"}</button>
+              <button className="media-editor-secondary-action" onClick={() => void downloadExternalPackage()} disabled={loading || preparingExternalPackage || cues.length === 0}><Download size={14}/>{preparingExternalPackage ? "Preparando pacote..." : "Baixar pacote para IA externa"}</button>
               <input ref={translationFileInput} type="file" accept=".json,application/json" hidden onChange={e => void importTranslations(e.target.files?.[0])}/>
-              <button className="media-editor-secondary-action" onClick={() => translationFileInput.current?.click()} disabled={loading || cues.length === 0}>Importar traduções em JSON</button>
+              <button className="media-editor-secondary-action" onClick={() => translationFileInput.current?.click()} disabled={loading || cues.length === 0}>Importar resultado JSON</button>
               {translationInfo && <p className="media-editor-transcription-info">{translationInfo}</p>}
             </div>
             {chosen ? <div className="media-editor-inspector-section">
