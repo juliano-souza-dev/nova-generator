@@ -322,3 +322,12 @@ pub fn save_project_subtitles(app: AppHandle, project_id: String, asset_id: Stri
     if path.exists() { fs::remove_file(&path).map_err(|e| e.to_string())?; }
     fs::rename(temp, path).map_err(|e| e.to_string())
 }
+
+
+pub(crate) fn project_media_root(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
+    Ok(project_dir(app, project_id)?.join("media"))
+}
+
+pub(crate) fn shared_ffmpeg(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(shared(app)?.ffmpeg)
+}
