@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { CheckCircle2, FileImage, Film, FolderInput, LoaderCircle, Music2, Scissors, Video, X, Play, Clock3 } from "lucide-react";
 import "./MediaWorkspace.css";
+import { runTrackedTask } from "../tasks/TaskCenter";
 
 type Asset = { id:string; name:string; kind:string; sizeBytes:number; source:string; sourceVideoId?:string|null; sourceStartMs?:number|null; sourceEndMs?:number|null };
 type Inspection = { videoId:string; url:string; title:string; channel?:string|null; durationMs?:number|null; thumbnail?:string|null; qualities:number[] };
@@ -24,14 +25,13 @@ export default function MediaWorkspace({projectId}:{projectId:string}) {
  useEffect(()=>{let stop:(()=>void)|undefined;listen<Progress>("media-task-progress",e=>{if(e.payload.projectId===projectId)setProgress(e.payload);}).then(fn=>stop=fn);return()=>stop?.();},[projectId]);
  async function importLocal(){
   setError(""); const selected=await open({multiple:true,directory:false,title:"Importar mídias",filters:[{name:"Mídias",extensions:["mp4","mov","mkv","webm","mp3","wav","m4a","aac","ogg","flac","jpg","jpeg","png","webp","gif"]}]});
-  if(!selected)return;setBusy(true);try{const paths=Array.isArray(selected)?selected:[selected];const result=await invoke<Asset[]>("import_media_files",{projectId,paths});setAssets(v=>[...result,...v]);setNotice(result.length+" mídia(s) importada(s).");}catch(e){setError(String(e));}finally{setBusy(false);}
+  if(!selected)return;setBusy(true);try{const paths=Array.isArray(selected)?selected:[selected];const result=await runTrackedTask("import","Importar mídias",()=>invoke<Asset[]>("import_media_files",{projectId,paths}));setAssets(v=>[...result,...v]);setNotice(result.length+" mídia(s) importada(s).");}catch(e){setError(String(e));}finally{setBusy(false);}
  }
- async function inspectYoutube(){if(!url.trim()||busy)return;setBusy(true);setError("");setInfo(null);setCache(null);setPreviewUrl("");try{const v=await invoke<Inspection>("inspect_youtube",{url});setInfo(v);setQuality(v.qualities.find(h=>h<=1080)??v.qualities[0]??0);}catch(e){setError(String(e));}finally{setBusy(false);}}
+ async function inspectYoutube(){if(!url.trim()||busy)return;setBusy(true);setError("");setInfo(null);setCache(null);setPreviewUrl("");try{const v=await runTrackedTask("download","Consultar vídeo do YouTube",()=>invoke<Inspection>("inspect_youtube",{url}));setInfo(v);setQuality(v.qualities.find(h=>h<=1080)??v.qualities[0]??0);}catch(e){setError(String(e));}finally{setBusy(false);}}
  async function download(){
   if(!info||busy)return;setBusy(true);setError("");setProgress({projectId,status:"running",percent:1,message:"Verificando a biblioteca compartilhada..."});
   try{
-   const c=await invoke<Cache>("prepare_youtube_cache",{projectId,url:info.url,maxHeight:quality});
-   const path=await invoke<string>("authorize_youtube_preview",{videoId:c.videoId});
+   const {cache:c,path}=await runTrackedTask("download","Baixar vídeo original",async()=>{const cache=await invoke<Cache>("prepare_youtube_cache",{projectId,url:info.url,maxHeight:quality});const path=await invoke<string>("authorize_youtube_preview",{videoId:cache.videoId});return {cache,path};});
    setCache(c);setPreviewUrl(convertFileSrc(path));setStart(0);setEnd((c.durationMs??info.durationMs??0)/1000);setTrimOpen(true);
    setNotice(c.reused?"Vídeo original reutilizado da biblioteca compartilhada.":"Download concluído. O original foi preservado.");
   }catch(e){setError(String(e));setProgress({projectId,status:"failed",percent:0,message:String(e)});}finally{setBusy(false);}
@@ -39,7 +39,7 @@ export default function MediaWorkspace({projectId}:{projectId:string}) {
  async function createClip(){
   if(!cache||busy)return;setBusy(true);setError("");
   try{
-   const asset=await invoke<Asset>("trim_youtube_cache",{projectId,videoId:cache.videoId,startMs:Math.round(start*1000),endMs:Math.round(end*1000)});
+   const asset=await runTrackedTask("trim","Recortar vídeo",()=>invoke<Asset>("trim_youtube_cache",{projectId,videoId:cache.videoId,startMs:Math.round(start*1000),endMs:Math.round(end*1000)}));
    setAssets(v=>[asset,...v]);setNotice("Trecho adicionado ao projeto. O original permanece na biblioteca compartilhada.");
    setTrimOpen(false);setCache(null);setPreviewUrl("");setInfo(null);setUrl("");
    setProgress({projectId,status:"completed",percent:100,message:"Importação concluída."});
