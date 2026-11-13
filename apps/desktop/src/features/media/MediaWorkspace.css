@@ -235,3 +235,6 @@
 .media-editor-editorial-status .media-editor-secondary-action {
   justify-content: center;
 }
+
+.media-editor-track-clip.wordbyword-clip{top:7px;height:19px;padding:0 3px;border-color:#8c6bb5;background:#3b2c50;color:#eadcff;font-size:7px}
+.media-editor-track-clip.wordbyword-clip:hover{border-color:#d0b4f3;background:#523b6c}
