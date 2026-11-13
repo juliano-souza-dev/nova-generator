@@ -80,11 +80,9 @@ fn load_config(app: &AppHandle) -> Result<(PathBuf, Value), String> {
     if config.pointer("/shared/enabled").and_then(Value::as_bool) != Some(true) {
         return Err("O Shared Runtime está desativado para esta aplicação.".into());
     }
-    let app_id = config.pointer("/application/id").and_then(Value::as_str)
-        .ok_or("O vínculo Shared Runtime não informa application.id.")?;
-    if app_id != APPLICATION_ID {
-        return Err(format!("O shared.config.json pertence a '{app_id}', não a '{APPLICATION_ID}'."));
-    }
+    // application.id is project-owned metadata, not the Shared registry key.
+    // Shared resources are resolved from this config and API authorization continues
+    // to use APPLICATION_ID (the ID used when registering this app in Shared).
     Ok((path, config))
 }
 
