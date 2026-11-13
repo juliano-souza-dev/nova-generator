@@ -5,7 +5,7 @@ use std::{
     fs,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{Child, ChildStdin, ChildStdout, Stdio},
 };
 use tauri::{AppHandle, Emitter};
 
@@ -57,7 +57,7 @@ struct AlignmentWorker {
 
 impl AlignmentWorker {
     fn start(python: &Path, runner: &Path) -> Result<Self, String> {
-        let mut child = Command::new(python)
+        let mut child = crate::process::hidden_command(python)
             .arg("-u")
             .arg(runner)
             .stdin(Stdio::piped())
