@@ -5,8 +5,9 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { CheckCircle2, FileImage, Film, FolderInput, LoaderCircle, Music2, Scissors, Video, X, Play, Clock3 } from "lucide-react";
 import "./MediaWorkspace.css";
 import { runTrackedTask } from "../tasks/TaskCenter";
+import MediaEditor from "./MediaEditor";
 
-type Asset = { id:string; name:string; kind:string; sizeBytes:number; source:string; sourceVideoId?:string|null; sourceStartMs?:number|null; sourceEndMs?:number|null };
+type Asset = { id:string; name:string; kind:string; sizeBytes:number; source:string; relativePath:string; durationMs?:number|null; sourceVideoId?:string|null; sourceStartMs?:number|null; sourceEndMs?:number|null };
 type Inspection = { videoId:string; url:string; title:string; channel?:string|null; durationMs?:number|null; thumbnail?:string|null; qualities:number[] };
 type Cache = { videoId:string; title:string; durationMs?:number|null; reused:boolean };
 type Progress = { projectId:string; status:string; percent:number; message:string };
@@ -17,7 +18,7 @@ export default function MediaWorkspace({projectId}:{projectId:string}) {
  const [assets,setAssets]=useState<Asset[]>([]),[url,setUrl]=useState(""),[info,setInfo]=useState<Inspection|null>(null),[cache,setCache]=useState<Cache|null>(null);
  const [quality,setQuality]=useState(1080),[start,setStart]=useState(0),[end,setEnd]=useState(0),[busy,setBusy]=useState(false);
  const [error,setError]=useState(""),[notice,setNotice]=useState(""),[progress,setProgress]=useState<Progress|null>(null);
- const [previewUrl,setPreviewUrl]=useState(""),[trimOpen,setTrimOpen]=useState(false);
+ const [previewUrl,setPreviewUrl]=useState(""),[trimOpen,setTrimOpen]=useState(false),[editingAsset,setEditingAsset]=useState<Asset|null>(null);
  const videoRef=useRef<HTMLVideoElement|null>(null);
  const durationSeconds=(cache?.durationMs??info?.durationMs??0)/1000;
  const refresh=useCallback(async()=>{try{setAssets(await invoke<Asset[]>("list_project_media",{projectId}));}catch(e){setError(String(e));}},[projectId]);
@@ -60,7 +61,8 @@ export default function MediaWorkspace({projectId}:{projectId:string}) {
    {progress?.status==="running"&&<div className="media-progress"><div><LoaderCircle className="spin" size={14}/><span>{progress.message}</span><b>Em andamento</b></div><i><span style={{width:progress.percent+"%"}}/></i></div>}
   </div>
   <div className="media-library-heading"><div><span className="eyebrow">ARQUIVOS VINCULADOS</span><h3>Conteúdo do projeto <small>{assets.length}</small></h3></div></div>
-  {!assets.length?<div className="media-empty"><div><Film size={23}/></div><strong>Nenhuma mídia neste projeto</strong><span>Importe um arquivo local ou consulte um vídeo do YouTube.</span></div>:<div className="media-asset-list">{assets.map(a=><article className="media-asset" key={a.id}><span className="media-asset-icon">{a.kind==="video"?<Film size={17}/>:a.kind==="audio"?<Music2 size={17}/>:<FileImage size={17}/>}</span><div className="media-asset-info"><strong>{a.name}</strong><small>{a.kind.toUpperCase()} · {size(a.sizeBytes)} · {a.source==="youtube"?"YouTube":"Arquivo local"}</small>{a.sourceVideoId&&<small>Trecho {time(a.sourceStartMs)}–{time(a.sourceEndMs)} · ID {a.sourceVideoId}</small>}</div><span className="media-asset-state"><CheckCircle2 size={14}/> Importada</span></article>)}</div>}
+  {!assets.length?<div className="media-empty"><div><Film size={23}/></div><strong>Nenhuma mídia neste projeto</strong><span>Importe um arquivo local ou consulte um vídeo do YouTube.</span></div>:<div className="media-asset-list">{assets.map(a=><article className="media-asset" key={a.id}><span className="media-asset-icon">{a.kind==="video"?<Film size={17}/>:a.kind==="audio"?<Music2 size={17}/>:<FileImage size={17}/>}</span><div className="media-asset-info"><strong>{a.name}</strong><small>{a.kind.toUpperCase()} · {size(a.sizeBytes)} · {a.source==="youtube"?"YouTube":"Arquivo local"}</small>{a.sourceVideoId&&<small>Trecho {time(a.sourceStartMs)}–{time(a.sourceEndMs)} · ID {a.sourceVideoId}</small>}</div><span className="media-asset-state"><CheckCircle2 size={14}/> Importada</span>{a.kind==="video"&&<button className="media-asset-open" onClick={()=>setEditingAsset(a)}><Play size={14}/> Abrir editor</button>}</article>)}</div>}
+  {editingAsset&&<MediaEditor projectId={projectId} asset={editingAsset} onClose={()=>setEditingAsset(null)}/>}
   {trimOpen&&cache&&<div className="trim-modal-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)closeTrim();}}>
    <section className="trim-modal" role="dialog" aria-modal="true" aria-labelledby="trim-modal-title">
     <header className="trim-modal-header"><div><span className="eyebrow">EDIÇÃO DO VÍDEO ORIGINAL</span><h2 id="trim-modal-title">Escolha o trecho</h2><p>{cache.title}</p></div><button className="icon-button" title="Fechar recorte" onClick={closeTrim}><X size={18}/></button></header>
