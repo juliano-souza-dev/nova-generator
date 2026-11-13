@@ -151,7 +151,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   }
 
   async function alignWords() {
-    if (aligning || loading || cues.length === 0) return;
+    if (aligning || saving || loading || cues.length === 0) return;
     if (dirty || translationDirty) {
       setAlignmentInfo("Salvando as alterações da transcrição e da tradução...");
       const didSave = await save();
@@ -461,7 +461,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             <div className="media-editor-inspector-section">
               <div className="media-editor-section-title"><strong>Sincronização palavra por palavra</strong><span className="media-editor-translation-count">{cues.filter(c => c.wordAlignment === "whisperx").length}/{cues.length} blocos</span></div>
               <p className="media-editor-translation-help">O WhisperX calcula os tempos de cada palavra usando o áudio original e o texto transcrito. Os blocos já alinhados são preservados e ignorados nas próximas execuções.</p>
-              <button className="primary-button media-editor-transcribe-button" onClick={() => void alignWords()} disabled={loading || aligning || cues.length === 0}>
+              <button className="primary-button media-editor-transcribe-button" onClick={() => void alignWords()} disabled={loading || saving || aligning || cues.length === 0}>
                 <Clock3 size={15}/>{aligning ? "Alinhando palavras..." : "Alinhar palavras com WhisperX"}
               </button>
               {alignmentInfo && <p className="media-editor-transcription-info">{alignmentInfo}</p>}
