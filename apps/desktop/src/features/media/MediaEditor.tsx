@@ -5,6 +5,7 @@ import { runTrackedTask } from "../tasks/TaskCenter";
 
 type Cue = { id: string; startMs: number; endMs: number; text: string; words?: { text: string; startMs: number; endMs: number }[] };
 type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: Cue[] };
+type TranslationCue = { id: string; startMs: number; endMs: number; text: string };
 type Asset = { id: string; name: string; durationMs?: number | null; sourceStartMs?: number | null; sourceEndMs?: number | null };
 const fmt = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -13,8 +14,13 @@ const fmt = (ms: number) => {
 
 export default function MediaEditor({ projectId, asset, onClose }: { projectId: string; asset: Asset; onClose: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
+  const translationFileInput = useRef<HTMLInputElement>(null);
   const [src, setSrc] = useState("");
   const [cues, setCues] = useState<Cue[]>([]);
+  const [translations, setTranslations] = useState<TranslationCue[]>([]);
+  const [translationDirty, setTranslationDirty] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [translationInfo, setTranslationInfo] = useState("");
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(asset.durationMs ?? 0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -38,13 +44,15 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     let alive = true;
     (async () => {
       try {
-        const [path, stored] = await Promise.all([
+        const [path, stored, storedTranslations] = await Promise.all([
           invoke<string>("open_project_media", { projectId, assetId: asset.id }),
-          invoke<Cue[]>("load_project_subtitles", { projectId, assetId: asset.id })
+          invoke<Cue[]>("load_project_subtitles", { projectId, assetId: asset.id }),
+          invoke<TranslationCue[]>("load_project_translations", { projectId, assetId: asset.id })
         ]);
         if (!alive) return;
         setSrc(convertFileSrc(path));
         setCues(stored);
+        setTranslations(storedTranslations);
         setSelected(stored[0]?.id ?? null);
         if (stored.length) setActiveTrack("transcript");
       } catch (e) { if (alive) setError(String(e)); }
@@ -75,10 +83,15 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   async function save() {
     setSaving(true); setError("");
     try {
-      await runTrackedTask("export", "Salvar legendas do vídeo", () =>
-        invoke("save_project_subtitles", { projectId, assetId: asset.id, cues }));
+      await runTrackedTask("export", "Salvar transcrição e tradução", async () => {
+        await invoke("save_project_subtitles", { projectId, assetId: asset.id, cues });
+        if (translations.length > 0 || translationDirty) {
+          await invoke("save_project_translations", { projectId, assetId: asset.id, translations });
+        }
+      });
       setSaved(true);
       setDirty(false);
+      setTranslationDirty(false);
     } catch (e) { setError(String(e)); }
     finally { setSaving(false); }
   }
@@ -98,6 +111,49 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       setTranscriptionInfo(`${next.length} legendas geradas por ${result.engine === "groq" ? "Groq Whisper" : "Faster-Whisper"}${result.language ? ` · idioma detectado: ${result.language}` : ""}. Revise e salve as legendas.`);
     } catch (e) { setError(String(e)); }
     finally { setTranscribing(false); }
+  }
+
+  async function translateAll() {
+    if (translating || loading || cues.length === 0) return;
+    if (translations.length && !window.confirm("Gerar novamente substituirá as traduções atuais. A transcrição original será preservada. Continuar?")) return;
+    setTranslating(true); setError(""); setTranslationInfo("");
+    try {
+      const result = await runTrackedTask("translation", "Traduzir transcrição para PT-BR", () =>
+        invoke<TranslationCue[]>("translate_project_subtitles", { projectId, assetId: asset.id, cues }));
+      setTranslations(result);
+      setTranslationDirty(true); setDirty(true); setSaved(false);
+      setTranslationInfo(result.length + " trechos traduzidos para português brasileiro. Revise e salve.");
+    } catch (e) { setError(String(e)); }
+    finally { setTranslating(false); }
+  }
+
+  function updateTranslation(id: string, text: string) {
+    setTranslations(items => items.map(item => item.id === id ? { ...item, text } : item));
+    setTranslationDirty(true); setDirty(true); setSaved(false);
+  }
+
+  async function importTranslations(file?: File) {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const items = Array.isArray(parsed) ? parsed : parsed.translations;
+      if (!Array.isArray(items)) throw new Error("O JSON precisa conter uma lista de traduções.");
+      const byId = new Map<string, string>();
+      for (const item of items) {
+        const id = String(item.id ?? item.cue_id ?? "");
+        const text = String(item.text ?? item.translation ?? item.approved_pt ?? item.pt ?? "");
+        if (!id || !text.trim()) continue;
+        byId.set(id, text.trim());
+      }
+      const imported = cues.filter(cue => byId.has(cue.id)).map(cue => ({
+        id: cue.id, startMs: cue.startMs, endMs: cue.endMs, text: byId.get(cue.id)!
+      }));
+      if (!imported.length) throw new Error("Nenhum ID do JSON corresponde aos trechos desta transcrição.");
+      if (imported.length !== cues.length) throw new Error("O arquivo contém " + imported.length + " traduções correspondentes para " + cues.length + " trechos. Importe um JSON completo com os mesmos IDs.");
+      setTranslations(imported); setTranslationDirty(true); setDirty(true); setSaved(false);
+      setTranslationInfo(imported.length + " traduções importadas. Revise e salve.");
+    } catch (e) { setError("Falha ao importar JSON: " + String(e)); }
+    finally { if (translationFileInput.current) translationFileInput.current.value = ""; }
   }
 
   async function installLocalAsr() {
@@ -132,7 +188,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   return <div className="media-editor-backdrop">
     <section className="media-editor media-editor-v2" role="dialog" aria-modal="true" aria-label="Editor de mídia">
       <header className="media-editor-header">
-        <button className="media-editor-back" onClick={() => { if (!dirty || window.confirm("Há alterações de legendas não salvas. Fechar mesmo assim?")) onClose(); }}><ArrowLeft size={16}/> Biblioteca</button>
+        <button className="media-editor-back" onClick={() => { if (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?")) onClose(); }}><ArrowLeft size={16}/> Biblioteca</button>
         <div className="media-editor-title"><span className="eyebrow">EDITOR DE MÍDIA</span><strong>{asset.name}</strong></div>
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
@@ -171,13 +227,13 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             </div>
             <div className="media-editor-tracks">
               {trackNames.map(({ id, label, icon: Icon }) => <div className={`media-editor-track-row ${activeTrack === id ? "is-active" : ""}`} key={id}>
-                <button className="media-editor-track-label" onClick={() => { setActiveTrack(id); if (id !== "transcript") setSelected(null); else if (!selected && cues[0]) setSelected(cues[0].id); }}>
+                <button className="media-editor-track-label" onClick={() => { setActiveTrack(id); if (id === "video" || id === "wordbyword") setSelected(null); else if (id === "transcript" && !selected && cues[0]) setSelected(cues[0].id); else if (id === "translation" && !selected && translations[0]) setSelected(translations[0].id); }}>
                   <Icon size={14}/><span>{label}</span>
                 </button>
                 <div className="media-editor-track-lane" onClick={() => setActiveTrack(id)}>
                   {id === "video" && <button className={`media-editor-track-clip video-clip ${activeTrack === "video" ? "selected" : ""}`} style={{ left: "0%", width: "100%" }} onClick={() => { setActiveTrack("video"); setSelected(null); seek(0); }} title={asset.name}><Film size={12}/><span>{asset.name}</span></button>}
                   {id === "transcript" && cues.map(c => <button key={c.id} className={`media-editor-track-clip transcript-clip ${selected === c.id ? "selected" : ""}`} style={{ left: `${pct(c.startMs)}%`, width: `${Math.max(.7, pct(c.endMs - c.startMs))}%` }} onClick={() => { setActiveTrack("transcript"); setSelected(c.id); seek(c.startMs); }} title={c.text || "Trecho sem texto"}><span>{c.text || "Trecho"}</span></button>)}
-                  {id === "translation" && <span className="media-editor-track-empty">Traduções aparecerão aqui</span>}
+                  {id === "translation" && (translations.length ? translations.map(t => <button key={t.id} className={"media-editor-track-clip translation-clip " + (selected === t.id ? "selected" : "")} style={{ left: pct(t.startMs) + "%", width: Math.max(.7, pct(t.endMs - t.startMs)) + "%" }} onClick={() => { setActiveTrack("translation"); setSelected(t.id); seek(t.startMs); }} title={t.text}><span>{t.text}</span></button>) : <span className="media-editor-track-empty">Traduções aparecerão aqui</span>)}
                   {id === "wordbyword" && <span className="media-editor-track-empty">Palavras sincronizadas aparecerão aqui</span>}
                   <div className="media-editor-lane-playhead" style={{ left: `${pct(current)}%` }}/>
                 </div>
@@ -227,7 +283,26 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             </div>
           </div>}
 
-          {activeTrack === "translation" && <div className="media-editor-inspector-content"><div className="media-editor-inspector-empty"><Languages size={24}/><strong>Faixa de tradução</strong><span>Esta faixa terá seus próprios blocos e propriedades, vinculados aos trechos da transcrição sem alterar o texto original.</span><small>A etapa de tradução ainda não foi conectada.</small></div></div>}
+          {activeTrack === "translation" && <div className="media-editor-inspector-content">
+            <div className="media-editor-inspector-section">
+              <div className="media-editor-section-title"><strong>Tradução para PT-BR</strong><span className="media-editor-translation-count">{translations.length}/{cues.length}</span></div>
+              <p className="media-editor-translation-help">A IA considera a transcrição completa para manter contexto e continuidade entre os trechos.</p>
+              <button className="primary-button media-editor-transcribe-button" onClick={() => void translateAll()} disabled={loading || translating || cues.length === 0}><Languages size={15}/>{translating ? "Traduzindo..." : translations.length ? "Gerar tradução novamente" : "Traduzir com Groq"}</button>
+              <input ref={translationFileInput} type="file" accept=".json,application/json" hidden onChange={e => void importTranslations(e.target.files?.[0])}/>
+              <button className="media-editor-secondary-action" onClick={() => translationFileInput.current?.click()} disabled={loading || cues.length === 0}>Importar traduções em JSON</button>
+              {translationInfo && <p className="media-editor-transcription-info">{translationInfo}</p>}
+            </div>
+            {chosen ? <div className="media-editor-inspector-section">
+              <div className="media-editor-section-title"><strong>Trecho selecionado</strong><button className="media-editor-inline-link" onClick={() => { setActiveTrack("transcript"); seek(chosen.startMs); }}>Ver original</button></div>
+              <div className="media-editor-source-text">{chosen.text}</div>
+              <label className="media-editor-text-label">Tradução em português<textarea value={translations.find(t => t.id === chosen.id)?.text ?? ""} onChange={e => {
+                const existing = translations.find(t => t.id === chosen.id);
+                if (existing) updateTranslation(chosen.id, e.target.value);
+                else { setTranslations(items => [...items, { id: chosen.id, startMs: chosen.startMs, endMs: chosen.endMs, text: e.target.value }].sort((a,b) => a.startMs-b.startMs)); setTranslationDirty(true); setDirty(true); setSaved(false); }
+              }} placeholder="A tradução deste trecho aparecerá aqui..."/></label>
+              <div className="media-editor-inspector-note">Editar esta tradução não modifica o texto reconhecido nem os tempos da transcrição.</div>
+            </div> : <div className="media-editor-no-cue"><Languages size={22}/><strong>Nenhum trecho selecionado</strong><span>Selecione um bloco na faixa de tradução ou na transcrição.</span></div>}
+          </div>}
           {activeTrack === "wordbyword" && <div className="media-editor-inspector-content"><div className="media-editor-inspector-empty"><Clock3 size={24}/><strong>Faixa WordByWord</strong><span>As palavras serão elementos individuais, com tradução própria e sincronização com a palavra original.</span><small>A edição palavra por palavra ainda não foi conectada.</small></div></div>}
         </aside>
       </div>
