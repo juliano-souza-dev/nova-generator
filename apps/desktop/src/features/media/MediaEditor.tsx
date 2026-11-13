@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, Captions, Check, Clock3, Pause, Play, Plus, Save, SkipBack, SkipForward, Trash2, X } from "lucide-react";
+import { ArrowLeft, Captions, Check, Clock3, Film, Languages, Pause, Play, Plus, Save, SkipBack, SkipForward, Trash2, X } from "lucide-react";
 import { runTrackedTask } from "../tasks/TaskCenter";
 
 type Cue = { id: string; startMs: number; endMs: number; text: string; words?: { text: string; startMs: number; endMs: number }[] };
@@ -18,6 +18,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(asset.durationMs ?? 0);
   const [selected, setSelected] = useState<string | null>(null);
+  const [activeTrack, setActiveTrack] = useState<"video" | "transcript" | "translation" | "wordbyword">("video");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -45,6 +46,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         setSrc(convertFileSrc(path));
         setCues(stored);
         setSelected(stored[0]?.id ?? null);
+        if (stored.length) setActiveTrack("transcript");
       } catch (e) { if (alive) setError(String(e)); }
       finally { if (alive) setLoading(false); }
     })();
@@ -119,93 +121,114 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
 
   const chosen = cues.find(c => c.id === selected) ?? null;
 
+  const trackNames = [
+    { id: "video" as const, label: "Video", icon: Film },
+    { id: "transcript" as const, label: "Transcrição", icon: Captions },
+    { id: "translation" as const, label: "Tradução", icon: Languages },
+    { id: "wordbyword" as const, label: "WordByWord", icon: Clock3 }
+  ];
+  const pct = (ms: number) => duration > 0 ? Math.max(0, Math.min(100, ms / duration * 100)) : 0;
+
   return <div className="media-editor-backdrop">
-    <section className="media-editor" role="dialog" aria-modal="true" aria-label="Editor de mídia">
+    <section className="media-editor media-editor-v2" role="dialog" aria-modal="true" aria-label="Editor de mídia">
       <header className="media-editor-header">
         <button className="media-editor-back" onClick={() => { if (!dirty || window.confirm("Há alterações de legendas não salvas. Fechar mesmo assim?")) onClose(); }}><ArrowLeft size={16}/> Biblioteca</button>
         <div className="media-editor-title"><span className="eyebrow">EDITOR DE MÍDIA</span><strong>{asset.name}</strong></div>
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
-          <button className="primary-button" onClick={() => void save()} disabled={saving || loading}><Save size={15}/> {saving ? "Salvando..." : "Salvar legendas"}</button>
+          <button className="primary-button" onClick={() => void save()} disabled={saving || loading}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button>
           <button className="icon-button" title="Fechar editor" onClick={() => { if (!dirty || window.confirm("Há alterações de legendas não salvas. Fechar mesmo assim?")) onClose(); }}><X size={18}/></button>
         </div>
       </header>
       {error && <div className="media-editor-error">{error}</div>}
-      <div className="media-editor-main">
-        <div className="media-editor-preview">
-          {loading ? <div className="media-editor-placeholder">Preparando vídeo...</div> : src ? <>
-            <div className="media-editor-video-wrap">
-              <video ref={video} src={src} controls playsInline preload="metadata"
-                onLoadedMetadata={e => { const ms = e.currentTarget.duration * 1000; setDuration(ms); }}
-                onTimeUpdate={e => setCurrent(e.currentTarget.currentTime * 1000)} />
-              {activeCue?.text && <div className="media-editor-caption">{activeCue.text}</div>}
-            </div>
-            <div className="media-editor-transport">
-              <button title="Voltar 5 segundos" onClick={() => seek(current - 5000)}><SkipBack size={16}/></button>
-              <button title="Reproduzir" onClick={() => void video.current?.play()}><Play size={16}/></button>
-              <button title="Pausar" onClick={() => video.current?.pause()}><Pause size={16}/></button>
-              <button title="Avançar 5 segundos" onClick={() => seek(current + 5000)}><SkipForward size={16}/></button>
-              <span>{fmt(current)} <i>/</i> {fmt(duration)}</span>
-            </div>
-            <div className="media-editor-timeline">
-              <div className="media-editor-ruler"><span>00:00</span><span>{fmt(duration / 2)}</span><span>{fmt(duration)}</span></div>
-              <input aria-label="Navegar pelo vídeo" type="range" min="0" max={Math.max(1, duration)} step="50" value={Math.min(current, duration || current)} onChange={e => seek(Number(e.target.value))}/>
-              <div className="media-editor-cue-track">
-                {cues.map(c => <button key={c.id} title={c.text || "Legenda sem texto"} className={selected === c.id ? "active" : ""} style={{ left: `${duration ? c.startMs / duration * 100 : 0}%`, width: `${duration ? Math.max(1, (c.endMs - c.startMs) / duration * 100) : 1}%` }} onClick={() => { setSelected(c.id); seek(c.startMs); }}/>)}
+      <div className="media-editor-main media-editor-main-v2">
+        <main className="media-editor-workarea">
+          <section className="media-editor-preview-v2">
+            {loading ? <div className="media-editor-placeholder">Preparando vídeo...</div> : src ? <>
+              <div className="media-editor-video-wrap">
+                <video ref={video} src={src} controls playsInline preload="metadata"
+                  onLoadedMetadata={e => { const ms = e.currentTarget.duration * 1000; setDuration(ms); }}
+                  onTimeUpdate={e => setCurrent(e.currentTarget.currentTime * 1000)} />
+                {activeCue?.text && <div className="media-editor-caption">{activeCue.text}</div>}
               </div>
+              <div className="media-editor-transport">
+                <button title="Voltar 5 segundos" onClick={() => seek(current - 5000)}><SkipBack size={16}/></button>
+                <button title="Reproduzir" onClick={() => void video.current?.play()}><Play size={16}/></button>
+                <button title="Pausar" onClick={() => video.current?.pause()}><Pause size={16}/></button>
+                <button title="Avançar 5 segundos" onClick={() => seek(current + 5000)}><SkipForward size={16}/></button>
+                <span>{fmt(current)} <i>/</i> {fmt(duration)}</span>
+              </div>
+            </> : <div className="media-editor-placeholder">Não foi possível abrir o vídeo.</div>}
+          </section>
+
+          <section className="media-editor-timeline-dock">
+            <div className="media-editor-timeline-toolbar">
+              <div><span className="eyebrow">LINHA DO TEMPO</span><strong>Composição do projeto</strong></div>
+              <span className="media-editor-timecode">{fmt(current)} / {fmt(duration)}</span>
             </div>
-          </> : <div className="media-editor-placeholder">Não foi possível abrir o vídeo.</div>}
-          <div className="media-editor-transcription">
-            <div className="media-editor-transcription-heading"><Captions size={16}/><div><strong>Transcrever mídia</strong><span>Gere legendas com marcação de tempo e revise antes de salvar.</span></div></div>
-            <div className="media-editor-transcription-options">
-              <label>Modo
-                <select value={transcriptionMode} onChange={e => setTranscriptionMode(e.target.value as "auto" | "cloud" | "local")}>
-                  <option value="auto">Automático (Groq + fallback local)</option>
-                  <option value="cloud">Nuvem (Groq Whisper)</option>
-                  <option value="local">Local (Faster-Whisper)</option>
-                </select>
-              </label>
-              <label>Idioma
-                <select value={transcriptionLanguage} onChange={e => setTranscriptionLanguage(e.target.value)}>
-                  <option value="">Detectar automaticamente</option>
-                  <option value="pt">Português</option><option value="en">Inglês</option>
-                  <option value="es">Espanhol</option><option value="fr">Francês</option>
-                  <option value="de">Alemão</option><option value="it">Italiano</option>
-                </select>
-              </label>
-              {(transcriptionMode === "local" || transcriptionMode === "auto") && <label>Modelo local
-                <select value={transcriptionModel} onChange={e => setTranscriptionModel(e.target.value)}>
-                  <option value="tiny">Tiny · mais rápido</option><option value="base">Base</option>
-                  <option value="small">Small · equilibrado</option><option value="medium">Medium</option>
-                  <option value="large-v3">Large v3 · mais preciso</option>
-                </select>
-              </label>}
+            <div className="media-editor-ruler-v2">
+              <span>00:00</span><span>{fmt(duration / 4)}</span><span>{fmt(duration / 2)}</span><span>{fmt(duration * .75)}</span><span>{fmt(duration)}</span>
             </div>
-            {(transcriptionMode === "local" || transcriptionMode === "auto") && <div className="media-editor-asr-status">
-              <span>{localAsrChecking ? "Verificando mecanismo local..." : localAsrReady ? "Faster-Whisper instalado" : "Faster-Whisper não instalado"}</span>
-              {!localAsrChecking && !localAsrReady && <button onClick={() => void installLocalAsr()} disabled={installingAsr}>{installingAsr ? "Instalando..." : "Instalar suporte local"}</button>}
-            </div>}
-            <button className="primary-button media-editor-transcribe-button" onClick={() => void transcribe()} disabled={loading || transcribing || (transcriptionMode === "local" && !localAsrReady)}>
-              <Captions size={15}/>{transcribing ? "Transcrevendo..." : "Iniciar transcrição"}
-            </button>
-            {transcriptionInfo && <p className="media-editor-transcription-info">{transcriptionInfo}</p>}
+            <div className="media-editor-tracks">
+              {trackNames.map(({ id, label, icon: Icon }) => <div className={`media-editor-track-row ${activeTrack === id ? "is-active" : ""}`} key={id}>
+                <button className="media-editor-track-label" onClick={() => { setActiveTrack(id); if (id !== "transcript") setSelected(null); else if (!selected && cues[0]) setSelected(cues[0].id); }}>
+                  <Icon size={14}/><span>{label}</span>
+                </button>
+                <div className="media-editor-track-lane" onClick={() => setActiveTrack(id)}>
+                  {id === "video" && <button className={`media-editor-track-clip video-clip ${activeTrack === "video" ? "selected" : ""}`} style={{ left: "0%", width: "100%" }} onClick={() => { setActiveTrack("video"); setSelected(null); seek(0); }} title={asset.name}><Film size={12}/><span>{asset.name}</span></button>}
+                  {id === "transcript" && cues.map(c => <button key={c.id} className={`media-editor-track-clip transcript-clip ${selected === c.id ? "selected" : ""}`} style={{ left: `${pct(c.startMs)}%`, width: `${Math.max(.7, pct(c.endMs - c.startMs))}%` }} onClick={() => { setActiveTrack("transcript"); setSelected(c.id); seek(c.startMs); }} title={c.text || "Trecho sem texto"}><span>{c.text || "Trecho"}</span></button>)}
+                  {id === "translation" && <span className="media-editor-track-empty">Traduções aparecerão aqui</span>}
+                  {id === "wordbyword" && <span className="media-editor-track-empty">Palavras sincronizadas aparecerão aqui</span>}
+                </div>
+              </div>)}
+              <div className="media-editor-playhead" style={{ left: `calc(150px + (100% - 150px) * ${pct(current) / 100})` }} />
+            </div>
+            <input className="media-editor-scrubber" aria-label="Navegar pela timeline" type="range" min="0" max={Math.max(1, duration)} step="50" value={Math.min(current, duration || current)} onChange={e => seek(Number(e.target.value))}/>
+          </section>
+        </main>
+
+        <aside className="media-editor-inspector">
+          <div className="media-editor-inspector-head">
+            <span className="eyebrow">PROPRIEDADES</span>
+            <h3>{trackNames.find(t => t.id === activeTrack)?.label}</h3>
+            <p>Selecione um elemento na timeline para editar suas propriedades.</p>
           </div>
-        </div>
-        <aside className="media-editor-sidebar">
-          <div className="media-editor-sidebar-head"><div><span className="eyebrow">LEGENDAS</span><h3>Faixas de texto <small>{cues.length}</small></h3></div><button className="primary-button" onClick={addCue} disabled={loading}><Plus size={14}/> Nova</button></div>
-          {chosen ? <div className="media-editor-cue-form">
-            <div className="media-editor-time-fields">
-              <label>Início (ms)<input type="number" min="0" value={chosen.startMs} onChange={e => updateCue(chosen.id, { startMs: Math.max(0, Math.min(Number(e.target.value), chosen.endMs - 100)) })}/></label>
-              <label>Fim (ms)<input type="number" min="1" value={chosen.endMs} onChange={e => updateCue(chosen.id, { endMs: Math.max(chosen.startMs + 100, Number(e.target.value)) })}/></label>
+
+          {activeTrack === "video" && <div className="media-editor-inspector-content">
+            <div className="media-editor-inspector-card"><Film size={18}/><strong>{asset.name}</strong><span>Mídia de origem do projeto</span></div>
+            <div className="media-editor-property"><span>Duração</span><strong>{fmt(duration)}</strong></div>
+            <div className="media-editor-property"><span>Posição atual</span><strong>{fmt(current)}</strong></div>
+            <div className="media-editor-inspector-note">O clipe original é preservado. Os recortes e posicionamentos da timeline serão configurados como elementos independentes, sem modificar o arquivo-fonte.</div>
+          </div>}
+
+          {activeTrack === "transcript" && <div className="media-editor-inspector-content">
+            <div className="media-editor-inspector-section">
+              <div className="media-editor-section-title"><strong>Transcrição</strong><button className="primary-button" onClick={addCue} disabled={loading}><Plus size={13}/> Novo trecho</button></div>
+              {chosen ? <>
+                <div className="media-editor-time-fields">
+                  <label>Início (ms)<input type="number" min="0" value={chosen.startMs} onChange={e => updateCue(chosen.id, { startMs: Math.max(0, Math.min(Number(e.target.value), chosen.endMs - 100)) })}/></label>
+                  <label>Fim (ms)<input type="number" min="1" value={chosen.endMs} onChange={e => updateCue(chosen.id, { endMs: Math.max(chosen.startMs + 100, Number(e.target.value)) })}/></label>
+                </div>
+                <label className="media-editor-text-label">Texto reconhecido<textarea value={chosen.text} onChange={e => updateCue(chosen.id, { text: e.target.value })} placeholder="Texto da transcrição..."/></label>
+                <div className="media-editor-cue-buttons"><button onClick={() => seek(chosen.startMs)}><Clock3 size={13}/> Ir ao início</button><button className="danger" onClick={() => { setCues(items => items.filter(c => c.id !== chosen.id)); setSelected(null); setSaved(false); setDirty(true); }}><Trash2 size={13}/> Excluir trecho</button></div>
+                <div className="media-editor-inspector-note">{chosen.words?.length ?? 0} palavras identificadas. A edição deste trecho não altera as faixas de tradução ou WordByWord.</div>
+              </> : <div className="media-editor-no-cue"><Captions size={22}/><strong>Nenhum trecho selecionado</strong><span>Selecione um bloco na faixa ou crie um novo trecho.</span></div>}
             </div>
-            <label className="media-editor-text-label">Texto da legenda<textarea value={chosen.text} onChange={e => updateCue(chosen.id, { text: e.target.value })} placeholder="Digite o texto desta legenda..."/></label>
-            <div className="media-editor-cue-buttons"><button onClick={() => seek(chosen.startMs)}><Clock3 size={13}/> Ir ao início</button><button className="danger" onClick={() => { setCues(items => items.filter(c => c.id !== chosen.id)); setSelected(null); setSaved(false); setDirty(true); }}><Trash2 size={13}/> Excluir</button></div>
-          </div> : <div className="media-editor-no-cue"><Captions size={22}/><strong>Nenhuma legenda selecionada</strong><span>Crie uma legenda para começar a montar a faixa de texto.</span></div>}
-          <div className="media-editor-cue-list">
-            {cues.map(c => <button key={c.id} className={selected === c.id ? "selected" : ""} onClick={() => { setSelected(c.id); seek(c.startMs); }}>
-              <span>{fmt(c.startMs)}</span><strong>{c.text || "Legenda sem texto"}</strong>
-            </button>)}
-          </div>
+            <div className="media-editor-inspector-section">
+              <div className="media-editor-section-title"><strong>Gerar transcrição</strong></div>
+              <div className="media-editor-transcription-options">
+                <label>Modo<select value={transcriptionMode} onChange={e => setTranscriptionMode(e.target.value as "auto" | "cloud" | "local")}><option value="auto">Automático (Groq + fallback)</option><option value="cloud">Nuvem (Groq Whisper)</option><option value="local">Local (Faster-Whisper)</option></select></label>
+                <label>Idioma<select value={transcriptionLanguage} onChange={e => setTranscriptionLanguage(e.target.value)}><option value="">Detectar automaticamente</option><option value="pt">Português</option><option value="en">Inglês</option><option value="es">Espanhol</option><option value="fr">Francês</option><option value="de">Alemão</option><option value="it">Italiano</option></select></label>
+                {(transcriptionMode === "local" || transcriptionMode === "auto") && <label>Modelo local<select value={transcriptionModel} onChange={e => setTranscriptionModel(e.target.value)}><option value="tiny">Tiny · mais rápido</option><option value="base">Base</option><option value="small">Small · equilibrado</option><option value="medium">Medium</option><option value="large-v3">Large v3 · mais preciso</option></select></label>}
+              </div>
+              {(transcriptionMode === "local" || transcriptionMode === "auto") && <div className="media-editor-asr-status"><span>{localAsrChecking ? "Verificando mecanismo local..." : localAsrReady ? "Faster-Whisper instalado" : "Faster-Whisper não instalado"}</span>{!localAsrChecking && !localAsrReady && <button onClick={() => void installLocalAsr()} disabled={installingAsr}>{installingAsr ? "Instalando..." : "Instalar suporte local"}</button>}</div>}
+              <button className="primary-button media-editor-transcribe-button" onClick={() => void transcribe()} disabled={loading || transcribing || (transcriptionMode === "local" && !localAsrReady)}><Captions size={15}/>{transcribing ? "Transcrevendo..." : "Iniciar transcrição"}</button>
+              {transcriptionInfo && <p className="media-editor-transcription-info">{transcriptionInfo}</p>}
+            </div>
+          </div>}
+
+          {activeTrack === "translation" && <div className="media-editor-inspector-content"><div className="media-editor-inspector-empty"><Languages size={24}/><strong>Faixa de tradução</strong><span>Esta faixa terá seus próprios blocos e propriedades, vinculados aos trechos da transcrição sem alterar o texto original.</span><small>A etapa de tradução ainda não foi conectada.</small></div></div>}
+          {activeTrack === "wordbyword" && <div className="media-editor-inspector-content"><div className="media-editor-inspector-empty"><Clock3 size={24}/><strong>Faixa WordByWord</strong><span>As palavras serão elementos individuais, com tradução própria e sincronização com a palavra original.</span><small>A edição palavra por palavra ainda não foi conectada.</small></div></div>}
         </aside>
       </div>
     </section>
