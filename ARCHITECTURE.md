@@ -50,6 +50,19 @@ O documento do projeto será versionado e independente dos detalhes de execuçã
 
 Mudanças incompatíveis exigem migração explícita. Nunca apagar ou reescrever mídia original durante migrações.
 
+## Contrato editorial e provedores de IA
+
+A tradução contextual e as predições editoriais usam o contrato versionado 1.3:
+- Entrada: `nova-generator-editorial-input/1.3`.
+- Saída: `nova-generator-editorial-suggestions/1.3`.
+- Predições selecionáveis: `word_translations` e `semantic_units`. Unidades semânticas dependem da presença de traduções por palavra.
+- Groq e IA externa recebem a mesma entrada, regras editoriais e esquema de saída. O pacote externo contém `CONTRACT.md`, `README.md`, `input.json` e `output-schema.json`.
+- A resposta permanece como `draft` e exige revisão humana. Não gerar marcação pedagógica, mini-aulas, exercícios ou conteúdo Anki nesta etapa.
+- IDs, ordem e timestamps das cues e palavras são preservados e validados. Unidades semânticas devem ser contíguas e não podem se sobrepor.
+- O resultado editorial é salvo separadamente das traduções de linha, com revisão incremental e hash da entrada para invalidar predições desatualizadas.
+
+O contrato é a fonte das instruções e do formato de resposta, não o provedor. Trocar Groq por IA externa não altera o contrato.
+
 ## Regra de modularização
 
 Extrações estruturais não devem alterar comportamento. Mudanças funcionais e refatorações devem ser separadas sempre que possível. Cada módulo precisa de responsabilidade clara, API pública pequena e testes próximos às regras que possui.
