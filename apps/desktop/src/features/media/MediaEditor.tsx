@@ -47,7 +47,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         const [path, stored, storedTranslations] = await Promise.all([
           invoke<string>("open_project_media", { projectId, assetId: asset.id }),
           invoke<Cue[]>("load_project_subtitles", { projectId, assetId: asset.id }),
-          invoke<TranslationCue[]>("load_project_translations", { projectId, assetId: asset.id })
+          invoke<TranslationCue[]>("load_project_translations", { projectId, assetId: asset.id }).catch(() => [] as TranslationCue[])
         ]);
         if (!alive) return;
         setSrc(convertFileSrc(path));
