@@ -223,3 +223,87 @@ Não iniciar pela recuperação do código antigo da branch `backup`. Primeiro, 
 A prioridade é desenvolver uma solução mais robusta, eficiente em processamento e precisa na sincronização, sem carregar limitações de uma implementação anterior.
 
 **Próximo passo aprovado:** iniciar a Etapa 1, analisando a timeline atual e definindo a menor implementação funcional de edição manual por palavra.
+
+## 10. Arquitetura de execução e processamento incremental
+
+Decisões aprovadas em 13/11/2026:
+
+### 10.1. Propriedade do recurso pelo Shared Runtime Manager
+
+O Shared Runtime Manager é o único proprietário do recurso de Forced Alignment e de todos os seus componentes compartilhados:
+
+- ambiente Python virtual e isolado, localizado dentro da instalação global do Shared;
+- WhisperX e suas dependências;
+- worker de alinhamento;
+- modelos acústicos e cache dos modelos;
+- caminhos absolutos provisionados para as aplicações autorizadas/declarantes.
+
+O Nova Generator não instalará Python, WhisperX ou modelos por conta própria, não manterá cópias locais desses recursos e não construirá caminhos a partir de uma pasta presumida. Deverá descobrir os caminhos exclusivamente pelo vínculo local `shared.config.json` provisionado pelo Shared Runtime Manager.
+
+A dependência `forced-alignment` será opcional no contrato da aplicação para evitar downloads grandes durante o registro ou sincronização comum. A instalação será explícita pelo Shared Runtime Manager:
+
+```powershell
+srm install forced-alignment --app nova-generator
+```
+
+Depois da instalação, o Shared disponibilizará o diretório resolvido em `shared.resources.forced-alignment`. Outras aplicações poderão declarar e reutilizar o mesmo recurso.
+
+### 10.2. Whisper e Forced Alignment
+
+O Whisper já utilizado pelo Nova Generator continua responsável pela transcrição. O Forced Alignment não deve transcrever novamente o áudio.
+
+O alinhador receberá:
+- o trecho de áudio correspondente ao bloco;
+- o texto original transcrito naquele bloco;
+- o idioma efetivamente falado.
+
+A tradução nunca será utilizada como entrada do alinhador. Traduções permanecem independentes dos timestamps das palavras originais.
+
+WhisperX será a primeira implementação a ser avaliada. A escolha poderá ser revista se os testes de precisão, compatibilidade, desempenho ou distribuição não forem satisfatórios.
+
+### 10.3. Worker persistente
+
+O Shared provisionará um worker com protocolo JSON Lines. O Nova poderá iniciar o processo usando os caminhos fornecidos no vínculo Shared e enviar uma requisição por linha.
+
+O worker deverá:
+- manter o processo ativo durante a sessão de alinhamento;
+- carregar o modelo acústico uma vez por idioma e reutilizá-lo entre blocos;
+- responder individualmente a cada requisição;
+- isolar erros por requisição, sem encerrar o worker por falha em um bloco;
+- armazenar modelos e caches exclusivamente nos diretórios globais do Shared.
+
+CPU será suportada. CUDA poderá ser utilizada automaticamente quando disponível.
+
+### 10.4. Processamento por bloco e retomada
+
+O alinhamento será executado sobre os blocos individuais já produzidos pela transcrição, sem exigir nova transcrição integral.
+
+Cada bloco terá estado independente:
+- pendente;
+- processando;
+- concluído;
+- falhou.
+
+O resultado de cada bloco deverá ser persistido assim que validado. Uma falha não poderá invalidar resultados concluídos anteriormente. Ao retomar, somente blocos pendentes, falhos ou invalidados deverão ser processados novamente.
+
+O cache deverá considerar, no mínimo:
+- identidade/hash do áudio de referência e do intervalo utilizado;
+- texto original do bloco;
+- idioma;
+- versão do worker e do modelo acústico.
+
+### 10.5. Contexto acústico nas fronteiras
+
+Para reduzir erros nas palavras conectadas entre blocos, o áudio enviado ao alinhador poderá incluir pequenas margens anteriores e posteriores ao intervalo principal.
+
+O resultado deverá ser convertido para a referência temporal absoluta do áudio original. Palavras pertencentes apenas às margens não poderão ser duplicadas em blocos vizinhos.
+
+A estratégia exata de margem e deduplicação será validada com amostras reais antes de ser fixada.
+
+### 10.6. Preservação de edição manual
+
+A reaplicação do alinhamento automático não poderá sobrescrever silenciosamente tempos corrigidos manualmente. O estado de cada palavra deverá preservar a origem do timestamp e a política de invalidação deverá atuar apenas sobre o bloco afetado.
+
+### 10.7. Incremento de implementação atual
+
+O primeiro incremento provisiona o recurso centralizado no Shared e expõe o caminho resolvido ao Nova Generator. A próxima etapa é integrar o worker persistente ao backend do Nova, executar um único bloco de ponta a ponta e validar o contrato de entrada/saída antes de habilitar o processamento em lote.
