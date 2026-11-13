@@ -36,6 +36,10 @@
       {
         "id": "whisper-models",
         "required": false
+      },
+      {
+        "id": "forced-alignment",
+        "required": false
       }
     ],
     "providers": [
