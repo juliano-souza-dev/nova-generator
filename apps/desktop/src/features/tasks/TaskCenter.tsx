@@ -40,7 +40,7 @@ export default function TaskCenter() {
   let disposed=false;let unlisteners:Array<()=>void>=[];
   const update=(kind:TaskKind,progress:number|null,message:string)=>{
    setTasks(current=>{const index=current.findIndex(t=>t.kind===kind&&t.status==="running");if(index<0)return current;
-    return current.map((t,i)=>i!==index?t:{...t,progress:progress==null?t.progress:Math.max(0,Math.min(100,progress)),message,updatedAt:Date.now(),logs:t.logs.at(-1)?.endsWith(message)?t.logs:[...t.logs,clock()+"  "+message].slice(-80)});
+    return current.map((t,i)=>i!==index?t:{...t,progress:progress==null?t.progress:Math.max(0,Math.min(100,progress)),message,updatedAt:Date.now(),logs:t.logs[t.logs.length-1]?.endsWith(message)?t.logs:[...t.logs,clock()+"  "+message].slice(-80)});
    });
   };
   Promise.all([
@@ -51,7 +51,7 @@ export default function TaskCenter() {
   ]).then(items=>{if(disposed)items.forEach(fn=>fn());else unlisteners=items;}).catch(error=>console.error("Falha ao acompanhar processamentos:",error));
   return()=>{disposed=true;unlisteners.forEach(fn=>fn());};
  },[]);
- if(!window.__TAURI_INTERNALS__)return null;
+ if(typeof window==="undefined")return null;
  const clear=()=>setTasks(current=>current.filter(t=>t.status==="running"));
  return <div className="nova-task-center">
   <button className={"nova-task-trigger"+(activeCount?" is-active":"")} onClick={()=>setOpen(v=>!v)} aria-expanded={open}>
