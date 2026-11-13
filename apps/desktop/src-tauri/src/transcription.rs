@@ -1,6 +1,6 @@
 use reqwest::blocking::{multipart, Client};
 use serde::{Deserialize, Serialize};
-use std::{path::{Path, PathBuf}, process::Command, time::Duration};
+use std::{path::{Path, PathBuf}, time::Duration};
 use tauri::{AppHandle, Emitter};
 
 const MODEL: &str = "whisper-large-v3-turbo";
@@ -30,7 +30,7 @@ fn ffprobe(ffmpeg:&Path)->Result<PathBuf,String>{
  if p.is_file(){Ok(p)}else{Err("ffprobe não foi encontrado junto ao FFmpeg compartilhado. Sincronize os recursos pelo Shared Runtime Manager.".into())}
 }
 fn duration(probe:&Path,input:&Path)->Result<u64,String>{
- let out=Command::new(probe).args(["-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1"]).arg(input).output().map_err(|e|format!("Falha ao consultar duração: {e}"))?;
+ let out=crate::process::hidden_command(probe).args(["-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1"]).arg(input).output().map_err(|e|format!("Falha ao consultar duração: {e}"))?;
  if !out.status.success(){return Err(String::from_utf8_lossy(&out.stderr).into_owned())}
  let secs=String::from_utf8_lossy(&out.stdout).trim().parse::<f64>().map_err(|_|"Não foi possível identificar a duração do áudio.")?;
  Ok((secs.max(0.0)*1000.0).round() as u64)
