@@ -181,7 +181,14 @@ fn extract_block(
     Ok(())
 }
 
-fn block_fingerprint(audio: &Path, text: &str, language: &str, runner_bytes: &[u8]) -> Result<String, String> {
+fn block_fingerprint(
+    audio: &Path,
+    text: &str,
+    language: &str,
+    start_ms: u64,
+    end_ms: u64,
+    runner_bytes: &[u8],
+) -> Result<String, String> {
     let audio_bytes = fs::read(audio).map_err(|e| format!("Não foi possível calcular a impressão digital do áudio: {e}"))?;
     let mut digest = Sha256::new();
     digest.update(ALIGNMENT_MODEL_KEY.as_bytes());
@@ -189,6 +196,9 @@ fn block_fingerprint(audio: &Path, text: &str, language: &str, runner_bytes: &[u
     digest.update(language.as_bytes());
     digest.update([0]);
     digest.update(text.as_bytes());
+    digest.update([0]);
+    digest.update(start_ms.to_le_bytes());
+    digest.update(end_ms.to_le_bytes());
     digest.update([0]);
     digest.update(&audio_bytes);
     digest.update([0]);
@@ -258,10 +268,18 @@ pub async fn align_project_subtitles(
                 let clip_end = cues[index].end_ms.saturating_add(PADDING_MS);
                 let clip = temp.join(format!("block-{index:05}.flac"));
                 extract_block(&ffmpeg, &source, &clip, clip_start, clip_end)?;
-                let fingerprint = block_fingerprint(&clip, &cues[index].text, &lang, &runner_bytes)?;
+                let fingerprint = block_fingerprint(
+                    &clip,
+                    &cues[index].text,
+                    &lang,
+                    cues[index].start_ms,
+                    cues[index].end_ms,
+                    &runner_bytes,
+                )?;
 
                 if cues[index].word_alignment.as_deref() == Some("whisperx")
-                    && cues[index].word_alignment_hash.as_deref() == Some(fingerprint.as_str()) {
+                    && cues[index].word_alignment_hash.as_deref() == Some(fingerprint.as_str())
+                    && cues[index].words.as_ref().is_some_and(|words| !words.is_empty()) {
                     skipped += 1;
                 } else {
                     if cues[index].word_alignment.as_deref() == Some("whisperx") {
