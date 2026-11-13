@@ -5,7 +5,7 @@ import { ArrowLeft, Captions, Check, Clock3, Download, Film, Languages, Pause, P
 import { runTrackedTask } from "../tasks/TaskCenter";
 import { downloadExternalTranslationPackage, type ExternalTranslationPackage } from "./translationPackage";
 
-type Cue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; wordAlignment?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
+type Cue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; wordAlignment?: string | null; wordAlignmentHash?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
 type AlignmentProgress = { projectId: string; assetId: string; completed: number; total: number; message: string };
 type AlignmentResult = { aligned: number; skipped: number; total: number; language?: string | null };
 type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: Cue[] };
@@ -94,7 +94,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   }
   function updateCue(id: string, patch: Partial<Cue>) {
     const invalidatesAlignment = "text" in patch || "startMs" in patch || "endMs" in patch;
-    setCues(items => items.map(c => c.id === id ? { ...c, ...patch, ...(invalidatesAlignment ? { words: [], wordAlignment: null } : {}) } : c).sort((a, b) => a.startMs - b.startMs));
+    setCues(items => items.map(c => c.id === id ? { ...c, ...patch, ...(invalidatesAlignment ? { words: [], wordAlignment: null, wordAlignmentHash: null } : {}) } : c).sort((a, b) => a.startMs - b.startMs));
     setEditorialResult(null);
     setSaved(false);
     setDirty(true);
@@ -130,7 +130,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
           projectId, assetId: asset.id, mode: transcriptionMode,
           language: transcriptionLanguage || null, localModel: transcriptionModel
         }));
-      const next = result.cues.map(c => ({ ...c, language: result.language ?? (transcriptionLanguage || null), wordAlignment: null, words: c.words ?? [] }));
+      const next = result.cues.map(c => ({ ...c, language: result.language ?? (transcriptionLanguage || null), wordAlignment: null, wordAlignmentHash: null, words: c.words ?? [] }));
       setCues(next);
       setTranslations([]);
       setEditorialResult(null);
@@ -330,7 +330,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
           <button className="primary-button" onClick={() => void save()} disabled={saving || loading}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button>
-          <button className="icon-button" title="Fechar editor" onClick={() => { if (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?")) onClose(); }}><X size={18}/></button>
+          <button className="icon-button" title="Fechar editor" onClick={() => { if (!aligning && (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?"))) onClose(); }} disabled={aligning}><X size={18}/></button>
         </div>
       </header>
       {error && <div className="media-editor-error">{error}</div>}
