@@ -39,7 +39,7 @@
       },
       {
         "id": "forced-alignment",
-        "required": false
+        "required": true
       }
     ],
     "providers": [
