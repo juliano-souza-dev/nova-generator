@@ -149,7 +149,11 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
 
   async function alignWords() {
     if (aligning || loading || cues.length === 0) return;
-    const missingLanguage = cues.some(c => !(c.language || transcriptionLanguage) && !(c.words?.length));
+    if (dirty || translationDirty) {
+      setError("Salve as alterações da transcrição e da tradução antes de iniciar o alinhamento.");
+      return;
+    }
+    const missingLanguage = cues.some(c => c.wordAlignment !== "whisperx" && !(c.language || transcriptionLanguage) && Boolean(c.text.trim()));
     if (missingLanguage) {
       setError("O idioma da fala não está registrado nesta transcrição. Selecione o idioma no campo Idioma antes de alinhar as palavras.");
       setActiveTrack("transcript");
@@ -180,6 +184,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       try {
         const stored = await invoke<Cue[]>("load_project_subtitles", { projectId, assetId: asset.id });
         setCues(stored);
+        setSaved(true); setDirty(false);
       } catch { /* Preserve the current editor state if reload fails. */ }
     } finally {
       unlisten?.();
@@ -320,7 +325,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   return <div className="media-editor-backdrop">
     <section className="media-editor media-editor-v2" role="dialog" aria-modal="true" aria-label="Editor de mídia">
       <header className="media-editor-header">
-        <button className="media-editor-back" onClick={() => { if (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?")) onClose(); }}><ArrowLeft size={16}/> Biblioteca</button>
+        <button className="media-editor-back" onClick={() => { if (!aligning && (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?"))) onClose(); }} disabled={aligning}><ArrowLeft size={16}/> Biblioteca</button>
         <div className="media-editor-title"><span className="eyebrow">EDITOR DE MÍDIA</span><strong>{asset.name}</strong></div>
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
