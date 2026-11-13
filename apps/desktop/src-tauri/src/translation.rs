@@ -262,7 +262,7 @@ fn translate_cue_streaming(
     app: &AppHandle,
     project_id: &str,
     asset_id: &str,
-    model: &str,
+    _configured_model: &str,
     key: &str,
     endpoint: &str,
     cue: &crate::media::SubtitleCue,
@@ -352,7 +352,7 @@ fn translate_cue_streaming(
         let data = data.trim();
         if data.is_empty() || data == "[DONE]" { continue; }
         let event: Value = serde_json::from_str(data)
-            .map_err(|e| format!("Evento de streaming inválido da Groq ({model}): {e}"))?;
+            .map_err(|e| format!("Evento de streaming inválido da Groq ({editorial_model}): {e}"))?;
         if let Some(actual_model) = event.get("model").and_then(Value::as_str) {
             response_model = actual_model.to_string();
         }
