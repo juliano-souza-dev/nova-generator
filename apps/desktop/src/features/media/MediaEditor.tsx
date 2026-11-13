@@ -19,6 +19,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   const [src, setSrc] = useState("");
   const [cues, setCues] = useState<Cue[]>([]);
   const [translations, setTranslations] = useState<TranslationCue[]>([]);
+  const [editorialResult, setEditorialResult] = useState<Record<string, any> | null>(null);
   const [translationDirty, setTranslationDirty] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [preparingExternalPackage, setPreparingExternalPackage] = useState(false);
@@ -48,15 +49,17 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     let alive = true;
     (async () => {
       try {
-        const [path, stored, storedTranslations] = await Promise.all([
+        const [path, stored, storedTranslations, storedEditorial] = await Promise.all([
           invoke<string>("open_project_media", { projectId, assetId: asset.id }),
           invoke<Cue[]>("load_project_subtitles", { projectId, assetId: asset.id }),
-          invoke<TranslationCue[]>("load_project_translations", { projectId, assetId: asset.id }).catch(() => [] as TranslationCue[])
+          invoke<TranslationCue[]>("load_project_translations", { projectId, assetId: asset.id }).catch(() => [] as TranslationCue[]),
+          invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id }).catch(() => null)
         ]);
         if (!alive) return;
         setSrc(convertFileSrc(path));
         setCues(stored);
         setTranslations(storedTranslations);
+        setEditorialResult(storedEditorial);
         setSelected(stored[0]?.id ?? null);
         if (stored.length) setActiveTrack("transcript");
       } catch (e) { if (alive) setError(String(e)); }
@@ -92,6 +95,13 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         if (translations.length > 0 || translationDirty) {
           await invoke("save_project_translations", { projectId, assetId: asset.id, translations });
         }
+        if (editorialResult) {
+          const approved = { ...editorialResult, suggestions: (editorialResult.suggestions ?? []).map((item: any) => ({
+            ...item, approved_pt: translations.find(t => t.id === item.cue_id)?.text ?? item.approved_pt
+          })) };
+          await invoke("save_project_editorial_result", { projectId, assetId: asset.id, result: approved, cues, includeWordTranslations, includeSemanticUnits });
+          setEditorialResult(approved);
+        }
       });
       setSaved(true);
       setDirty(false);
@@ -123,8 +133,9 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     setTranslating(true); setError(""); setTranslationInfo("");
     try {
       const result = await runTrackedTask("translation", "Traduzir transcrição para PT-BR", () =>
-        invoke<TranslationCue[]>("translate_project_subtitles", { projectId, assetId: asset.id, cues }));
+        invoke<TranslationCue[]>("translate_project_subtitles", { projectId, assetId: asset.id, cues, includeWordTranslations, includeSemanticUnits }));
       setTranslations(result);
+      setEditorialResult(await invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id }));
       setTranslationDirty(true); setDirty(true); setSaved(false);
       setTranslationInfo(result.length + " trechos traduzidos para português brasileiro. Revise e salve.");
     } catch (e) { setError(String(e)); }
@@ -153,6 +164,14 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
+      const isEditorialContract = !Array.isArray(parsed) && parsed.contract === "nova-generator-editorial-suggestions/1.3";
+      if (isEditorialContract) {
+        if (parsed.approval !== "draft") throw new Error("O resultado precisa estar em estado draft para revisão humana.");
+        if (parsed.predictions?.word_translations !== includeWordTranslations || parsed.predictions?.semantic_units !== includeSemanticUnits) {
+          throw new Error("As predições do JSON não correspondem às opções selecionadas. Selecione as mesmas opções usadas na geração do pacote.");
+        }
+        setEditorialResult(parsed);
+      }
       const items = Array.isArray(parsed) ? parsed : (parsed.translations ?? parsed.suggestions ?? parsed.cues);
       if (!Array.isArray(items)) throw new Error("O JSON precisa conter uma lista de traduções.");
       const byId = new Map<string, string>();
