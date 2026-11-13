@@ -1,26 +1,28 @@
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{collections::{HashMap, HashSet}, fs, path::PathBuf, time::{Duration, SystemTime, UNIX_EPOCH}};
+use std::{collections::{HashMap, HashSet}, fs, io::{BufRead, BufReader}, path::PathBuf, thread, time::{Duration, SystemTime, UNIX_EPOCH}};
 use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranslationCue { pub id: String, pub start_ms: u64, pub end_ms: u64, pub text: String }
 
-#[derive(Debug, Deserialize)]
-struct ChatResponse { choices: Vec<ChatChoice> }
-#[derive(Debug, Deserialize)]
-struct ChatChoice { message: ChatMessage }
-#[derive(Debug, Deserialize)]
-struct ChatMessage { content: String }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Progress { project_id: String, stage: String, percent: f32, completed_chunks: usize, total_chunks: usize, message: String }
+struct Progress { project_id: String, asset_id: String, stage: String, percent: f32, completed_chunks: usize, total_chunks: usize, message: String }
 
-fn emit(app: &AppHandle, project_id: &str, stage: &str, percent: f32, done: usize, total: usize, message: &str) {
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TranslationStream { project_id: String, asset_id: String, cue_id: String, delta: String }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TranslationJob { source_hash: String, include_words: bool, include_units: bool, suggestions: Vec<Value> }
+
+fn emit(app: &AppHandle, project_id: &str, asset_id: &str, stage: &str, percent: f32, done: usize, total: usize, message: &str) {
     let _ = app.emit("translation-progress", Progress {
-        project_id: project_id.into(), stage: stage.into(), percent: percent.clamp(0.0, 100.0),
+        project_id: project_id.into(), asset_id: asset_id.into(), stage: stage.into(), percent: percent.clamp(0.0, 100.0),
         completed_chunks: done, total_chunks: total, message: message.into(),
     });
 }
@@ -40,6 +42,9 @@ fn translation_file(app: &AppHandle, project_id: &str, asset_id: &str) -> Result
 }
 fn editorial_file(app: &AppHandle, project_id: &str, asset_id: &str) -> Result<PathBuf, String> {
     project_asset_file(app, project_id, asset_id, "editorial")
+}
+fn translation_job_file(app: &AppHandle, project_id: &str, asset_id: &str) -> Result<PathBuf, String> {
+    project_asset_file(app, project_id, asset_id, "translation-jobs")
 }
 fn atomic_write(path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
     let temp = path.with_extension("json.tmp");
@@ -242,50 +247,240 @@ pub fn save_project_translations(app: AppHandle, project_id: String, asset_id: S
     atomic_write(&path, &serde_json::to_vec_pretty(&translations).map_err(|e| e.to_string())?)
 }
 
-fn translate_batch(model: &str, key: &str, endpoint: &str, full_input: &Value, batch: &[crate::media::SubtitleCue], include_words: bool, include_units: bool) -> Result<Value, String> {
-    let mut batch_input = crate::translation_contract::build_editorial_input(
-        full_input["project_id"].as_str().unwrap_or(""), full_input["asset_id"].as_str().unwrap_or(""),
-        batch, include_words, include_units
-    )?;
-    if let Some(object) = batch_input.as_object_mut() { object.remove("source_hash"); }
-    let schema = crate::translation_contract::output_schema(include_words, include_units, full_input["source_hash"].as_str().unwrap_or(""));
-    let user = format!(
-        "ENTRADA E CONTEXTO COMPLETO:\n{}\n\nCUES DESTE LOTE:\n{}\n\nESQUEMA DE SAÍDA OBRIGATÓRIO:\n{}",
-        serde_json::to_string(full_input).map_err(|e| e.to_string())?,
-        serde_json::to_string(&batch_input).map_err(|e| e.to_string())?,
-        serde_json::to_string(&schema).map_err(|e| e.to_string())?
-    );
-    let body = json!({
-        "model": model, "temperature": 0.2, "response_format": {"type":"json_object"},
-        "messages": [
-            {"role":"system","content":crate::translation_contract::EDITORIAL_RULES},
-            {"role":"user","content":user}
-        ]
-    });
-    let client = Client::builder().timeout(Duration::from_secs(240)).build().map_err(|e| e.to_string())?;
-    let response = client.post(endpoint).bearer_auth(key).json(&body).send().map_err(|e| format!("Falha de conexão com a Groq: {e}"))?;
-    if !response.status().is_success() {
-        let status = response.status();
-        let details = response.text().unwrap_or_default().chars().take(500).collect::<String>();
-        return Err(format!("Groq HTTP {status}: {details}"));
-    }
-    let data: ChatResponse = response.json().map_err(|e| format!("Resposta da Groq inválida: {e}"))?;
-    let raw = data.choices.first().ok_or("A Groq não retornou nenhuma resposta editorial.")?.message.content.trim().to_string();
-    let parsed: Value = match serde_json::from_str(&raw) {
-        Ok(value) => value,
+fn parse_streamed_json(raw: &str) -> Result<Value, String> {
+    match serde_json::from_str::<Value>(raw.trim()) {
+        Ok(value) => Ok(value),
         Err(_) => {
             let start = raw.find('{').ok_or("A Groq não retornou JSON válido.")?;
             let end = raw.rfind('}').ok_or("A resposta JSON da Groq está incompleta.")?;
-            serde_json::from_str(&raw[start..=end]).map_err(|e| format!("JSON editorial inválido: {e}"))?
+            serde_json::from_str(&raw[start..=end]).map_err(|e| format!("JSON da Groq inválido: {e}"))
         }
-    };
-    if parsed["contract"].as_str() != Some(crate::translation_contract::OUTPUT_CONTRACT) || parsed["approval"].as_str() != Some("draft") {
-        return Err("A Groq retornou uma resposta fora do contrato editorial 1.3.".into());
     }
-    if parsed["source_hash"].as_str() != full_input["source_hash"].as_str() {
-        return Err("A Groq retornou um resultado associado a outra versão da transcrição. Nenhuma alteração foi aplicada.".into());
+}
+
+fn translate_cue_streaming(
+    app: &AppHandle,
+    project_id: &str,
+    asset_id: &str,
+    model: &str,
+    key: &str,
+    endpoint: &str,
+    cue: &crate::media::SubtitleCue,
+    include_words: bool,
+    include_units: bool,
+) -> Result<Value, String> {
+    let words = if include_words {
+        cue.words.as_deref().unwrap_or(&[]).iter().enumerate().map(|(order, word)| {
+            let (leading, surface) = crate::translation_contract::split_leading(&word.text);
+            json!({
+                "word_id": format!("{}:word:{:04}", cue.id, order + 1),
+                "surface": surface,
+                "leading": leading
+            })
+        }).collect::<Vec<_>>()
+    } else { Vec::new() };
+
+    let user_payload = json!({
+        "cue_id": cue.id,
+        "text": cue.text,
+        "predictions": {
+            "word_translations": include_words,
+            "semantic_units": include_units
+        },
+        "words": words
+    });
+
+    let mut system = String::from(
+        "Você é o tradutor editorial do Nova Generator. Traduza integralmente a fala para português brasileiro natural, preservando sentido, negações, detalhes, repetições relevantes e tom. Não resuma nem acrescente explicações. Responda exclusivamente com um único objeto JSON, sem Markdown. O objeto deve conter approved_pt como tradução completa. Não devolva contrato, hash, timestamps, IDs de cue, esquema ou metadados que não foram pedidos."
+    );
+    if include_words {
+        system.push_str(
+            " Inclua word_translations como um array de strings, com uma tradução contextual curta para cada palavra, rigorosamente na mesma ordem do array words recebido. Inclua todas as palavras uma única vez. Não devolva IDs, leading, surface, order ou tempos."
+        );
+    }
+    if include_units {
+        system.push_str(
+            " Inclua semantic_units como uma lista apenas quando houver expressões ou grupos contíguos cujo significado funcione como unidade. Cada item deve conter semantic_group_id curto e único dentro deste trecho, word_ids em ordem e pt com a tradução natural completa da expressão. Não force agrupamentos."
+        );
+    }
+    system.push_str(
+        " Não inclua approved_en, trailing, notes, approval, predictions ou source_hash. O aplicativo preencherá e validará esses campos."
+    );
+
+    let body = json!({
+        "model": model,
+        "temperature": 0.2,
+        "response_format": {"type":"json_object"},
+        "stream": true,
+        "max_completion_tokens": 4096,
+        "messages": [
+            {"role":"system","content":system},
+            {"role":"user","content":serde_json::to_string(&user_payload).map_err(|e| e.to_string())?}
+        ]
+    });
+
+    let client = Client::builder()
+        .timeout(Duration::from_secs(240))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let response = client.post(endpoint).bearer_auth(key).json(&body).send()
+        .map_err(|e| format!("Falha de conexão com a Groq: {e}"))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+        let details = response.text().unwrap_or_default().chars().take(500).collect::<String>();
+        return Err(format!("Groq HTTP {status}: {details} [retry-after: {retry_after}]"));
+    }
+
+    let mut reader = BufReader::new(response);
+    let mut line = String::new();
+    let mut raw = String::new();
+    loop {
+        line.clear();
+        let read = reader.read_line(&mut line).map_err(|e| format!("Falha ao receber streaming da Groq: {e}"))?;
+        if read == 0 { break; }
+        let Some(data) = line.trim().strip_prefix("data:") else { continue; };
+        let data = data.trim();
+        if data.is_empty() || data == "[DONE]" { continue; }
+        let event: Value = serde_json::from_str(data)
+            .map_err(|e| format!("Evento de streaming inválido da Groq: {e}"))?;
+        if let Some(delta) = event.pointer("/choices/0/delta/content").and_then(Value::as_str) {
+            raw.push_str(delta);
+            let _ = app.emit("translation-stream", TranslationStream {
+                project_id: project_id.into(),
+                asset_id: asset_id.into(),
+                cue_id: cue.id.clone(),
+                delta: delta.into(),
+            });
+        }
+    }
+    if raw.trim().is_empty() {
+        return Err("A Groq encerrou o streaming sem retornar conteúdo.".into());
+    }
+
+    let parsed = parse_streamed_json(&raw)?;
+    if parsed["approved_pt"].as_str().unwrap_or("").trim().is_empty() {
+        return Err(format!("A Groq não devolveu a tradução do trecho '{}'.", cue.id));
+    }
+    if include_words {
+        let translations = parsed.get("word_translations").and_then(Value::as_array)
+            .ok_or_else(|| format!("A Groq não devolveu word_translations para '{}'.", cue.id))?;
+        if translations.len() != words.len() {
+            return Err(format!("A Groq devolveu {} traduções de palavras para '{}' mas eram esperadas {}.", translations.len(), cue.id, words.len()));
+        }
+        if translations.iter().any(|value| value.as_str().unwrap_or("").trim().is_empty()) {
+            return Err(format!("A Groq devolveu uma tradução de palavra vazia em '{}'.", cue.id));
+        }
+    }
+    if include_units && !parsed.get("semantic_units").map(Value::is_array).unwrap_or(false) {
+        return Err(format!("A Groq não devolveu semantic_units para '{}'.", cue.id));
     }
     Ok(parsed)
+}
+
+fn build_contract_suggestion(
+    cue: &crate::media::SubtitleCue,
+    response: &Value,
+    include_words: bool,
+    include_units: bool,
+) -> Result<Value, String> {
+    let mut suggestion = json!({
+        "cue_id": cue.id,
+        "approved_en": cue.text,
+        "approved_pt": response["approved_pt"],
+        "trailing": "",
+        "notes": ""
+    });
+
+    if include_words {
+        let source_words = cue.words.as_deref().unwrap_or(&[]);
+        let raw_translations = response.get("word_translations").and_then(Value::as_array)
+            .ok_or("A resposta não contém a lista de traduções por palavra.")?;
+        if raw_translations.len() != source_words.len() {
+            return Err(format!("A resposta contém {} traduções de palavras, mas eram esperadas {}.", raw_translations.len(), source_words.len()));
+        }
+        let mut word_translations = Vec::with_capacity(source_words.len());
+        for (index, word) in source_words.iter().enumerate() {
+            let (leading, surface) = crate::translation_contract::split_leading(&word.text);
+            let word_id = format!("{}:word:{:04}", cue.id, index + 1);
+            let pt = raw_translations[index].as_str()
+                .ok_or_else(|| format!("A tradução da palavra '{word_id}' não é um texto válido."))?;
+            word_translations.push(json!({
+                "word_id": word_id,
+                "order": index + 1,
+                "leading": leading,
+                "surface": surface,
+                "start_ms": word.start_ms,
+                "end_ms": word.end_ms,
+                "pt": pt
+            }));
+        }
+
+        if include_units {
+            let units = response.get("semantic_units").and_then(Value::as_array)
+                .ok_or("A resposta não contém semantic_units.")?;
+            let mut group_map: HashMap<String, (String, String)> = HashMap::new();
+            for unit in units {
+                let group_id = unit["semantic_group_id"].as_str().unwrap_or("").to_string();
+                let phrase_pt = unit["pt"].as_str().unwrap_or("").to_string();
+                let ids = unit["word_ids"].as_array().ok_or("Uma unidade semântica não contém word_ids.")?;
+                for (member_index, id) in ids.iter().enumerate() {
+                    let id = id.as_str().ok_or("word_id inválido em unidade semântica.")?.to_string();
+                    let role = if member_index == 0 { "lead" } else { "member" };
+                    if group_map.insert(id, (group_id.clone(), format!("{role}\u{0}{phrase_pt}"))).is_some() {
+                        return Err("A Groq associou uma palavra a mais de uma unidade semântica.".into());
+                    }
+                }
+            }
+            for word in &mut word_translations {
+                let id = word["word_id"].as_str().unwrap_or("").to_string();
+                if let Some((group_id, role_and_phrase)) = group_map.get(&id) {
+                    let mut parts = role_and_phrase.splitn(2, '\0');
+                    let role = parts.next().unwrap_or("member");
+                    let phrase_pt = parts.next().unwrap_or("");
+                    let individual_pt = word["pt"].as_str().unwrap_or("").to_string();
+                    word["semantic_group_id"] = json!(group_id);
+                    word["semantic_group_role"] = json!(role);
+                    if role == "lead" {
+                        word["pt_original"] = json!(individual_pt);
+                        word["pt"] = json!(phrase_pt);
+                    } else {
+                        word["pt_original"] = json!(individual_pt);
+                    }
+                }
+            }
+        }
+        suggestion["word_translations"] = json!(word_translations);
+    }
+
+    if include_units {
+        suggestion["semantic_units"] = response.get("semantic_units").cloned().unwrap_or_else(|| json!([]));
+    }
+    Ok(suggestion)
+}
+
+fn should_retry_groq_error(error: &str) -> bool {
+    error.contains("Groq HTTP 429") || error.contains("Groq HTTP 500") ||
+    error.contains("Groq HTTP 502") || error.contains("Groq HTTP 503") ||
+    error.contains("Groq HTTP 504")
+}
+
+fn load_translation_job(path: &PathBuf, source_hash: &str, include_words: bool, include_units: bool) -> TranslationJob {
+    if path.exists() {
+        if let Ok(raw) = fs::read_to_string(path) {
+            if let Ok(job) = serde_json::from_str::<TranslationJob>(&raw) {
+                if job.source_hash == source_hash && job.include_words == include_words && job.include_units == include_units {
+                    return job;
+                }
+            }
+        }
+    }
+    TranslationJob {
+        source_hash: source_hash.into(),
+        include_words,
+        include_units,
+        suggestions: Vec::new(),
+    }
 }
 
 #[tauri::command]
@@ -293,36 +488,122 @@ pub async fn translate_project_subtitles(
     app: AppHandle, project_id: String, asset_id: String, cues: Vec<crate::media::SubtitleCue>,
     include_word_translations: bool, include_semantic_units: bool,
 ) -> Result<Vec<TranslationCue>, String> {
-    if include_semantic_units && !include_word_translations { return Err("Unidades semânticas dependem das traduções palavra por palavra. Ative as duas predições.".into()); }
+    if include_semantic_units && !include_word_translations {
+        return Err("Unidades semânticas dependem das traduções palavra por palavra. Ative as duas predições.".into());
+    }
     if cues.is_empty() { return Err("Não há trechos de transcrição para traduzir.".into()); }
     if cues.len() > 5000 { return Err("O projeto excede o limite de 5.000 trechos por tradução.".into()); }
     if cues.iter().any(|cue| cue.id.trim().is_empty() || cue.text.trim().is_empty() || cue.text.len() > 2000) {
         return Err("A transcrição contém trechos vazios ou inválidos. Revise-a antes de traduzir.".into());
     }
+
     let mut ordered = cues;
     let mut ids = HashSet::new();
-    if ordered.iter().any(|cue| !ids.insert(cue.id.as_str())) { return Err("A transcrição contém IDs de trechos duplicados.".into()); }
+    if ordered.iter().any(|cue| !ids.insert(cue.id.as_str())) {
+        return Err("A transcrição contém IDs de trechos duplicados.".into());
+    }
     ordered.sort_by_key(|cue| cue.start_ms);
+
     let app2 = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _ = translation_file(&app2, &project_id, &asset_id)?;
         let cfg = crate::shared_runtime::resolve_provider_settings(&app2, "groq")?;
         let key = crate::shared_runtime::resolve_provider_credential(&app2, "groq")?;
         let endpoint = format!("{}/chat/completions", cfg.endpoint.trim_end_matches('/'));
-        let full_input = crate::translation_contract::build_editorial_input(&project_id, &asset_id, &ordered, include_word_translations, include_semantic_units)?;
-        const BATCH_SIZE: usize = 12;
-        let batches = ordered.chunks(BATCH_SIZE).collect::<Vec<_>>();
-        let total = batches.len();
-        let mut suggestions = Vec::new();
-        for (index, batch) in batches.iter().enumerate() {
-            emit(&app2, &project_id, "translating", index as f32 / total as f32 * 100.0, index, total, &format!("Executando contrato editorial 1.3, lote {} de {}", index + 1, total));
-            let result = translate_batch(&cfg.model, &key, &endpoint, &full_input, batch, include_word_translations, include_semantic_units)?;
-            let batch_result = json!({"contract":crate::translation_contract::OUTPUT_CONTRACT,"approval":"draft","source_hash":result["source_hash"],"predictions":result["predictions"],"suggestions":result["suggestions"]});
-            suggestions.extend(validate_editorial_result(&batch_result, batch, include_word_translations, include_semantic_units)?);
-            emit(&app2, &project_id, "translating", (index + 1) as f32 / total as f32 * 100.0, index + 1, total, &format!("Lote {} de {} validado", index + 1, total));
+        let full_input = crate::translation_contract::build_editorial_input(
+            &project_id, &asset_id, &ordered, include_word_translations, include_semantic_units
+        )?;
+        let hash = full_input["source_hash"].as_str().ok_or("Não foi possível calcular o hash da transcrição.")?.to_string();
+        let job_path = translation_job_file(&app2, &project_id, &asset_id)?;
+        let mut job = load_translation_job(&job_path, &hash, include_word_translations, include_semantic_units);
+        let total = ordered.len();
+        let mut suggestions_by_id = job.suggestions.iter().filter_map(|item| {
+            Some((item["cue_id"].as_str()?.to_string(), item.clone()))
+        }).collect::<HashMap<_, _>>();
+
+        // Revalida o cache local antes de reutilizar qualquer trecho concluído.
+        suggestions_by_id.retain(|cue_id, suggestion| {
+            ordered.iter().find(|cue| cue.id == *cue_id).map(|cue| {
+                let cached = json!({
+                    "contract": crate::translation_contract::OUTPUT_CONTRACT,
+                    "approval": "draft",
+                    "source_hash": hash,
+                    "predictions": {"word_translations": include_word_translations, "semantic_units": include_semantic_units},
+                    "suggestions": [suggestion]
+                });
+                validate_editorial_result(&cached, std::slice::from_ref(cue), include_word_translations, include_semantic_units).is_ok()
+            }).unwrap_or(false)
+        });
+
+        let completed = suggestions_by_id.len();
+        emit(&app2, &project_id, &asset_id, "preparing", completed as f32 / total as f32 * 100.0, completed, total,
+            &format!("Tarefa preparada. {} de {} trechos já concluídos serão reutilizados.", completed, total));
+
+        let mut ordered_suggestions = Vec::with_capacity(total);
+        for (index, cue) in ordered.iter().enumerate() {
+            let suggestion = if let Some(cached) = suggestions_by_id.get(&cue.id) {
+                cached.clone()
+            } else {
+                emit(&app2, &project_id, &asset_id, "streaming", index as f32 / total as f32 * 100.0,
+                    index, total, &format!("Recebendo tradução do trecho {} de {} em streaming...", index + 1, total));
+
+                let mut response = None;
+                let mut last_error = String::new();
+                for attempt in 0..3 {
+                    match translate_cue_streaming(
+                        &app2, &project_id, &asset_id, &cfg.model, &key, &endpoint, cue,
+                        include_word_translations, include_semantic_units
+                    ) {
+                        Ok(value) => { response = Some(value); break; }
+                        Err(error) => {
+                            let retry = should_retry_groq_error(&error);
+                            let retry_after = error.split("[retry-after: ").nth(1)
+                                .and_then(|value| value.split(']').next())
+                                .and_then(|value| value.parse::<u64>().ok());
+                            last_error = error;
+                            if !retry || attempt == 2 { break; }
+                            let delay = retry_after.unwrap_or_else(|| 2_u64.pow(attempt as u32 + 1)).clamp(1, 60);
+                            emit(&app2, &project_id, &asset_id, "retrying", index as f32 / total as f32 * 100.0,
+                                index, total, &format!("Limite temporário da Groq. Nova tentativa em {delay}s..."));
+                            thread::sleep(Duration::from_secs(delay));
+                        }
+                    }
+                }
+                let response = response.ok_or(last_error)?;
+                let suggestion = build_contract_suggestion(cue, &response, include_word_translations, include_semantic_units)?;
+                let single = json!({
+                    "contract": crate::translation_contract::OUTPUT_CONTRACT,
+                    "approval": "draft",
+                    "source_hash": hash,
+                    "predictions": {"word_translations": include_word_translations, "semantic_units": include_semantic_units},
+                    "suggestions": [suggestion]
+                });
+                validate_editorial_result(&single, std::slice::from_ref(cue), include_word_translations, include_semantic_units)?;
+                suggestion
+            };
+
+            if !suggestions_by_id.contains_key(&cue.id) {
+                suggestions_by_id.insert(cue.id.clone(), suggestion.clone());
+                job.suggestions = ordered.iter().filter_map(|item| suggestions_by_id.get(&item.id).cloned()).collect();
+                atomic_write(&job_path, &serde_json::to_vec_pretty(&job).map_err(|e| e.to_string())?)?;
+                let done = suggestions_by_id.len();
+                emit(&app2, &project_id, &asset_id, "translating", done as f32 / total as f32 * 100.0,
+                    done, total, &format!("Trecho {} de {} traduzido, validado e salvo.", done, total));
+                // A pausa curta e sequencial ajuda a respeitar os limites da API gratuita.
+                if done < total { thread::sleep(Duration::from_millis(1200)); }
+            }
+            ordered_suggestions.push(suggestion);
         }
-        let final_result = json!({"contract":crate::translation_contract::OUTPUT_CONTRACT,"approval":"draft","source_hash":full_input["source_hash"],"predictions":{"word_translations":include_word_translations,"semantic_units":include_semantic_units},"suggestions":suggestions});
+
+        let final_result = json!({
+            "contract": crate::translation_contract::OUTPUT_CONTRACT,
+            "approval": "draft",
+            "source_hash": hash,
+            "predictions": {"word_translations": include_word_translations, "semantic_units": include_semantic_units},
+            "suggestions": ordered_suggestions
+        });
         persist_editorial_result(&app2, &project_id, &asset_id, &final_result, &ordered, include_word_translations, include_semantic_units)?;
+
         let by_id = final_result["suggestions"].as_array().unwrap().iter().filter_map(|s| {
             Some((s["cue_id"].as_str()?.to_string(), s["approved_pt"].as_str()?.to_string()))
         }).collect::<HashMap<_, _>>();
@@ -330,8 +611,12 @@ pub async fn translate_project_subtitles(
             id: cue.id.clone(), start_ms: cue.start_ms, end_ms: cue.end_ms,
             text: by_id.get(&cue.id).cloned().unwrap_or_default(),
         }).collect::<Vec<_>>();
-        if translations.iter().any(|cue| cue.text.trim().is_empty()) { return Err("A tradução editorial está incompleta. Nenhuma alteração foi aplicada.".into()); }
-        emit(&app2, &project_id, "completed", 100.0, total, total, "Contrato editorial 1.3 concluído; resultado salvo como rascunho");
+        if translations.iter().any(|cue| cue.text.trim().is_empty()) {
+            return Err("A tradução editorial está incompleta. Nenhuma alteração foi aplicada.".into());
+        }
+        if job_path.exists() { fs::remove_file(&job_path).map_err(|e| format!("Não foi possível finalizar a fila de tradução: {e}"))?; }
+        emit(&app2, &project_id, &asset_id, "completed", 100.0, total, total,
+            "Contrato editorial 1.3 concluído; rascunho montado e salvo pelo Nova Generator.");
         Ok(translations)
     }).await.map_err(|e| format!("A tradução foi interrompida: {e}"))?
 }
