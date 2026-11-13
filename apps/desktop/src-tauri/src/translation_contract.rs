@@ -84,6 +84,57 @@ pub fn build_editorial_input(
     Ok(input)
 }
 
+pub fn input_schema(include_word_translations: bool, include_semantic_units: bool) -> Value {
+    let word = json!({
+        "type":"object",
+        "required":["word_id","order","leading","surface","start_ms","end_ms"],
+        "properties":{
+            "word_id":{"type":"string"},
+            "order":{"type":"integer"},
+            "leading":{"type":"string"},
+            "surface":{"type":"string"},
+            "start_ms":{"type":"integer"},
+            "end_ms":{"type":"integer"}
+        }
+    });
+    json!({
+        "$schema":"https://json-schema.org/draft/2020-12/schema",
+        "type":"object",
+        "required":["contract","project_id","asset_id","source_language","target_language","source_hash","predictions","cues"],
+        "properties":{
+            "contract":{"const":INPUT_CONTRACT},
+            "project_id":{"type":"string"},
+            "asset_id":{"type":"string"},
+            "source_language":{"type":"string"},
+            "target_language":{"const":"pt-BR"},
+            "source_hash":{"type":"string"},
+            "predictions":{
+                "type":"object",
+                "required":["word_translations","semantic_units"],
+                "properties":{
+                    "word_translations":{"const":include_word_translations},
+                    "semantic_units":{"const":include_semantic_units}
+                }
+            },
+            "cues":{
+                "type":"array",
+                "items":{
+                    "type":"object",
+                    "required":["cue_id","order","start_ms","end_ms","text","words"],
+                    "properties":{
+                        "cue_id":{"type":"string"},
+                        "order":{"type":"integer"},
+                        "start_ms":{"type":"integer"},
+                        "end_ms":{"type":"integer"},
+                        "text":{"type":"string"},
+                        "words":{"type":"array","items":word}
+                    }
+                }
+            }
+        }
+    })
+}
+
 pub fn output_schema(include_word_translations: bool, include_semantic_units: bool, source_hash: &str) -> Value {
     let mut suggestion = json!({
         "type": "object",
@@ -159,14 +210,16 @@ pub fn build_external_package(
     }
     let input = build_editorial_input(project_id, asset_id, cues, include_word_translations, include_semantic_units)?;
     let schema = output_schema(include_word_translations, include_semantic_units, input["source_hash"].as_str().unwrap_or(""));
+    let input_schema = input_schema(include_word_translations, include_semantic_units);
     let contract_md = format!("# Contrato editorial Nova Generator 1.3\n\nIdentificador de entrada: `{INPUT_CONTRACT}`\n\nIdentificador de saída: `{OUTPUT_CONTRACT}`\n\n## Regras obrigatórias\n\n{EDITORIAL_RULES}\n\n## Predições selecionadas\n\n- Tradução por palavra: {}\n- Unidades semânticas: {}\n- Revisão humana obrigatória; a resposta deve permanecer em estado `draft`.\n",
         if include_word_translations { "incluída" } else { "não incluída" },
         if include_semantic_units { "incluídas" } else { "não incluídas" });
-    let readme = format!("# Pacote editorial para IA externa\n\n1. Leia `CONTRACT.md` integralmente.\n2. Use `input.json` como fonte dos textos, IDs e tempos.\n3. Produza somente um JSON que respeite `output-schema.json`.\n4. Salve a resposta como `output.json`.\n5. Copie `source_hash` exatamente como está em `input.json`.\n6. Não altere IDs, ordem ou timestamps. Não omita conteúdo.\n7. Não produza conteúdo pedagógico, mini-aulas, exercícios ou Anki.\n8. Mantenha `approval` como `draft`; a aprovação será humana no Nova Generator.\n\nContrato: `{OUTPUT_CONTRACT}`.\n");
+    let readme = format!("# Pacote editorial para IA externa\n\n1. Leia `CONTRACT.md` integralmente.\n2. Leia `input-schema.json` e use `input.json` como fonte dos textos, IDs e tempos.\n3. Produza somente um JSON que respeite `output-schema.json`.\n4. Salve a resposta como `output.json`.\n5. Copie `source_hash` exatamente como está em `input.json`.\n6. Não altere IDs, ordem ou timestamps. Não omita conteúdo.\n7. Não produza conteúdo pedagógico, mini-aulas, exercícios ou Anki.\n8. Mantenha `approval` como `draft`; a aprovação será humana no Nova Generator.\n\nContrato: `{OUTPUT_CONTRACT}`.\n");
     let mut files = std::collections::BTreeMap::new();
     files.insert("CONTRACT.md".into(), contract_md);
     files.insert("README.md".into(), readme);
     files.insert("input.json".into(), serde_json::to_string_pretty(&input).map_err(|e| e.to_string())?);
+    files.insert("input-schema.json".into(), serde_json::to_string_pretty(&input_schema).map_err(|e| e.to_string())?);
     files.insert("output-schema.json".into(), serde_json::to_string_pretty(&schema).map_err(|e| e.to_string())?);
     Ok(ExternalPackage { package_version: "1.0".into(), contract_id: OUTPUT_CONTRACT.into(), files })
 }
