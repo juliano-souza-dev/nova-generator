@@ -188,6 +188,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       }
       if (isEditorialContract) {
         if (parsed.approval !== "draft") throw new Error("O resultado precisa estar em estado draft para revisão humana.");
+        if (typeof parsed.source_hash !== "string" || !parsed.source_hash) throw new Error("O JSON não contém o hash da transcrição do pacote. Gere o resultado usando o pacote atual.");
         if (parsed.predictions?.word_translations !== includeWordTranslations || parsed.predictions?.semantic_units !== includeSemanticUnits) {
           throw new Error("As predições do JSON não correspondem às opções selecionadas. Selecione as mesmas opções usadas na geração do pacote.");
         }
