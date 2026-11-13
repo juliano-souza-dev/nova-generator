@@ -49,17 +49,21 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     let alive = true;
     (async () => {
       try {
-        const [path, stored, storedTranslations, storedEditorial] = await Promise.all([
+        const [path, stored, storedTranslations] = await Promise.all([
           invoke<string>("open_project_media", { projectId, assetId: asset.id }),
           invoke<Cue[]>("load_project_subtitles", { projectId, assetId: asset.id }),
-          invoke<TranslationCue[]>("load_project_translations", { projectId, assetId: asset.id }).catch(() => [] as TranslationCue[]),
-          invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id }).catch(() => null)
+          invoke<TranslationCue[]>("load_project_translations", { projectId, assetId: asset.id }).catch(() => [] as TranslationCue[])
         ]);
+        const storedEditorial = await invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id, cues: stored }).catch(() => null);
         if (!alive) return;
         setSrc(convertFileSrc(path));
         setCues(stored);
         setTranslations(storedTranslations);
         setEditorialResult(storedEditorial);
+        if (storedEditorial?.predictions) {
+          setIncludeWordTranslations(Boolean(storedEditorial.predictions.word_translations));
+          setIncludeSemanticUnits(Boolean(storedEditorial.predictions.semantic_units));
+        }
         setSelected(stored[0]?.id ?? null);
         if (stored.length) setActiveTrack("transcript");
       } catch (e) { if (alive) setError(String(e)); }
@@ -78,12 +82,14 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     const endMs = Math.min(duration || startMs + 2500, startMs + 2500);
     const cue: Cue = { id: `cue-${Date.now()}-${cues.length}`, startMs, endMs: Math.max(startMs + 100, endMs), text: "" };
     setCues(items => [...items, cue].sort((a, b) => a.startMs - b.startMs));
+    setEditorialResult(null);
     setSelected(cue.id);
     setSaved(false);
     setDirty(true);
   }
   function updateCue(id: string, patch: Partial<Cue>) {
     setCues(items => items.map(c => c.id === id ? { ...c, ...patch } : c).sort((a, b) => a.startMs - b.startMs));
+    setEditorialResult(null);
     setSaved(false);
     setDirty(true);
   }
@@ -120,6 +126,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         }));
       const next = result.cues.map(c => ({ ...c, words: c.words ?? [] }));
       setCues(next);
+      setEditorialResult(null);
       setSelected(next[0]?.id ?? null);
       setSaved(false); setDirty(true);
       setTranscriptionInfo(`${next.length} legendas geradas por ${result.engine === "groq" ? "Groq Whisper" : "Faster-Whisper"}${result.language ? ` · idioma detectado: ${result.language}` : ""}. Revise e salve as legendas.`);
@@ -135,7 +142,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       const result = await runTrackedTask("translation", "Traduzir transcrição para PT-BR", () =>
         invoke<TranslationCue[]>("translate_project_subtitles", { projectId, assetId: asset.id, cues, includeWordTranslations, includeSemanticUnits }));
       setTranslations(result);
-      setEditorialResult(await invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id }));
+      setEditorialResult(await invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id, cues }));
       setTranslationDirty(true); setDirty(true); setSaved(false);
       setTranslationInfo(result.length + " trechos traduzidos para português brasileiro. Revise e salve.");
     } catch (e) { setError(String(e)); }
@@ -170,7 +177,6 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         if (parsed.predictions?.word_translations !== includeWordTranslations || parsed.predictions?.semantic_units !== includeSemanticUnits) {
           throw new Error("As predições do JSON não correspondem às opções selecionadas. Selecione as mesmas opções usadas na geração do pacote.");
         }
-        setEditorialResult(parsed);
       }
       const items = Array.isArray(parsed) ? parsed : (parsed.translations ?? parsed.suggestions ?? parsed.cues);
       if (!Array.isArray(items)) throw new Error("O JSON precisa conter uma lista de traduções.");
@@ -186,7 +192,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       }));
       if (!imported.length) throw new Error("Nenhum ID do JSON corresponde aos trechos desta transcrição.");
       if (imported.length !== cues.length) throw new Error("O arquivo contém " + imported.length + " traduções correspondentes para " + cues.length + " trechos. Importe um JSON completo com os mesmos IDs.");
-      setTranslations(imported); setTranslationDirty(true); setDirty(true); setSaved(false);
+      setTranslations(imported); if (isEditorialContract) setEditorialResult(parsed); setTranslationDirty(true); setDirty(true); setSaved(false);
       setTranslationInfo(imported.length + " traduções importadas. Revise e salve.");
     } catch (e) { setError("Falha ao importar JSON: " + String(e)); }
     finally { if (translationFileInput.current) translationFileInput.current.value = ""; }
@@ -302,7 +308,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                   <label>Fim (ms)<input type="number" min="1" value={chosen.endMs} onChange={e => updateCue(chosen.id, { endMs: Math.max(chosen.startMs + 100, Number(e.target.value)) })}/></label>
                 </div>
                 <label className="media-editor-text-label">Texto reconhecido<textarea value={chosen.text} onChange={e => updateCue(chosen.id, { text: e.target.value })} placeholder="Texto da transcrição..."/></label>
-                <div className="media-editor-cue-buttons"><button onClick={() => seek(chosen.startMs)}><Clock3 size={13}/> Ir ao início</button><button className="danger" onClick={() => { setCues(items => items.filter(c => c.id !== chosen.id)); setSelected(null); setSaved(false); setDirty(true); }}><Trash2 size={13}/> Excluir trecho</button></div>
+                <div className="media-editor-cue-buttons"><button onClick={() => seek(chosen.startMs)}><Clock3 size={13}/> Ir ao início</button><button className="danger" onClick={() => { setCues(items => items.filter(c => c.id !== chosen.id)); setEditorialResult(null); setSelected(null); setSaved(false); setDirty(true); }}><Trash2 size={13}/> Excluir trecho</button></div>
                 <div className="media-editor-inspector-note">{chosen.words?.length ?? 0} palavras identificadas. A edição deste trecho não altera as faixas de tradução ou WordByWord.</div>
               </> : <div className="media-editor-no-cue"><Captions size={22}/><strong>Nenhum trecho selecionado</strong><span>Selecione um bloco na faixa ou crie um novo trecho.</span></div>}
             </div>
