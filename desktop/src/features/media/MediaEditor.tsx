@@ -700,7 +700,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
           {activeTrack === "translation" && <div className="media-editor-inspector-content">
             <div className="media-editor-inspector-section">
               <div className="media-editor-section-title"><strong>Tradução para PT-BR</strong><span className="media-editor-translation-count">{translations.length}/{cues.length}</span></div>
-              <p className="media-editor-translation-help">A tradução e as predições editoriais seguem o contrato 1.3. Groq e IA externa recebem a mesma entrada e as mesmas regras.</p>
+              <p className="media-editor-translation-help">A Groq recebe um trecho pequeno por vez em streaming. O Nova Generator reconstrói e valida localmente o contrato editorial 1.3.</p>
               <div className="media-editor-contract-options">
                 <label><input type="checkbox" checked={includeWordTranslations} disabled={Boolean(editorialResult)} onChange={e => { setIncludeWordTranslations(e.target.checked); if (!e.target.checked) setIncludeSemanticUnits(false); }}/> Traduções palavra por palavra</label>
                 <label><input type="checkbox" checked={includeSemanticUnits} disabled={!includeWordTranslations || Boolean(editorialResult)} onChange={e => setIncludeSemanticUnits(e.target.checked)}/> Sugestões de unidades semânticas</label>
