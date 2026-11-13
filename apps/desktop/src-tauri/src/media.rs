@@ -254,3 +254,71 @@ pub async fn trim_youtube_cache(app: AppHandle, project_id: String, video_id: St
         Ok(asset)
     }).await.map_err(|e| format!("O recorte foi interrompido: {e}"))?
 }
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtitleCue {
+    pub id: String,
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub text: String,
+}
+
+#[tauri::command]
+pub fn open_project_media(app: AppHandle, project_id: String, asset_id: String) -> Result<String, String> {
+    let root = project_dir(&app, &project_id)?;
+    let assets = read_assets(&root)?;
+    let asset = assets.iter().find(|item| item.id == asset_id).ok_or("Mídia não encontrada neste projeto.")?;
+    if asset.kind != "video" { return Err("O editor visual está disponível para vídeos.".into()); }
+    let relative = Path::new(&asset.relative_path);
+    if relative.is_absolute() || relative.components().any(|part| matches!(part, std::path::Component::ParentDir)) {
+        return Err("Caminho da mídia inválido.".into());
+    }
+    let canonical_root = root.canonicalize().map_err(|e| e.to_string())?;
+    let canonical_file = root.join(relative).canonicalize().map_err(|_| "O arquivo de vídeo não foi encontrado no projeto.".to_string())?;
+    if !canonical_file.starts_with(&canonical_root) || !canonical_file.is_file() {
+        return Err("O arquivo selecionado não pertence à pasta deste projeto.".into());
+    }
+    app.asset_protocol_scope().allow_file(&canonical_file)
+        .map_err(|e| format!("Não foi possível liberar a reprodução do vídeo: {e}"))?;
+    Ok(canonical_file.to_string_lossy().into_owned())
+}
+
+fn subtitle_file(app: &AppHandle, project_id: &str, asset_id: &str) -> Result<PathBuf, String> {
+    if !valid_id(asset_id) { return Err("Identificador de mídia inválido.".into()); }
+    let root = project_dir(app, project_id)?;
+    let assets = read_assets(&root)?;
+    if !assets.iter().any(|item| item.id == asset_id) { return Err("Mídia não encontrada neste projeto.".into()); }
+    let dir = root.join("captions");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join(format!("{asset_id}.json")))
+}
+
+#[tauri::command]
+pub fn load_project_subtitles(app: AppHandle, project_id: String, asset_id: String) -> Result<Vec<SubtitleCue>, String> {
+    let path = subtitle_file(&app, &project_id, &asset_id)?;
+    if !path.exists() { return Ok(Vec::new()); }
+    let raw = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    if raw.trim().is_empty() { return Ok(Vec::new()); }
+    serde_json::from_str(&raw).map_err(|e| format!("Não foi possível ler as legendas salvas: {e}"))
+}
+
+#[tauri::command]
+pub fn save_project_subtitles(app: AppHandle, project_id: String, asset_id: String, cues: Vec<SubtitleCue>) -> Result<(), String> {
+    if cues.len() > 5000 { return Err("O projeto excede o limite de 5.000 legendas.".into()); }
+    let path = subtitle_file(&app, &project_id, &asset_id)?;
+    let mut previous_start = 0;
+    for cue in &cues {
+        if cue.id.is_empty() || cue.id.len() > 80 || cue.text.len() > 2000 || cue.end_ms <= cue.start_ms {
+            return Err("Uma legenda contém dados inválidos.".into());
+        }
+        if cue.start_ms < previous_start { return Err("As legendas precisam estar ordenadas pelo início.".into()); }
+        previous_start = cue.start_ms;
+    }
+    let temp = path.with_extension("json.tmp");
+    let bytes = serde_json::to_vec_pretty(&cues).map_err(|e| e.to_string())?;
+    fs::write(&temp, bytes).map_err(|e| e.to_string())?;
+    if path.exists() { fs::remove_file(&path).map_err(|e| e.to_string())?; }
+    fs::rename(temp, path).map_err(|e| e.to_string())
+}
