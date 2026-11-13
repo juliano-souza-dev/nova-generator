@@ -80,7 +80,7 @@ pub fn save_project_translations(app: AppHandle, project_id: String, asset_id: S
 
 fn translate_batch(model: &str, key: &str, endpoint: &str, context: &str, batch: &[crate::media::SubtitleCue]) -> Result<Vec<TranslationItem>, String> {
     let targets = batch.iter().map(|cue| serde_json::json!({"id":cue.id,"text":cue.text})).collect::<Vec<_>>();
-    let system = "Você é um tradutor profissional de inglês para português brasileiro (PT-BR). Traduza de forma natural, fluida e fiel ao sentido. Use o contexto integral para resolver pronomes, referências, expressões idiomáticas, phrasal verbs, humor e continuidade entre falas. Não traduza palavra por palavra quando isso produzir português artificial. Preserve nomes próprios, intenção, registro e tom. Não acrescente explicações. Responda exclusivamente em JSON válido no formato {\"translations\":[{\"id\":\"mesmo-id\",\"text\":\"tradução\"}]}. Cada ID solicitado deve aparecer exatamente uma vez.";
+    let system = "Você é um tradutor profissional do idioma original da transcrição para português brasileiro (PT-BR). Traduza de forma natural, fluida e fiel ao sentido. Use o contexto integral para resolver pronomes, referências, expressões idiomáticas, phrasal verbs, humor e continuidade entre falas. Não traduza palavra por palavra quando isso produzir português artificial. Preserve nomes próprios, intenção, registro e tom. Não acrescente explicações. Responda exclusivamente em JSON válido no formato {\"translations\":[{\"id\":\"mesmo-id\",\"text\":\"tradução\"}]}. Cada ID solicitado deve aparecer exatamente uma vez.";
     let user = format!("CONTEXTO COMPLETO DA TRANSCRIÇÃO (para compreensão; não precisa reescrever):\n{context}\n\nTRECHOS QUE DEVEM SER TRADUZIDOS:\n{}",
         serde_json::to_string(&targets).map_err(|e| e.to_string())?);
     let body = serde_json::json!({
@@ -129,6 +129,8 @@ pub async fn translate_project_subtitles(app: AppHandle, project_id: String, ass
         return Err("A transcrição contém trechos vazios ou inválidos. Revise-a antes de traduzir.".into());
     }
     let mut ordered = cues;
+    let mut ids = std::collections::HashSet::new();
+    if ordered.iter().any(|cue| !ids.insert(cue.id.as_str())) { return Err("A transcrição contém IDs de trechos duplicados.".into()); }
     ordered.sort_by_key(|cue| cue.start_ms);
     let app2 = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
