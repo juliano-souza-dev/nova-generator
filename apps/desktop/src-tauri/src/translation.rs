@@ -307,8 +307,11 @@ fn translate_cue_streaming(
         " Não inclua approved_en, trailing, notes, approval, predictions ou source_hash. O aplicativo preencherá e validará esses campos."
     );
 
+    // Modelo editorial padronizado para tradução e predições.
+    // A chave e o endpoint continuam vindo do Shared Runtime (Groq).
+    let editorial_model = "openai/gpt-oss-120b";
     let mut body = json!({
-        "model": model,
+        "model": editorial_model,
         "temperature": 0.2,
         "response_format": {"type":"json_object"},
         "stream": true,
@@ -318,11 +321,9 @@ fn translate_cue_streaming(
             {"role":"user","content":serde_json::to_string(&user_payload).map_err(|e| e.to_string())?}
         ]
     });
-    // Qwen3 pode gastar tokens de conclusão com raciocínio interno.
-    // Para esta tarefa editorial estruturada, precisamos reservar a saída para o conteúdo.
-    if model.to_ascii_lowercase().contains("qwen3") {
-        body["reasoning_effort"] = json!("none");
-    }
+    // GPT-OSS oferece níveis de raciocínio; low prioriza a resposta editorial
+    // sem gastar capacidade excessiva com raciocínio interno.
+    body["reasoning_effort"] = json!("low");
 
     let client = Client::builder()
         .timeout(Duration::from_secs(240))
@@ -341,7 +342,7 @@ fn translate_cue_streaming(
     let mut line = String::new();
     let mut raw = String::new();
     let mut finish_reason = String::from("desconhecido");
-    let mut response_model = model.to_string();
+    let mut response_model = editorial_model.to_string();
     let mut refusal = String::new();
     loop {
         line.clear();
