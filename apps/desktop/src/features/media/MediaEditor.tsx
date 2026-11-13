@@ -320,6 +320,16 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   }, []);
 
   const chosen = cues.find(c => c.id === selected) ?? null;
+  const selectedEditorialSuggestion = useMemo(() => {
+    if (!chosen || !Array.isArray(editorialResult?.suggestions)) return null;
+    return editorialResult.suggestions.find((item: any) => item.cue_id === chosen.id) ?? null;
+  }, [chosen, editorialResult]);
+  const selectedEditorialWords = Array.isArray(selectedEditorialSuggestion?.word_translations)
+    ? selectedEditorialSuggestion.word_translations
+    : [];
+  const selectedSemanticUnits = Array.isArray(selectedEditorialSuggestion?.semantic_units)
+    ? selectedEditorialSuggestion.semantic_units
+    : [];
 
   const trackNames = [
     { id: "video" as const, label: "Video", icon: Film },
@@ -448,7 +458,28 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             </div>
             {chosen ? <div className="media-editor-inspector-section">
               <div className="media-editor-section-title"><strong>Trecho selecionado</strong><button className="media-editor-inline-link" onClick={() => { setActiveTrack("transcript"); seek(chosen.startMs); }}>Ver original</button></div>
-              <div className="media-editor-source-text">{chosen.text}</div>
+              <div className="media-editor-source-text">{selectedEditorialSuggestion?.approved_en || chosen.text}</div>
+              {selectedEditorialSuggestion && <div className="media-editor-inspector-section" style={{ marginTop: 12, padding: 12, border: "1px solid var(--border-subtle, #343a46)", borderRadius: 10 }}>
+                <div className="media-editor-section-title"><strong>Prévia da tradução editorial</strong><span className="media-editor-translation-count">Contrato 1.3</span></div>
+                <div className="media-editor-source-text" style={{ marginTop: 8 }}>{selectedEditorialSuggestion.approved_en || chosen.text}</div>
+                <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5, fontWeight: 600 }}>{selectedEditorialSuggestion.approved_pt || translations.find(t => t.id === chosen.id)?.text || "Tradução ainda não disponível"}</div>
+                {selectedSemanticUnits.length > 0 && <div style={{ marginTop: 12 }}>
+                  <div className="media-editor-inspector-note" style={{ marginBottom: 6 }}>Unidades semânticas</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {selectedSemanticUnits.map((unit: any) => <span key={unit.semantic_group_id} style={{ padding: "5px 9px", borderRadius: 7, background: "var(--surface-elevated, #252b36)", fontSize: 12 }}>{unit.pt}</span>)}
+                  </div>
+                </div>}
+                {selectedEditorialWords.length > 0 && <div style={{ marginTop: 12 }}>
+                  <div className="media-editor-inspector-note" style={{ marginBottom: 6 }}>Tradução palavra por palavra</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 6 }}>
+                    {selectedEditorialWords.map((word: any) => <div key={word.word_id} style={{ minWidth: 0, padding: "7px 8px", borderRadius: 7, background: "var(--surface-elevated, #252b36)", border: word.semantic_group_role === "lead" ? "1px solid var(--accent, #6d8cff)" : "1px solid transparent" }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, overflowWrap: "anywhere" }}>{word.leading || ""}{word.surface || ""}</div>
+                      <div style={{ fontSize: 12, marginTop: 3, opacity: 0.88, overflowWrap: "anywhere" }}>{word.semantic_group_role === "member" ? (word.pt_original || word.pt || "") : (word.pt || "")}</div>
+                      <div style={{ fontSize: 10, opacity: 0.55, marginTop: 4 }}>{Number(word.start_ms ?? 0)}–{Number(word.end_ms ?? 0)} ms</div>
+                    </div>)}
+                  </div>
+                </div>}
+              </div>}
               <label className="media-editor-text-label">Tradução em português<textarea value={translations.find(t => t.id === chosen.id)?.text ?? ""} onChange={e => {
                 const existing = translations.find(t => t.id === chosen.id);
                 if (existing) updateTranslation(chosen.id, e.target.value);
