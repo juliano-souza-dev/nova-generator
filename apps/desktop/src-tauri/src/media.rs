@@ -269,6 +269,8 @@ pub struct SubtitleCue {
     pub language: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub word_alignment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub word_alignment_hash: Option<String>,
 }
 
 #[tauri::command]
