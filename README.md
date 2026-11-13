@@ -32,4 +32,14 @@ O comando cria `shared.config.json` a partir de `shared.config.example.json`, ma
 
 Para provedores de API, autorize o Nova Generator no provedor desejado pelo Shared Runtime Manager e sincronize novamente a aplicação. Em uma instalação distribuída, o Shared deve ser vinculado ao diretório de instalação do aplicativo para provisionar o arquivo local nesse ambiente.
 
-Consulte `ARCHITECTURE.md` antes de introduzir novas funcionalidades.
+### Forced Alignment (Word by Word)
+
+O Forced Alignment é um recurso opcional gerenciado integralmente pelo Shared Runtime Manager. Para instalá-lo:
+
+```powershell
+srm install forced-alignment --app nova-generator
+```
+
+O Shared cria o ambiente Python isolado, instala WhisperX e mantém os modelos acústicos no armazenamento global. O Nova Generator apenas lê o caminho provisionado em `shared.resources.forced-alignment`; não instala nem mantém cópias desses recursos.
+
+Consulte `docs/WORD-BY-WORD-SYNC.md` para a arquitetura de alinhamento incremental por blocos e `ARCHITECTURE.md` antes de introduzir novas funcionalidades.
