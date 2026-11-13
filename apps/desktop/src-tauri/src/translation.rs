@@ -78,7 +78,7 @@ pub fn save_project_translations(app: AppHandle, project_id: String, asset_id: S
     atomic_write(&path, &bytes)
 }
 
-fn translate_batch(app: &AppHandle, model: &str, key: &str, endpoint: &str, context: &str, batch: &[crate::media::SubtitleCue]) -> Result<Vec<TranslationItem>, String> {
+fn translate_batch(model: &str, key: &str, endpoint: &str, context: &str, batch: &[crate::media::SubtitleCue]) -> Result<Vec<TranslationItem>, String> {
     let targets = batch.iter().map(|cue| serde_json::json!({"id":cue.id,"text":cue.text})).collect::<Vec<_>>();
     let system = "Você é um tradutor profissional de inglês para português brasileiro (PT-BR). Traduza de forma natural, fluida e fiel ao sentido. Use o contexto integral para resolver pronomes, referências, expressões idiomáticas, phrasal verbs, humor e continuidade entre falas. Não traduza palavra por palavra quando isso produzir português artificial. Preserve nomes próprios, intenção, registro e tom. Não acrescente explicações. Responda exclusivamente em JSON válido no formato {\"translations\":[{\"id\":\"mesmo-id\",\"text\":\"tradução\"}]}. Cada ID solicitado deve aparecer exatamente uma vez.";
     let user = format!("CONTEXTO COMPLETO DA TRANSCRIÇÃO (para compreensão; não precisa reescrever):\n{context}\n\nTRECHOS QUE DEVEM SER TRADUZIDOS:\n{}",
@@ -99,12 +99,15 @@ fn translate_batch(app: &AppHandle, model: &str, key: &str, endpoint: &str, cont
     }
     let data: ChatResponse = response.json().map_err(|e| format!("Resposta da Groq inválida: {e}"))?;
     let raw = data.choices.first().ok_or("A Groq não retornou nenhuma escolha de tradução.")?.message.content.trim().to_string();
-    let parsed = serde_json::from_str::<TranslationPayload>(&raw)
-        .or_else(|_| {
-            let start = raw.find('{').ok_or_else(|| serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "JSON não encontrado")))?;
-            let end = raw.rfind('}').ok_or_else(|| serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "JSON incompleto")))?;
+    let parsed = match serde_json::from_str::<TranslationPayload>(&raw) {
+        Ok(value) => value,
+        Err(_) => {
+            let start = raw.find('{').ok_or("A Groq não retornou um objeto JSON de tradução válido.")?;
+            let end = raw.rfind('}').ok_or("A resposta JSON da Groq está incompleta.")?;
             serde_json::from_str::<TranslationPayload>(&raw[start..=end])
-        }).map_err(|e| format!("Não foi possível interpretar a tradução retornada pela Groq: {e}"))?;
+                .map_err(|e| format!("Não foi possível interpretar a tradução retornada pela Groq: {e}"))?
+        }
+    };
     let expected = batch.iter().map(|cue| cue.id.as_str()).collect::<std::collections::HashSet<_>>();
     let mut seen = std::collections::HashSet::new();
     for item in &parsed.translations {
@@ -115,7 +118,6 @@ fn translate_batch(app: &AppHandle, model: &str, key: &str, endpoint: &str, cont
     if seen.len() != expected.len() {
         return Err("A Groq não traduziu todos os trechos solicitados. Nenhuma tradução foi aplicada.".into());
     }
-    let _ = app;
     Ok(parsed.translations)
 }
 
@@ -142,7 +144,7 @@ pub async fn translate_project_subtitles(app: AppHandle, project_id: String, ass
         let mut by_id = std::collections::HashMap::<String, String>::new();
         for (index, batch) in batches.iter().enumerate() {
             emit(&app2, &project_id, "translating", index as f32 / total as f32 * 100.0, index, total, &format!("Traduzindo bloco {} de {} com contexto integral", index + 1, total));
-            let items = translate_batch(&app2, &model, &key, &endpoint, &context, batch)?;
+            let items = translate_batch(&model, &key, &endpoint, &context, batch)?;
             for item in items { by_id.insert(item.id, item.text.trim().to_string()); }
             emit(&app2, &project_id, "translating", (index + 1) as f32 / total as f32 * 100.0, index + 1, total, &format!("Bloco {} de {} concluído", index + 1, total));
         }
