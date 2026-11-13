@@ -215,6 +215,7 @@ fn translate_batch(model: &str, key: &str, endpoint: &str, full_input: &Value, b
         full_input["project_id"].as_str().unwrap_or(""), full_input["asset_id"].as_str().unwrap_or(""),
         batch, include_words, include_units
     )?;
+    if let Some(object) = batch_input.as_object_mut() { object.remove("source_hash"); }
     let schema = crate::translation_contract::output_schema(include_words, include_units, full_input["source_hash"].as_str().unwrap_or(""));
     let user = format!(
         "ENTRADA E CONTEXTO COMPLETO:\n{}\n\nCUES DESTE LOTE:\n{}\n\nESQUEMA DE SAÍDA OBRIGATÓRIO:\n{}",
