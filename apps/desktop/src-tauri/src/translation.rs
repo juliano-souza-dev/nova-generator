@@ -300,7 +300,7 @@ fn translate_cue_streaming(
     }
     if include_units {
         system.push_str(
-            " Inclua semantic_units como uma lista apenas quando houver expressões ou grupos contíguos cujo significado funcione como unidade. Cada item deve conter semantic_group_id curto e único dentro deste trecho, word_ids em ordem e pt com a tradução natural completa da expressão. Não force agrupamentos."
+            " Inclua semantic_units sempre como array; use [] quando não houver expressões ou grupos contíguos cujo significado funcione como unidade. Cada item deve conter semantic_group_id curto e único dentro deste trecho, word_ids em ordem e pt com a tradução natural completa da expressão. Não force agrupamentos."
         );
     }
     system.push_str(
