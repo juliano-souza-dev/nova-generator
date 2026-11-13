@@ -263,6 +263,8 @@ pub struct SubtitleCue {
     pub start_ms: u64,
     pub end_ms: u64,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub words: Option<Vec<crate::transcription::TranscriptWord>>,
 }
 
 #[tauri::command]
