@@ -330,8 +330,8 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
               <div className="media-editor-section-title"><strong>Tradução para PT-BR</strong><span className="media-editor-translation-count">{translations.length}/{cues.length}</span></div>
               <p className="media-editor-translation-help">A tradução e as predições editoriais seguem o contrato 1.3. Groq e IA externa recebem a mesma entrada e as mesmas regras.</p>
               <div className="media-editor-contract-options">
-                <label><input type="checkbox" checked={includeWordTranslations} onChange={e => setIncludeWordTranslations(e.target.checked)}/> Traduções palavra por palavra</label>
-                <label><input type="checkbox" checked={includeSemanticUnits} onChange={e => setIncludeSemanticUnits(e.target.checked)}/> Sugestões de unidades semânticas</label>
+                <label><input type="checkbox" checked={includeWordTranslations} onChange={e => { setIncludeWordTranslations(e.target.checked); if (!e.target.checked) setIncludeSemanticUnits(false); }}/> Traduções palavra por palavra</label>
+                <label><input type="checkbox" checked={includeSemanticUnits} disabled={!includeWordTranslations} onChange={e => setIncludeSemanticUnits(e.target.checked)}/> Sugestões de unidades semânticas</label>
               </div>
               <button className="primary-button media-editor-transcribe-button" onClick={() => void translateAll()} disabled={loading || translating || cues.length === 0}><Languages size={15}/>{translating ? "Traduzindo..." : translations.length ? "Gerar tradução novamente" : "Traduzir com Groq"}</button>
               <button className="media-editor-secondary-action" onClick={() => void downloadExternalPackage()} disabled={loading || preparingExternalPackage || cues.length === 0}><Download size={14}/>{preparingExternalPackage ? "Preparando pacote..." : "Baixar pacote para IA externa"}</button>
