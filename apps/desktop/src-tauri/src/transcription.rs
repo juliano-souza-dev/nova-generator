@@ -48,14 +48,14 @@ fn safe_source(app:&AppHandle,project_id:&str,asset_id:&str)->Result<PathBuf,Str
  Ok(path)
 }
 fn extract_audio(ffmpeg:&Path,source:&Path,dest:&Path)->Result<(),String>{
- let out=Command::new(ffmpeg).args(["-y","-hide_banner","-loglevel","error","-i"]).arg(source).args(["-vn","-ac","1","-ar","16000","-c:a","flac"]).arg(dest).output().map_err(|e|format!("Não foi possível iniciar FFmpeg: {e}"))?;
+ let out=crate::process::hidden_command(ffmpeg).args(["-y","-hide_banner","-loglevel","error","-i"]).arg(source).args(["-vn","-ac","1","-ar","16000","-c:a","flac"]).arg(dest).output().map_err(|e|format!("Não foi possível iniciar FFmpeg: {e}"))?;
  if !out.status.success(){return Err(format!("Falha ao preparar o áudio: {}",String::from_utf8_lossy(&out.stderr).chars().take(500).collect::<String>()))} Ok(())
 }
 fn chunks(ffmpeg:&Path,audio:&Path,dir:&Path,duration:u64)->Result<Vec<(PathBuf,u64)>,String>{
  let mut out=Vec::new();let mut start=0u64;let mut index=0usize;
  while start<duration {let actual=if index==0{0}else{start.saturating_sub(OVERLAP_MS)};let end=(start+CHUNK_MS).min(duration);let path=dir.join(format!("chunk-{index:05}.flac"));
  let secs=(end-actual) as f64/1000.0;
- let result=Command::new(ffmpeg).args(["-y","-hide_banner","-loglevel","error","-ss"]).arg(format!("{:.3}",actual as f64/1000.0)).arg("-i").arg(audio).arg("-t").arg(format!("{secs:.3}")).args(["-ac","1","-ar","16000","-c:a","flac"]).arg(&path).output().map_err(|e|e.to_string())?;
+ let result=crate::process::hidden_command(ffmpeg).args(["-y","-hide_banner","-loglevel","error","-ss"]).arg(format!("{:.3}",actual as f64/1000.0)).arg("-i").arg(audio).arg("-t").arg(format!("{secs:.3}")).args(["-ac","1","-ar","16000","-c:a","flac"]).arg(&path).output().map_err(|e|e.to_string())?;
  if !result.status.success(){return Err(format!("Falha ao dividir o áudio: {}",String::from_utf8_lossy(&result.stderr)))}
  out.push((path,actual));if end==duration{break}start=end;index+=1;
  } Ok(out)
@@ -104,9 +104,9 @@ fn cloud(app:&AppHandle,project_id:&str,audio:&Path,dir:&Path,duration:u64,langu
  Ok(TranscriptResult{engine:"groq".into(),model:MODEL.into(),language:detected,duration_ms:duration,cues})
 }
 fn run_python(args:&[&str])->Result<std::process::Output,String>{
- let first=match Command::new("python").args(args).output(){Ok(o) if o.status.success()=>return Ok(o),Ok(o)=>format!("python: {}",String::from_utf8_lossy(&o.stderr).chars().take(400).collect::<String>()),Err(e)=>format!("python: {e}")};
+ let first=match crate::process::hidden_command("python").args(args).output(){Ok(o) if o.status.success()=>return Ok(o),Ok(o)=>format!("python: {}",String::from_utf8_lossy(&o.stderr).chars().take(400).collect::<String>()),Err(e)=>format!("python: {e}")};
  let mut a=vec!["-3"];a.extend_from_slice(args);
- match Command::new("py").args(a).output(){Ok(o) if o.status.success()=>Ok(o),Ok(o)=>Err(format!("{first}; py -3: {}",String::from_utf8_lossy(&o.stderr).chars().take(600).collect::<String>())),Err(e)=>Err(format!("{first}; py -3: {e}"))}
+ match crate::process::hidden_command("py").args(a).output(){Ok(o) if o.status.success()=>Ok(o),Ok(o)=>Err(format!("{first}; py -3: {}",String::from_utf8_lossy(&o.stderr).chars().take(600).collect::<String>())),Err(e)=>Err(format!("{first}; py -3: {e}"))}
 }
 fn local(audio:&Path,model:&str,language:Option<&str>)->Result<TranscriptResult,String>{
  const SCRIPT:&str=r#"import contextlib,json,sys
