@@ -638,7 +638,9 @@ pub async fn translate_project_subtitles(
         )?;
         let hash = full_input["source_hash"].as_str().ok_or("Não foi possível calcular o hash da transcrição.")?.to_string();
         let job_path = translation_job_file(&app2, &project_id, &asset_id)?;
-        let mut job = load_translation_job(&job_path, &hash, include_word_translations, include_semantic_units);
+        // Invalida filas parciais geradas antes da inclusão de contexto entre cues.
+        let job_hash = format!("{hash}:dialogue-context-v1");
+        let mut job = load_translation_job(&job_path, &job_hash, include_word_translations, include_semantic_units);
         let total = ordered.len();
         let mut suggestions_by_id = job.suggestions.iter().filter_map(|item| {
             Some((item["cue_id"].as_str()?.to_string(), item.clone()))
