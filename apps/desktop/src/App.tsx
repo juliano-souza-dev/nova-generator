@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import MediaWorkspace from "./features/media/MediaWorkspace";
+import TaskCenter from "./features/tasks/TaskCenter";
 import { invoke } from "@tauri-apps/api/core";
 import {
   ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy,
@@ -99,7 +100,7 @@ export default function App() {
 
   if (view === "project" && activeProject) {
     const currentStage = Math.max(0, stages.indexOf(activeProject.stage));
-    return <div className="workspace-shell">
+    return <div className="workspace-shell">\n      <TaskCenter />
       <header className="workspace-topbar">
         <button className="back-button" onClick={() => { setView("home"); setActiveProject(null); }}><ArrowLeft size={17}/> <span>Projetos</span></button>
         <div className="workspace-crumb"><span className="crumb-dot"/>{activeProject.name}</div>
@@ -123,7 +124,7 @@ export default function App() {
     </div>;
   }
 
-  return <div className="home-shell">
+  return <div className="home-shell">\n    <TaskCenter />
     <header className="home-topbar">
       <div className="brand"><div className="brand-mark"><Sparkles size={18}/></div><div><strong>NOVA<span>GENERATOR</span></strong><small>ESTÚDIO DE CRIAÇÃO</small></div></div>
       <div className="home-top-actions"><span className="local-status"><i/> Ambiente local</span><button className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={17}/> Novo projeto</button></div>
