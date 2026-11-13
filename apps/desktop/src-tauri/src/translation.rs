@@ -590,7 +590,7 @@ pub async fn translate_project_subtitles(
                 emit(&app2, &project_id, &asset_id, "translating", done as f32 / total as f32 * 100.0,
                     done, total, &format!("Trecho {} de {} traduzido, validado e salvo.", done, total));
                 // A pausa curta e sequencial ajuda a respeitar os limites da API gratuita.
-                if done < total { thread::sleep(Duration::from_millis(1200)); }
+                if done < total { thread::sleep(Duration::from_millis(2100)); }
             }
             ordered_suggestions.push(suggestion);
         }
