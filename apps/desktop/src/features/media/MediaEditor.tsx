@@ -324,6 +324,10 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     if (!chosen || !Array.isArray(editorialResult?.suggestions)) return null;
     return editorialResult.suggestions.find((item: any) => item.cue_id === chosen.id) ?? null;
   }, [chosen, editorialResult]);
+  const activeEditorialSuggestion = useMemo(() => {
+    if (!activeCue || !Array.isArray(editorialResult?.suggestions)) return null;
+    return editorialResult.suggestions.find((item: any) => item.cue_id === activeCue.id) ?? null;
+  }, [activeCue, editorialResult]);
   const selectedEditorialWords = Array.isArray(selectedEditorialSuggestion?.word_translations)
     ? selectedEditorialSuggestion.word_translations
     : [];
@@ -359,7 +363,16 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                 <video ref={video} src={src} controls playsInline preload="metadata"
                   onLoadedMetadata={e => { const ms = e.currentTarget.duration * 1000; setDuration(ms); }}
                   onTimeUpdate={e => setCurrent(e.currentTarget.currentTime * 1000)} />
-                {activeCue?.text && <div className="media-editor-caption">{activeCue.text}</div>}
+                {activeCue?.text && <div className="media-editor-caption">
+                  <div>{activeEditorialSuggestion?.approved_en || activeCue.text}</div>
+                  {activeEditorialSuggestion?.approved_pt && <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,.28)", fontWeight: 600 }}>{activeEditorialSuggestion.approved_pt}</div>}
+                  {Array.isArray(activeEditorialSuggestion?.word_translations) && activeEditorialSuggestion.word_translations.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "4px 8px", marginTop: 7, fontSize: 11, lineHeight: 1.35 }}>
+                    {activeEditorialSuggestion.word_translations.map((word: any) => <span key={word.word_id} style={{ display: "inline-flex", flexDirection: "column", alignItems: "center" }}>
+                      <span>{word.leading || ""}{word.surface || ""}</span>
+                      <span style={{ opacity: .82 }}>{word.semantic_group_role === "member" ? (word.pt_original || word.pt || "") : (word.pt || "")}</span>
+                    </span>)}
+                  </div>}
+                </div>}
               </div>
               <div className="media-editor-transport">
                 <button title="Voltar 5 segundos" onClick={() => seek(current - 5000)}><SkipBack size={16}/></button>
