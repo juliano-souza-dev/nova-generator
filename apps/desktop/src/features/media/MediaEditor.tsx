@@ -20,7 +20,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(false);\n  const [dirty, setDirty] = useState(false);
   const activeCue = useMemo(() => cues.find(c => current >= c.startMs && current <= c.endMs), [cues, current]);
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     try {
       await runTrackedTask("export", "Salvar legendas do vídeo", () =>
         invoke("save_project_subtitles", { projectId, assetId: asset.id, cues }));
-      setSaved(true);
+      setSaved(true);\n      setDirty(false);
     } catch (e) { setError(String(e)); }
     finally { setSaving(false); }
   }
@@ -72,12 +72,12 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   return <div className="media-editor-backdrop">
     <section className="media-editor" role="dialog" aria-modal="true" aria-label="Editor de mídia">
       <header className="media-editor-header">
-        <button className="media-editor-back" onClick={onClose}><ArrowLeft size={16}/> Biblioteca</button>
+        <button className="media-editor-back" onClick={() => { if (!dirty || window.confirm("Há alterações de legendas não salvas. Fechar mesmo assim?")) onClose(); }}><ArrowLeft size={16}/> Biblioteca</button>
         <div className="media-editor-title"><span className="eyebrow">EDITOR DE MÍDIA</span><strong>{asset.name}</strong></div>
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
           <button className="primary-button" onClick={() => void save()} disabled={saving || loading}><Save size={15}/> {saving ? "Salvando..." : "Salvar legendas"}</button>
-          <button className="icon-button" title="Fechar editor" onClick={onClose}><X size={18}/></button>
+          <button className="icon-button" title="Fechar editor" onClick={() => { if (!dirty || window.confirm("Há alterações de legendas não salvas. Fechar mesmo assim?")) onClose(); }}><X size={18}/></button>
         </div>
       </header>
       {error && <div className="media-editor-error">{error}</div>}
@@ -111,11 +111,11 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
           <div className="media-editor-sidebar-head"><div><span className="eyebrow">LEGENDAS</span><h3>Faixas de texto <small>{cues.length}</small></h3></div><button className="primary-button" onClick={addCue} disabled={loading}><Plus size={14}/> Nova</button></div>
           {chosen ? <div className="media-editor-cue-form">
             <div className="media-editor-time-fields">
-              <label>Início (ms)<input type="number" min="0" value={chosen.startMs} onChange={e => updateCue(chosen.id, { startMs: Math.max(0, Number(e.target.value)) })}/></label>
+              <label>Início (ms)<input type="number" min="0" value={chosen.startMs} onChange={e => updateCue(chosen.id, { startMs: Math.max(0, Math.min(Number(e.target.value), chosen.endMs - 100)) })}/></label>
               <label>Fim (ms)<input type="number" min="1" value={chosen.endMs} onChange={e => updateCue(chosen.id, { endMs: Math.max(chosen.startMs + 100, Number(e.target.value)) })}/></label>
             </div>
             <label className="media-editor-text-label">Texto da legenda<textarea value={chosen.text} onChange={e => updateCue(chosen.id, { text: e.target.value })} placeholder="Digite o texto desta legenda..."/></label>
-            <div className="media-editor-cue-buttons"><button onClick={() => seek(chosen.startMs)}><Clock3 size={13}/> Ir ao início</button><button className="danger" onClick={() => { setCues(items => items.filter(c => c.id !== chosen.id)); setSelected(null); setSaved(false); }}><Trash2 size={13}/> Excluir</button></div>
+            <div className="media-editor-cue-buttons"><button onClick={() => seek(chosen.startMs)}><Clock3 size={13}/> Ir ao início</button><button className="danger" onClick={() => { setCues(items => items.filter(c => c.id !== chosen.id)); setSelected(null); setSaved(false); setDirty(true); }}><Trash2 size={13}/> Excluir</button></div>
           </div> : <div className="media-editor-no-cue"><Captions size={22}/><strong>Nenhuma legenda selecionada</strong><span>Crie uma legenda para começar a montar a faixa de texto.</span></div>}
           <div className="media-editor-cue-list">
             {cues.map(c => <button key={c.id} className={selected === c.id ? "selected" : ""} onClick={() => { setSelected(c.id); seek(c.startMs); }}>
