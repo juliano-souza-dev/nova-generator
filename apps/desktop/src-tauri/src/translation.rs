@@ -110,12 +110,26 @@ fn validate_editorial_result(result: &Value, cues: &[crate::media::SubtitleCue],
                 if group_id.is_empty() || !groups.insert(group_id.to_string()) || ids.len() < 2 || unit["pt"].as_str().unwrap_or("").trim().is_empty() {
                     return Err(format!("Unidade semântica incompleta em '{cue_id}'."));
                 }
+                let word_items = suggestion.get("word_translations").and_then(Value::as_array).cloned().unwrap_or_default();
                 let mut previous: Option<usize> = None;
-                for id in ids {
+                for (member_index, id) in ids.iter().enumerate() {
                     let id = id.as_str().ok_or("word_id inválido em unidade semântica.")?;
                     let pos = *positions.get(id).ok_or_else(|| format!("Unidade '{group_id}' referencia palavra inexistente."))?;
                     if !used.insert(id.to_string()) || previous.map(|p| pos != p + 1).unwrap_or(false) {
                         return Err(format!("Unidade '{group_id}' não é contígua ou sobrepõe outro grupo."));
+                    }
+                    let word = word_items.iter().find(|word| word["word_id"].as_str() == Some(id))
+                        .ok_or_else(|| format!("A palavra '{id}' da unidade semântica não existe em word_translations."))?;
+                    let expected_role = if member_index == 0 { "lead" } else { "member" };
+                    if word["semantic_group_id"].as_str() != Some(group_id) || word["semantic_group_role"].as_str() != Some(expected_role) {
+                        return Err(format!("A palavra '{id}' não respeita o papel '{expected_role}' do grupo '{group_id}'."));
+                    }
+                    if member_index == 0 {
+                        if word["pt"].as_str() != unit["pt"].as_str() {
+                            return Err(format!("A palavra líder do grupo '{group_id}' deve conter a tradução completa da unidade em pt."));
+                        }
+                    } else if word["pt_original"].as_str().unwrap_or("").trim().is_empty() {
+                        return Err(format!("A palavra membro '{id}' precisa preservar sua tradução individual em pt_original."));
                     }
                     previous = Some(pos);
                 }
