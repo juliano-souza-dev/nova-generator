@@ -101,3 +101,19 @@
 .media-editor-error{margin:10px 16px 0;padding:9px 11px;border:1px solid #70484b;border-radius:6px;background:#321f23;color:#e7a9aa;font-size:10px}
 @media(max-width:900px){.media-editor-backdrop{padding:7px}.media-editor{height:calc(100vh - 14px)}.media-editor-main{grid-template-columns:minmax(0,1fr) 290px}.media-editor-header{gap:8px;padding:9px}.media-editor-title .eyebrow{font-size:8px}.media-editor-title strong{font-size:10px}.media-editor-actions .primary-button{font-size:0;gap:0;padding:9px}.media-editor-actions .primary-button svg{margin:0}.media-editor-preview{padding:10px}}
 @media(max-width:650px){.media-editor-main{grid-template-columns:1fr;grid-template-rows:minmax(280px,1fr) minmax(220px,.8fr);overflow:auto}.media-editor-preview{min-height:320px}.media-editor-sidebar{min-height:280px;border-left:0;border-top:1px solid #302b38}.media-editor-header{flex-wrap:wrap}.media-editor-title{order:3;flex-basis:100%}.media-editor-actions{margin-left:auto}}
+
+
+.media-editor-transcription{display:grid;gap:11px;padding:13px;border:1px solid #3d3449;border-radius:8px;background:#211c29}
+.media-editor-transcription-heading{display:flex;align-items:flex-start;gap:9px;color:#c6adf0}
+.media-editor-transcription-heading div{display:grid;gap:4px}
+.media-editor-transcription-heading strong{font-size:10px;color:#e6dff0}
+.media-editor-transcription-heading span{font-size:9px;line-height:1.5;color:#a49aaa}
+.media-editor-transcription-options{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.media-editor-transcription-options label{display:grid;gap:5px;color:#a9a1b2;font-size:9px}
+.media-editor-transcription-options label:first-child{grid-column:1/-1}
+.media-editor-transcription-options select{width:100%;min-width:0;height:33px;padding:0 8px;border:1px solid #403a49;border-radius:6px;background:#111015;color:#e8e1ef;font-size:9px}
+.media-editor-asr-status{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#a69eae;font-size:9px}
+.media-editor-asr-status button{padding:6px 8px;border:1px solid #655080;border-radius:5px;background:#30253d;color:#d5c2f2;font-size:9px}
+.media-editor-transcribe-button{justify-content:center;width:100%;padding:9px 12px;font-size:10px}
+.media-editor-transcription-info{margin:0;color:#9fd0ac;font-size:9px;line-height:1.5}
+@media(max-width:650px){.media-editor-transcription-options{grid-template-columns:1fr}.media-editor-transcription-options label:first-child{grid-column:auto}}
