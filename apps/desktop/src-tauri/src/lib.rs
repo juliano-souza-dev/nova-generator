@@ -4,6 +4,7 @@ mod shared_runtime;
 mod transcription;
 mod translation;
 mod translation_contract;
+mod process;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 use tauri::Manager;
