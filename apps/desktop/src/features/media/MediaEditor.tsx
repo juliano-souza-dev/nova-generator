@@ -172,6 +172,9 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     try {
       const parsed = JSON.parse(await file.text());
       const isEditorialContract = !Array.isArray(parsed) && parsed.contract === "nova-generator-editorial-suggestions/1.3";
+      if (!Array.isArray(parsed) && parsed.suggestions && !isEditorialContract) {
+        throw new Error("Contrato editorial não reconhecido. Use nova-generator-editorial-suggestions/1.3.");
+      }
       if (isEditorialContract) {
         if (parsed.approval !== "draft") throw new Error("O resultado precisa estar em estado draft para revisão humana.");
         if (parsed.predictions?.word_translations !== includeWordTranslations || parsed.predictions?.semantic_units !== includeSemanticUnits) {
