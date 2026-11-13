@@ -181,8 +181,10 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       const pkg = await invoke<ExternalTranslationPackage>("prepare_external_translation_package", {
         projectId, assetId: asset.id, cues, includeWordTranslations, includeSemanticUnits
       });
-      downloadExternalTranslationPackage(pkg);
-      setTranslationInfo("Pacote editorial 1.3 preparado. Envie o ZIP para a IA externa e importe o output.json retornado.");
+      const saved = await downloadExternalTranslationPackage(pkg);
+      setTranslationInfo(saved
+        ? "Pacote editorial 1.3 salvo. Envie o ZIP para a IA externa e importe o output.json retornado."
+        : "Salvamento cancelado. O pacote não foi gravado.");
     } catch (e) { setError("Não foi possível preparar o pacote externo: " + String(e)); }
     finally { setPreparingExternalPackage(false); }
   }
