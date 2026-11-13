@@ -99,7 +99,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     setSaved(false);
     setDirty(true);
   }
-  async function save() {
+  async function save(): Promise<boolean> {
     setSaving(true); setError("");
     try {
       await runTrackedTask("export", "Salvar transcrição e tradução", async () => {
@@ -118,8 +118,11 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       setSaved(true);
       setDirty(false);
       setTranslationDirty(false);
-    } catch (e) { setError(String(e)); }
-    finally { setSaving(false); }
+      return true;
+    } catch (e) {
+      setError(String(e));
+      return false;
+    } finally { setSaving(false); }
   }
   async function transcribe() {
     if (transcribing || loading) return;
@@ -150,8 +153,12 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   async function alignWords() {
     if (aligning || loading || cues.length === 0) return;
     if (dirty || translationDirty) {
-      setError("Salve as alterações da transcrição e da tradução antes de iniciar o alinhamento.");
-      return;
+      setAlignmentInfo("Salvando as alterações da transcrição e da tradução...");
+      const didSave = await save();
+      if (!didSave) {
+        setAlignmentInfo("Não foi possível salvar as alterações. Corrija o erro e tente alinhar novamente.");
+        return;
+      }
     }
     const missingLanguage = cues.some(c => c.wordAlignment !== "whisperx" && !(c.language || transcriptionLanguage) && Boolean(c.text.trim()));
     if (missingLanguage) {
