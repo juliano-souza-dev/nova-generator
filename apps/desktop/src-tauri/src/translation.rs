@@ -266,6 +266,7 @@ fn translate_cue_streaming(
     key: &str,
     endpoint: &str,
     cue: &crate::media::SubtitleCue,
+    context: &[Value],
     include_words: bool,
     include_units: bool,
 ) -> Result<Value, String> {
@@ -283,6 +284,7 @@ fn translate_cue_streaming(
     let user_payload = json!({
         "cue_id": cue.id,
         "text": cue.text,
+        "dialogue_context": context,
         "predictions": {
             "word_translations": include_words,
             "semantic_units": include_units
@@ -291,16 +293,16 @@ fn translate_cue_streaming(
     });
 
     let mut system = String::from(
-        "Você é o tradutor editorial do Nova Generator. Traduza integralmente a fala para português brasileiro natural, preservando sentido, negações, detalhes, repetições relevantes e tom. Não resuma nem acrescente explicações. Responda exclusivamente com um único objeto JSON, sem Markdown. O objeto deve conter approved_pt como tradução completa. Não devolva contrato, hash, timestamps, IDs de cue, esquema ou metadados que não foram pedidos."
+        "Você é o tradutor editorial do Nova Generator. Traduza integralmente APENAS o trecho-alvo para português brasileiro natural. Use dialogue_context exclusivamente para compreender a conversa: referências, pronomes, sujeito omitido, continuidade, expressões idiomáticas, phrasal verbs, intenção e tom. O contexto NÃO deve ser traduzido, repetido nem incorporado à resposta. Preserve no trecho-alvo sentido, negações, detalhes, repetições relevantes, registro e intenção; não resuma, não literalize expressões idiomáticas e não acrescente informações que o contexto não sustente. Prefira uma formulação que um falante brasileiro realmente usaria, sem sacrificar o significado. Se ainda houver ambiguidade, escolha a leitura mais neutra e fiel. Responda exclusivamente com um único objeto JSON, sem Markdown. O objeto deve conter approved_pt como tradução completa somente do trecho-alvo. Não devolva contrato, hash, timestamps, IDs de cue, esquema ou metadados que não foram pedidos."
     );
     if include_words {
         system.push_str(
-            " Inclua word_translations como um array de strings, com uma tradução contextual curta para cada palavra, rigorosamente na mesma ordem do array words recebido. Inclua todas as palavras uma única vez. Não devolva IDs, leading, surface, order ou tempos."
+            " Inclua word_translations como um array de strings, com uma tradução contextual curta para cada palavra do trecho-alvo, rigorosamente na mesma ordem do array words recebido. Considere a frase completa e dialogue_context ao escolher cada sentido; não forneça equivalentes de dicionário desconectados da fala. A tradução por palavra deve ser compatível com approved_pt, mesmo quando a estrutura natural do português omitir ou reposicionar termos. Inclua todas as palavras do alvo uma única vez. Não devolva IDs, leading, surface, order ou tempos."
         );
     }
     if include_units {
         system.push_str(
-            " Inclua semantic_units sempre como array; use [] quando não houver expressões ou grupos contíguos cujo significado funcione como unidade. Cada item deve conter semantic_group_id curto e único dentro deste trecho, word_ids em ordem e pt com a tradução natural completa da expressão. Não force agrupamentos."
+            " Inclua semantic_units sempre como array; use [] quando não houver expressões ou grupos contíguos cujo significado funcione como unidade. Agrupe somente expressões idiomáticas, phrasal verbs, locuções ou construções cujo sentido dependa do conjunto, não combinações gramaticais comuns. Cada item deve conter semantic_group_id curto e único dentro deste trecho, word_ids contíguos em ordem e pt com a tradução natural completa da expressão. Nunca crie grupos de uma palavra. Não force agrupamentos."
         );
     }
     system.push_str(
@@ -671,8 +673,20 @@ pub async fn translate_project_subtitles(
                 let mut response = None;
                 let mut last_error = String::new();
                 for attempt in 0..3 {
+                    let context = ordered.iter().enumerate()
+                        .filter(|(context_index, item)| {
+                            *context_index != index
+                                && context_index.abs_diff(index) <= 3
+                                && !item.text.trim().is_empty()
+                        })
+                        .map(|(context_index, item)| json!({
+                            "relation": if context_index < index { "previous" } else { "next" },
+                            "distance": context_index.abs_diff(index),
+                            "text": item.text
+                        }))
+                        .collect::<Vec<_>>();
                     match translate_cue_streaming(
-                        &app2, &project_id, &asset_id, &cfg.model, &key, &endpoint, cue,
+                        &app2, &project_id, &asset_id, &cfg.model, &key, &endpoint, cue, &context,
                         include_word_translations, include_semantic_units
                     ) {
                         Ok(value) => { response = Some(value); break; }
