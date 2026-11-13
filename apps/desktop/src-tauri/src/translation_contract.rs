@@ -124,10 +124,11 @@ pub fn output_schema(include_word_translations: bool, include_semantic_units: bo
     json!({
         "$schema":"https://json-schema.org/draft/2020-12/schema",
         "type":"object",
-        "required":["contract","approval","suggestions"],
+        "required":["contract","approval","predictions","suggestions"],
         "properties":{
             "contract":{"const":OUTPUT_CONTRACT},
             "approval":{"const":"draft"},
+            "predictions":{"type":"object","required":["word_translations","semantic_units"],"properties":{"word_translations":{"const":include_word_translations},"semantic_units":{"const":include_semantic_units}}},
             "suggestions":{"type":"array","items":suggestion}
         }
     })
