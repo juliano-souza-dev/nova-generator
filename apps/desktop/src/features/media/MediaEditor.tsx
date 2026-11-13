@@ -132,7 +132,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       .then(status => {
         if (!alive) return;
         const groq = status.providers?.find(provider => provider.id === "groq");
-        setGroqChatModel(groq?.model || "Modelo não informado no Shared Runtime");
+        setGroqChatModel("openai/gpt-oss-120b (tradução editorial)");
       })
       .catch(() => {
         if (alive) setGroqChatModel("Não foi possível consultar o Shared Runtime");
