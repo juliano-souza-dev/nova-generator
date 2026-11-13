@@ -138,7 +138,7 @@ pub fn run() {
             shared_runtime::get_shared_runtime_status,
             transcription::transcribe_media, transcription::check_local_asr, transcription::install_local_asr,
             translation::translate_project_subtitles, translation::load_project_translations, translation::save_project_translations,
-            translation::load_project_editorial_result, translation::save_project_editorial_result, translation::clear_project_editorial_result,
+            translation::load_project_editorial_result, translation::save_project_editorial_result, translation::clear_project_editorial_result, translation::approve_project_editorial_result,
             translation_contract::prepare_external_translation_package
         ])
         .run(tauri::generate_context!())
