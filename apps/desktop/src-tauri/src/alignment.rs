@@ -206,13 +206,6 @@ fn block_fingerprint(
     Ok(format!("{:x}", digest.finalize()))
 }
 
-struct PendingBlock {
-    index: usize,
-    clip: PathBuf,
-    language: String,
-    fingerprint: String,
-}
-
 fn emit_progress(app: &AppHandle, project_id: &str, asset_id: &str, completed: usize, total: usize, message: &str) {
     let _ = app.emit("alignment-progress", AlignmentProgress {
         project_id: project_id.into(),
@@ -344,18 +337,12 @@ pub async fn align_project_subtitles(
                 }
 
                 processed += 1;
-                emit_progress(
-                    &app,
-                    &project_id,
-                    &asset_id,
-                    processed,
-                    total,
-                    if reusable {
-                        &format!("Bloco {} de {} reutilizado", processed, total)
-                    } else {
-                        &format!("Bloco {} de {} alinhado e salvo", processed, total)
-                    },
-                );
+                let message = if reusable {
+                    format!("Bloco {} de {} reutilizado", processed, total)
+                } else {
+                    format!("Bloco {} de {} alinhado e salvo", processed, total)
+                };
+                emit_progress(&app, &project_id, &asset_id, processed, total, &message);
                 let _ = fs::remove_file(&clip);
             }
 
