@@ -23,3 +23,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tauri-plugin-dialog = "2"
 url = "2"
 uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
