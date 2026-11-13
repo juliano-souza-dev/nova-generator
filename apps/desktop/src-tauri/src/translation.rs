@@ -1,7 +1,7 @@
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{collections::{HashMap, HashSet}, fs, path::PathBuf, time::Duration};
+use std::{collections::{HashMap, HashSet}, fs, path::PathBuf, time::{Duration, SystemTime, UNIX_EPOCH}};
 use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +48,7 @@ fn atomic_write(path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
     fs::rename(temp, path).map_err(|e| e.to_string())
 }
 fn source_hash(input: &Value) -> Result<String, String> { crate::translation_contract::input_hash(input) }
+fn now_ms() -> u128 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() }
 
 fn validate_editorial_result(result: &Value, cues: &[crate::media::SubtitleCue], include_words: bool, include_units: bool) -> Result<Vec<Value>, String> {
     if result.get("contract").and_then(Value::as_str) != Some(crate::translation_contract::OUTPUT_CONTRACT) {
@@ -145,17 +146,20 @@ fn persist_editorial_result(app: &AppHandle, project_id: &str, asset_id: &str, r
         return Err("Este resultado pertence a outra versão da transcrição. Gere novamente o pacote ou a tradução.".into());
     }
     let path = editorial_file(app, project_id, asset_id)?;
-    let revision = if path.exists() {
-        fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok())
-            .and_then(|v| v.get("revision").and_then(Value::as_u64)).unwrap_or(0) + 1
-    } else { 1 };
+    let previous = if path.exists() {
+        fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or_else(|| json!({}))
+    } else { json!({}) };
+    let revision = previous.get("revision").and_then(Value::as_u64).unwrap_or(0) + 1;
+    let mut audit = previous.get("audit").and_then(Value::as_array).cloned().unwrap_or_default();
+    audit.push(json!({"revision":revision,"action":"save_draft","at_ms":now_ms()}));
     let stored = json!({
         "contract": crate::translation_contract::OUTPUT_CONTRACT,
         "approval": "draft",
         "revision": revision,
         "source_hash": hash,
         "predictions": {"word_translations": include_words, "semantic_units": include_units},
-        "suggestions": suggestions
+        "suggestions": suggestions,
+        "audit": audit
     });
     atomic_write(&path, &serde_json::to_vec_pretty(&stored).map_err(|e| e.to_string())?)
 }
@@ -195,6 +199,34 @@ pub fn clear_project_editorial_result(app: AppHandle, project_id: String, asset_
     let path = editorial_file(&app, &project_id, &asset_id)?;
     if path.exists() { fs::remove_file(path).map_err(|e| format!("Não foi possível remover o rascunho editorial: {e}"))?; }
     Ok(())
+}
+
+#[tauri::command]
+pub fn approve_project_editorial_result(app: AppHandle, project_id: String, asset_id: String, cues: Vec<crate::media::SubtitleCue>) -> Result<Value, String> {
+    let path = editorial_file(&app, &project_id, &asset_id)?;
+    if !path.exists() { return Err("Não há resultado editorial para aprovar.".into()); }
+    let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut stored: Value = serde_json::from_str(&raw).map_err(|e| format!("Rascunho editorial inválido: {e}"))?;
+    if stored.get("approval").and_then(Value::as_str) != Some("draft") {
+        return Err("Este resultado não está em estado de rascunho.".into());
+    }
+    let include_words = stored.pointer("/predictions/word_translations").and_then(Value::as_bool).unwrap_or(false);
+    let include_units = stored.pointer("/predictions/semantic_units").and_then(Value::as_bool).unwrap_or(false);
+    let input = crate::translation_contract::build_editorial_input(&project_id, &asset_id, &cues, include_words, include_units)?;
+    let current_hash = source_hash(&input)?;
+    if stored.get("source_hash").and_then(Value::as_str) != Some(current_hash.as_str()) {
+        return Err("A transcrição mudou desde a geração. Gere novamente as predições antes de aprovar.".into());
+    }
+    let _ = validate_editorial_result(&stored, &cues, include_words, include_units)?;
+    let revision = stored.get("revision").and_then(Value::as_u64).unwrap_or(0) + 1;
+    let mut audit = stored.get("audit").and_then(Value::as_array).cloned().unwrap_or_default();
+    audit.push(json!({"revision":revision,"action":"human_approved","at_ms":now_ms()}));
+    stored["approval"] = json!("approved");
+    stored["revision"] = json!(revision);
+    stored["approved_at_ms"] = json!(now_ms());
+    stored["audit"] = json!(audit);
+    atomic_write(&path, &serde_json::to_vec_pretty(&stored).map_err(|e| e.to_string())?)?;
+    Ok(stored)
 }
 
 #[tauri::command]
