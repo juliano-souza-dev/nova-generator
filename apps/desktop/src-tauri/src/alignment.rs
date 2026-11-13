@@ -241,6 +241,18 @@ pub async fn align_project_subtitles(
             return Err("Não há blocos com texto para alinhar.".into());
         }
 
+        // Resolve every language before starting so a missing language cannot
+        // interrupt the sequence after some blocks have already been processed.
+        let mut languages = vec![None::<String>; cues.len()];
+        for (index, cue) in cues.iter().enumerate() {
+            if cue.text.trim().is_empty() { continue; }
+            let raw_language = language.as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .or(cue.language.as_deref())
+                .ok_or_else(|| format!("O bloco {} não possui idioma registrado. Selecione o idioma da fala e tente novamente.", index + 1))?;
+            languages[index] = Some(language_code(raw_language)?);
+        }
+
         let (python, runner) = crate::shared_runtime::forced_alignment_paths(&app)?;
         let runner_bytes = fs::read(&runner).map_err(|e| format!("Não foi possível verificar a versão do alinhador: {e}"))?;
         let ffmpeg = crate::media::shared_ffmpeg(&app)?;
@@ -249,24 +261,28 @@ pub async fn align_project_subtitles(
         fs::create_dir_all(&temp).map_err(|e| e.to_string())?;
 
         let result = (|| {
-            let mut pending = Vec::<PendingBlock>::new();
+            let mut worker: Option<AlignmentWorker> = None;
+            let mut aligned = 0usize;
             let mut skipped = 0usize;
-            let mut scanned = 0usize;
+            let mut processed = 0usize;
+            let mut resolved_language = None::<String>;
 
-            emit_progress(&app, &project_id, &asset_id, 0, total, "Verificando quais blocos já possuem alinhamento válido");
             for index in 0..cues.len() {
-                if cues[index].text.trim().is_empty() {
-                    continue;
-                }
-                scanned += 1;
-                let raw_language = language.as_deref()
-                    .filter(|value| !value.trim().is_empty())
-                    .or(cues[index].language.as_deref())
-                    .ok_or_else(|| format!("O bloco {} não possui idioma registrado. Selecione o idioma da fala e tente novamente.", index + 1))?;
-                let lang = language_code(raw_language)?;
+                if cues[index].text.trim().is_empty() { continue; }
+                let lang = languages[index].as_ref().expect("language validated").clone();
+                resolved_language = Some(lang.clone());
                 let clip_start = cues[index].start_ms.saturating_sub(PADDING_MS);
                 let clip_end = cues[index].end_ms.saturating_add(PADDING_MS);
                 let clip = temp.join(format!("block-{index:05}.flac"));
+
+                emit_progress(
+                    &app,
+                    &project_id,
+                    &asset_id,
+                    processed,
+                    total,
+                    &format!("Preparando bloco {} de {}", processed + 1, total),
+                );
                 extract_block(&ffmpeg, &source, &clip, clip_start, clip_end)?;
                 let fingerprint = block_fingerprint(
                     &clip,
@@ -277,90 +293,70 @@ pub async fn align_project_subtitles(
                     &runner_bytes,
                 )?;
 
-                if cues[index].word_alignment.as_deref() == Some("whisperx")
+                let reusable = cues[index].word_alignment.as_deref() == Some("whisperx")
                     && cues[index].word_alignment_hash.as_deref() == Some(fingerprint.as_str())
-                    && cues[index].words.as_ref().is_some_and(|words| !words.is_empty()) {
+                    && cues[index].words.as_ref().is_some_and(|words| !words.is_empty());
+
+                if reusable {
                     skipped += 1;
                 } else {
+                    // Never leave stale WhisperX timestamps visible when the
+                    // audio, text, timing, language or alignment runner changed.
                     if cues[index].word_alignment.as_deref() == Some("whisperx") {
                         cues[index].words = None;
                         cues[index].word_alignment = None;
                         cues[index].word_alignment_hash = None;
                         crate::media::save_project_subtitles(app.clone(), project_id.clone(), asset_id.clone(), cues.clone())?;
                     }
-                    pending.push(PendingBlock { index, clip, language: lang, fingerprint });
+
+                    if worker.is_none() {
+                        worker = Some(AlignmentWorker::start(&python, &runner)?);
+                    }
+                    let words = worker.as_mut().expect("worker initialized")
+                        .align(&clip, &cues[index].text, &lang)?;
+                    if words.is_empty() {
+                        return Err(format!("O WhisperX não encontrou palavras alinháveis no bloco {}. Os blocos concluídos anteriormente permanecem salvos.", index + 1));
+                    }
+
+                    let cue_start = cues[index].start_ms;
+                    let cue_end = cues[index].end_ms;
+                    let mut mapped = Vec::with_capacity(words.len());
+                    for word in words {
+                        let start = clip_start.saturating_add(word.start_ms).max(cue_start).min(cue_end.saturating_sub(1));
+                        let end = clip_start.saturating_add(word.end_ms).min(cue_end).max(start.saturating_add(1));
+                        if end <= start || word.text.trim().is_empty() { continue; }
+                        mapped.push(crate::transcription::TranscriptWord {
+                            text: word.text,
+                            start_ms: start,
+                            end_ms: end,
+                        });
+                    }
+                    if mapped.is_empty() {
+                        return Err(format!("O alinhamento do bloco {} não produziu tempos válidos dentro do trecho.", index + 1));
+                    }
+
+                    cues[index].words = Some(mapped);
+                    cues[index].language = Some(lang.clone());
+                    cues[index].word_alignment = Some("whisperx".into());
+                    cues[index].word_alignment_hash = Some(fingerprint);
+                    crate::media::save_project_subtitles(app.clone(), project_id.clone(), asset_id.clone(), cues.clone())?;
+                    aligned += 1;
                 }
+
+                processed += 1;
                 emit_progress(
                     &app,
                     &project_id,
                     &asset_id,
-                    skipped,
+                    processed,
                     total,
-                    &format!("Verificado bloco {} de {}", scanned, total),
+                    if reusable {
+                        &format!("Bloco {} de {} reutilizado", processed, total)
+                    } else {
+                        &format!("Bloco {} de {} alinhado e salvo", processed, total)
+                    },
                 );
-            }
-
-            if pending.is_empty() {
-                return Ok(AlignmentResult {
-                    aligned: 0,
-                    skipped,
-                    total,
-                    language,
-                });
-            }
-
-            let mut worker = AlignmentWorker::start(&python, &runner)?;
-            let mut aligned = 0usize;
-            let mut resolved_language = None::<String>;
-
-            for block in pending {
-                let index = block.index;
-                emit_progress(
-                    &app,
-                    &project_id,
-                    &asset_id,
-                    skipped + aligned,
-                    total,
-                    &format!("Alinhando bloco {} de {}", skipped + aligned + 1, total),
-                );
-                let words = worker.align(&block.clip, &cues[index].text, &block.language)?;
-                if words.is_empty() {
-                    return Err(format!("O WhisperX não encontrou palavras alinháveis no bloco {}. Os blocos concluídos anteriormente permanecem salvos.", index + 1));
-                }
-
-                let clip_start = cues[index].start_ms.saturating_sub(PADDING_MS);
-                let cue_start = cues[index].start_ms;
-                let cue_end = cues[index].end_ms;
-                let mut mapped = Vec::with_capacity(words.len());
-                for word in words {
-                    let start = clip_start.saturating_add(word.start_ms).max(cue_start).min(cue_end.saturating_sub(1));
-                    let end = clip_start.saturating_add(word.end_ms).min(cue_end).max(start.saturating_add(1));
-                    if end <= start || word.text.trim().is_empty() { continue; }
-                    mapped.push(crate::transcription::TranscriptWord {
-                        text: word.text,
-                        start_ms: start,
-                        end_ms: end,
-                    });
-                }
-                if mapped.is_empty() {
-                    return Err(format!("O alinhamento do bloco {} não produziu tempos válidos dentro do trecho.", index + 1));
-                }
-
-                cues[index].words = Some(mapped);
-                cues[index].language = Some(block.language.clone());
-                cues[index].word_alignment = Some("whisperx".into());
-                cues[index].word_alignment_hash = Some(block.fingerprint);
-                crate::media::save_project_subtitles(app.clone(), project_id.clone(), asset_id.clone(), cues.clone())?;
-                aligned += 1;
-                resolved_language = Some(block.language);
-                emit_progress(
-                    &app,
-                    &project_id,
-                    &asset_id,
-                    skipped + aligned,
-                    total,
-                    &format!("Bloco {} alinhado e salvo", index + 1),
-                );
+                let _ = fs::remove_file(&clip);
             }
 
             Ok(AlignmentResult {
