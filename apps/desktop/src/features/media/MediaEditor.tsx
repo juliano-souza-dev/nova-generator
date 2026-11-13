@@ -74,6 +74,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   const [includeWordTranslations, setIncludeWordTranslations] = useState(true);
   const [includeSemanticUnits, setIncludeSemanticUnits] = useState(true);
   const [translationInfo, setTranslationInfo] = useState("");
+  const [translationStream, setTranslationStream] = useState<{ cueId: string; text: string } | null>(null);
   const [current, setCurrent] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(asset.durationMs ?? 0);
@@ -121,6 +122,22 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; video.current?.pause(); };
+  }, [projectId, asset.id]);
+
+  useEffect(() => {
+    let alive = true;
+    let unlisten: (() => void) | undefined;
+    listen<{ projectId: string; assetId: string; cueId: string; delta: string }>("translation-stream", event => {
+      const payload = event.payload;
+      if (payload.projectId !== projectId || payload.assetId !== asset.id) return;
+      setTranslationStream(current => current?.cueId === payload.cueId
+        ? { cueId: payload.cueId, text: (current.text + payload.delta).slice(-6000) }
+        : { cueId: payload.cueId, text: payload.delta });
+    }).then(stop => {
+      if (alive) unlisten = stop;
+      else stop();
+    }).catch(error => console.error("Falha ao acompanhar streaming da tradução:", error));
+    return () => { alive = false; unlisten?.(); };
   }, [projectId, asset.id]);
 
   function seek(ms: number) {
@@ -409,7 +426,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   async function translateAll() {
     if (translating || loading || cues.length === 0) return;
     if (translations.length && !window.confirm("Gerar novamente substituirá as traduções atuais. A transcrição original será preservada. Continuar?")) return;
-    setTranslating(true); setError(""); setTranslationInfo("");
+    setTranslating(true); setError(""); setTranslationInfo(""); setTranslationStream(null);
     try {
       const result = await runTrackedTask("translation", "Traduzir transcrição para PT-BR", () =>
         invoke<TranslationCue[]>("translate_project_subtitles", { projectId, assetId: asset.id, cues, includeWordTranslations, includeSemanticUnits }));
@@ -683,13 +700,20 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
           {activeTrack === "translation" && <div className="media-editor-inspector-content">
             <div className="media-editor-inspector-section">
               <div className="media-editor-section-title"><strong>Tradução para PT-BR</strong><span className="media-editor-translation-count">{translations.length}/{cues.length}</span></div>
-              <p className="media-editor-translation-help">A tradução e as predições editoriais seguem o contrato 1.3. Groq e IA externa recebem a mesma entrada e as mesmas regras.</p>
+              <p className="media-editor-translation-help">A Groq recebe um trecho pequeno por vez em streaming. O Nova Generator reconstrói e valida localmente o contrato editorial 1.3.</p>
               <div className="media-editor-contract-options">
                 <label><input type="checkbox" checked={includeWordTranslations} disabled={Boolean(editorialResult)} onChange={e => { setIncludeWordTranslations(e.target.checked); if (!e.target.checked) setIncludeSemanticUnits(false); }}/> Traduções palavra por palavra</label>
                 <label><input type="checkbox" checked={includeSemanticUnits} disabled={!includeWordTranslations || Boolean(editorialResult)} onChange={e => setIncludeSemanticUnits(e.target.checked)}/> Sugestões de unidades semânticas</label>
                 {editorialResult && <button className="media-editor-inline-link" onClick={() => void resetEditorialDraft()}>Reconfigurar predições</button>}
               </div>
               <button className="primary-button media-editor-transcribe-button" onClick={() => void translateAll()} disabled={loading || translating || cues.length === 0}><Languages size={15}/>{translating ? "Traduzindo..." : translations.length ? "Gerar tradução novamente" : "Traduzir com Groq"}</button>
+              {translationStream && <div style={{ marginTop: 10, padding: 10, borderRadius: 8, border: "1px solid var(--border-subtle, #343a46)", background: "var(--panel-muted, rgba(127,127,127,.06))" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6, fontSize: 12, fontWeight: 700 }}>
+                  <span>{translating ? "Groq · resposta em streaming" : "Último trecho recebido"}</span>
+                  <span>{translationStream.cueId}</span>
+                </div>
+                <pre style={{ margin: 0, maxHeight: 150, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 11, lineHeight: 1.45 }}>{translationStream.text}</pre>
+              </div>}
               <button className="media-editor-secondary-action" onClick={() => void downloadExternalPackage()} disabled={loading || preparingExternalPackage || cues.length === 0}><Download size={14}/>{preparingExternalPackage ? "Preparando pacote..." : "Baixar pacote para IA externa"}</button>
               {editorialResult && <div className="media-editor-editorial-status">
                 <span>{editorialResult.approval === "approved" ? "Resultado aprovado" : "Resultado aguardando revisão humana"}</span>
