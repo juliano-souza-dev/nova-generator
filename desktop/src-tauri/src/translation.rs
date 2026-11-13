@@ -557,9 +557,12 @@ pub async fn translate_project_subtitles(
                         Ok(value) => { response = Some(value); break; }
                         Err(error) => {
                             let retry = should_retry_groq_error(&error);
+                            let retry_after = error.split("[retry-after: ").nth(1)
+                                .and_then(|value| value.split(']').next())
+                                .and_then(|value| value.parse::<u64>().ok());
                             last_error = error;
                             if !retry || attempt == 2 { break; }
-                            let delay = 2_u64.pow(attempt as u32 + 1);
+                            let delay = retry_after.unwrap_or_else(|| 2_u64.pow(attempt as u32 + 1)).clamp(1, 60);
                             emit(&app2, &project_id, &asset_id, "retrying", index as f32 / total as f32 * 100.0,
                                 index, total, &format!("Limite temporário da Groq. Nova tentativa em {delay}s..."));
                             thread::sleep(Duration::from_secs(delay));
