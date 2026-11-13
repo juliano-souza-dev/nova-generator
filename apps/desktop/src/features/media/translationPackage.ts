@@ -1,3 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+
 export type ExternalTranslationPackage = {
   packageVersion: string;
   contractId: string;
@@ -33,8 +36,8 @@ function join(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-/** Creates a standards-compliant ZIP using the STORE method, without adding a runtime dependency. */
-export function createZip(files: Record<string, string>): Blob {
+/** Creates a standards-compliant ZIP using STORE, without adding a runtime dependency. */
+export function createZip(files: Record<string, string>): Uint8Array {
   const local: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;
@@ -62,17 +65,22 @@ export function createZip(files: Record<string, string>): Blob {
     u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length),
     u32(centralBytes.length), u32(localBytes.length), u16(0)
   ]);
-  return new Blob([localBytes, centralBytes, end], { type: "application/zip" });
+  return join([localBytes, centralBytes, end]);
 }
 
-export function downloadExternalTranslationPackage(pkg: ExternalTranslationPackage): void {
-  const blob = createZip(pkg.files);
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `nova-editorial-${pkg.packageVersion}-${Date.now()}.zip`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+/** Uses a native save dialog and filesystem write, avoiding unreliable WebView blob downloads. */
+export async function downloadExternalTranslationPackage(pkg: ExternalTranslationPackage): Promise<boolean> {
+  const path = await save({
+    title: "Salvar pacote para IA externa",
+    defaultPath: `nova-editorial-${pkg.packageVersion}.zip`,
+    filters: [{ name: "Pacote ZIP", extensions: ["zip"] }]
+  });
+  if (!path) return false;
+
+  const bytes = createZip(pkg.files);
+  await invoke("save_external_translation_package", {
+    path,
+    bytes: Array.from(bytes)
+  });
+  return true;
 }
