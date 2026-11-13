@@ -307,7 +307,7 @@ fn translate_cue_streaming(
         " Não inclua approved_en, trailing, notes, approval, predictions ou source_hash. O aplicativo preencherá e validará esses campos."
     );
 
-    let body = json!({
+    let mut body = json!({
         "model": model,
         "temperature": 0.2,
         "response_format": {"type":"json_object"},
@@ -318,6 +318,11 @@ fn translate_cue_streaming(
             {"role":"user","content":serde_json::to_string(&user_payload).map_err(|e| e.to_string())?}
         ]
     });
+    // Qwen3 pode gastar tokens de conclusão com raciocínio interno.
+    // Para esta tarefa editorial estruturada, precisamos reservar a saída para o conteúdo.
+    if model.to_ascii_lowercase().contains("qwen3") {
+        body["reasoning_effort"] = json!("none");
+    }
 
     let client = Client::builder()
         .timeout(Duration::from_secs(240))
@@ -335,6 +340,9 @@ fn translate_cue_streaming(
     let mut reader = BufReader::new(response);
     let mut line = String::new();
     let mut raw = String::new();
+    let mut finish_reason = String::from("desconhecido");
+    let mut response_model = model.to_string();
+    let mut refusal = String::new();
     loop {
         line.clear();
         let read = reader.read_line(&mut line).map_err(|e| format!("Falha ao receber streaming da Groq: {e}"))?;
@@ -343,25 +351,69 @@ fn translate_cue_streaming(
         let data = data.trim();
         if data.is_empty() || data == "[DONE]" { continue; }
         let event: Value = serde_json::from_str(data)
-            .map_err(|e| format!("Evento de streaming inválido da Groq: {e}"))?;
-        if let Some(delta) = event.pointer("/choices/0/delta/content").and_then(Value::as_str) {
-            raw.push_str(delta);
-            let _ = app.emit("translation-stream", TranslationStream {
-                project_id: project_id.into(),
-                asset_id: asset_id.into(),
-                cue_id: cue.id.clone(),
-                delta: delta.into(),
-            });
+            .map_err(|e| format!("Evento de streaming inválido da Groq ({model}): {e}"))?;
+        if let Some(actual_model) = event.get("model").and_then(Value::as_str) {
+            response_model = actual_model.to_string();
+        }
+        if let Some(choice) = event.get("choices").and_then(Value::as_array).and_then(|items| items.first()) {
+            if let Some(reason) = choice.get("finish_reason").and_then(Value::as_str) {
+                finish_reason = reason.to_string();
+            }
+            if let Some(message) = choice.get("delta") {
+                if let Some(value) = message.get("refusal").and_then(Value::as_str) {
+                    refusal.push_str(value);
+                }
+                if let Some(delta) = message.get("content").and_then(Value::as_str) {
+                    raw.push_str(delta);
+                    let _ = app.emit("translation-stream", TranslationStream {
+                        project_id: project_id.into(),
+                        asset_id: asset_id.into(),
+                        cue_id: cue.id.clone(),
+                        delta: delta.into(),
+                    });
+                }
+            }
         }
     }
     if raw.trim().is_empty() {
-        return Err("A Groq encerrou o streaming sem retornar conteúdo.".into());
+        return Err(format!(
+            "A Groq não enviou conteúdo para o trecho '{}' usando o modelo '{}'. finish_reason={finish_reason}. {}",
+            cue.id, response_model,
+            if refusal.is_empty() { "Verifique o modelo configurado e o limite de conclusão.".to_string() } else { format!("Recusa do modelo: {refusal}") }
+        ));
+    }
+    if finish_reason == "length" {
+        return Err(format!(
+            "A resposta do modelo '{response_model}' foi interrompida pelo limite de tokens (finish_reason=length) no trecho '{}'. Reduza o tamanho do chunk ou ajuste o limite de saída.",
+            cue.id
+        ));
     }
 
-    let parsed = parse_streamed_json(&raw)?;
-    if parsed["approved_pt"].as_str().unwrap_or("").trim().is_empty() {
-        return Err(format!("A Groq não devolveu a tradução do trecho '{}'.", cue.id));
+    let parsed = match parse_streamed_json(&raw) {
+        Ok(value) => value,
+        Err(_) if !include_words && !include_units => json!({"approved_pt": raw.trim()}),
+        Err(error) => return Err(format!(
+            "O modelo '{response_model}' não retornou o formato esperado no trecho '{}'. finish_reason={finish_reason}; detalhe={error}; resposta recebida={}",
+            cue.id, raw.chars().take(360).collect::<String>()
+        )),
+    };
+    let translated = parsed.get("approved_pt")
+        .or_else(|| parsed.get("translation"))
+        .or_else(|| parsed.get("translated_text"))
+        .or_else(|| parsed.get("pt"))
+        .or_else(|| parsed.get("text"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if translated.is_empty() {
+        return Err(format!(
+            "O modelo '{response_model}' não devolveu a tradução no campo approved_pt (nem nos campos alternativos) para o trecho '{}'. finish_reason={finish_reason}; resposta recebida={}",
+            cue.id, raw.chars().take(500).collect::<String>()
+        ));
     }
+    let mut parsed = parsed;
+    parsed["approved_pt"] = json!(translated);
     if include_words {
         let translations = parsed.get("word_translations").and_then(Value::as_array)
             .ok_or_else(|| format!("A Groq não devolveu word_translations para '{}'.", cue.id))?;
