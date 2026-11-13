@@ -129,7 +129,11 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       setEditorialResult(null);
       setSelected(next[0]?.id ?? null);
       setSaved(false); setDirty(true);
-      setTranscriptionInfo(`${next.length} legendas geradas por ${result.engine === "groq" ? "Groq Whisper" : "Faster-Whisper"}${result.language ? ` · idioma detectado: ${result.language}` : ""}. Revise e salve as legendas.`);
+      setTranscriptionInfo(`${next.length} legendas geradas por ${result.engine === "groq" ? "Groq Whisper" : "Faster-Whisper"}${result.language ? ` · idioma detectado: ${result.language}` : ""}. Salvando automaticamente...`);
+      // A transcrição é um resultado de processamento do projeto: persista-a imediatamente.
+      await invoke("save_project_subtitles", { projectId, assetId: asset.id, cues: next });
+      setSaved(true); setDirty(false);
+      setTranscriptionInfo(`${next.length} legendas geradas e salvas no projeto por ${result.engine === "groq" ? "Groq Whisper" : "Faster-Whisper"}${result.language ? ` · idioma detectado: ${result.language}` : ""}.`);
     } catch (e) { setError(String(e)); }
     finally { setTranscribing(false); }
   }
@@ -144,7 +148,12 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       setTranslations(result);
       setEditorialResult(await invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id, cues }));
       setTranslationDirty(true); setDirty(true); setSaved(false);
-      setTranslationInfo(result.length + " trechos traduzidos para português brasileiro. Revise e salve.");
+      setTranslationInfo("Tradução concluída. Salvando automaticamente...");
+      // O backend já persiste o rascunho editorial; aqui persistimos também a faixa PT-BR.
+      await invoke("save_project_subtitles", { projectId, assetId: asset.id, cues });
+      await invoke("save_project_translations", { projectId, assetId: asset.id, translations: result });
+      setTranslationDirty(false); setDirty(false); setSaved(true);
+      setTranslationInfo(result.length + " trechos traduzidos e salvos no projeto. O rascunho editorial permanece disponível para revisão.");
     } catch (e) { setError(String(e)); }
     finally { setTranslating(false); }
   }
