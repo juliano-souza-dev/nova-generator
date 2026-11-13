@@ -98,15 +98,15 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     try {
       await runTrackedTask("export", "Salvar transcrição e tradução", async () => {
         await invoke("save_project_subtitles", { projectId, assetId: asset.id, cues });
-        if (translations.length > 0 || translationDirty) {
-          await invoke("save_project_translations", { projectId, assetId: asset.id, translations });
-        }
         if (editorialResult) {
           const approved = { ...editorialResult, suggestions: (editorialResult.suggestions ?? []).map((item: any) => ({
             ...item, approved_pt: translations.find(t => t.id === item.cue_id)?.text ?? item.approved_pt
           })) };
           await invoke("save_project_editorial_result", { projectId, assetId: asset.id, result: approved, cues, includeWordTranslations, includeSemanticUnits });
           setEditorialResult(approved);
+        }
+        if (translations.length > 0 || translationDirty) {
+          await invoke("save_project_translations", { projectId, assetId: asset.id, translations });
         }
       });
       setSaved(true);
