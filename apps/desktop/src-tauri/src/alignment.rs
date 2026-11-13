@@ -241,12 +241,14 @@ pub async fn align_project_subtitles(
         let result = (|| {
             let mut pending = Vec::<PendingBlock>::new();
             let mut skipped = 0usize;
+            let mut scanned = 0usize;
 
             emit_progress(&app, &project_id, &asset_id, 0, total, "Verificando quais blocos já possuem alinhamento válido");
             for index in 0..cues.len() {
                 if cues[index].text.trim().is_empty() {
                     continue;
                 }
+                scanned += 1;
                 let raw_language = language.as_deref()
                     .filter(|value| !value.trim().is_empty())
                     .or(cues[index].language.as_deref())
@@ -262,6 +264,12 @@ pub async fn align_project_subtitles(
                     && cues[index].word_alignment_hash.as_deref() == Some(fingerprint.as_str()) {
                     skipped += 1;
                 } else {
+                    if cues[index].word_alignment.as_deref() == Some("whisperx") {
+                        cues[index].words = None;
+                        cues[index].word_alignment = None;
+                        cues[index].word_alignment_hash = None;
+                        crate::media::save_project_subtitles(app.clone(), project_id.clone(), asset_id.clone(), cues.clone())?;
+                    }
                     pending.push(PendingBlock { index, clip, language: lang, fingerprint });
                 }
                 emit_progress(
@@ -270,7 +278,7 @@ pub async fn align_project_subtitles(
                     &asset_id,
                     skipped,
                     total,
-                    &format!("Verificado bloco {} de {}", index + 1, total),
+                    &format!("Verificado bloco {} de {}", scanned, total),
                 );
             }
 
@@ -295,7 +303,7 @@ pub async fn align_project_subtitles(
                     &asset_id,
                     skipped + aligned,
                     total,
-                    &format!("Alinhando bloco {} de {}", index + 1, cues.len()),
+                    &format!("Alinhando bloco {} de {}", skipped + aligned + 1, total),
                 );
                 let words = worker.align(&block.clip, &cues[index].text, &block.language)?;
                 if words.is_empty() {
