@@ -1,6 +1,5 @@
 use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::AppHandle;
 
 pub const INPUT_CONTRACT: &str = "nova-generator-editorial-input/1.3";
 pub const OUTPUT_CONTRACT: &str = "nova-generator-editorial-suggestions/1.3";
@@ -11,11 +10,10 @@ NÃO produza marcação pedagógica, mini-aulas, exercícios, exemplos didático
 Traduza integralmente cada linha. Não resuma, não omita orações, detalhes, negações, condições, causas, consequências, repetições relevantes ou interjeições. Use PT-BR natural sem reduzir o conteúdo.
 Use a transcrição completa como contexto, mas produza uma sugestão para cada cue_id solicitado. Preserve todos os IDs e timestamps recebidos. Não crie, remova ou renumere cues ou palavras.
 approved_en deve conter a versão revisada da fala no idioma original, sem mudar seu conteúdo. approved_pt deve conter a tradução completa e natural da linha.
-Cada palavra recebida deve aparecer exatamente uma vez em word_translations, preservando word_id, order, leading, surface, start_ms e end_ms. Preencha pt com a tradução contextual da palavra.
-semantic_units deve conter apenas grupos contíguos de palavras da mesma cue, sem sobreposição. Cada grupo deve ter semantic_group_id único, word_ids em ordem e uma tradução natural completa em pt. Não force agrupamentos quando não forem necessários.
+Quando predictions.word_translations=true, cada palavra recebida deve aparecer exatamente uma vez em word_translations, preservando word_id, order, leading, surface, start_ms e end_ms. Preencha pt com a tradução contextual da palavra. Quando predictions.semantic_units=true, semantic_units deve conter apenas grupos contíguos de palavras da mesma cue, sem sobreposição. Cada grupo deve ter semantic_group_id único, word_ids em ordem e uma tradução natural completa em pt. Nas palavras agrupadas, registre semantic_group_id e semantic_group_role: a primeira palavra é lead e recebe em pt a tradução completa da unidade; as demais são member e preservam sua tradução individual anterior em pt_original. Não force agrupamentos quando não forem necessários.
 trailing deve preservar eventual texto residual não associado a palavra. notes deve registrar apenas observações editoriais relevantes, nunca explicações pedagógicas.
 A saída é um rascunho para revisão humana. Não aprove nem publique automaticamente.
-Responda exclusivamente com JSON válido no contrato nova-generator-editorial-suggestions/1.3, no formato { "contract": "nova-generator-editorial-suggestions/1.3", "approval": "draft", "suggestions": [...] }."#;
+Responda exclusivamente com JSON válido no contrato nova-generator-editorial-suggestions/1.3, no formato { "contract": "nova-generator-editorial-suggestions/1.3", "approval": "draft", "predictions": { "word_translations": true|false, "semantic_units": true|false }, "suggestions": [...] }. Os valores de predictions devem repetir exatamente as opções recebidas na entrada."#;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,7 +99,7 @@ pub fn output_schema(include_word_translations: bool, include_semantic_units: bo
                     "surface":{"type":"string"},
                     "start_ms":{"type":"integer"},
                     "end_ms":{"type":"integer"},
-                    "pt":{"type":"string"}
+                    "pt":{"type":"string"},"semantic_group_id":{"type":"string"},"semantic_group_role":{"enum":["lead","member"]},"pt_original":{"type":"string"}
                 }
             }
         });
