@@ -165,7 +165,8 @@ pub fn load_project_editorial_result(app: AppHandle, project_id: String, asset_i
     let include_words = stored.pointer("/predictions/word_translations").and_then(Value::as_bool).unwrap_or(false);
     let include_units = stored.pointer("/predictions/semantic_units").and_then(Value::as_bool).unwrap_or(false);
     let input = crate::translation_contract::build_editorial_input(&project_id, &asset_id, &cues, include_words, include_units);
-    if stored.get("source_hash").and_then(Value::as_str) != Some(source_hash(&input)?.as_str()) {
+    let current_hash = source_hash(&input)?;
+    if stored.get("source_hash").and_then(Value::as_str) != Some(current_hash.as_str()) {
         return Ok(None);
     }
     Ok(Some(stored))
