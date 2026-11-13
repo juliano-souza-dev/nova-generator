@@ -221,6 +221,33 @@ pub fn build_external_package(
     files.insert("input.json".into(), serde_json::to_string_pretty(&input).map_err(|e| e.to_string())?);
     files.insert("input-schema.json".into(), serde_json::to_string_pretty(&input_schema).map_err(|e| e.to_string())?);
     files.insert("output-schema.json".into(), serde_json::to_string_pretty(&schema).map_err(|e| e.to_string())?);
+
+    // Arquivo autossuficiente em texto puro para uso direto em qualquer IA externa.
+    // Mantém o conteúdo estruturado completo do pacote e explica como produzir a saída.
+    let complete_instructions = [
+        "NOVA GENERATOR — INSTRUÇÕES COMPLETAS PARA TRADUÇÃO EDITORIAL".to_string(),
+        "==============================================================".to_string(),
+        format!("Versão do pacote: 1.0\\nContrato de entrada: {INPUT_CONTRACT}\\nContrato de saída: {OUTPUT_CONTRACT}"),
+        format!("\\nPREDIÇÕES SELECIONADAS\\nTradução palavra por palavra: {}\\nUnidades semânticas: {}",
+            if include_word_translations { "SIM" } else { "NÃO" },
+            if include_semantic_units { "SIM" } else { "NÃO" }),
+        "\\nOBJETIVO E REGRAS EDITORIAIS\\n".to_string(),
+        EDITORIAL_RULES.to_string(),
+        "\\nINSTRUÇÕES OPERACIONAIS\\nLeia todo este arquivo antes de processar. Use a transcrição integral abaixo como fonte de verdade. Gere exatamente uma sugestão para cada cue_id, preservando IDs, ordem e timestamps. Não invente nem descarte trechos ou palavras. A tradução deve ser integral, contextual e natural em português brasileiro. Não resuma. Não inclua comentários fora do JSON. A resposta deve ser somente JSON válido, sem cercas Markdown.".to_string(),
+        "\\nENTRADA COMPLETA (JSON)\\n".to_string(),
+        serde_json::to_string_pretty(&input).map_err(|e| e.to_string())?,
+        "\\nESQUEMA DA ENTRADA (JSON SCHEMA)\\n".to_string(),
+        serde_json::to_string_pretty(&input_schema).map_err(|e| e.to_string())?,
+        "\\nESQUEMA OBRIGATÓRIO DA SAÍDA (JSON SCHEMA)\\n".to_string(),
+        serde_json::to_string_pretty(&schema).map_err(|e| e.to_string())?,
+        "\\nFORMATO DE SAÍDA ESPERADO\\n".to_string(),
+        format!("{{\\n  \\"contract\\": \\"{OUTPUT_CONTRACT}\\",\\n  \\"approval\\": \\"draft\\",\\n  \\"source_hash\\": \\"{}\\",\\n  \\"predictions\\": {{ \\"word_translations\\": {}, \\"semantic_units\\": {} }},\\n  \\"suggestions\\": [ ... uma sugestão para cada cue_id ... ]\\n}}",
+            input["source_hash"].as_str().unwrap_or(""),
+            include_word_translations, include_semantic_units),
+        "\\nVALIDAÇÃO ANTES DE RESPONDER\\n- O JSON deve ser válido e respeitar output-schema.json.\\n- contract deve ser exatamente nova-generator-editorial-suggestions/1.3.\\n- approval deve permanecer draft.\\n- source_hash deve ser copiado sem qualquer alteração.\\n- predictions deve repetir exatamente as duas opções selecionadas acima.\\n- suggestions deve conter todos os cue_id, uma única vez, na ordem original.\\n- Não altere timestamps, IDs ou conteúdo de origem.\\n- Quando habilitada, word_translations deve conter cada palavra recebida exatamente uma vez, com word_id, order, leading, surface, start_ms e end_ms preservados.\\n- Quando habilitadas, semantic_units devem agrupar somente palavras contíguas da mesma cue, sem sobreposição; não force grupos desnecessários.\\n- Não aprove automaticamente. O resultado será revisado por uma pessoa no Nova Generator.\\n- Salve ou devolva somente o objeto JSON final, sem explicações adicionais.".to_string()
+    ].join("\\n");
+    files.insert("INSTRUCOES_COMPLETAS.txt".into(), complete_instructions);
+
     Ok(ExternalPackage { package_version: "1.0".into(), contract_id: OUTPUT_CONTRACT.into(), files })
 }
 
