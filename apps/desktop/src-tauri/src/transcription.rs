@@ -77,12 +77,12 @@ fn cloud(app:&AppHandle,project_id:&str,audio:&Path,dir:&Path,duration:u64,langu
   emit(app,project_id,"cloud",index as f32/total.max(1) as f32*100.0,index,total,&format!("Transcrevendo bloco {} de {}",index+1,total));
   let bytes=std::fs::read(path).map_err(|e|e.to_string())?;
   if bytes.len()>25*1024*1024{return Err("Um bloco ultrapassou o limite de 25 MB da Groq.".into())}
-  let part=multipart::Part::bytes(bytes).file_name("audio.flac").mime_str("audio/flac").map_err(|e|e.to_string())?;
-  let mut form=multipart::Form::new().text("model",MODEL).text("response_format","verbose_json").text("temperature","0")
-   .text("timestamp_granularities[]","word").text("timestamp_granularities[]","segment").part("file",part);
-  if let Some(lang)=language{if !lang.trim().is_empty(){form=form.text("language",lang.to_string())}}
   let mut response=None;let mut last=String::new();
   for attempt in 0..4{
+   let part=multipart::Part::bytes(bytes.clone()).file_name("audio.flac").mime_str("audio/flac").map_err(|e|e.to_string())?;
+   let mut form=multipart::Form::new().text("model",MODEL).text("response_format","verbose_json").text("temperature","0")
+    .text("timestamp_granularities[]","word").text("timestamp_granularities[]","segment").part("file",part);
+   if let Some(lang)=language{if !lang.trim().is_empty(){form=form.text("language",lang.to_string())}}
    match client.post(&endpoint).bearer_auth(&key).multipart(form).send(){
     Ok(r) if r.status().is_success()=>{response=Some(r.json::<GroqResponse>().map_err(|e|format!("Resposta da Groq inválida: {e}"))?);break}
     Ok(r)=>{let status=r.status();last=format!("Groq HTTP {status}: {}",r.text().unwrap_or_default().chars().take(400).collect::<String>());if status.as_u16()!=429&&!status.is_server_error(){return Err(last)}}
