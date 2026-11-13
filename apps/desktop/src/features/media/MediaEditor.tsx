@@ -179,9 +179,9 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                   {id === "transcript" && cues.map(c => <button key={c.id} className={`media-editor-track-clip transcript-clip ${selected === c.id ? "selected" : ""}`} style={{ left: `${pct(c.startMs)}%`, width: `${Math.max(.7, pct(c.endMs - c.startMs))}%` }} onClick={() => { setActiveTrack("transcript"); setSelected(c.id); seek(c.startMs); }} title={c.text || "Trecho sem texto"}><span>{c.text || "Trecho"}</span></button>)}
                   {id === "translation" && <span className="media-editor-track-empty">Traduções aparecerão aqui</span>}
                   {id === "wordbyword" && <span className="media-editor-track-empty">Palavras sincronizadas aparecerão aqui</span>}
+                  <div className="media-editor-lane-playhead" style={{ left: `${pct(current)}%` }}/>
                 </div>
               </div>)}
-              <div className="media-editor-playhead" style={{ left: `calc(150px + (100% - 150px) * ${pct(current) / 100})` }} />
             </div>
             <input className="media-editor-scrubber" aria-label="Navegar pela timeline" type="range" min="0" max={Math.max(1, duration)} step="50" value={Math.min(current, duration || current)} onChange={e => seek(Number(e.target.value))}/>
           </section>
