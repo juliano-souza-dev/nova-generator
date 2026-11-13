@@ -327,7 +327,7 @@ fn translate_cue_streaming(
         .map_err(|e| format!("Falha de conexão com a Groq: {e}"))?;
     if !response.status().is_success() {
         let status = response.status();
-        let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok()).unwrap_or("");
+        let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
         let details = response.text().unwrap_or_default().chars().take(500).collect::<String>();
         return Err(format!("Groq HTTP {status}: {details} [retry-after: {retry_after}]"));
     }
