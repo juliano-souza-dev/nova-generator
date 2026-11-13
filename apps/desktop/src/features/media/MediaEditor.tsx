@@ -20,7 +20,8 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);\n  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const activeCue = useMemo(() => cues.find(c => current >= c.startMs && current <= c.endMs), [cues, current]);
 
   useEffect(() => {
@@ -53,17 +54,20 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     setCues(items => [...items, cue].sort((a, b) => a.startMs - b.startMs));
     setSelected(cue.id);
     setSaved(false);
+    setDirty(true);
   }
   function updateCue(id: string, patch: Partial<Cue>) {
     setCues(items => items.map(c => c.id === id ? { ...c, ...patch } : c).sort((a, b) => a.startMs - b.startMs));
     setSaved(false);
+    setDirty(true);
   }
   async function save() {
     setSaving(true); setError("");
     try {
       await runTrackedTask("export", "Salvar legendas do vídeo", () =>
         invoke("save_project_subtitles", { projectId, assetId: asset.id, cues }));
-      setSaved(true);\n      setDirty(false);
+      setSaved(true);
+      setDirty(false);
     } catch (e) { setError(String(e)); }
     finally { setSaving(false); }
   }
