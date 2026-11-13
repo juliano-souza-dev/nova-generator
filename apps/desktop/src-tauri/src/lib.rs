@@ -1,4 +1,5 @@
 mod media;
+mod alignment;
 mod shared_runtime;
 mod transcription;
 mod translation;
@@ -146,6 +147,7 @@ pub fn run() {
             media::inspect_youtube, media::prepare_youtube_cache, media::authorize_youtube_preview, media::list_project_media,
             media::import_media_files, media::trim_youtube_cache,
             media::open_project_media, media::load_project_subtitles, media::save_project_subtitles,
+            alignment::align_project_subtitles,
             shared_runtime::get_shared_runtime_status,
             transcription::transcribe_media, transcription::check_local_asr, transcription::install_local_asr,
             translation::translate_project_subtitles, translation::load_project_translations, translation::save_project_translations,
