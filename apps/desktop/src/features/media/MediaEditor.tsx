@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowLeft, Captions, Check, Clock3, Download, Film, Languages, Pause, Play, Plus, Save, SkipBack, SkipForward, Trash2, X } from "lucide-react";
@@ -22,7 +22,7 @@ function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: nu
     const end = Number(word.end_ms ?? word.endMs);
     return Number.isFinite(start) && Number.isFinite(end) && currentMs >= start && currentMs <= end;
   });
-  const parts: React.ReactNode[] = [];
+  const parts: ReactNode[] = [];
   let cursor = 0;
   matches.forEach((match, index) => {
     const start = match.index ?? cursor;
