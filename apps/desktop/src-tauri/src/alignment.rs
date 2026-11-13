@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
@@ -203,7 +203,7 @@ pub async fn align_project_subtitles(
             return Err("Este projeto ainda não possui blocos de transcrição para alinhar.".into());
         }
         let pending = cues.iter().filter(|cue| {
-            cue.words.as_ref().map_or(true, |words| words.is_empty()) && !cue.text.trim().is_empty()
+            cue.word_alignment.as_deref() != Some("whisperx") && !cue.text.trim().is_empty()
         }).count();
         let skipped = cues.len().saturating_sub(pending);
         if pending == 0 {
@@ -228,7 +228,7 @@ pub async fn align_project_subtitles(
             let mut resolved_language = None::<String>;
 
             for index in 0..cues.len() {
-                if cues[index].words.as_ref().is_some_and(|words| !words.is_empty()) || cues[index].text.trim().is_empty() {
+                if cues[index].word_alignment.as_deref() == Some("whisperx") || cues[index].text.trim().is_empty() {
                     continue;
                 }
                 let raw_language = cues[index].language.as_deref()
@@ -265,6 +265,7 @@ pub async fn align_project_subtitles(
 
                 cues[index].words = Some(mapped);
                 cues[index].language = Some(lang);
+                cues[index].word_alignment = Some("whisperx".into());
                 crate::media::save_project_subtitles(app.clone(), project_id.clone(), asset_id.clone(), cues.clone())?;
                 aligned += 1;
                 emit_progress(
