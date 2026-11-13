@@ -404,7 +404,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                 </div>
                 <label className="media-editor-text-label">Texto reconhecido<textarea value={chosen.text} onChange={e => updateCue(chosen.id, { text: e.target.value })} placeholder="Texto da transcrição..."/></label>
                 <div className="media-editor-cue-buttons"><button onClick={() => seek(chosen.startMs)}><Clock3 size={13}/> Ir ao início</button><button className="danger" onClick={() => { setCues(items => items.filter(c => c.id !== chosen.id)); setEditorialResult(null); setSelected(null); setSaved(false); setDirty(true); }}><Trash2 size={13}/> Excluir trecho</button></div>
-                <div className="media-editor-inspector-note">{chosen.words?.length ?? 0} palavras identificadas. A edição deste trecho não altera as faixas de tradução ou WordByWord.</div>
+                <div className="media-editor-inspector-note">{chosen.wordAlignment === "whisperx" ? (chosen.words?.length ?? 0) + " palavras alinhadas pelo WhisperX." : (chosen.words?.length ?? 0) + " palavras identificadas pelo mecanismo de transcrição. O alinhamento preciso ainda está pendente."}</div>
               </> : <div className="media-editor-no-cue"><Captions size={22}/><strong>Nenhum trecho selecionado</strong><span>Selecione um bloco na faixa ou crie um novo trecho.</span></div>}
             </div>
             <div className="media-editor-inspector-section">
