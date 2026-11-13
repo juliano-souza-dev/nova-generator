@@ -7,7 +7,7 @@ const MODEL: &str = "whisper-large-v3-turbo";
 const CHUNK_MS: u64 = 58_000;
 const OVERLAP_MS: u64 = 2_000;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct TranscriptWord { pub text:String, pub start_ms:u64, pub end_ms:u64 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -37,7 +37,7 @@ fn duration(probe:&Path,input:&Path)->Result<u64,String>{
 }
 fn safe_source(app:&AppHandle,project_id:&str,asset_id:&str)->Result<PathBuf,String>{
  let root=crate::media::project_media_root(app,project_id)?;
- let assets=crate::media::list_project_media(app,project_id.to_string())?;
+ let assets=crate::media::list_project_media(app.clone(),project_id.to_string())?;
  let asset=assets.iter().find(|a|a.id==asset_id).ok_or("Mídia não encontrada neste projeto.")?;
  if asset.kind!="video"&&asset.kind!="audio"{return Err("Selecione um vídeo ou arquivo de áudio para transcrever.".into())}
  let rel=Path::new(&asset.relative_path);
