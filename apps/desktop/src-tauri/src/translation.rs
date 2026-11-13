@@ -47,12 +47,7 @@ fn atomic_write(path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
     if path.exists() { fs::remove_file(path).map_err(|e| e.to_string())?; }
     fs::rename(temp, path).map_err(|e| e.to_string())
 }
-fn source_hash(input: &Value) -> Result<String, String> {
-    let bytes = serde_json::to_vec(input).map_err(|e| e.to_string())?;
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for byte in bytes { hash ^= byte as u64; hash = hash.wrapping_mul(0x100000001b3); }
-    Ok(format!("fnv1a64:{hash:016x}"))
-}
+fn source_hash(input: &Value) -> Result<String, String> { crate::translation_contract::input_hash(input) }
 
 fn validate_editorial_result(result: &Value, cues: &[crate::media::SubtitleCue], include_words: bool, include_units: bool) -> Result<Vec<Value>, String> {
     if result.get("contract").and_then(Value::as_str) != Some(crate::translation_contract::OUTPUT_CONTRACT) {
@@ -68,7 +63,7 @@ fn validate_editorial_result(result: &Value, cues: &[crate::media::SubtitleCue],
     let suggestions = result.get("suggestions").and_then(Value::as_array).ok_or("O JSON não contém a lista suggestions.")?;
     if suggestions.len() != cues.len() { return Err(format!("O resultado contém {} sugestões para {} trechos.", suggestions.len(), cues.len())); }
 
-    let input = crate::translation_contract::build_editorial_input("", "", cues, include_words, include_units);
+    let input = crate::translation_contract::build_editorial_input("", "", cues, include_words, include_units)?;
     let input_cues = input["cues"].as_array().ok_or("Não foi possível montar a entrada editorial.")?;
     let source_by_id = input_cues.iter().filter_map(|c| Some((c["cue_id"].as_str()?.to_string(), c))).collect::<HashMap<_, _>>();
     let mut seen = HashSet::new();
@@ -144,8 +139,11 @@ fn validate_editorial_result(result: &Value, cues: &[crate::media::SubtitleCue],
 
 fn persist_editorial_result(app: &AppHandle, project_id: &str, asset_id: &str, result: &Value, cues: &[crate::media::SubtitleCue], include_words: bool, include_units: bool) -> Result<(), String> {
     let suggestions = validate_editorial_result(result, cues, include_words, include_units)?;
-    let input = crate::translation_contract::build_editorial_input(project_id, asset_id, cues, include_words, include_units);
+    let input = crate::translation_contract::build_editorial_input(project_id, asset_id, cues, include_words, include_units)?;
     let hash = source_hash(&input)?;
+    if result.get("source_hash").and_then(Value::as_str) != Some(hash.as_str()) {
+        return Err("Este resultado pertence a outra versão da transcrição. Gere novamente o pacote ou a tradução.".into());
+    }
     let path = editorial_file(app, project_id, asset_id)?;
     let revision = if path.exists() {
         fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok())
@@ -179,7 +177,7 @@ pub fn load_project_editorial_result(app: AppHandle, project_id: String, asset_i
     let stored: Value = serde_json::from_str(&raw).map_err(|e| format!("Resultado editorial salvo inválido: {e}"))?;
     let include_words = stored.pointer("/predictions/word_translations").and_then(Value::as_bool).unwrap_or(false);
     let include_units = stored.pointer("/predictions/semantic_units").and_then(Value::as_bool).unwrap_or(false);
-    let input = crate::translation_contract::build_editorial_input(&project_id, &asset_id, &cues, include_words, include_units);
+    let input = crate::translation_contract::build_editorial_input(&project_id, &asset_id, &cues, include_words, include_units)?;
     let current_hash = source_hash(&input)?;
     if stored.get("source_hash").and_then(Value::as_str) != Some(current_hash.as_str()) {
         return Ok(None);
@@ -216,8 +214,8 @@ fn translate_batch(model: &str, key: &str, endpoint: &str, full_input: &Value, b
     let batch_input = crate::translation_contract::build_editorial_input(
         full_input["project_id"].as_str().unwrap_or(""), full_input["asset_id"].as_str().unwrap_or(""),
         batch, include_words, include_units
-    );
-    let schema = crate::translation_contract::output_schema(include_words, include_units);
+    )?;
+    let schema = crate::translation_contract::output_schema(include_words, include_units, full_input["source_hash"].as_str().unwrap_or(""));
     let user = format!(
         "ENTRADA E CONTEXTO COMPLETO:\n{}\n\nCUES DESTE LOTE:\n{}\n\nESQUEMA DE SAÍDA OBRIGATÓRIO:\n{}",
         serde_json::to_string(full_input).map_err(|e| e.to_string())?,
@@ -251,6 +249,9 @@ fn translate_batch(model: &str, key: &str, endpoint: &str, full_input: &Value, b
     if parsed["contract"].as_str() != Some(crate::translation_contract::OUTPUT_CONTRACT) || parsed["approval"].as_str() != Some("draft") {
         return Err("A Groq retornou uma resposta fora do contrato editorial 1.3.".into());
     }
+    if parsed["source_hash"].as_str() != full_input["source_hash"].as_str() {
+        return Err("A Groq retornou um resultado associado a outra versão da transcrição. Nenhuma alteração foi aplicada.".into());
+    }
     Ok(parsed)
 }
 
@@ -275,7 +276,7 @@ pub async fn translate_project_subtitles(
         let cfg = crate::shared_runtime::resolve_provider_settings(&app2, "groq")?;
         let key = crate::shared_runtime::resolve_provider_credential(&app2, "groq")?;
         let endpoint = format!("{}/chat/completions", cfg.endpoint.trim_end_matches('/'));
-        let full_input = crate::translation_contract::build_editorial_input(&project_id, &asset_id, &ordered, include_word_translations, include_semantic_units);
+        let full_input = crate::translation_contract::build_editorial_input(&project_id, &asset_id, &ordered, include_word_translations, include_semantic_units)?;
         const BATCH_SIZE: usize = 12;
         let batches = ordered.chunks(BATCH_SIZE).collect::<Vec<_>>();
         let total = batches.len();
@@ -283,11 +284,11 @@ pub async fn translate_project_subtitles(
         for (index, batch) in batches.iter().enumerate() {
             emit(&app2, &project_id, "translating", index as f32 / total as f32 * 100.0, index, total, &format!("Executando contrato editorial 1.3, lote {} de {}", index + 1, total));
             let result = translate_batch(&cfg.model, &key, &endpoint, &full_input, batch, include_word_translations, include_semantic_units)?;
-            let batch_result = json!({"contract":crate::translation_contract::OUTPUT_CONTRACT,"approval":"draft","predictions":result["predictions"],"suggestions":result["suggestions"]});
+            let batch_result = json!({"contract":crate::translation_contract::OUTPUT_CONTRACT,"approval":"draft","source_hash":result["source_hash"],"predictions":result["predictions"],"suggestions":result["suggestions"]});
             suggestions.extend(validate_editorial_result(&batch_result, batch, include_word_translations, include_semantic_units)?);
             emit(&app2, &project_id, "translating", (index + 1) as f32 / total as f32 * 100.0, index + 1, total, &format!("Lote {} de {} validado", index + 1, total));
         }
-        let final_result = json!({"contract":crate::translation_contract::OUTPUT_CONTRACT,"approval":"draft","predictions":{"word_translations":include_word_translations,"semantic_units":include_semantic_units},"suggestions":suggestions});
+        let final_result = json!({"contract":crate::translation_contract::OUTPUT_CONTRACT,"approval":"draft","source_hash":full_input["source_hash"],"predictions":{"word_translations":include_word_translations,"semantic_units":include_semantic_units},"suggestions":suggestions});
         persist_editorial_result(&app2, &project_id, &asset_id, &final_result, &ordered, include_word_translations, include_semantic_units)?;
         let by_id = final_result["suggestions"].as_array().unwrap().iter().filter_map(|s| {
             Some((s["cue_id"].as_str()?.to_string(), s["approved_pt"].as_str()?.to_string()))
