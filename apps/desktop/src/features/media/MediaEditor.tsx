@@ -14,7 +14,7 @@ type Asset = { id: string; name: string; durationMs?: number | null; sourceStart
 function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: number) {
   const text = String(suggestion?.approved_en || fallback || "");
   const words = Array.isArray(suggestion?.word_translations) ? suggestion.word_translations : [];
-  const matches = [...text.matchAll(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*/gu)];
+  const matches = [...text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)];
   if (!words.length || matches.length !== words.length) return text;
 
   const activeIndex = words.findIndex((word: any) => {
