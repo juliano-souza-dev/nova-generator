@@ -13,7 +13,7 @@ approved_en deve conter a versão revisada da fala no idioma original, sem mudar
 Quando predictions.word_translations=true, cada palavra recebida deve aparecer exatamente uma vez em word_translations, preservando word_id, order, leading, surface, start_ms e end_ms. Preencha pt com a tradução contextual da palavra. Quando predictions.semantic_units=true, semantic_units deve conter apenas grupos contíguos de palavras da mesma cue, sem sobreposição. Cada grupo deve ter semantic_group_id único, word_ids em ordem e uma tradução natural completa em pt. Nas palavras agrupadas, registre semantic_group_id e semantic_group_role: a primeira palavra é lead e recebe em pt a tradução completa da unidade; as demais são member e preservam sua tradução individual anterior em pt_original. Não force agrupamentos quando não forem necessários.
 trailing deve preservar eventual texto residual não associado a palavra. notes deve registrar apenas observações editoriais relevantes, nunca explicações pedagógicas.
 A saída é um rascunho para revisão humana. Não aprove nem publique automaticamente.
-Responda exclusivamente com JSON válido no contrato nova-generator-editorial-suggestions/1.3, no formato { "contract": "nova-generator-editorial-suggestions/1.3", "approval": "draft", "predictions": { "word_translations": true|false, "semantic_units": true|false }, "suggestions": [...] }. Os valores de predictions devem repetir exatamente as opções recebidas na entrada."#;
+Responda exclusivamente com JSON válido no contrato nova-generator-editorial-suggestions/1.3, no formato { "contract": "nova-generator-editorial-suggestions/1.3", "approval": "draft", "source_hash": "hash recebido", "predictions": { "word_translations": true|false, "semantic_units": true|false }, "suggestions": [...] }. Copie source_hash exatamente da entrada e repita exatamente as opções recebidas em predictions."#;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,13 +28,22 @@ pub(crate) fn split_leading(value: &str) -> (String, String) {
     (value[..split].to_string(), value[split..].to_string())
 }
 
+pub fn input_hash(input: &Value) -> Result<String, String> {
+    let mut canonical = input.clone();
+    if let Some(object) = canonical.as_object_mut() { object.remove("source_hash"); }
+    let bytes = serde_json::to_vec(&canonical).map_err(|e| e.to_string())?;
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in bytes { hash ^= byte as u64; hash = hash.wrapping_mul(0x100000001b3); }
+    Ok(format!("fnv1a64:{hash:016x}"))
+}
+
 pub fn build_editorial_input(
     project_id: &str,
     asset_id: &str,
     cues: &[crate::media::SubtitleCue],
     include_word_translations: bool,
     include_semantic_units: bool,
-) -> Value {
+) -> Result<Value, String> {
     let cue_values = cues.iter().enumerate().map(|(cue_order, cue)| {
         let words = if include_word_translations {
             cue.words.as_deref().unwrap_or(&[]).iter().enumerate().map(|(order, word)| {
@@ -59,7 +68,7 @@ pub fn build_editorial_input(
         })
     }).collect::<Vec<_>>();
 
-    json!({
+    let mut input = json!({
         "contract": INPUT_CONTRACT,
         "project_id": project_id,
         "asset_id": asset_id,
@@ -70,10 +79,12 @@ pub fn build_editorial_input(
             "semantic_units": include_semantic_units
         },
         "cues": cue_values
-    })
+    });
+    input["source_hash"] = json!(input_hash(&input)?);
+    Ok(input)
 }
 
-pub fn output_schema(include_word_translations: bool, include_semantic_units: bool) -> Value {
+pub fn output_schema(include_word_translations: bool, include_semantic_units: bool, source_hash: &str) -> Value {
     let mut suggestion = json!({
         "type": "object",
         "required": ["cue_id", "approved_en", "approved_pt", "trailing", "notes"],
@@ -122,10 +133,11 @@ pub fn output_schema(include_word_translations: bool, include_semantic_units: bo
     json!({
         "$schema":"https://json-schema.org/draft/2020-12/schema",
         "type":"object",
-        "required":["contract","approval","predictions","suggestions"],
+        "required":["contract","approval","source_hash","predictions","suggestions"],
         "properties":{
             "contract":{"const":OUTPUT_CONTRACT},
             "approval":{"const":"draft"},
+            "source_hash":{"const":source_hash},
             "predictions":{"type":"object","required":["word_translations","semantic_units"],"properties":{"word_translations":{"const":include_word_translations},"semantic_units":{"const":include_semantic_units}}},
             "suggestions":{"type":"array","items":suggestion}
         }
@@ -145,8 +157,8 @@ pub fn build_external_package(
     if cues.iter().any(|c| c.id.trim().is_empty() || c.text.trim().is_empty() || c.end_ms <= c.start_ms) {
         return Err("A transcrição contém trechos inválidos.".into());
     }
-    let input = build_editorial_input(project_id, asset_id, cues, include_word_translations, include_semantic_units);
-    let schema = output_schema(include_word_translations, include_semantic_units);
+    let input = build_editorial_input(project_id, asset_id, cues, include_word_translations, include_semantic_units)?;
+    let schema = output_schema(include_word_translations, include_semantic_units, input["source_hash"].as_str().unwrap_or(""));
     let contract_md = format!("# Contrato editorial Nova Generator 1.3\n\nIdentificador de entrada: `{INPUT_CONTRACT}`\n\nIdentificador de saída: `{OUTPUT_CONTRACT}`\n\n## Regras obrigatórias\n\n{EDITORIAL_RULES}\n\n## Predições selecionadas\n\n- Tradução por palavra: {}\n- Unidades semânticas: {}\n- Revisão humana obrigatória; a resposta deve permanecer em estado `draft`.\n",
         if include_word_translations { "incluída" } else { "não incluída" },
         if include_semantic_units { "incluídas" } else { "não incluídas" });
