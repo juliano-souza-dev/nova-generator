@@ -5,7 +5,7 @@ import { ArrowLeft, Captions, Check, Clock3, Download, Film, Languages, Pause, P
 import { runTrackedTask } from "../tasks/TaskCenter";
 import { downloadExternalTranslationPackage, type ExternalTranslationPackage } from "./translationPackage";
 
-type Cue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
+type Cue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; wordAlignment?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
 type AlignmentProgress = { projectId: string; assetId: string; completed: number; total: number; message: string };
 type AlignmentResult = { aligned: number; skipped: number; total: number; language?: string | null };
 type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: Cue[] };
@@ -94,7 +94,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   }
   function updateCue(id: string, patch: Partial<Cue>) {
     const invalidatesAlignment = "text" in patch || "startMs" in patch || "endMs" in patch;
-    setCues(items => items.map(c => c.id === id ? { ...c, ...patch, ...(invalidatesAlignment ? { words: [] } : {}) } : c).sort((a, b) => a.startMs - b.startMs));
+    setCues(items => items.map(c => c.id === id ? { ...c, ...patch, ...(invalidatesAlignment ? { words: [], wordAlignment: null } : {}) } : c).sort((a, b) => a.startMs - b.startMs));
     setEditorialResult(null);
     setSaved(false);
     setDirty(true);
@@ -130,7 +130,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
           projectId, assetId: asset.id, mode: transcriptionMode,
           language: transcriptionLanguage || null, localModel: transcriptionModel
         }));
-      const next = result.cues.map(c => ({ ...c, language: result.language ?? (transcriptionLanguage || null), words: c.words ?? [] }));
+      const next = result.cues.map(c => ({ ...c, language: result.language ?? (transcriptionLanguage || null), wordAlignment: null, words: c.words ?? [] }));
       setCues(next);
       setTranslations([]);
       setEditorialResult(null);
@@ -366,7 +366,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                   {id === "video" && <button className={`media-editor-track-clip video-clip ${activeTrack === "video" ? "selected" : ""}`} style={{ left: "0%", width: "100%" }} onClick={() => { setActiveTrack("video"); setSelected(null); seek(0); }} title={asset.name}><Film size={12}/><span>{asset.name}</span></button>}
                   {id === "transcript" && cues.map(c => <button key={c.id} className={`media-editor-track-clip transcript-clip ${selected === c.id ? "selected" : ""}`} style={{ left: `${pct(c.startMs)}%`, width: `${Math.max(.7, pct(c.endMs - c.startMs))}%` }} onClick={() => { setActiveTrack("transcript"); setSelected(c.id); seek(c.startMs); }} title={c.text || "Trecho sem texto"}><span>{c.text || "Trecho"}</span></button>)}
                   {id === "translation" && (translations.length ? translations.map(t => <button key={t.id} className={"media-editor-track-clip translation-clip " + (selected === t.id ? "selected" : "")} style={{ left: pct(t.startMs) + "%", width: Math.max(.7, pct(t.endMs - t.startMs)) + "%" }} onClick={() => { setActiveTrack("translation"); setSelected(t.id); seek(t.startMs); }} title={t.text}><span>{t.text}</span></button>) : <span className="media-editor-track-empty">Traduções aparecerão aqui</span>)}
-                  {id === "wordbyword" && (cues.some(c => c.words?.length) ? cues.flatMap(c => (c.words ?? []).map((word, index) => ({ cue: c, word, index }))).map(({ cue, word, index }) => <button key={cue.id + "-word-" + index} className="media-editor-track-clip wordbyword-clip" style={{ left: pct(word.startMs) + "%", width: Math.max(.35, pct(word.endMs - word.startMs)) + "%" }} onClick={() => { setActiveTrack("wordbyword"); setSelected(cue.id); seek(word.startMs); }} title={word.text}><span>{word.text}</span></button>) : <span className="media-editor-track-empty">Alinhe os blocos para exibir as palavras</span>)}
+                  {id === "wordbyword" && (cues.some(c => c.wordAlignment === "whisperx" && c.words?.length) ? cues.filter(c => c.wordAlignment === "whisperx").flatMap(c => (c.words ?? []).map((word, index) => ({ cue: c, word, index }))).map(({ cue, word, index }) => <button key={cue.id + "-word-" + index} className="media-editor-track-clip wordbyword-clip" style={{ left: pct(word.startMs) + "%", width: Math.max(.35, pct(word.endMs - word.startMs)) + "%" }} onClick={() => { setActiveTrack("wordbyword"); setSelected(cue.id); seek(word.startMs); }} title={word.text}><span>{word.text}</span></button>) : <span className="media-editor-track-empty">Alinhe os blocos para exibir as palavras</span>)}
                   <div className="media-editor-lane-playhead" style={{ left: `${pct(current)}%` }}/>
                 </div>
               </div>)}
@@ -447,13 +447,13 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
           </div>}
           {activeTrack === "wordbyword" && <div className="media-editor-inspector-content">
             <div className="media-editor-inspector-section">
-              <div className="media-editor-section-title"><strong>Sincronização palavra por palavra</strong><span className="media-editor-translation-count">{cues.filter(c => c.words?.length).length}/{cues.length} blocos</span></div>
+              <div className="media-editor-section-title"><strong>Sincronização palavra por palavra</strong><span className="media-editor-translation-count">{cues.filter(c => c.wordAlignment === "whisperx").length}/{cues.length} blocos</span></div>
               <p className="media-editor-translation-help">O WhisperX calcula os tempos de cada palavra usando o áudio original e o texto transcrito. Os blocos já alinhados são preservados e ignorados nas próximas execuções.</p>
               <button className="primary-button media-editor-transcribe-button" onClick={() => void alignWords()} disabled={loading || aligning || cues.length === 0}>
                 <Clock3 size={15}/>{aligning ? "Alinhando palavras..." : "Alinhar palavras com WhisperX"}
               </button>
               {alignmentInfo && <p className="media-editor-transcription-info">{alignmentInfo}</p>}
-              <div className="media-editor-inspector-note">{cues.reduce((total, cue) => total + (cue.words?.length ?? 0), 0)} palavras sincronizadas. Cada bloco concluído é salvo imediatamente no projeto.</div>
+              <div className="media-editor-inspector-note">{cues.reduce((total, cue) => total + (cue.wordAlignment === "whisperx" ? cue.words?.length ?? 0 : 0), 0)} palavras sincronizadas. Cada bloco concluído é salvo imediatamente no projeto.</div>
               {chosen && <div className="media-editor-source-text">{chosen.text}</div>}
             </div>
           </div>}
