@@ -29,8 +29,9 @@ export default function TaskCenter() {
  useEffect(()=>{
   const handle=(raw:Event)=>{const event=(raw as CustomEvent<TaskEvent>).detail;if(!event)return;
    setTasks(current=>{
-    if(event.type==="started")return [{id:event.id,kind:event.kind,title:event.title,status:"running",progress:null,message:event.message,logs:[clock()+"  "+event.message],updatedAt:event.timestamp},...current].slice(0,15);
-    return current.map(task=>task.id!==event.id?task:{...task,status:event.type==="completed"?"completed":"failed",progress:event.type==="completed"?100:task.progress,message:event.message,updatedAt:event.timestamp,logs:[...task.logs,clock()+"  "+event.message].slice(-80)});
+    if(event.type==="started"){const started:TaskRecord={id:event.id,kind:event.kind,title:event.title,status:"running",progress:null,message:event.message,logs:[clock()+"  "+event.message],updatedAt:event.timestamp};return [started,...current].slice(0,15);}
+    const status:TaskStatus=event.type==="completed"?"completed":"failed";
+    return current.map(task=>task.id!==event.id?task:{...task,status,progress:status==="completed"?100:task.progress,message:event.message,updatedAt:event.timestamp,logs:[...task.logs,clock()+"  "+event.message].slice(-80)});
    });
    if(event.type==="started")setOpen(true);
   };
