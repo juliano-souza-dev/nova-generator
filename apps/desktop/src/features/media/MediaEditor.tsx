@@ -3,7 +3,8 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { ArrowLeft, Captions, Check, Clock3, Pause, Play, Plus, Save, SkipBack, SkipForward, Trash2, X } from "lucide-react";
 import { runTrackedTask } from "../tasks/TaskCenter";
 
-type Cue = { id: string; startMs: number; endMs: number; text: string };
+type Cue = { id: string; startMs: number; endMs: number; text: string; words?: { text: string; startMs: number; endMs: number }[] };
+type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: Cue[] };
 type Asset = { id: string; name: string; durationMs?: number | null; sourceStartMs?: number | null; sourceEndMs?: number | null };
 const fmt = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -22,6 +23,14 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [transcriptionMode, setTranscriptionMode] = useState<"auto" | "cloud" | "local">("auto");
+  const [transcriptionLanguage, setTranscriptionLanguage] = useState("");
+  const [transcriptionModel, setTranscriptionModel] = useState("small");
+  const [transcribing, setTranscribing] = useState(false);
+  const [localAsrReady, setLocalAsrReady] = useState(false);
+  const [localAsrChecking, setLocalAsrChecking] = useState(true);
+  const [installingAsr, setInstallingAsr] = useState(false);
+  const [transcriptionInfo, setTranscriptionInfo] = useState("");
   const activeCue = useMemo(() => cues.find(c => current >= c.startMs && current <= c.endMs), [cues, current]);
 
   useEffect(() => {
@@ -71,6 +80,43 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     } catch (e) { setError(String(e)); }
     finally { setSaving(false); }
   }
+  async function transcribe() {
+    if (transcribing || loading) return;
+    setTranscribing(true); setError(""); setTranscriptionInfo("");
+    try {
+      const result = await runTrackedTask("transcription", "Transcrever vídeo", () =>
+        invoke<TranscriptResult>("transcribe_media", {
+          projectId, assetId: asset.id, mode: transcriptionMode,
+          language: transcriptionLanguage || null, localModel: transcriptionModel
+        }));
+      const next = result.cues.map(c => ({ ...c, words: c.words ?? [] }));
+      setCues(next);
+      setSelected(next[0]?.id ?? null);
+      setSaved(false); setDirty(true);
+      setTranscriptionInfo(`${next.length} legendas geradas por ${result.engine === "groq" ? "Groq Whisper" : "Faster-Whisper"}${result.language ? ` · idioma detectado: ${result.language}` : ""}. Revise e salve as legendas.`);
+    } catch (e) { setError(String(e)); }
+    finally { setTranscribing(false); }
+  }
+
+  async function installLocalAsr() {
+    setInstallingAsr(true); setError("");
+    try {
+      const message = await runTrackedTask("installation", "Instalar transcrição local", () =>
+        invoke<string>("install_local_asr"));
+      setLocalAsrReady(await invoke<boolean>("check_local_asr"));
+      setTranscriptionInfo(message);
+    } catch (e) { setError(String(e)); }
+    finally { setInstallingAsr(false); }
+  }
+
+  useEffect(() => {
+    let alive = true;
+    invoke<boolean>("check_local_asr").then(value => { if (alive) setLocalAsrReady(value); })
+      .catch(() => { if (alive) setLocalAsrReady(false); })
+      .finally(() => { if (alive) setLocalAsrChecking(false); });
+    return () => { alive = false; };
+  }, []);
+
   const chosen = cues.find(c => c.id === selected) ?? null;
 
   return <div className="media-editor-backdrop">
@@ -109,7 +155,41 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
               </div>
             </div>
           </> : <div className="media-editor-placeholder">Não foi possível abrir o vídeo.</div>}
-          <div className="media-editor-next-step"><Captions size={16}/><div><strong>Transcrição e tradução</strong><span>O editor já permite revisar e salvar legendas manualmente. As ações de transcrição automática e tradução serão conectadas na próxima etapa.</span></div></div>
+          <div className="media-editor-transcription">
+            <div className="media-editor-transcription-heading"><Captions size={16}/><div><strong>Transcrever mídia</strong><span>Gere legendas com marcação de tempo e revise antes de salvar.</span></div></div>
+            <div className="media-editor-transcription-options">
+              <label>Modo
+                <select value={transcriptionMode} onChange={e => setTranscriptionMode(e.target.value as "auto" | "cloud" | "local")}>
+                  <option value="auto">Automático (Groq + fallback local)</option>
+                  <option value="cloud">Nuvem (Groq Whisper)</option>
+                  <option value="local">Local (Faster-Whisper)</option>
+                </select>
+              </label>
+              <label>Idioma
+                <select value={transcriptionLanguage} onChange={e => setTranscriptionLanguage(e.target.value)}>
+                  <option value="">Detectar automaticamente</option>
+                  <option value="pt">Português</option><option value="en">Inglês</option>
+                  <option value="es">Espanhol</option><option value="fr">Francês</option>
+                  <option value="de">Alemão</option><option value="it">Italiano</option>
+                </select>
+              </label>
+              {(transcriptionMode === "local" || transcriptionMode === "auto") && <label>Modelo local
+                <select value={transcriptionModel} onChange={e => setTranscriptionModel(e.target.value)}>
+                  <option value="tiny">Tiny · mais rápido</option><option value="base">Base</option>
+                  <option value="small">Small · equilibrado</option><option value="medium">Medium</option>
+                  <option value="large-v3">Large v3 · mais preciso</option>
+                </select>
+              </label>}
+            </div>
+            {(transcriptionMode === "local" || transcriptionMode === "auto") && <div className="media-editor-asr-status">
+              <span>{localAsrChecking ? "Verificando mecanismo local..." : localAsrReady ? "Faster-Whisper instalado" : "Faster-Whisper não instalado"}</span>
+              {!localAsrChecking && !localAsrReady && <button onClick={() => void installLocalAsr()} disabled={installingAsr}>{installingAsr ? "Instalando..." : "Instalar suporte local"}</button>}
+            </div>}
+            <button className="primary-button media-editor-transcribe-button" onClick={() => void transcribe()} disabled={loading || transcribing || (transcriptionMode === "local" && !localAsrReady)}>
+              <Captions size={15}/>{transcribing ? "Transcrevendo..." : "Iniciar transcrição"}
+            </button>
+            {transcriptionInfo && <p className="media-editor-transcription-info">{transcriptionInfo}</p>}
+          </div>
         </div>
         <aside className="media-editor-sidebar">
           <div className="media-editor-sidebar-head"><div><span className="eyebrow">LEGENDAS</span><h3>Faixas de texto <small>{cues.length}</small></h3></div><button className="primary-button" onClick={addCue} disabled={loading}><Plus size={14}/> Nova</button></div>
