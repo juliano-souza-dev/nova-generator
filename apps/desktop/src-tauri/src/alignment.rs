@@ -161,7 +161,7 @@ fn extract_block(
     }
     let duration = (end_ms - start_ms) as f64 / 1000.0;
     let start = start_ms as f64 / 1000.0;
-    let result = Command::new(ffmpeg)
+    let result = crate::process::hidden_command(ffmpeg)
         .args(["-y", "-hide_banner", "-loglevel", "error", "-ss"])
         .arg(format!("{start:.3}"))
         .arg("-i")
