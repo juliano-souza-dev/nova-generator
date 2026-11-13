@@ -62,3 +62,54 @@
 
 @keyframes media-progress-slide{0%{transform:translateX(-110%)}100%{transform:translateX(320%)}}
 .media-progress>i span{width:28%;animation:media-progress-slide 1.35s ease-in-out infinite}
+
+
+/* Global processing center: visual standard adapted from TTK Creator */
+.nova-task-center{position:fixed;z-index:30;top:18px;right:5.2%}
+.nova-task-trigger{height:38px;display:flex;align-items:center;gap:9px;padding:0 12px;border:1px solid #393342;border-radius:8px;background:#1b1921;color:#aaa4b3;font-size:11px;box-shadow:0 8px 24px #0003}
+.nova-task-trigger:hover,.nova-task-trigger.is-active{border-color:#8065ac;color:#e4d8f8;background:#282231}
+.nova-task-trigger b{min-width:18px;height:18px;display:grid;place-items:center;padding:0 5px;border-radius:10px;background:#a98bed;color:#17121f;font:700 10px 'DM Mono'}
+.nova-task-panel{position:absolute;top:47px;right:0;width:min(430px,calc(100vw - 28px));max-height:min(690px,calc(100vh - 82px));display:flex;flex-direction:column;overflow:hidden;border:1px solid #494052;border-radius:12px;background:linear-gradient(145deg,#211d29,#17161c 70%);box-shadow:0 24px 80px #000b}
+.nova-task-header{display:flex;align-items:flex-start;justify-content:space-between;padding:19px 20px 16px;border-bottom:1px solid #302b38}
+.nova-task-kicker{font:9px 'DM Mono';letter-spacing:1.5px;color:#ad91ed}
+.nova-task-header h3{font:600 17px 'Space Grotesk';margin:6px 0 4px;color:#eee9f5}
+.nova-task-header small{font-size:10px;color:#8e8997}
+.nova-task-close{width:29px;height:29px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:#898391}
+.nova-task-close:hover{background:#302a3a;color:#e5d8fa}
+.nova-task-list{min-height:120px;overflow:auto;padding:12px;display:grid;align-content:start;gap:9px}
+.nova-task-empty{min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;color:#817b8a}
+.nova-task-empty svg{color:#b99bf1}
+.nova-task-empty b{font:600 13px 'Space Grotesk';color:#ded8e7}
+.nova-task-empty span{max-width:260px;font-size:10px;line-height:1.6;color:#898391}
+.nova-task-card{padding:12px;border:1px solid #38323f;border-radius:9px;background:#1b1920}
+.nova-task-card-head{display:flex;align-items:center;gap:9px}
+.nova-task-icon{width:28px;height:28px;flex:none;display:grid;place-items:center;border-radius:7px;background:#30283e;color:#b99bf1}
+.task-completed .nova-task-icon{background:#22342b;color:#83c99b}
+.task-failed .nova-task-icon{background:#382528;color:#e5a0a4}
+.nova-task-card-head>div{min-width:0;flex:1}
+.nova-task-card-head b,.nova-task-card-head small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nova-task-card-head b{font-size:11px;color:#e6e0eb}
+.nova-task-card-head small{font-size:9px;color:#898391;margin-top:4px}
+.nova-task-card-head>strong{font:10px 'DM Mono';color:#c4a9f5}
+.nova-task-track{height:4px;margin:11px 0 8px;overflow:hidden;border-radius:4px;background:#393340}
+.nova-task-track i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#8464c7,#c3a5ff);transition:width .2s}
+.nova-task-track i.indeterminate{width:28%;animation:nova-task-slide 1.35s ease-in-out infinite}
+@keyframes nova-task-slide{0%{transform:translateX(-110%)}100%{transform:translateX(360%)}}
+.nova-task-message{margin:0;color:#aaa3b2;font-size:10px;line-height:1.5}
+.nova-task-logs{margin-top:10px;border-top:1px solid #302b36;padding-top:8px}
+.nova-task-logs summary{display:flex;align-items:center;gap:6px;list-style:none;cursor:pointer;color:#a49cac;font-size:9px}
+.nova-task-logs summary::-webkit-details-marker{display:none}
+.nova-task-logs summary span{color:#81798b;font-family:'DM Mono'}
+.nova-task-chevron{margin-left:auto;transition:transform .15s}
+.nova-task-logs[open] .nova-task-chevron{transform:rotate(180deg)}
+.nova-task-logs>div{max-height:130px;overflow:auto;margin-top:8px;padding:8px;border-radius:6px;background:#121116}
+.nova-task-logs p{margin:0 0 5px;color:#96909f;font:9px/1.55 'DM Mono';overflow-wrap:anywhere}
+.nova-task-logs p:last-child{margin-bottom:0}
+.nova-task-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 15px;border-top:1px solid #302b38;background:#19171e}
+.nova-task-footer button{border:1px solid #40394a;border-radius:6px;padding:7px 9px;background:#24212b;color:#c9c1d2;font-size:9px}
+.nova-task-footer button:hover:not(:disabled){border-color:#8e75bd;color:#e6d9fb}
+.nova-task-footer button:disabled{opacity:.35;cursor:not-allowed}
+.nova-task-footer span{font-size:8px;color:#77717f;text-align:right}
+.nova-spin{animation:nova-spin .8s linear infinite}
+@keyframes nova-spin{to{transform:rotate(360deg)}}
+@media(max-width:720px){.nova-task-center{top:10px;right:12px}.nova-task-trigger{height:34px}.nova-task-panel{top:42px}}
