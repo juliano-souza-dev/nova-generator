@@ -17,11 +17,28 @@ function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: nu
   const matches = [...text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)];
   if (!words.length || matches.length !== words.length) return text;
 
-  const activeIndex = words.findIndex((word: any) => {
-    const start = Number(word.start_ms ?? word.startMs);
-    const end = Number(word.end_ms ?? word.endMs);
+  const getWordBounds = (word: any) => ({
+    start: Number(word.start_ms ?? word.startMs),
+    end: Number(word.end_ms ?? word.endMs)
+  });
+  let activeIndex = words.findIndex((word: any) => {
+    const { start, end } = getWordBounds(word);
     return Number.isFinite(start) && Number.isFinite(end) && currentMs >= start && currentMs <= end;
   });
+  // WhisperX may leave tiny gaps between adjacent word intervals. Bridge only
+  // a narrow boundary window so those words do not disappear between frames.
+  if (activeIndex < 0) {
+    let nearestDistance = 36;
+    words.forEach((word: any, index: number) => {
+      const { start, end } = getWordBounds(word);
+      if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+      const distance = currentMs < start ? start - currentMs : currentMs - end;
+      if (distance >= 0 && distance < nearestDistance) {
+        nearestDistance = distance;
+        activeIndex = index;
+      }
+    });
+  }
   const parts: ReactNode[] = [];
   let cursor = 0;
   matches.forEach((match, index) => {
@@ -57,6 +74,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   const [includeSemanticUnits, setIncludeSemanticUnits] = useState(true);
   const [translationInfo, setTranslationInfo] = useState("");
   const [current, setCurrent] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(asset.durationMs ?? 0);
   const [selected, setSelected] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<"video" | "transcript" | "translation" | "wordbyword">("video");
@@ -346,6 +364,29 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     return () => { alive = false; };
   }, []);
 
+  useEffect(() => {
+    if (!isPlaying) return;
+    let frame = 0;
+    let lastPublished = -1;
+    const tick = () => {
+      const element = video.current;
+      if (!element || element.paused || element.ended) {
+        setIsPlaying(false);
+        return;
+      }
+      const timeMs = element.currentTime * 1000;
+      // Keep word highlighting synchronized to rendered video frames.
+      // The native timeupdate event is too sparse for short spoken words.
+      if (Math.abs(timeMs - lastPublished) >= 8) {
+        lastPublished = timeMs;
+        setCurrent(timeMs);
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [isPlaying]);
+
   const chosen = cues.find(c => c.id === selected) ?? null;
   const selectedEditorialSuggestion = useMemo(() => {
     if (!chosen || !Array.isArray(editorialResult?.suggestions)) return null;
@@ -382,6 +423,9 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
               <div className="media-editor-video-wrap">
                 <video ref={video} src={src} controls playsInline preload="metadata"
                   onLoadedMetadata={e => { const ms = e.currentTarget.duration * 1000; setDuration(ms); }}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={() => setIsPlaying(false)}
                   onTimeUpdate={e => setCurrent(e.currentTarget.currentTime * 1000)} />
                 {activeCue?.text && <div className="media-editor-caption">
                   <div>{renderEditorialEnglish(activeEditorialSuggestion, activeCue.text, current)}</div>
