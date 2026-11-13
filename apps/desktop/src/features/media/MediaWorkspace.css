@@ -179,3 +179,16 @@
 .media-editor-inspector-empty small{margin-top:4px;color:#8f8499;font-size:8px}
 @media(max-width:1050px){.media-editor-main-v2{grid-template-columns:minmax(0,1fr) 290px}.media-editor-ruler-v2{margin-left:120px}.media-editor-track-row{grid-template-columns:110px minmax(0,1fr)}.media-editor-scrubber{width:calc(100% - 120px);margin-left:120px}}
 @media(max-width:720px){.media-editor-v2{height:calc(100vh - 14px)}.media-editor-main-v2{grid-template-columns:1fr;grid-template-rows:minmax(300px,1fr) minmax(230px,.75fr);overflow:auto}.media-editor-workarea{min-height:420px;grid-template-rows:minmax(180px,1fr) auto;overflow:visible}.media-editor-preview-v2{min-height:190px;padding:9px}.media-editor-timeline-dock{padding:9px}.media-editor-inspector{min-height:260px;border-left:0;border-top:1px solid #302b38}.media-editor-inspector-content{overflow:visible}.media-editor-track-row{grid-template-columns:95px minmax(0,1fr);gap:6px}.media-editor-track-label{padding:0 5px;font-size:8px}.media-editor-ruler-v2{margin-left:101px}.media-editor-scrubber{width:calc(100% - 101px);margin-left:101px}}
+
+
+/* Translation track and contextual translation inspector */
+.media-editor-track-clip.translation-clip{border-color:#8060a8;background:#38294d;color:#e7d9fa}
+.media-editor-track-clip.translation-clip.selected{border-color:#c6a5f3;background:#50376e;box-shadow:0 0 0 1px #c6a5f355}
+.media-editor-translation-count{color:#b99bf1;font:9px 'DM Mono'}
+.media-editor-translation-help{margin:0;color:#a49aaa;font-size:9px;line-height:1.55}
+.media-editor-secondary-action{width:100%;padding:9px 10px;border:1px solid #514365;border-radius:6px;background:#211e27;color:#d4c0f7;font-size:9px}
+.media-editor-secondary-action:hover:not(:disabled){border-color:#a98bed;background:#30263d}
+.media-editor-secondary-action:disabled{opacity:.45;cursor:not-allowed}
+.media-editor-inline-link{padding:4px 0;border:0;background:transparent;color:#b99bf1;font-size:9px}
+.media-editor-source-text{padding:10px;border:1px solid #35303d;border-radius:7px;background:#211e27;color:#c9c1d2;font-size:10px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.media-editor-inspector .media-editor-text-label textarea{min-height:115px}
