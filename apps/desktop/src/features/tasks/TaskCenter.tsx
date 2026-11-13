@@ -39,16 +39,26 @@ export default function TaskCenter() {
  },[]);
  useEffect(()=>{
   let disposed=false;let unlisteners:Array<()=>void>=[];
-  const update=(kind:TaskKind,progress:number|null,message:string)=>{
-   setTasks(current=>{const index=current.findIndex(t=>t.kind===kind&&t.status==="running");if(index<0)return current;
-    return current.map((t,i)=>i!==index?t:{...t,progress:progress==null?t.progress:Math.max(0,Math.min(100,progress)),message,updatedAt:Date.now(),logs:t.logs[t.logs.length-1]?.endsWith(message)?t.logs:[...t.logs,clock()+"  "+message].slice(-80)});
+  const update=(kind:TaskKind,progress:number|null,message:string,status?:string)=>{
+   const terminal=status==="completed"||status==="done"||progress===100;
+   const failed=status==="failed"||status==="error";
+   setTasks(current=>{
+    const index=current.findIndex(t=>t.kind===kind&&t.status==="running");
+    const now=Date.now();
+    if(index<0){
+     const title:Record<TaskKind,string>={download:"Download de mídia",import:"Importação de mídia",trim:"Recorte de vídeo",transcription:"Transcrição",translation:"Tradução",export:"Exportação",installation:"Instalação de recurso"};
+     const created:TaskRecord={id:crypto.randomUUID(),kind,title:title[kind],status:failed?"failed":terminal?"completed":"running",progress:progress==null?(terminal?100:null):Math.max(0,Math.min(100,progress)),message,logs:[clock()+"  "+message],updatedAt:now};
+     return [created,...current].slice(0,15);
+    }
+    return current.map((t,i)=>i!==index?t:{...t,status:failed?"failed":terminal?"completed":t.status,progress:terminal?100:progress==null?t.progress:Math.max(0,Math.min(100,progress)),message,updatedAt:now,logs:t.logs[t.logs.length-1]?.endsWith(message)?t.logs:[...t.logs,clock()+"  "+message].slice(-80)});
    });
+   setOpen(true);
   };
   Promise.all([
-   listen<ProgressPayload>("media-task-progress",e=>{const p=e.payload;update("download",p.percent??null,p.message);}),
-   listen<ProgressPayload>("transcription-progress",e=>{const p=e.payload;update("transcription",p.percent??null,p.message);}),
-   listen<ProgressPayload>("translation-progress",e=>{const p=e.payload;update("translation",p.percent??null,p.message);}),
-   listen<ProgressPayload>("export-progress",e=>{const p=e.payload;update("export",p.percent??null,p.message||"Renderizando mídia...");})
+   listen<ProgressPayload>("media-task-progress",e=>{const p=e.payload;update("download",p.percent??null,p.message,p.status);}),
+   listen<ProgressPayload>("transcription-progress",e=>{const p=e.payload;update("transcription",p.percent??null,p.message,p.status);}),
+   listen<ProgressPayload>("translation-progress",e=>{const p=e.payload;update("translation",p.percent??null,p.message,p.status);}),
+   listen<ProgressPayload>("export-progress",e=>{const p=e.payload;update("export",p.percent??null,p.message||"Renderizando mídia...",p.status);})
   ]).then(items=>{if(disposed)items.forEach(fn=>fn());else unlisteners=items;}).catch(error=>console.error("Falha ao acompanhar processamentos:",error));
   return()=>{disposed=true;unlisteners.forEach(fn=>fn());};
  },[]);
