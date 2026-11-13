@@ -397,7 +397,17 @@ fn translate_cue_streaming(
             cue.id, raw.chars().take(360).collect::<String>()
         )),
     };
-    let translated = parsed.get("approved_pt")
+    // Alguns modelos encapsulam os campos editoriais dentro de "text".
+    // Normalizamos esse formato alternativo antes de validar a resposta.
+    let nested_text = parsed.get("text").filter(|value| value.is_object());
+    let content = nested_text.unwrap_or(&parsed);
+
+    let translated = content.get("approved_pt")
+        .or_else(|| content.get("translation"))
+        .or_else(|| content.get("translated_text"))
+        .or_else(|| content.get("pt"))
+        .or_else(|| content.get("text"))
+        .or_else(|| parsed.get("approved_pt"))
         .or_else(|| parsed.get("translation"))
         .or_else(|| parsed.get("translated_text"))
         .or_else(|| parsed.get("pt"))
@@ -407,25 +417,73 @@ fn translate_cue_streaming(
         .trim()
         .to_string();
     if translated.is_empty() {
+        let root_keys = parsed.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>().join(", ")).unwrap_or_default();
+        let nested_keys = content.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>().join(", ")).unwrap_or_default();
         return Err(format!(
-            "O modelo '{response_model}' não devolveu a tradução no campo approved_pt (nem nos campos alternativos) para o trecho '{}'. finish_reason={finish_reason}; resposta recebida={}",
-            cue.id, raw.chars().take(500).collect::<String>()
+            "O modelo '{response_model}' não devolveu approved_pt para o trecho '{}'. finish_reason={finish_reason}; chaves_raiz=[{}]; chaves_text=[{}]; resposta_chars={}; amostra={}",
+            cue.id, root_keys, nested_keys, raw.chars().count(), raw.chars().take(1200).collect::<String>()
         ));
     }
+
     let mut parsed = parsed;
     parsed["approved_pt"] = json!(translated);
+
+    // A resposta alternativa do ALLaM pode colocar traduções individuais
+    // em semantic_units[].word_translations.pt, identificadas por word_id.
     if include_words {
-        let translations = parsed.get("word_translations").and_then(Value::as_array)
-            .ok_or_else(|| format!("A Groq não devolveu word_translations para '{}'.", cue.id))?;
-        if translations.len() != words.len() {
-            return Err(format!("A Groq devolveu {} traduções de palavras para '{}' mas eram esperadas {}.", translations.len(), cue.id, words.len()));
+        let source = parsed.get("text").filter(|value| value.is_object()).unwrap_or(&parsed);
+        let mut normalized_words = source.get("word_translations")
+            .and_then(Value::as_array)
+            .cloned()
+            .or_else(|| parsed.get("word_translations").and_then(Value::as_array).cloned())
+            .unwrap_or_default();
+
+        if normalized_words.is_empty() {
+            let mut by_id = HashMap::<String, String>::new();
+            if let Some(items) = source.get("semantic_units").and_then(Value::as_array) {
+                for item in items {
+                    let id = item.get("word_id").and_then(Value::as_str);
+                    let pt = item.pointer("/word_translations/pt").and_then(Value::as_str)
+                        .or_else(|| item.get("pt").and_then(Value::as_str));
+                    if let (Some(id), Some(pt)) = (id, pt) {
+                        by_id.insert(id.to_string(), pt.to_string());
+                    }
+                }
+            }
+            normalized_words = words.iter().filter_map(|word| {
+                let id = word.get("word_id")?.as_str()?;
+                by_id.get(id).map(|pt| json!(pt))
+            }).collect();
+        } else {
+            normalized_words = normalized_words.into_iter().map(|value| {
+                if let Some(text) = value.as_str() { json!(text) }
+                else if let Some(text) = value.get("pt").and_then(Value::as_str) { json!(text) }
+                else if let Some(text) = value.pointer("/word_translations/pt").and_then(Value::as_str) { json!(text) }
+                else { Value::Null }
+            }).collect();
         }
-        if translations.iter().any(|value| value.as_str().unwrap_or("").trim().is_empty()) {
+
+        if normalized_words.len() != words.len() {
+            return Err(format!("A Groq devolveu {} traduções de palavras para '{}' mas eram esperadas {}. Verifique o formato emitido pelo modelo '{}'.", normalized_words.len(), cue.id, words.len(), response_model));
+        }
+        if normalized_words.iter().any(|value| value.as_str().unwrap_or("").trim().is_empty()) {
             return Err(format!("A Groq devolveu uma tradução de palavra vazia em '{}'.", cue.id));
         }
+        parsed["word_translations"] = json!(normalized_words);
     }
-    if include_units && !parsed.get("semantic_units").map(Value::is_array).unwrap_or(false) {
-        return Err(format!("A Groq não devolveu semantic_units para '{}'.", cue.id));
+
+    if include_units {
+        let source = parsed.get("text").filter(|value| value.is_object()).unwrap_or(&parsed);
+        let units = source.get("semantic_units").and_then(Value::as_array).cloned()
+            .or_else(|| parsed.get("semantic_units").and_then(Value::as_array).cloned())
+            .unwrap_or_default();
+        // Descarta itens que representam palavras isoladas, não unidades semânticas.
+        let valid_units = units.into_iter().filter(|unit| {
+            unit.get("semantic_group_id").and_then(Value::as_str).is_some()
+                && unit.get("word_ids").and_then(Value::as_array).is_some()
+                && unit.get("pt").and_then(Value::as_str).is_some()
+        }).collect::<Vec<_>>();
+        parsed["semantic_units"] = json!(valid_units);
     }
     Ok(parsed)
 }
