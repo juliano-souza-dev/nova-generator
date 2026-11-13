@@ -126,12 +126,15 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         }));
       const next = result.cues.map(c => ({ ...c, words: c.words ?? [] }));
       setCues(next);
+      setTranslations([]);
       setEditorialResult(null);
       setSelected(next[0]?.id ?? null);
-      setSaved(false); setDirty(true);
+      setSaved(false); setDirty(true); setTranslationDirty(false);
       setTranscriptionInfo(`${next.length} legendas geradas por ${result.engine === "groq" ? "Groq Whisper" : "Faster-Whisper"}${result.language ? ` · idioma detectado: ${result.language}` : ""}. Salvando automaticamente...`);
-      // A transcrição é um resultado de processamento do projeto: persista-a imediatamente.
+      // Uma nova transcrição invalida traduções e predições vinculadas à versão anterior.
       await invoke("save_project_subtitles", { projectId, assetId: asset.id, cues: next });
+      await invoke("save_project_translations", { projectId, assetId: asset.id, translations: [] });
+      await invoke("clear_project_editorial_result", { projectId, assetId: asset.id });
       setSaved(true); setDirty(false);
       setTranscriptionInfo(`${next.length} legendas geradas e salvas no projeto por ${result.engine === "groq" ? "Groq Whisper" : "Faster-Whisper"}${result.language ? ` · idioma detectado: ${result.language}` : ""}.`);
     } catch (e) { setError(String(e)); }
