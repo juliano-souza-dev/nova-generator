@@ -252,6 +252,7 @@ pub async fn translate_project_subtitles(
     app: AppHandle, project_id: String, asset_id: String, cues: Vec<crate::media::SubtitleCue>,
     include_word_translations: bool, include_semantic_units: bool,
 ) -> Result<Vec<TranslationCue>, String> {
+    if include_semantic_units && !include_word_translations { return Err("Unidades semânticas dependem das traduções palavra por palavra. Ative as duas predições.".into()); }
     if cues.is_empty() { return Err("Não há trechos de transcrição para traduzir.".into()); }
     if cues.len() > 5000 { return Err("O projeto excede o limite de 5.000 trechos por tradução.".into()); }
     if cues.iter().any(|cue| cue.id.trim().is_empty() || cue.text.trim().is_empty() || cue.text.len() > 2000) {
