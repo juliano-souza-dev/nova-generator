@@ -277,6 +277,8 @@ pub fn build_external_package(
     sections.push("{".to_string());
     sections.push("  \"contract\": \"nova-generator-external-editorial-output/1.0\",".to_string());
     sections.push(format!("  \"source_hash\": \"{source_hash}\","));
+    sections.push(format!("  \"predictions\": {{ \"word_translations\": {}, \"semantic_units\": {} }},",
+        include_word_translations, include_semantic_units));
     sections.push("  \"cues\": [".to_string());
     sections.push("    {".to_string());
     sections.push("      \"id\": 1, \"en\": \"legenda original\", \"pt\": \"tradução natural completa\",".to_string());
@@ -301,7 +303,7 @@ pub fn build_external_package(
     sections.push("- word_ids deve listar os números WORD em ordem, contíguos e pertencentes à mesma CUE.".to_string());
     sections.push("- semantic_units[].en deve reproduzir a expressão inglesa formada pelas palavras listadas; semantic_units[].pt deve traduzir a expressão como unidade de sentido.".to_string());
     sections.push("- Não inclua IDs internos, timestamps, explicações ou campos extras.".to_string());
-    sections.push("- O source_hash deve ser copiado exatamente.".to_string());
+    sections.push("- O source_hash e as opções predictions devem ser copiados exatamente.".to_string());
 
     let mut files = std::collections::BTreeMap::new();
     files.insert("entrada-editorial.txt".into(), sections.join("\n"));
