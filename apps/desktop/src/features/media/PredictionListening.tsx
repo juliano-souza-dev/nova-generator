@@ -60,7 +60,7 @@ type Props = {
 const OUTPUT_CONTRACT = "nova-generator-prediction-listening-output/1.0";
 const REVIEW_CONTRACT = "nova-generator-prediction-listening-review/1.0";
 const MATERIALS_CONTRACT = "nova-generator-prediction-listening-materials/1.0";
-const normalize = (value: string) => (value.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) ?? []).join(" ").toLowerCase();
+const normalize = (value: string) => (value.replace(/[’‘]/g, "'").match(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu) ?? []).join(" ").toLowerCase();
 
 export default function PredictionListening({
   projectId, assetId, assetName, cues, selectedCueIds, sourceSignature, onClose, onPreview
