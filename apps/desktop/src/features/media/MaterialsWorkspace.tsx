@@ -295,7 +295,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
   }
 
   function exportJson() {
-    const payload = JSON.stringify({ schema: "nova-generator-materials/1.0", projectId, assetId, assetName: selectedAsset?.name, cards }, null, 2);
+    const payload = JSON.stringify({ schema: "nova-generator-materials/2.0", projectId, assetId, assetName: selectedAsset?.name, cards }, null, 2);
     const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
     const anchor = document.createElement("a");
     anchor.href = url; anchor.download = "materiais-" + assetId + ".json"; anchor.click();
