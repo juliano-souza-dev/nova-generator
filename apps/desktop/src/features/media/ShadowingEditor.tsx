@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Check, CheckCircle2, Circle, Clock3, Merge, Pause, Split, Play, RotateCcw, SkipBack, SkipForward, Trash2, Undo2, X } from "lucide-react";
 import "./ShadowingEditor.css";
@@ -124,7 +124,7 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
       window.clearInterval(interval);
       window.clearTimeout(timeout);
     };
-  }, [demoPhase, demoIndex, demoBlock, blocks.length, repeatEachBlock, repeatPass]);
+  }, [demoPhase, demoIndex, demoBlock, blocks.length, repeatEachBlock, repeatPass, startDemoBlock]);
 
   function seek(ms: number) {
     const next = Math.max(0, Math.min(ms, duration || ms));
@@ -137,21 +137,22 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
     const first = cueById.get(block.cueIds[0]);
     if (first) seek(first.startMs);
   }
-  function startDemoBlock(index: number) {
+  const startDemoBlock = useCallback((index: number) => {
     const block = blocks[index];
     const first = block ? cueById.get(block.cueIds[0]) : null;
     if (!block || !first || !video.current) return;
     setDemoIndex(index);
+    setActiveId(first.id);
+    setCurrent(first.startMs);
     setDemoCountdown(0);
     setDemoPhase("playing");
-    seek(first.startMs);
     const player = video.current;
     player.currentTime = first.startMs / 1000;
     void player.play().catch(e => {
       setError("Não foi possível iniciar o teste de Shadowing: " + String(e));
       setDemoPhase("idle");
     });
-  }
+  }, [blocks, cueById]);
   function startDemo() {
     if (!blocks.length) return;
     setError("");
