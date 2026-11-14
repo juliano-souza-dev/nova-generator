@@ -62,7 +62,7 @@ const fmt = (ms: number) => {
   return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0") + "." + String(Math.floor(ms % 1000 / 100));
 };
 
-export default function MediaEditor({ projectId, asset, onClose }: { projectId: string; asset: Asset; onClose: () => void }) {
+export default function MediaEditor({ projectId, asset, onClose, onProjectUpdated }: { projectId: string; asset: Asset; onClose: () => void; onProjectUpdated?: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const translationFileInput = useRef<HTMLInputElement>(null);
   const timelineDragMoved = useRef(false);
@@ -342,6 +342,12 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       : "Trecho dividido. Os tempos das palavras foram preservados.");
   }
 
+  async function unlockShadowingStage(hasCues = cues.length) {
+    if (hasCues <= 0) return;
+    await invoke("update_project_stage", { id: projectId, stage: "Shadowing" });
+    onProjectUpdated?.();
+  }
+
   async function save(): Promise<boolean> {
     setSaving(true); setError("");
     try {
@@ -357,7 +363,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         if (translations.length > 0 || translationDirty) {
           await invoke("save_project_translations", { projectId, assetId: asset.id, translations });
         }
-        if (cues.length > 0) await invoke("update_project_stage", { id: projectId, stage: "Shadowing" });
+        await unlockShadowingStage(cues.length);
       });
       setSaved(true);
       setDirty(false);
@@ -388,6 +394,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       await invoke("save_project_subtitles", { projectId, assetId: asset.id, cues: next });
       await invoke("save_project_translations", { projectId, assetId: asset.id, translations: [] });
       await invoke("clear_project_editorial_result", { projectId, assetId: asset.id });
+      await unlockShadowingStage(next.length);
       setSaved(true); setDirty(false);
       setTranscriptionInfo(`${next.length} legendas geradas e salvas no projeto por ${result.engine === "groq" ? "Groq Whisper" : "Faster-Whisper"}${result.language ? ` · idioma detectado: ${result.language}` : ""}.`);
     } catch (e) { setError(String(e)); }
@@ -457,6 +464,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       // O backend já persiste o rascunho editorial; aqui persistimos também a faixa PT-BR.
       await invoke("save_project_subtitles", { projectId, assetId: asset.id, cues });
       await invoke("save_project_translations", { projectId, assetId: asset.id, translations: result });
+      await unlockShadowingStage(cues.length);
       setTranslationDirty(false); setDirty(false); setSaved(true);
       setTranslationInfo(result.length + " trechos traduzidos e salvos no projeto. O rascunho editorial permanece disponível para revisão.");
     } catch (e) { setError(String(e)); }
