@@ -79,7 +79,7 @@ const mergeSourceCards = (stored: AnkiCard[], generated: AnkiCard[]) => {
     const match = stored.find(card => !used.has(card.id) && (card.key === next.key || (card.sourceType === next.sourceType && card.sourceCueId === next.sourceCueId && card.focus === next.focus)));
     if (!match) return next;
     used.add(match.id);
-    return { ...next, ...match, key: next.key, sourceCueId: next.sourceCueId, sourceType: next.sourceType };
+    return { ...next, ...match, key: next.key, sourceCueId: next.sourceCueId, sourceType: next.sourceType, sourceStartMs: next.sourceStartMs, sourceEndMs: next.sourceEndMs };
   });
   return [...merged, ...stored.filter(card => !used.has(card.id))];
 };
