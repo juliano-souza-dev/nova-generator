@@ -7,7 +7,7 @@ type Cue = { id: string; startMs: number; endMs: number; text: string };
 type Translation = { id: string; text: string };
 type Asset = { id: string; name: string };
 type Props = { projectId: string; asset: Asset; cues: Cue[]; translations: Translation[]; editorialResult: Record<string, any> | null; onClose: () => void };
-type StoredPlan = { selectedCueIds: string[]; sourceSnapshot: Cue[]; updatedAt: string };
+type StoredPlan = { selectedCueIds: string[]; sourceSnapshot: Cue[]; sourceSignature?: string; updatedAt: number };
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -33,6 +33,7 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
   const selected = useMemo(() => cues.filter(c => selectedIds.includes(c.id)), [cues, selectedIds]);
   const visible = showExcluded ? cues.filter(c => !selectedIds.includes(c.id)) : cues.filter(c => selectedIds.includes(c.id));
   const pct = (ms: number) => duration > 0 ? Math.max(0, Math.min(100, ms / duration * 100)) : 0;
+  const sourceSignature = JSON.stringify([cues.map(c => [c.id,c.startMs,c.endMs,c.text]), translations.map(t => [t.id,t.text]), editorialResult?.suggestions?.map((s: any) => [s.cue_id,s.approved_en,s.approved_pt]) ?? []]);
   const translationFor = (id: string) => {
     const suggestion = editorialResult?.suggestions?.find((s: any) => s.cue_id === id);
     return suggestion?.approved_pt || translations.find(t => t.id === id)?.text || "";
@@ -44,12 +45,12 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
       try {
         const [path, plan] = await Promise.all([
           invoke<string>("open_project_media", { projectId, assetId: asset.id }),
-          invoke<StoredPlan | null>("load_shadowing_selection", { projectId, assetId: asset.id, cues }).catch(() => null)
+          invoke<StoredPlan | null>("load_shadowing_selection", { projectId, assetId: asset.id, cues, sourceSignature }).catch(() => null)
         ]);
         if (!alive) return;
         setSrc(convertFileSrc(path));
         if (plan) {
-          const fresh = sameSource(plan.sourceSnapshot ?? [], cues);
+          const fresh = sameSource(plan.sourceSnapshot ?? [], cues) && (!plan.sourceSignature || plan.sourceSignature === sourceSignature);
           setStale(!fresh);
           if (fresh) setSelectedIds(plan.selectedCueIds.filter(id => cues.some(c => c.id === id)));
         }
@@ -57,7 +58,7 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
       finally { if (alive) setLoaded(true); }
     })();
     return () => { alive = false; video.current?.pause(); };
-  }, [projectId, asset.id, cues]);
+  }, [projectId, asset.id, cues, sourceSignature]);
 
   function seek(ms: number) {
     const next = Math.max(0, Math.min(ms, duration || ms));
@@ -75,7 +76,7 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
   async function save() {
     setSaving(true); setError("");
     try {
-      await invoke("save_shadowing_selection", { projectId, assetId: asset.id, cues, selectedCueIds: selectedIds });
+      await invoke("save_shadowing_selection", { projectId, assetId: asset.id, cues, selectedCueIds: selectedIds, sourceSignature });
       setSaved(true); setStale(false);
     } catch (e) { setError(String(e)); }
     finally { setSaving(false); }
