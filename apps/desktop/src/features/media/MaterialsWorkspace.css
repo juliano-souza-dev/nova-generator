@@ -83,3 +83,5 @@
 .materials-preview-side.back>footer small{font-weight:400;color:#526273}
 .materials-preview-audio{display:flex;align-items:center;gap:5px;color:#08785f;font-size:10px}
 @media(max-width:650px){.materials-preview{grid-template-columns:1fr}}
+
+.materials-preview-highlight{padding:.04em .16em;border-radius:3px;background:#ffd56a;color:#8a5100;font-weight:900}.materials-preview-side audio{width:100%;height:30px}

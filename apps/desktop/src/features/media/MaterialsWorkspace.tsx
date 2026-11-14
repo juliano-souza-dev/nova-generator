@@ -44,6 +44,13 @@ const newCard = (): AnkiCard => {
   };
 };
 const text = (value: unknown) => typeof value === "string" ? value : "";
+const highlightedText = (sentence: string, target: string) => {
+  if (!sentence || !target) return sentence;
+  const start = sentence.toLocaleLowerCase().indexOf(target.toLocaleLowerCase());
+  if (start < 0) return sentence;
+  const end = start + target.length;
+  return <>{sentence.slice(0, start)}<mark className="materials-preview-highlight">{sentence.slice(start, end)}</mark>{sentence.slice(end)}</>;
+};
 const mergeSourceCards = (stored: AnkiCard[], generated: AnkiCard[]) => {
   const used = new Set<string>();
   const merged = generated.map(next => {
@@ -397,13 +404,13 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
             <div className="materials-preview" aria-label="Prévia do card Anki Didactic v3">
               <div className="materials-preview-side">
                 <span>FRENTE · EN → PT</span>
-                <strong>{card.focus || "Sua frase em inglês aparecerá aqui"}</strong>
+                <strong>{highlightedText(card.focus || "Sua frase em inglês aparecerá aqui", card.markedEn || card.highlightEn || card.focus)}</strong>
                 <small>{card.highlightEn || "Expressão destacada"}</small>
-                {card.audioPath && <span className="materials-preview-audio"><Volume2 size={13}/> Áudio vinculado</span>}
+                {card.audioPath && <audio controls preload="none" src={convertFileSrc(card.audioPath)}/>}
               </div>
               <div className="materials-preview-side back">
                 <span>VERSO · MINI-AULA</span>
-                <strong>{card.meaning || "A tradução contextual aparecerá aqui"}</strong>
+                <strong>{highlightedText(card.meaning || "A tradução contextual aparecerá aqui", card.markedPt || card.highlightPt || card.meaning)}</strong>
                 <small>{card.type.toUpperCase()} · {card.highlightPt || "Significado da expressão"}</small>
                 <p>{card.explanation || "A explicação contextual será exibida nesta área."}</p>
                 {(card.exampleEn || card.examplePt) && <footer>{card.exampleEn}<small>{card.examplePt}</small></footer>}

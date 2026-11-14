@@ -311,8 +311,8 @@ with tempfile.TemporaryDirectory(prefix="nova-anki-") as temporary:
         "assetId": package_data.get("assetId"),
         "assetName": package_data.get("assetName"),
         "youtubeVideoId": package_data.get("sourceVideoId"),
-        "cards": package_data.get("cards", []),
-        "audio": [{"cardId": card.get("id"), "file": card.get("audioFile")} for card in package_data.get("cards", []) if card.get("audioFile")]
+        "cards": [card for card in package_data.get("cards", []) if card.get("status") == "approved"],
+        "audio": [{"cardId": card.get("id"), "file": card.get("audioFile")} for card in package_data.get("cards", []) if card.get("status") == "approved" and card.get("audioFile")]
     }
     hub_final.write_text(json.dumps(hub_payload, ensure_ascii=False, indent=2), encoding="utf-8")
     concat_file = work / "audio-reel-concat.txt"
