@@ -31,7 +31,7 @@ type AnkiCard = {
   audioPath?: string;
   status: "draft" | "approved";
 };
-type MaterialDocument = { version: 2; projectId: string; assetId: string; assetName: string; cards: AnkiCard[]; updatedAt: string; sourceSignature: string };
+type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 
 const createCardId = () => crypto.randomUUID();
