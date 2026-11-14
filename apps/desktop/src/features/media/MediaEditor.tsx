@@ -523,7 +523,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
 
         let nextWordNumber = 0;
         const expectedByCue = cues.map((cue, cueIndex) => {
-          const words = (cue.words ?? []).map((word, wordIndex) => {
+          const words = (includeWordTranslations ? (cue.words ?? []) : []).map((word, wordIndex) => {
             nextWordNumber += 1;
             const leading = word.text.match(/^\\s*/u)?.[0] ?? "";
             return {
@@ -546,6 +546,9 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             throw new Error("O JSON contém números de legenda inválidos ou duplicados.");
           }
           externalCueByNumber.set(number, item);
+        }
+        if (externalCueByNumber.size !== cues.length) {
+          throw new Error("O JSON contém legendas extras ou ausentes em relação ao TXT.");
         }
 
         const suggestions = expectedByCue.map(({ cue, cueNumber, words: expectedWords }) => {
@@ -574,7 +577,12 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             throw new Error(`A quantidade de palavras da legenda ${cueNumber} não corresponde ao TXT.`);
           }
 
-          const externalUnits = Array.isArray(external.semantic_units) ? external.semantic_units : [];
+          const externalUnits = includeSemanticUnits
+            ? (Array.isArray(external.semantic_units) ? external.semantic_units : [])
+            : [];
+          if (includeSemanticUnits && !Array.isArray(external.semantic_units)) {
+            throw new Error(`A legenda ${cueNumber} não contém semantic_units.`);
+          }
           const positions = new Map(expectedWords.map((word, index) => [word.number, index]));
           const used = new Set<number>();
           const semanticUnits = externalUnits.map((unit: any, unitIndex: number) => {
