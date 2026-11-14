@@ -319,20 +319,20 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   }
 
   async function generateAudio(card: AnkiCard) {
-    if (!assetId || !ttsReady || audioBusy.includes(card.id)) return;
+    if (!assetId || !voiceCloningReady || !selectedVoiceId || audioBusy.includes(card.id)) return;
     const audioText = card.audioText.trim() || card.focus.trim();
     if (!audioText) { setError("Preencha o texto para áudio antes de gerar."); return; }
     setAudioBusy(current => [...current, card.id]); setError(""); setNotice("");
     try {
       const audio = await runTrackedTask("materials", "Gerar áudio do card Anki", async () => {
         const result = await invoke<AudioResult[]>("generate_material_audio", {
-          projectId, assetId, requests: [{ cardId: card.id, text: audioText, language: "English", speaker: "Aiden" }]
+          projectId, assetId, voiceId: selectedVoiceId, requests: [{ cardId: card.id, text: audioText, language: "English" }]
         });
         const generated = result[0];
         if (!generated?.audioPath) throw new Error("O sintetizador não retornou o arquivo de áudio.");
         return generated;
       });
-      setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath: audio.audioPath, audioSource: "tts" } : item));
+      setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath: audio.audioPath, audioSource: "tts", speaker: audio.speaker } : item));
       
     } catch { /* A Central de Processamento registra a falha. */ }
     finally { setAudioBusy(current => current.filter(id => id !== card.id)); }
@@ -351,7 +351,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
 
   async function generatePendingAudio() {
     const pending = approvedCards.filter(card => !card.audioPath);
-    if (!assetId || !ttsReady || !pending.length || audioBusy.length) return;
+    if (!assetId || !voiceCloningReady || !selectedVoiceId || !pending.length || audioBusy.length) return;
     const invalid = pending.find(card => !(card.audioText.trim() || card.focus.trim()));
     if (invalid) { setError("O card " + invalid.id + " não possui texto para sintetização."); return; }
     setAudioBusy(pending.map(card => card.id)); setError(""); setNotice("");
@@ -362,8 +362,11 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
           cardId: card.id, text: card.audioText.trim() || card.focus.trim(), language: "English", speaker: "Aiden"
         }))
       }));
-      const byId = new Map(result.map(item => [item.cardId, item.audioPath]));
-      setCards(current => current.map(card => byId.has(card.id) ? { ...card, audioPath: byId.get(card.id), audioSource: "tts" } : card));
+      const byId = new Map(result.map(item => [item.cardId, item]));
+      setCards(current => current.map(card => {
+        const generated = byId.get(card.id);
+        return generated ? { ...card, audioPath: generated.audioPath, audioSource: "tts", speaker: generated.speaker } : card;
+      }));
       
     } catch { /* A Central de Processamento registra a falha. */ }
     finally { setAudioBusy([]); }
@@ -486,7 +489,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
         <button className="secondary-button" onClick={() => importInput.current?.click()}><Download size={15}/> Importar JSON da IA</button>
         <input ref={importInput} type="file" accept=".json,application/json" hidden onChange={event => void importExternalResult(event.target.files?.[0])}/>
         <button className="secondary-button" onClick={exportJson} disabled={!cards.length}><Download size={15}/> Exportar JSON</button>
-        <button className="secondary-button" onClick={() => void generatePendingAudio()} disabled={!ttsReady || !pendingAudioCount || !approvedCount || Boolean(audioBusy.length)}><AudioLines size={15}/>{audioBusy.length ? "Gerando áudios..." : "Gerar áudios pendentes"}</button>
+        <button className="secondary-button" onClick={() => void generatePendingAudio()} disabled={!voiceCloningReady || !pendingAudioCount || !approvedCount || Boolean(audioBusy.length)}><AudioLines size={15}/>{audioBusy.length ? "Gerando áudios..." : "Gerar áudios pendentes"}</button>
         <button className="primary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar materiais"}</button>
         <button className="primary-button" onClick={() => void exportPackage()} disabled={!assetId || exporting || !approvedCount || pendingAudioCount > 0}><Download size={15}/>{exporting ? "Exportando..." : "Exportar pacote Anki"}</button>
       </div>
@@ -516,8 +519,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
 
         <div className="materials-runtime">
           <div className="materials-runtime-icon"><AudioLines size={18}/></div>
-          <div><strong>Qwen3-TTS 1.7B · voz em inglês</strong><p>{ttsReady ? "Runtime compartilhado pronto. A geração usa o ambiente isolado do Shared Runtime Manager." : "Runtime não disponível. Sincronize o Nova Generator e instale qwen3-tts pelo Shared Runtime Manager."}</p></div>
-          <span className={ttsReady ? "ready" : "missing"}>{ttsReady ? "Disponível" : "Não instalado"}</span>
+          <div><strong>Qwen3-TTS 1.7B · voz em inglês</strong><p>{voiceCloningReady ? "Runtime compartilhado pronto. A geração usa o ambiente isolado do Shared Runtime Manager." : "Runtime não disponível. Sincronize o Nova Generator e instale qwen3-tts pelo Shared Runtime Manager."}</p></div>
+          <span className={voiceCloningReady ? "ready" : "missing"}>{voiceCloningReady ? "Disponível" : "Não instalado"}</span>
         </div>
 
         <div className="materials-section-title">
@@ -562,7 +565,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
             </div>
             <div className="materials-audio-row">
               {card.audioPath ? <audio controls preload="none" src={convertFileSrc(card.audioPath)}/> : <span><FileAudio size={15}/> Nenhum áudio gerado</span>}
-              <button className="secondary-button" onClick={() => void generateAudio(card)} disabled={!ttsReady || audioBusy.length > 0 || !card.audioText.trim() && !card.focus.trim()}>
+              <button className="secondary-button" onClick={() => void generateAudio(card)} disabled={!voiceCloningReady || audioBusy.length > 0 || !card.audioText.trim() && !card.focus.trim()}>
                 {audioBusy.includes(card.id) ? <LoaderCircle className="spin" size={14}/> : card.audioPath && card.audioSource === "tts" ? <RefreshCw size={14}/> : <AudioLines size={14}/>}
                 {audioBusy.includes(card.id) ? "Gerando..." : card.audioPath && card.audioSource === "tts" ? "Regenerar voz IA" : "Gerar voz IA"}
               </button>
