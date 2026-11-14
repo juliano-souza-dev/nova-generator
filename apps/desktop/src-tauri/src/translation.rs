@@ -262,7 +262,7 @@ fn translate_cue_streaming(
     app: &AppHandle,
     project_id: &str,
     asset_id: &str,
-    _configured_model: &str,
+    model: &str,
     key: &str,
     endpoint: &str,
     cue: &crate::media::SubtitleCue,
@@ -309,9 +309,9 @@ fn translate_cue_streaming(
         " Não inclua approved_en, trailing, notes, approval, predictions ou source_hash. O aplicativo preencherá e validará esses campos."
     );
 
-    // Modelo editorial padronizado para tradução e predições.
+    // O modelo é escolhido pela política central de tentativas e fallback.
     // A chave e o endpoint continuam vindo do Shared Runtime (Groq).
-    let editorial_model = "openai/gpt-oss-120b";
+    let editorial_model = model;
     let mut body = json!({
         "model": editorial_model,
         "temperature": 0.2,
@@ -323,9 +323,11 @@ fn translate_cue_streaming(
             {"role":"user","content":serde_json::to_string(&user_payload).map_err(|e| e.to_string())?}
         ]
     });
-    // GPT-OSS oferece níveis de raciocínio; low prioriza a resposta editorial
-    // sem gastar capacidade excessiva com raciocínio interno.
-    body["reasoning_effort"] = json!("low");
+    // GPT-OSS oferece níveis de raciocínio. Outros modelos recebem somente
+    // parâmetros compatíveis com sua família.
+    if editorial_model.starts_with("openai/gpt-oss-") {
+        body["reasoning_effort"] = json!("low");
+    }
 
     let client = Client::builder()
         .timeout(Duration::from_secs(240))
@@ -368,12 +370,6 @@ fn translate_cue_streaming(
                 }
                 if let Some(delta) = message.get("content").and_then(Value::as_str) {
                     raw.push_str(delta);
-                    let _ = app.emit("translation-stream", TranslationStream {
-                        project_id: project_id.into(),
-                        asset_id: asset_id.into(),
-                        cue_id: cue.id.clone(),
-                        delta: delta.into(),
-                    });
                 }
             }
         }
@@ -488,6 +484,12 @@ fn translate_cue_streaming(
         }).collect::<Vec<_>>();
         parsed["semantic_units"] = json!(valid_units);
     }
+    let _ = app.emit("translation-stream", TranslationStream {
+        project_id: project_id.into(),
+        asset_id: asset_id.into(),
+        cue_id: cue.id.clone(),
+        delta: raw,
+    });
     Ok(parsed)
 }
 
@@ -582,10 +584,33 @@ fn build_contract_suggestion(
     Ok(suggestion)
 }
 
-fn should_retry_groq_error(error: &str) -> bool {
-    error.contains("Groq HTTP 429") || error.contains("Groq HTTP 500") ||
-    error.contains("Groq HTTP 502") || error.contains("Groq HTTP 503") ||
-    error.contains("Groq HTTP 504")
+const MAX_ATTEMPTS_PER_MODEL: usize = 2;
+
+fn editorial_fallback_models() -> [&'static str; 3] {
+    [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.8-27b",
+    ]
+}
+
+fn is_fatal_provider_error(error: &str) -> bool {
+    error.contains("Groq HTTP 401") || error.contains("Groq HTTP 403")
+}
+
+fn should_skip_model(error: &str) -> bool {
+    // Rate limits and model/parameter incompatibilities should move directly
+    // to the next model instead of wasting retries against the same one.
+    ["Groq HTTP 400", "Groq HTTP 404", "Groq HTTP 422", "Groq HTTP 429"]
+        .iter()
+        .any(|marker| error.contains(marker))
+}
+
+fn retry_delay(error: &str, attempt: usize) -> Duration {
+    let retry_after = error.split("[retry-after: ").nth(1)
+        .and_then(|value| value.split(']').next())
+        .and_then(|value| value.parse::<u64>().ok());
+    Duration::from_secs(retry_after.unwrap_or_else(|| 2_u64.pow(attempt as u32 + 1)).clamp(1, 30))
 }
 
 fn load_translation_job(path: &PathBuf, source_hash: &str, include_words: bool, include_units: bool) -> TranslationJob {
@@ -672,50 +697,101 @@ pub async fn translate_project_subtitles(
                 emit(&app2, &project_id, &asset_id, "streaming", index as f32 / total as f32 * 100.0,
                     index, total, &format!("Recebendo tradução do trecho {} de {} em streaming...", index + 1, total));
 
-                let mut response = None;
-                let mut last_error = String::new();
-                for attempt in 0..3 {
-                    let context = ordered.iter().enumerate()
-                        .filter(|(context_index, item)| {
-                            *context_index != index
-                                && context_index.abs_diff(index) <= 3
-                                && !item.text.trim().is_empty()
-                        })
-                        .map(|(context_index, item)| json!({
-                            "relation": if context_index < index { "previous" } else { "next" },
-                            "distance": context_index.abs_diff(index),
-                            "text": item.text
-                        }))
-                        .collect::<Vec<_>>();
-                    match translate_cue_streaming(
-                        &app2, &project_id, &asset_id, &cfg.model, &key, &endpoint, cue, &context,
-                        include_word_translations, include_semantic_units
-                    ) {
-                        Ok(value) => { response = Some(value); break; }
-                        Err(error) => {
-                            let retry = should_retry_groq_error(&error);
-                            let retry_after = error.split("[retry-after: ").nth(1)
-                                .and_then(|value| value.split(']').next())
-                                .and_then(|value| value.parse::<u64>().ok());
-                            last_error = error;
-                            if !retry || attempt == 2 { break; }
-                            let delay = retry_after.unwrap_or_else(|| 2_u64.pow(attempt as u32 + 1)).clamp(1, 60);
-                            emit(&app2, &project_id, &asset_id, "retrying", index as f32 / total as f32 * 100.0,
-                                index, total, &format!("Limite temporário da Groq. Nova tentativa em {delay}s..."));
-                            thread::sleep(Duration::from_secs(delay));
+                let context = ordered.iter().enumerate()
+                    .filter(|(context_index, item)| {
+                        *context_index != index
+                            && context_index.abs_diff(index) <= 3
+                            && !item.text.trim().is_empty()
+                    })
+                    .map(|(context_index, item)| json!({
+                        "relation": if context_index < index { "previous" } else { "next" },
+                        "distance": context_index.abs_diff(index),
+                        "text": item.text
+                    }))
+                    .collect::<Vec<_>>();
+
+                let mut successful_suggestion = None;
+                let mut failures = Vec::new();
+                let models = editorial_fallback_models();
+
+                'model_fallback: for (model_index, model) in models.iter().enumerate() {
+                    let mut last_error = String::from("Nenhuma tentativa executada.");
+                    for attempt in 0..MAX_ATTEMPTS_PER_MODEL {
+                        match translate_cue_streaming(
+                            &app2, &project_id, &asset_id, model, &key, &endpoint, cue, &context,
+                            include_word_translations, include_semantic_units
+                        ) {
+                            Ok(value) => {
+                                let candidate = build_contract_suggestion(
+                                    cue, &value, include_word_translations, include_semantic_units
+                                ).and_then(|suggestion| {
+                                    let single = json!({
+                                        "contract": crate::translation_contract::OUTPUT_CONTRACT,
+                                        "approval": "draft",
+                                        "source_hash": hash,
+                                        "predictions": {
+                                            "word_translations": include_word_translations,
+                                            "semantic_units": include_semantic_units
+                                        },
+                                        "suggestions": [suggestion]
+                                    });
+                                    validate_editorial_result(
+                                        &single, std::slice::from_ref(cue),
+                                        include_word_translations, include_semantic_units
+                                    )?;
+                                    Ok(suggestion)
+                                });
+
+                                match candidate {
+                                    Ok(suggestion) => {
+                                        successful_suggestion = Some(suggestion);
+                                        break 'model_fallback;
+                                    }
+                                    Err(error) => last_error = error,
+                                }
+                            }
+                            Err(error) => last_error = error,
+                        }
+
+                        if is_fatal_provider_error(&last_error) {
+                            return Err(format!(
+                                "A Groq recusou a autenticação ou a permissão da conta.                                  A tradução foi interrompida sem descartar o progresso salvo. Detalhe: {last_error}"
+                            ));
+                        }
+                        if should_skip_model(&last_error) {
+                            break;
+                        }
+                        if attempt + 1 < MAX_ATTEMPTS_PER_MODEL {
+                            let delay = retry_delay(&last_error, attempt);
+                            emit(
+                                &app2, &project_id, &asset_id, "retrying",
+                                index as f32 / total as f32 * 100.0, index, total,
+                                &format!(
+                                    "Falha recuperável no modelo {model} ({}/{}). Nova tentativa em {}s...",
+                                    attempt + 1, MAX_ATTEMPTS_PER_MODEL, delay.as_secs()
+                                )
+                            );
+                            thread::sleep(delay);
                         }
                     }
+
+                    failures.push(format!("{model}: {last_error}"));
+                    if model_index + 1 < models.len() {
+                        emit(
+                            &app2, &project_id, &asset_id, "fallback",
+                            index as f32 / total as f32 * 100.0, index, total,
+                            &format!(
+                                "O modelo {model} não concluiu este trecho. Alternando para {}...",
+                                models[model_index + 1]
+                            )
+                        );
+                    }
                 }
-                let response = response.ok_or(last_error)?;
-                let suggestion = build_contract_suggestion(cue, &response, include_word_translations, include_semantic_units)?;
-                let single = json!({
-                    "contract": crate::translation_contract::OUTPUT_CONTRACT,
-                    "approval": "draft",
-                    "source_hash": hash,
-                    "predictions": {"word_translations": include_word_translations, "semantic_units": include_semantic_units},
-                    "suggestions": [suggestion]
-                });
-                validate_editorial_result(&single, std::slice::from_ref(cue), include_word_translations, include_semantic_units)?;
+
+                let suggestion = successful_suggestion.ok_or_else(|| format!(
+                    "Não foi possível traduzir o trecho '{}' após esgotar as tentativas e os modelos disponíveis.                      O progresso anterior foi preservado. Falhas: {}",
+                    cue.id, failures.join(" | ")
+                ))?;
                 suggestion
             };
 
