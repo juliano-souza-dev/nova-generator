@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { Check, CheckCircle2, Circle, Clock3, Merge, Pause, Play, RotateCcw, SkipBack, SkipForward, Trash2, Undo2, X } from "lucide-react";
+import { Check, CheckCircle2, Circle, Clock3, Merge, Pause, Split, Play, RotateCcw, SkipBack, SkipForward, Trash2, Undo2, X } from "lucide-react";
 import "./ShadowingEditor.css";
 
 type Cue = { id: string; startMs: number; endMs: number; text: string };
@@ -188,6 +188,22 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
   function toggleMerge(key: string) {
     setMergeSelection(current => current.includes(key) ? current.filter(x => x !== key) : [...current, key]);
   }
+  function splitBlock(block: ShadowingBlock) {
+    if (block.cueIds.length < 2) return;
+    const next = blocks.flatMap(item => blockKey(item) === blockKey(block)
+      ? item.cueIds.map(id => ({ cueIds: [id], pauseDurationMs: item.pauseDurationMs }))
+      : [item]);
+    setBlocks(next);
+    setMergeSelection([]);
+    setSaved(false);
+  }
+  function updatePauseDuration(seconds: number) {
+    if (!activeBlock) return;
+    setBlocks(current => current.map(block => blockKey(block) === blockKey(activeBlock)
+      ? { ...block, pauseDurationMs: seconds * 1000 }
+      : block));
+    setSaved(false);
+  }
   function mergeBlocks() {
     if (!canMerge) return;
     const firstIndex = mergeIndexes[0];
@@ -333,10 +349,16 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
             <span className="eyebrow">BLOCO ATUAL · {activeBlock.cueIds.length} {activeBlock.cueIds.length === 1 ? "fala" : "falas"}</span>
             <strong>{activeBlock.cueIds.map(id => cueById.get(id)?.text ?? "").filter(Boolean).join(" ")}</strong>
             {activeBlock.cueIds.map(id => translationFor(id)).filter(Boolean).length > 0 && <p>{activeBlock.cueIds.map(id => translationFor(id)).filter(Boolean).join(" ")}</p>}
-            <small><Clock3 size={12}/> {clock(cueById.get(activeBlock.cueIds[0])?.startMs ?? 0)} – {clock(cueById.get(activeBlock.cueIds[activeBlock.cueIds.length - 1])?.endMs ?? 0)} · pausa {Math.round(activeBlock.pauseDurationMs/1000)}s</small>
+            <small><Clock3 size={12}/> {clock(cueById.get(activeBlock.cueIds[0])?.startMs ?? 0)} – {clock(cueById.get(activeBlock.cueIds[activeBlock.cueIds.length - 1])?.endMs ?? 0)}</small>
+            <label className="shadowing-pause-setting">Tempo para repetir
+              <select value={Math.round(activeBlock.pauseDurationMs/1000)} onChange={e=>updatePauseDuration(Number(e.target.value))}>
+                {[2,3,4,5,6,8,10,12,15].map(seconds=><option key={seconds} value={seconds}>{seconds} segundos</option>)}
+              </select>
+            </label>
             <div className="shadowing-active-actions">
               <button className="primary-button" onClick={() => playBlock(activeBlock)}><Play size={14}/> Ouvir bloco</button>
               <button className="secondary-button" onClick={()=>seek(cueById.get(activeBlock.cueIds[0])?.startMs ?? 0)}>Ir ao início</button>
+              {activeBlock.cueIds.length > 1 && <button className="secondary-button" title="Separar este bloco" onClick={()=>splitBlock(activeBlock)}><Split size={14}/> Separar</button>}
             </div>
           </div>}
           <div className="shadowing-block-list">
