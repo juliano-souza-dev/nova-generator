@@ -89,7 +89,7 @@ fn generate_audio_batch(app: &AppHandle, project_id: &str, asset_id: &str, reque
         .arg(&model)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Não foi possível iniciar o Qwen3-TTS compartilhado: {e}"))?;
 
