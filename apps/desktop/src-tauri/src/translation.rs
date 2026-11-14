@@ -711,8 +711,8 @@ pub async fn translate_project_subtitles(
                     .collect::<Vec<_>>();
                 if models.is_empty() {
                     return Err(format!(
-                        "Todos os modelos Groq disponíveis foram temporariamente bloqueados por limite ou incompatibilidade. O progresso anterior foi preservado. Últimas falhas: {}",
-                        failures.join(" | ")
+                        "Todos os modelos Groq disponíveis foram temporariamente bloqueados por limite ou incompatibilidade nesta execução: {}. O progresso anterior foi preservado.",
+                        unavailable_models.iter().cloned().collect::<Vec<_>>().join(", ")
                     ));
                 }
 
@@ -746,7 +746,7 @@ pub async fn translate_project_subtitles(
 
                                 match candidate {
                                     Ok(suggestion) => {
-                                        let stream_delta = serde_json::to_string(&suggestion).unwrap_or_default();
+                                        let stream_delta = serde_json::to_string(&value).unwrap_or_default();
                                         let _ = app2.emit("translation-stream", TranslationStream {
                                             project_id: project_id.clone(),
                                             asset_id: asset_id.clone(),
