@@ -266,17 +266,6 @@ pub fn save_prediction_listening_result(
     fs::rename(temp, path).map_err(|e| format!("Não foi possível concluir o salvamento do Prediction Listening: {e}"))
 }
 
-#[tauri::command]
-pub fn save_prediction_listening_export(path: String, bytes: Vec<u8>) -> Result<(), String> {
-    if !path.to_ascii_lowercase().ends_with(".json") {
-        return Err("O material aprovado precisa ser salvo como arquivo .json.".into());
-    }
-    if bytes.is_empty() || bytes.len() > 20 * 1024 * 1024 {
-        return Err("O arquivo JSON está vazio ou excede 20 MB.".into());
-    }
-    fs::write(&path, bytes).map_err(|e| format!("Não foi possível gravar o JSON aprovado: {e}"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
