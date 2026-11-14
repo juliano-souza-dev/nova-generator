@@ -532,7 +532,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
             <label className="materials-voice-select">
               <span className="materials-voice-select-head">
                 Voz para os novos áudios
-                <button type="button" className="materials-voice-refresh" onClick={() => void refreshVoices()} title="Atualizar a lista de vozes"><RefreshCw size={12}/> Atualizar</button>
+                <button type="button" className="materials-voice-refresh" onClick={() => void refreshVoices().catch(error => setError(String(error)))} title="Atualizar a lista de vozes"><RefreshCw size={12}/> Atualizar</button>
               </span>
               <select value={selectedVoiceId} onChange={event => setSelectedVoiceId(event.target.value)} disabled={!voiceCloningReady}>
                 {!voices.length && <option value="">Nenhuma voz disponível</option>}
