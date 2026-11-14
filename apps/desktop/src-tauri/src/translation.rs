@@ -586,7 +586,7 @@ fn editorial_fallback_models() -> [&'static str; 3] {
 }
 
 fn is_fatal_provider_error(error: &str) -> bool {
-    error.contains("Groq HTTP 401") || error.contains("Groq HTTP 403")
+    error.contains("Groq HTTP 401") || error.contains("Groq HTTP 402") || error.contains("Groq HTTP 403")
 }
 
 fn should_skip_model(error: &str) -> bool {
@@ -681,6 +681,9 @@ pub async fn translate_project_subtitles(
             &format!("Tarefa preparada. {} de {} trechos já concluídos serão reutilizados.", completed, total));
 
         let mut ordered_suggestions = Vec::with_capacity(total);
+        // Modelos que devolveram erro permanente de modelo/parâmetro ou limite
+        // ficam fora das próximas legendas desta mesma execução.
+        let mut unavailable_models = HashSet::<String>::new();
         for (index, cue) in ordered.iter().enumerate() {
             let suggestion = if let Some(cached) = suggestions_by_id.get(&cue.id) {
                 cached.clone()
@@ -703,7 +706,15 @@ pub async fn translate_project_subtitles(
 
                 let mut successful_suggestion = None;
                 let mut failures = Vec::new();
-                let models = editorial_fallback_models();
+                let models = editorial_fallback_models().into_iter()
+                    .filter(|model| !unavailable_models.contains(*model))
+                    .collect::<Vec<_>>();
+                if models.is_empty() {
+                    return Err(format!(
+                        "Todos os modelos Groq disponíveis foram temporariamente bloqueados por limite ou incompatibilidade. O progresso anterior foi preservado. Últimas falhas: {}",
+                        failures.join(" | ")
+                    ));
+                }
 
                 'model_fallback: for (model_index, model) in models.iter().enumerate() {
                     let mut last_error = String::from("Nenhuma tentativa executada.");
@@ -757,6 +768,7 @@ pub async fn translate_project_subtitles(
                             ));
                         }
                         if should_skip_model(&last_error) {
+                            unavailable_models.insert((*model).to_string());
                             break;
                         }
                         if attempt + 1 < MAX_ATTEMPTS_PER_MODEL {
