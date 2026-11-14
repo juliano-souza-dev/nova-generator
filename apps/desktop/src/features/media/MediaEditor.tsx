@@ -111,6 +111,12 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
     translations.map(t => [t.id, t.text]),
     editorialResult?.suggestions?.map((s: any) => [s.cue_id, s.approved_en, s.approved_pt]) ?? []
   ]), [cues, translations, editorialResult]);
+  const predictionListeningReady = shadowingComplete
+    && shadowingSelectedCueIds.length > 0
+    && shadowingSelectedCueIds.every(id => {
+      const cue = cues.find(item => item.id === id);
+      return cue?.wordAlignment === "whisperx" && Boolean(cue.words?.length);
+    });
 
   useEffect(() => {
     let alive = true;
@@ -861,7 +867,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
           <button className="secondary-button" onClick={() => setShadowingOpen(true)} disabled={!saved || cues.length === 0} title={!saved ? "Salve a Editorial para liberar o Shadowing" : "Preparar blocos para Shadowing"}><AudioLines size={15}/> Shadowing</button>
-          <button className="secondary-button" onClick={() => setPredictionListeningOpen(true)} disabled={!shadowingComplete || dirty || translationDirty || loading} title={shadowingComplete ? "Gerar desafios a partir dos blocos selecionados no Shadowing" : "Conclua e salve o Shadowing para liberar este módulo"}><Languages size={15}/> Prediction Listening</button>
+          <button className="secondary-button" onClick={() => setPredictionListeningOpen(true)} disabled={!predictionListeningReady || dirty || translationDirty || loading} title={!shadowingComplete ? "Conclua e salve o Shadowing para liberar este módulo" : !predictionListeningReady ? "Alinhe com WhisperX todos os blocos selecionados no Shadowing" : "Gerar desafios a partir dos blocos selecionados no Shadowing"}><Languages size={15}/> Prediction Listening</button>
           <button className="primary-button" onClick={() => void save()} disabled={saving || loading}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button>
           <button className="icon-button" title="Fechar editor" onClick={() => { if (!aligning && (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?"))) onClose(); }} disabled={aligning}><X size={18}/></button>
         </div>
