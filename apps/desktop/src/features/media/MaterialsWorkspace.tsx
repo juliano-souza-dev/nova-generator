@@ -6,6 +6,7 @@ import {
   LoaderCircle, Plus, RefreshCw, Save, Sparkles, Trash2, Volume2, LockKeyhole
 } from "lucide-react";
 import "./MaterialsWorkspace.css";
+import { runTrackedTask } from "../tasks/TaskCenter";
 
 type Asset = { id: string; name: string; kind: string; durationMs?: number | null; sourceVideoId?: string | null };
 type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string };
@@ -79,7 +80,7 @@ const mergeSourceCards = (stored: AnkiCard[], generated: AnkiCard[]) => {
     const match = stored.find(card => !used.has(card.id) && (card.key === next.key || (card.sourceType === next.sourceType && card.sourceCueId === next.sourceCueId && card.focus === next.focus)));
     if (!match) return next;
     used.add(match.id);
-    return { ...next, ...match, key: next.key, sourceCueId: next.sourceCueId, sourceType: next.sourceType, sourceStartMs: next.sourceStartMs, sourceEndMs: next.sourceEndMs };
+    return { ...next, ...match, type: ["shadowing", "listening"].includes(text(match.type).toLowerCase()) ? next.type : match.type, key: next.key, sourceCueId: next.sourceCueId, sourceType: next.sourceType, sourceStartMs: next.sourceStartMs, sourceEndMs: next.sourceEndMs };
   });
   return [...merged, ...stored.filter(card => !used.has(card.id))];
 };
@@ -131,7 +132,7 @@ const cardFromPrediction = (item: any, cue: Cue, translation?: Translation): Ank
   const meaning = text(translation?.text);
   return {
     id, key: "source:prediction:" + text(item.id),
-    sourceCueId: cue.id, sourceType: "prediction", type: "listening",
+    sourceCueId: cue.id, sourceType: "prediction", type: "expression",
     focus, meaning, highlightEn: answer || text(item.highlightedText) || focus,
     markedEn: answer || text(item.markedEn) || text(item.highlightedText) || focus,
     highlightPt: "", markedPt: "", explanation: text(item.explanation),
@@ -143,7 +144,7 @@ const cardFromShadowing = (cue: Cue, translation?: Translation): AnkiCard => {
   const meaning = text(translation?.text);
   return {
     id: createCardId(), key: "source:shadowing:" + cue.id, sourceCueId: cue.id,
-    sourceType: "shadowing", type: "shadowing", focus: cue.text, meaning,
+    sourceType: "shadowing", type: "expression", focus: cue.text, meaning,
     highlightEn: cue.text, markedEn: cue.text, highlightPt: meaning, markedPt: meaning,
     explanation: "Trecho selecionado e concluído no Shadowing.",
     exampleEn: "", examplePt: "", speaker: text((cue as any).speaker), audioText: cue.text, sourceStartMs: cue.startMs, sourceEndMs: cue.endMs, status: "draft"
@@ -297,7 +298,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     if (!assetId || saving) return;
     setSaving(true); setError(""); setNotice("");
     try {
-      await persistMaterials();
+      await runTrackedTask("materials", "Salvar Materiais", () => persistMaterials());
       setNotice("Materiais salvos neste projeto. Cards, revisões e vínculos de áudio foram preservados.");
     } catch (e) { setError(String(e)); }
     finally { setSaving(false); }
@@ -309,9 +310,9 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     if (!audioText) { setError("Preencha o texto para áudio antes de gerar."); return; }
     setAudioBusy(current => [...current, card.id]); setError(""); setNotice("");
     try {
-      const result = await invoke<AudioResult[]>("generate_material_audio", {
+      const result = await runTrackedTask("materials", "Gerar áudio do card Anki", () => invoke<AudioResult[]>("generate_material_audio", {
         projectId, assetId, requests: [{ cardId: card.id, text: audioText, language: "English", speaker: "Aiden" }]
-      });
+      }));
       const audio = result[0];
       if (!audio?.audioPath) throw new Error("O sintetizador não retornou o arquivo de áudio.");
       setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath: audio.audioPath, audioSource: "tts" } : item));
@@ -324,7 +325,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     if (!assetId || card.sourceStartMs == null || card.sourceEndMs == null || card.sourceEndMs <= card.sourceStartMs) return;
     setAudioBusy(current => [...current, card.id]); setError(""); setNotice("");
     try {
-      const audioPath = await invoke<string>("extract_material_source_audio", { projectId, assetId, cardId: card.id, startMs: card.sourceStartMs, endMs: card.sourceEndMs });
+      const audioPath = await runTrackedTask("materials", "Extrair áudio original do card", () => invoke<string>("extract_material_source_audio", { projectId, assetId, cardId: card.id, startMs: card.sourceStartMs!, endMs: card.sourceEndMs! }));
       setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath, audioSource: "video" } : item));
       setNotice("Áudio original extraído do trecho do vídeo e vinculado ao card.");
     } catch (e) { setError(String(e)); }
@@ -338,12 +339,12 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     if (invalid) { setError("O card " + invalid.id + " não possui texto para sintetização."); return; }
     setAudioBusy(pending.map(card => card.id)); setError(""); setNotice("");
     try {
-      const result = await invoke<AudioResult[]>("generate_material_audio", {
+      const result = await runTrackedTask("materials", "Gerar áudios dos cards aprovados", () => invoke<AudioResult[]>("generate_material_audio", {
         projectId, assetId,
         requests: pending.map(card => ({
           cardId: card.id, text: card.audioText.trim() || card.focus.trim(), language: "English", speaker: "Aiden"
         }))
-      });
+      }));
       const byId = new Map(result.map(item => [item.cardId, item.audioPath]));
       setCards(current => current.map(card => byId.has(card.id) ? { ...card, audioPath: byId.get(card.id), audioSource: "tts" } : card));
       setNotice(result.length + " áudio(s) gerado(s). Salve os Materiais para registrar os vínculos.");
@@ -364,7 +365,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       if (!path) return;
       setExporting(true);
       await persistMaterials();
-      await invoke("export_project_materials_package", { projectId, assetId, outputPath: path });
+      await runTrackedTask("materials", "Exportar pacote de Materiais", () => invoke("export_project_materials_package", { projectId, assetId, outputPath: path }));
       setNotice("Pacote completo exportado com Anki (.apkg), JSON, reel MP4, manifesto e áudios.");
     } catch (e) { setError(String(e)); }
     finally { setExporting(false); }
@@ -376,7 +377,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     try {
       const payload = buildEnrichmentPayload(projectId, assetId, selectedAsset?.sourceVideoId ?? null, sourceSignature, cards, sourceCues, sourceTranslations);
       const sourceHash = await hashPayload(payload);
-      const outputContract = "nova-generator-materials-enrichment-output/1.0";
+      const outputContract = "nova-generator-materials-enrichment-output/1.1";
       const lines = [
         "NOVA GENERATOR | MATERIAIS DIDÁTICOS",
         "EXTERNAL AI GENERATION PACKAGE | INPUT 1.0",
@@ -393,17 +394,17 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
         "1. OBJECTIVE",
         "==============================================================",
         "Prepare didactic enrichment for every supplied Anki item. Preserve the original scene and its meaning, but teach the highlighted English expression, phrasal verb, collocation, or grammatical structure.",
-        "For EACH card_id, fill mini_lesson_pt, example_en, and example_pt. The mini-lesson must explain meaning, form, pragmatic use, and why the expression fits the supplied scene. The new English example must be a different sentence from the source scene, natural and reusable. Translate that new example naturally into Brazilian Portuguese.",
+        "For EACH card_id, fill card_type, mini_lesson_pt, example_en, and example_pt. Classify the highlighted keyword or expression itself, not the source activity: use a precise category such as PHRASAL VERB, IDIOM, COLLOCATION, GRAMMATICAL STRUCTURE, VOCABULARY, or EXPRESSION. Never use SHADOWING, LISTENING, EDITORIAL, or another workflow/source label as card_type. Base the classification primarily on HIGHLIGHT_EN and its use in SOURCE_EN. If the highlighted item is a multi-word verb with a particle or preposition (for example, give up or look forward to), classify it as PHRASAL VERB. If it is a fixed figurative expression, use IDIOM; a natural word combination, COLLOCATION; a reusable grammar pattern, GRAMMATICAL STRUCTURE; an isolated word, VOCABULARY; otherwise EXPRESSION. The mini-lesson must explain meaning, form, pragmatic use, and why the expression fits the supplied scene. The new English example must be a different sentence from the source scene, natural and reusable. Translate that new example naturally into Brazilian Portuguese.",
         "",
         "2. STRICT SOURCE AND TIMING RULES",
-        "Do not modify card_id, source_cue_id, start_ms, end_ms, source_en, source_pt, focus_en, focus_pt, highlight_en, highlight_pt, or card_type.",
+        "Do not modify card_id, source_cue_id, start_ms, end_ms, source_en, source_pt, focus_en, focus_pt, highlight_en, or highlight_pt. You MUST return a newly classified card_type for every item.",
         "Never invent, estimate, shift, round, or renumber timestamps. Copy IDs and source timing exactly. If start_ms or end_ms is null, keep it null.",
         "The timestamps identify the original audio segment to be played with the Anki card. They must remain attached to the same card.",
         "Do not use the original scene sentence as the additional example. Keep the original scene only as source context.",
         "",
         "3. REQUIRED OUTPUT",
         "Return ONLY valid JSON, without Markdown or commentary, using the exact contract and SOURCE_HASH below.",
-        JSON.stringify({ contract: outputContract, source_hash: sourceHash, items: cards.map(card => ({ card_id: card.id, mini_lesson_pt: "", example_en: "", example_pt: "" })) }, null, 2),
+        JSON.stringify({ contract: outputContract, source_hash: sourceHash, items: cards.map(card => ({ card_id: card.id, card_type: "", mini_lesson_pt: "", example_en: "", example_pt: "" })) }, null, 2),
         "",
         "4. SOURCE ITEMS"
       ];
@@ -437,14 +438,14 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       const returned = new Map<string, any>();
       for (const item of parsed.items) {
         if (!item || typeof item.card_id !== "string" || returned.has(item.card_id)) throw new Error("Há card_id ausente ou duplicado no retorno.");
-        if (![item.mini_lesson_pt, item.example_en, item.example_pt].every(value => typeof value === "string" && value.trim())) throw new Error("Cada item precisa conter mini_lesson_pt, example_en e example_pt preenchidos.");
+        if (![item.card_type, item.mini_lesson_pt, item.example_en, item.example_pt].every(value => typeof value === "string" && value.trim())) throw new Error("Cada item precisa conter card_type, mini_lesson_pt, example_en e example_pt preenchidos.");
         returned.set(item.card_id, item);
       }
       const expectedIds = new Set(cards.map(card => card.id));
       if (returned.size !== expectedIds.size || [...returned.keys()].some(id => !expectedIds.has(id))) throw new Error("Os IDs do JSON não correspondem aos cards atuais.");
       setCards(current => current.map(card => {
         const result = returned.get(card.id)!;
-        return { ...card, explanation: result.mini_lesson_pt, exampleEn: result.example_en, examplePt: result.example_pt, status: "draft" };
+        return { ...card, type: result.card_type.trim().toUpperCase(), explanation: result.mini_lesson_pt, exampleEn: result.example_en, examplePt: result.example_pt, status: "draft" };
       }));
       setNotice("Enriquecimento importado. Revise os cards e salve os Materiais para registrar as alterações.");
     } catch (e) { setError("Não foi possível importar o retorno da IA: " + String(e)); }
