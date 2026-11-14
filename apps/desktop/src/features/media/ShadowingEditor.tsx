@@ -19,7 +19,7 @@ const clock = (ms: number) => {
 const sameSource = (a: Cue[], b: Cue[]) => JSON.stringify(a.map(c => [c.id,c.startMs,c.endMs,c.text])) === JSON.stringify(b.map(c => [c.id,c.startMs,c.endMs,c.text]));
 const blockKey = (block: ShadowingBlock) => block.cueIds[0] ?? "";
 
-export default function ShadowingEditor({ projectId, asset, cues, translations, editorialResult, onClose }: Props) {
+export default function ShadowingEditor({ projectId, asset, cues, translations, editorialResult, onClose, onSaved }: Props) {
   const video = useRef<HTMLVideoElement>(null);
   const [src, setSrc] = useState("");
   const [blocks, setBlocks] = useState<ShadowingBlock[]>(() => cues.map(c => ({ cueIds: [c.id], pauseDurationMs: DEFAULT_PAUSE_MS })));
