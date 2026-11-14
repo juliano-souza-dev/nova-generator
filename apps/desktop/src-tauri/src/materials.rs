@@ -125,41 +125,89 @@ fn generate_audio_batch(
     let stderr = String::from_utf8_lossy(&output.stderr);
     let mut responses = Vec::with_capacity(requests.len());
     let mut diagnostics = Vec::new();
+    let mut executor_error: Option<Value> = None;
 
-    for line in stdout.lines().map(str::trim).filter(|line| !line.is_empty()) {
+    for (line_number, line) in stdout.lines().map(str::trim).filter(|line| !line.is_empty()).enumerate() {
         match serde_json::from_str::<Value>(line) {
             Ok(response) => {
-                if response.get("status").and_then(Value::as_str) != Some("completed") {
-                    let detail = response.get("error").and_then(Value::as_str)
-                        .unwrap_or("Erro não especificado pelo executor de clonagem.");
-                    return Err(format!("Falha ao sintetizar com a voz '{voice_name}': {detail}"));
+                if response.get("status").and_then(Value::as_str) == Some("completed") {
+                    responses.push(response);
+                } else {
+                    executor_error = Some(response);
                 }
-                responses.push(response);
             }
-            Err(_) => diagnostics.push(line.to_owned()),
+            Err(error) => {
+                let preview: String = line.chars().take(1800).collect();
+                diagnostics.push(format!("stdout linha {}: {} (JSON: {})", line_number + 1, preview, error));
+            }
         }
     }
 
-    if !output.status.success() {
-        let detail = stderr.lines().rev().take(8).collect::<Vec<_>>()
-            .into_iter().rev().collect::<Vec<_>>().join("\n");
-        return Err(if detail.is_empty() {
-            format!("O executor da voz '{voice_name}' terminou com código {}.", output.status)
-        } else {
-            format!("O executor da voz '{voice_name}' falhou: {detail}")
-        });
+    let stderr_detail = stderr.lines().rev().take(16)
+        .collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
+    if let Some(response) = executor_error {
+        let stage = response.get("stage").and_then(Value::as_str).unwrap_or("não informada");
+        let operation = response.get("operation").and_then(Value::as_str).unwrap_or("não informada");
+        let card_id = response.get("id").and_then(Value::as_str).unwrap_or("não associado");
+        let error_type = response.get("error_type").and_then(Value::as_str).unwrap_or("Erro não classificado");
+        let error = response.get("error").and_then(Value::as_str).unwrap_or("O worker não informou a causa.");
+        let traceback = response.get("traceback").and_then(Value::as_str).unwrap_or("");
+        let mut detail = format!(
+            "Falha na síntese da voz '{voice_name}'. Etapa: {stage}. Operação: {operation}. Card: {card_id}.\nTipo: {error_type}.\nCausa: {error}"
+        );
+        if !traceback.trim().is_empty() {
+            detail.push_str("\n\nRastreamento Python:\n");
+            detail.push_str(traceback.trim());
+        }
+        if !stderr_detail.trim().is_empty() {
+            detail.push_str("\n\nSaída de diagnóstico (stderr):\n");
+            detail.push_str(&stderr_detail);
+        }
+        if !output.status.success() {
+            detail.push_str(&format!("\n\nCódigo de encerramento: {}", output.status));
+        }
+        return Err(detail);
     }
+
+    if !output.status.success() {
+        let stdout_detail = diagnostics.join("\n");
+        let mut detail = format!(
+            "O executor da voz '{voice_name}' encerrou com falha. Código de encerramento: {}.",
+            output.status
+        );
+        if !stdout_detail.is_empty() {
+            detail.push_str("\n\nSaída não reconhecida (stdout):\n");
+            detail.push_str(&stdout_detail);
+        }
+        if !stderr_detail.is_empty() {
+            detail.push_str("\n\nErro do processo (stderr):\n");
+            detail.push_str(&stderr_detail);
+        }
+        if stdout_detail.is_empty() && stderr_detail.is_empty() {
+            detail.push_str("\nO processo não forneceu stdout nem stderr.");
+        }
+        return Err(detail);
+    }
+
+    if !diagnostics.is_empty() && responses.len() != requests.len() {
+        let detail = diagnostics.join("\n");
+        return Err(format!(
+            "O executor da voz '{voice_name}' produziu uma saída que não pôde ser interpretada. Foram recebidas {} respostas válidas para {} solicitações.\n\nSaída original (stdout):\n{}{}",
+            responses.len(),
+            requests.len(),
+            detail,
+            if stderr_detail.is_empty() { String::new() } else { format!("\n\nDiagnóstico (stderr):\n{stderr_detail}") }
+        ));
+    }
+
     if responses.len() != requests.len() {
-        let stdout_detail = diagnostics.into_iter().take(3).collect::<Vec<_>>().join(" | ");
-        let stderr_detail = stderr.lines().rev().take(5).collect::<Vec<_>>()
-            .into_iter().rev().collect::<Vec<_>>().join("\n");
-        let detail = [stdout_detail, stderr_detail].into_iter()
-            .filter(|value| !value.is_empty()).collect::<Vec<_>>().join("\n");
-        return Err(if detail.is_empty() {
-            format!("O executor da voz '{voice_name}' retornou {} de {} áudios solicitados.", responses.len(), requests.len())
-        } else {
-            format!("O executor da voz '{voice_name}' retornou {} de {} áudios. Diagnóstico: {detail}", responses.len(), requests.len())
-        });
+        return Err(format!(
+            "O executor da voz '{voice_name}' concluiu sem retornar todas as respostas. Recebidas: {}. Solicitadas: {}. Código de encerramento: {}.{}",
+            responses.len(),
+            requests.len(),
+            output.status,
+            if stderr_detail.is_empty() { String::new() } else { format!("\n\nDiagnóstico (stderr):\n{stderr_detail}") }
+        ));
     }
 
     let mut results = Vec::with_capacity(responses.len());
