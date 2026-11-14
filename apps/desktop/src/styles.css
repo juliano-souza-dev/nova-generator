@@ -113,3 +113,17 @@
 .nova-spin{animation:nova-spin .8s linear infinite}
 @keyframes nova-spin{to{transform:rotate(360deg)}}
 @media(max-width:720px){.nova-task-center{top:10px;right:12px}.nova-task-trigger{height:34px}.nova-task-panel{top:42px}}
+
+
+/* Project workspace navigation: persistent, visible access to each production area */
+.project-module-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 18px;padding:7px;border:1px solid #332e3c;border-radius:11px;background:#141318}
+.project-module-tabs button{min-width:0;min-height:58px;display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid transparent;border-radius:8px;background:transparent;color:#aaa4b3;text-align:left;transition:background .16s,border-color .16s,color .16s}
+.project-module-tabs button>svg{flex:none;color:#9686b2}
+.project-module-tabs button>span{min-width:0;display:grid;gap:4px}
+.project-module-tabs button strong{font:600 12px 'Space Grotesk';color:inherit}
+.project-module-tabs button small{font-size:10px;line-height:1.35;color:#898391}
+.project-module-tabs button:hover{background:#211e27;color:#e9e0f5}
+.project-module-tabs button.active{border-color:#715b91;background:linear-gradient(110deg,#342943,#25202e);color:#eee6fa;box-shadow:inset 3px 0 #ad91ed}
+.project-module-tabs button.active>svg{color:#c7adf5}
+.project-module-tabs button.active small{color:#b5a8c8}
+@media(max-width:650px){.project-module-tabs{grid-template-columns:1fr}.project-module-tabs button{min-height:52px}}
