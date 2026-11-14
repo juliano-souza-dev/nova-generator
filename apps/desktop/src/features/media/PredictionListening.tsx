@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { Check, FileJson, FileText, PlayCircle, RefreshCw, RotateCcw, X } from "lucide-react";
+import { Check, FileJson, FileText, PlayCircle, RefreshCw, RotateCcw, Save, X } from "lucide-react";
 import "./PredictionListening.css";
 
 type Cue = {
@@ -59,6 +59,7 @@ type Review = {
   contract: string;
   approval: "draft";
   source_hash: string;
+  saved_at?: string | null;
   challenges: Challenge[];
   materials?: Materials;
 };
@@ -157,9 +158,29 @@ export default function PredictionListening({
   }, [projectId, assetId, assetName, sourceSignature]);
 
   async function persist(next: Review) {
-    const persisted = { ...next, materials: buildMaterials(next, assetName) };
+    const pending = { ...next, saved_at: null };
+    const persisted = { ...pending, materials: buildMaterials(pending, assetName) };
     await invoke("save_prediction_listening_result", { projectId, assetId, result: persisted });
     setReview(persisted);
+  }
+
+  async function saveForMaterials() {
+    if (!review || busy || loading) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const approved = review.challenges.filter(item => item.status === "approved");
+      const next = { ...review, saved_at: new Date().toISOString() };
+      const persisted = { ...next, materials: buildMaterials(next, assetName) };
+      await invoke("save_prediction_listening_result", { projectId, assetId, result: persisted });
+      setReview(persisted);
+      setNotice(approved.length
+        ? `Prediction Listening salvo. ${approved.length} desafio(s) aprovado(s) liberados na área Materiais.`
+        : "Prediction Listening salvo. A área Materiais foi liberada; aprove desafios para incluí-los nos cards Anki.");
+    } catch (e) {
+      setError("Não foi possível salvar o Prediction Listening: " + String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function downloadInput() {
@@ -444,6 +465,9 @@ export default function PredictionListening({
         <button className="secondary-button" onClick={() => fileInput.current?.click()} disabled={busy || loading || !sourceHash}>
           <FileJson size={15}/> Importar JSON
         </button>
+        <button className="primary-button" onClick={() => void saveForMaterials()} disabled={!review || busy || loading || Boolean(review?.saved_at)} title={review?.saved_at ? "Este resultado já foi salvo para Materiais" : "Salvar explicitamente e liberar a área Materiais"}>
+          <Save size={15}/>{review?.saved_at ? "Salvo para Materiais" : "Salvar e liberar Materiais"}
+        </button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={event => void importResult(event.target.files?.[0])}/>
       </div>
       {error && <div className="prediction-listening-feedback error">{error}</div>}
@@ -453,6 +477,7 @@ export default function PredictionListening({
         <span><b>{counts.approved}</b> aprovados</span>
         <span><b>{counts.rejected}</b> rejeitados</span>
         {sourceHash && <small>HASH {sourceHash}</small>}
+        {review?.saved_at && <small className="prediction-materials-saved">SALVO PARA MATERIAIS</small>}
       </div>
       {demoState !== "idle" && <section className="prediction-demo-panel" aria-live="polite">
         <div className="prediction-demo-topline">
