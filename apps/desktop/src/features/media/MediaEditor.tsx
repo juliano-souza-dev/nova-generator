@@ -5,6 +5,7 @@ import { ArrowLeft, AudioLines, Captions, Check, Clock3, Download, Film, Languag
 import { runTrackedTask } from "../tasks/TaskCenter";
 import { downloadExternalTranslationPackage, type ExternalTranslationPackage } from "./translationPackage";
 import ShadowingEditor from "./ShadowingEditor";
+import PredictionListening from "./PredictionListening";
 
 type Cue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; wordAlignment?: string | null; wordAlignmentHash?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
 type AlignmentProgress = { projectId: string; assetId: string; completed: number; total: number; message: string };
@@ -90,6 +91,9 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [shadowingOpen, setShadowingOpen] = useState(false);
+  const [predictionListeningOpen, setPredictionListeningOpen] = useState(false);
+  const [shadowingComplete, setShadowingComplete] = useState(false);
+  const [shadowingSelectedCueIds, setShadowingSelectedCueIds] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
   const [transcriptionMode, setTranscriptionMode] = useState<"auto" | "cloud" | "local">("auto");
   const [transcriptionLanguage, setTranscriptionLanguage] = useState("");
@@ -102,6 +106,18 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
   const [installingAsr, setInstallingAsr] = useState(false);
   const [transcriptionInfo, setTranscriptionInfo] = useState("");
   const activeCue = useMemo(() => cues.find(c => current >= c.startMs && current <= c.endMs), [cues, current]);
+  const shadowingSourceSignature = useMemo(() => JSON.stringify([
+    cues.map(c => [c.id,c.startMs,c.endMs,c.text]),
+    translations.map(t => [t.id,t.text]),
+    editorialResult?.suggestions?.map((s: any) => [s.cue_id,s.approved_en,s.approved_pt]) ?? []
+  ]), [cues, translations, editorialResult]);
+  const predictionListeningReady = shadowingComplete
+    && shadowingSelectedCueIds.length > 0
+    && shadowingSelectedCueIds.every(id => {
+      const cue = cues.find(item => item.id === id);
+      return cue?.wordAlignment === "whisperx" && Boolean(cue.words?.length);
+    });
+
 
   useEffect(() => {
     let alive = true;
@@ -133,6 +149,30 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
     })();
     return () => { alive = false; video.current?.pause(); };
   }, [projectId, asset.id]);
+
+
+  useEffect(() => {
+    if (loading || !cues.length) {
+      setShadowingComplete(false);
+      setShadowingSelectedCueIds([]);
+      return;
+    }
+    let alive = true;
+    invoke<{ selectedCueIds: string[]; sourceSignature: string } | null>("load_shadowing_selection", {
+      projectId, assetId: asset.id, cues, sourceSignature: shadowingSourceSignature
+    }).then(plan => {
+      if (!alive) return;
+      const fresh = Boolean(plan && plan.sourceSignature === shadowingSourceSignature && plan.selectedCueIds.length > 0);
+      setShadowingComplete(fresh);
+      setShadowingSelectedCueIds(fresh ? plan!.selectedCueIds.filter(id => cues.some(cue => cue.id === id)) : []);
+    }).catch(() => {
+      if (alive) {
+        setShadowingComplete(false);
+        setShadowingSelectedCueIds([]);
+      }
+    });
+    return () => { alive = false; };
+  }, [loading, projectId, asset.id, cues, shadowingSourceSignature]);
 
   useEffect(() => {
     let alive = true;
@@ -832,6 +872,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
           <button className="secondary-button" onClick={() => setShadowingOpen(true)} disabled={!saved || cues.length === 0} title={!saved ? "Salve a Editorial para liberar o Shadowing" : "Preparar blocos para Shadowing"}><AudioLines size={15}/> Shadowing</button>
+          <button className="secondary-button" onClick={() => setPredictionListeningOpen(true)} disabled={!predictionListeningReady || dirty || translationDirty || loading} title={!shadowingComplete ? "Conclua e salve o Shadowing para liberar este módulo" : !predictionListeningReady ? "Alinhe com WhisperX todos os blocos selecionados no Shadowing" : "Gerar desafios a partir dos blocos selecionados no Shadowing"}><Languages size={15}/> Prediction Listening</button>
           <button className="primary-button" onClick={() => void save()} disabled={saving || loading}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button>
           <button className="icon-button" title="Fechar editor" onClick={() => { if (!aligning && (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?"))) onClose(); }} disabled={aligning}><X size={18}/></button>
         </div>
@@ -1004,5 +1045,5 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         </aside>
       </div>
     </section>
-  </div>{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onClose={() => setShadowingOpen(false)}/>}</>;
+  </div>{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onSaved={ids => { setShadowingComplete(true); setShadowingSelectedCueIds(ids); }} onClose={() => setShadowingOpen(false)}/>}{predictionListeningOpen && predictionListeningReady && <PredictionListening projectId={projectId} assetId={asset.id} assetName={asset.name} cues={cues} selectedCueIds={shadowingSelectedCueIds} sourceSignature={shadowingSourceSignature} onClose={() => setPredictionListeningOpen(false)} onPreview={timeMs => { setPredictionListeningOpen(false); video.current?.pause(); seek(timeMs); }}/>}</>;
 }

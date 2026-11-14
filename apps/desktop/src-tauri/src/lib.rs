@@ -4,6 +4,7 @@ mod shared_runtime;
 mod transcription;
 mod translation;
 mod translation_contract;
+mod prediction_listening;
 mod process;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
@@ -176,7 +177,9 @@ pub fn run() {
             transcription::transcribe_media, transcription::check_local_asr, transcription::install_local_asr,
             translation::translate_project_subtitles, translation::load_project_translations, translation::save_project_translations,
             translation::load_project_editorial_result, translation::save_project_editorial_result, translation::clear_project_editorial_result, translation::approve_project_editorial_result,
-            translation_contract::prepare_external_translation_package
+            translation_contract::prepare_external_translation_package,
+            prediction_listening::prepare_prediction_listening_package, prediction_listening::load_prediction_listening_result,
+            prediction_listening::save_prediction_listening_result, prediction_listening::save_prediction_listening_export
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Nova Generator");

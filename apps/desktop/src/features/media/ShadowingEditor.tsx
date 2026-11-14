@@ -7,7 +7,7 @@ type Cue = { id: string; startMs: number; endMs: number; text: string };
 type Translation = { id: string; text: string };
 type Asset = { id: string; name: string };
 type ShadowingBlock = { cueIds: string[]; pauseDurationMs: number };
-type Props = { projectId: string; asset: Asset; cues: Cue[]; translations: Translation[]; editorialResult: Record<string, any> | null; onClose: () => void };
+type Props = { projectId: string; asset: Asset; cues: Cue[]; translations: Translation[]; editorialResult: Record<string, any> | null; onClose: () => void; onSaved?: (selectedCueIds: string[], sourceSignature: string) => void };
 type StoredPlan = { selectedCueIds: string[]; blocks?: ShadowingBlock[]; sourceSnapshot: Cue[]; sourceSignature?: string; updatedAt: number };
 type DemoPhase = "idle" | "playing" | "pause" | "complete";
 
@@ -19,7 +19,7 @@ const clock = (ms: number) => {
 const sameSource = (a: Cue[], b: Cue[]) => JSON.stringify(a.map(c => [c.id,c.startMs,c.endMs,c.text])) === JSON.stringify(b.map(c => [c.id,c.startMs,c.endMs,c.text]));
 const blockKey = (block: ShadowingBlock) => block.cueIds[0] ?? "";
 
-export default function ShadowingEditor({ projectId, asset, cues, translations, editorialResult, onClose }: Props) {
+export default function ShadowingEditor({ projectId, asset, cues, translations, editorialResult, onClose, onSaved }: Props) {
   const video = useRef<HTMLVideoElement>(null);
   const [src, setSrc] = useState("");
   const [blocks, setBlocks] = useState<ShadowingBlock[]>(() => cues.map(c => ({ cueIds: [c.id], pauseDurationMs: DEFAULT_PAUSE_MS })));
@@ -250,6 +250,7 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
     try {
       await invoke("save_shadowing_selection", { projectId, assetId: asset.id, cues, selectedCueIds: selectedIds, blocks, sourceSignature });
       setSaved(true); setStale(false);
+      onSaved?.(selectedIds, sourceSignature);
     } catch (e) { setError(String(e)); }
     finally { setSaving(false); }
   }

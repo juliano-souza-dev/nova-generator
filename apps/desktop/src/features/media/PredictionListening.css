@@ -1,0 +1,29 @@
+.prediction-listening-backdrop{position:fixed;inset:0;z-index:1200;background:rgba(7,10,16,.78);display:grid;place-items:center;padding:22px}
+.prediction-listening-modal{width:min(1120px,96vw);height:min(900px,94vh);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border-subtle,#343a46);border-radius:18px;background:var(--panel,#151a23);color:var(--text,#f4f6fa);box-shadow:0 28px 90px rgba(0,0,0,.45)}
+.prediction-listening-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px;border-bottom:1px solid var(--border-subtle,#343a46)}
+.prediction-listening-header h2{margin:5px 0;font-size:22px}.prediction-listening-header p{margin:0;color:var(--text-muted,#9ba5b5);font-size:12px}
+.prediction-listening-toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:14px 24px;border-bottom:1px solid var(--border-subtle,#343a46)}
+.prediction-listening-prerequisite{display:flex;align-items:center;gap:6px;color:#8fd5ad;font-size:12px;font-weight:700;margin-right:auto}
+.prediction-listening-feedback{margin:12px 24px 0;padding:10px 12px;border:1px solid var(--border-subtle,#343a46);border-radius:9px;font-size:12px;color:var(--text-muted,#b8c0cc)}
+.prediction-listening-feedback.error{border-color:rgba(239,92,92,.45);color:#ffaaaa}
+.prediction-listening-summary{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:12px 24px;color:var(--text-muted,#9ba5b5);font-size:11px;border-bottom:1px solid var(--border-subtle,#343a46)}
+.prediction-listening-summary b{color:var(--text,#f4f6fa);font-size:14px;margin-right:4px}.prediction-listening-summary small{margin-left:auto;font-family:monospace;font-size:10px}
+.prediction-listening-content{padding:18px 24px 26px;overflow:auto;display:grid;align-content:start;gap:14px}
+.prediction-listening-empty{min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text-muted,#9ba5b5);text-align:center;font-size:12px}
+.prediction-listening-empty strong{color:var(--text,#f4f6fa);font-size:15px}
+.prediction-challenge{padding:17px;border:1px solid var(--border-subtle,#343a46);border-radius:13px;background:var(--panel-raised,rgba(255,255,255,.025))}
+.prediction-challenge.approved{border-color:rgba(91,184,131,.45)}.prediction-challenge.rejected{opacity:.72}
+.prediction-challenge-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.prediction-challenge-heading>div{display:flex;align-items:center;gap:9px;font-size:12px}
+.prediction-challenge-type{padding:4px 7px;border-radius:6px;background:rgba(127,146,180,.12);font-size:9px;letter-spacing:.06em}
+.prediction-challenge-status{font-size:10px;color:var(--text-muted,#9ba5b5)}.prediction-challenge-status.approved{color:#8fd5ad}.prediction-challenge-status.rejected{color:#e7a0a0}
+.prediction-challenge h3{margin:13px 0;font-size:16px}
+.prediction-challenge-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.prediction-challenge-choices>div{display:flex;align-items:center;gap:9px;padding:9px 10px;border:1px solid var(--border-subtle,#343a46);border-radius:8px;font-size:12px}
+.prediction-challenge-choices>div.correct{border-color:rgba(91,184,131,.55);background:rgba(91,184,131,.07)}
+.prediction-challenge-choices>div>span{width:22px;height:22px;display:grid;place-items:center;border-radius:6px;background:rgba(127,146,180,.12);font-size:10px;font-weight:700}
+.prediction-challenge-choices p{margin:0;flex:1}.prediction-challenge-choices small{font-size:9px;color:#8fd5ad}
+.prediction-challenge-answer,.prediction-challenge-explanation,.prediction-challenge-rationale{margin-top:10px;font-size:11px;line-height:1.5;color:var(--text-muted,#b5bfcd)}
+.prediction-challenge-answer b,.prediction-challenge-explanation b,.prediction-challenge-rationale b{color:var(--text,#f4f6fa)}
+.prediction-challenge footer{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-subtle,#343a46)}
+.prediction-challenge footer>span{margin-right:auto;color:var(--text-muted,#9ba5b5);font-size:10px;font-variant-numeric:tabular-nums}
+@media(max-width:700px){.prediction-listening-backdrop{padding:6px}.prediction-listening-modal{width:100%;height:98vh;border-radius:12px}.prediction-listening-header,.prediction-listening-toolbar,.prediction-listening-summary,.prediction-listening-content{padding-left:13px;padding-right:13px}.prediction-challenge-choices{grid-template-columns:1fr}.prediction-challenge footer>span{width:100%}.prediction-listening-summary small{margin-left:0}}
