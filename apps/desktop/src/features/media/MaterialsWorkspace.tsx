@@ -357,9 +357,9 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     setAudioBusy(pending.map(card => card.id)); setError(""); setNotice("");
     try {
       const result = await runTrackedTask("materials", "Gerar áudios dos cards aprovados", () => invoke<AudioResult[]>("generate_material_audio", {
-        projectId, assetId,
+        projectId, assetId, voiceId: selectedVoiceId,
         requests: pending.map(card => ({
-          cardId: card.id, text: card.audioText.trim() || card.focus.trim(), language: "English", speaker: "Aiden"
+          cardId: card.id, text: card.audioText.trim() || card.focus.trim(), language: "English"
         }))
       }));
       const byId = new Map(result.map(item => [item.cardId, item]));
