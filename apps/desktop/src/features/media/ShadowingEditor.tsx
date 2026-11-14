@@ -52,7 +52,11 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
         if (plan) {
           const fresh = sameSource(plan.sourceSnapshot ?? [], cues) && (!plan.sourceSignature || plan.sourceSignature === sourceSignature);
           setStale(!fresh);
-          if (fresh) setSelectedIds(plan.selectedCueIds.filter(id => cues.some(c => c.id === id)));
+          if (fresh) {
+            const restored = plan.selectedCueIds.filter(id => cues.some(c => c.id === id));
+            setSelectedIds(restored);
+            if (restored.length) setActiveId(restored[0]);
+          }
         }
       } catch (e) { if (alive) setError(String(e)); }
       finally { if (alive) setLoaded(true); }
@@ -70,7 +74,14 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
     seek(cue.startMs);
   }
   function toggle(id: string) {
-    setSelectedIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+    if (selectedIds.includes(id)) {
+      const next = selectedIds.filter(x => x !== id);
+      setSelectedIds(next);
+      if (activeId === id) setActiveId(next[0] ?? "");
+    } else {
+      setSelectedIds([...selectedIds, id]);
+      if (!activeId) setActiveId(id);
+    }
     setSaved(false);
   }
   async function save() {
