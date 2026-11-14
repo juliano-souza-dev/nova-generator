@@ -48,6 +48,7 @@ export default function App() {
     try {
       const items = await invoke<Project[]>("list_projects");
       setProjects(items);
+      setActiveProject(current => current ? items.find(item => item.id === current.id) ?? current : null);
     } catch (e) {
       setError(String(e));
     }
@@ -119,7 +120,7 @@ export default function App() {
           <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <div className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></div>; })}</div>
           <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {stageLabel(activeProject.stage)}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
         </section>
-        <MediaWorkspace projectId={activeProject.id} />
+        <MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />
       </main>
     </div>;
   }
