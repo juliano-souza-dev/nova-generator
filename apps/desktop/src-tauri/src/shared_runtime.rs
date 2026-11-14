@@ -1,6 +1,6 @@
 use serde::Serialize;
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::{fs, path::{Path, PathBuf}};
 use tauri::{AppHandle, Manager};
 
 const APPLICATION_ID: &str = "nova-generator";
@@ -25,6 +25,8 @@ pub struct SharedRuntimeStatus {
     pub forced_alignment_python_path: Option<String>,
     pub forced_alignment_runner_path: Option<String>,
     pub forced_alignment_ready: bool,
+    pub qwen3_tts_path: Option<String>,
+    pub qwen3_tts_ready: bool,
     pub providers: Vec<SharedProviderSummary>,
 }
 
@@ -137,6 +139,17 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
     let alignment_ready = alignment_python.as_ref().is_some_and(|python| python.is_file())
         && alignment_runner.as_ref().is_some_and(|runner| runner.is_file());
 
+    let qwen_runtime = config.pointer("/shared/resources/qwen3-tts")
+        .or_else(|| config.pointer("/shared/resolvedDependencies/qwen3-tts"))
+        .and_then(Value::as_str).map(PathBuf::from);
+    let qwen3_tts_ready = qwen_runtime.as_ref().is_some_and(|runtime| {
+        let python = if cfg!(windows) { runtime.join("venv").join("Scripts").join("python.exe") } else { runtime.join("venv").join("bin").join("python") };
+        let runner = runtime.join("runner.py");
+        let manifest = fs::read(runtime.join("runtime.json")).ok().and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+        let model = manifest.as_ref().and_then(|value| value.get("model")).and_then(Value::as_str).map(PathBuf::from);
+        python.is_file() && runner.is_file() && model.as_ref().is_some_and(|path| path.join("config.json").is_file())
+    });
+
     let providers = shared_runtime_manager::api::get_authorized_providers_from_config(&path, APPLICATION_ID)
         .map_err(|error| format!("Não foi possível ler os provedores autorizados pelo Shared Runtime: {error}"))?
         .into_iter()
@@ -157,10 +170,34 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
         forced_alignment_python_path: alignment_python.map(|value| value.to_string_lossy().into_owned()),
         forced_alignment_runner_path: alignment_runner.map(|value| value.to_string_lossy().into_owned()),
         forced_alignment_ready: alignment_ready,
+        qwen3_tts_path: qwen_runtime.map(|value| value.to_string_lossy().into_owned()),
+        qwen3_tts_ready,
         providers,
     })
 }
 
+
+/// Resolve the isolated Qwen3-TTS runtime provisioned and owned by Shared Runtime Manager.
+pub(crate) fn qwen3_tts_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+    let (_, config) = load_config(app)?;
+    let raw = config.pointer("/shared/resources/qwen3-tts")
+        .or_else(|| config.pointer("/shared/resolvedDependencies/qwen3-tts"))
+        .and_then(Value::as_str)
+        .ok_or("O Qwen3-TTS não está instalado ou vinculado no Shared Runtime Manager. Sincronize o Nova Generator e instale a dependência 'qwen3-tts'.")?;
+    let runtime = PathBuf::from(raw);
+    if !runtime.is_absolute() { return Err("O caminho do Qwen3-TTS no Shared Runtime precisa ser absoluto.".into()); }
+    let python = if cfg!(windows) { runtime.join("venv").join("Scripts").join("python.exe") } else { runtime.join("venv").join("bin").join("python") };
+    let runner = runtime.join("runner.py");
+    let manifest_path = runtime.join("runtime.json");
+    let manifest: Value = serde_json::from_slice(&fs::read(&manifest_path).map_err(|e| format!("Manifesto Qwen3-TTS indisponível: {e}"))?)
+        .map_err(|e| format!("Manifesto Qwen3-TTS inválido: {e}"))?;
+    let model = manifest.get("model").and_then(Value::as_str).map(PathBuf::from)
+        .ok_or("O manifesto Qwen3-TTS não informa o caminho do modelo.")?;
+    if !python.is_file() || !runner.is_file() || !model.join("config.json").is_file() {
+        return Err(format!("O runtime Qwen3-TTS está incompleto em {}. Reinstale ou sincronize a dependência pelo Shared Runtime Manager.", runtime.display()));
+    }
+    Ok((python, runner, model))
+}
 
 /// Resolve the isolated WhisperX runtime provisioned and owned by Shared Runtime Manager.
 pub(crate) fn forced_alignment_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
