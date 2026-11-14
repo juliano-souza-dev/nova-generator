@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Activity, CheckCircle2, ChevronDown, CircleAlert, Clock3, LoaderCircle, Terminal, X } from "lucide-react";
 
-type TaskKind = "download" | "import" | "trim" | "transcription" | "translation" | "export" | "installation";
+type TaskKind = "download" | "import" | "trim" | "transcription" | "translation" | "export" | "installation" | "materials";
 type TaskStatus = "running" | "completed" | "failed";
 type TaskEvent = { type:"started"|"completed"|"failed"; id:string; kind:TaskKind; title:string; message:string; timestamp:number };
 type TaskRecord = { id:string; kind:TaskKind; title:string; status:TaskStatus; progress:number|null; message:string; logs:string[]; updatedAt:number };
@@ -10,7 +10,7 @@ type ProgressPayload = { projectId:string; status?:string; stage?:string; percen
 
 const EVENT = "nova:task-center";
 const clock = () => new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-const labels:Record<TaskKind,string> = {download:"Download",import:"Importação",trim:"Recorte",transcription:"Transcrição",translation:"Tradução",export:"Exportação",installation:"Instalação"};
+const labels:Record<TaskKind,string> = {download:"Download",import:"Importação",trim:"Recorte",transcription:"Transcrição",translation:"Tradução",export:"Exportação",installation:"Instalação",materials:"Materiais"};
 
 export function publishTaskEvent(event:TaskEvent) {
   window.dispatchEvent(new CustomEvent<TaskEvent>(EVENT,{detail:event}));
@@ -46,7 +46,7 @@ export default function TaskCenter() {
     const index=current.findIndex(t=>t.kind===kind&&t.status==="running");
     const now=Date.now();
     if(index<0){
-     const title:Record<TaskKind,string>={download:"Download de mídia",import:"Importação de mídia",trim:"Recorte de vídeo",transcription:"Transcrição",translation:"Tradução",export:"Exportação",installation:"Instalação de recurso"};
+     const title:Record<TaskKind,string>={download:"Download de mídia",import:"Importação de mídia",trim:"Recorte de vídeo",transcription:"Transcrição",translation:"Tradução",export:"Exportação",installation:"Instalação de recurso",materials:"Processamento de Materiais"};
      const created:TaskRecord={id:crypto.randomUUID(),kind,title:title[kind],status:failed?"failed":terminal?"completed":"running",progress:progress==null?(terminal?100:null):Math.max(0,Math.min(100,progress)),message,logs:[clock()+"  "+message],updatedAt:now};
      return [created,...current].slice(0,15);
     }
@@ -70,7 +70,7 @@ export default function TaskCenter() {
   </button>
   {open&&<section className="nova-task-panel" role="dialog" aria-label="Central de processamento">
    <header className="nova-task-header"><div><span className="nova-task-kicker">NOVA GENERATOR</span><h3>Central de processamento</h3><small>{activeCount?activeCount+" tarefa(s) em andamento":"Acompanhe suas tarefas recentes"}</small></div><button className="nova-task-close" onClick={()=>setOpen(false)} title="Fechar"><X size={17}/></button></header>
-   <div className="nova-task-list">{tasks.length===0?<div className="nova-task-empty"><Clock3 size={24}/><b>Nenhuma tarefa recente</b><span>Downloads, transcrições, traduções e exportações aparecerão aqui.</span></div>:
+   <div className="nova-task-list">{tasks.length===0?<div className="nova-task-empty"><Clock3 size={24}/><b>Nenhuma tarefa recente</b><span>Downloads, transcrições, traduções, Materiais e exportações aparecerão aqui.</span></div>:
     tasks.map(task=><article className={"nova-task-card task-"+task.status} key={task.id}>
      <div className="nova-task-card-head"><span className="nova-task-icon">{task.status==="running"?<LoaderCircle className="nova-spin" size={15}/>:task.status==="completed"?<CheckCircle2 size={15}/>:<CircleAlert size={15}/>}</span><div><b>{task.title}</b><small>{labels[task.kind]} · {task.status==="running"?"Em andamento":task.status==="completed"?"Concluída":"Falhou"}</small></div>{task.progress!=null&&<strong>{Math.round(task.progress)}%</strong>}</div>
      <div className="nova-task-track"><i className={task.progress==null&&task.status==="running"?"indeterminate":""} style={{width:task.progress==null?(task.status==="completed"?"100%":"28%"):task.progress+"%"}}/></div>
