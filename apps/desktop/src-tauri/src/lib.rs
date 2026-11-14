@@ -82,7 +82,7 @@ fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String
     let timestamp = now();
     let project = Project {
         id: new_id(), name: name.to_string(), status: "in_progress".into(),
-        stage: "Planejamento".into(), created_at: timestamp.clone(), updated_at: timestamp,
+        stage: "Editorial".into(), created_at: timestamp.clone(), updated_at: timestamp,
     };
     let mut projects = read_projects(&app)?;
     projects.push(project.clone());
@@ -97,7 +97,7 @@ fn duplicate_project(app: tauri::AppHandle, id: String) -> Result<Project, Strin
     let timestamp = now();
     let copy = Project {
         id: new_id(), name: format!("{} (cópia)", original.name),
-        status: "in_progress".into(), stage: "Planejamento".into(),
+        status: "in_progress".into(), stage: "Editorial".into(),
         created_at: timestamp.clone(), updated_at: timestamp,
     };
     projects.push(copy.clone());
