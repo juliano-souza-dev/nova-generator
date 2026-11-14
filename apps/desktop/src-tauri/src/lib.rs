@@ -135,8 +135,17 @@ fn update_project_stage(app: tauri::AppHandle, id: String, stage: String) -> Res
     }
     let mut projects = read_projects(&app)?;
     let project = projects.iter_mut().find(|p| p.id == id).ok_or("Projeto não encontrado.")?;
-    project.stage = stage;
-    project.updated_at = now();
+    let stage_rank = |value: &str| match value {
+        "Editorial" => 0,
+        "Shadowing" => 1,
+        "Materiais" => 2,
+        _ => -1,
+    };
+    // Etapas concluídas não devem regredir quando uma operação anterior for salva novamente.
+    if stage_rank(&stage) > stage_rank(&project.stage) {
+        project.stage = stage;
+        project.updated_at = now();
+    }
     let updated = project.clone();
     write_projects(&app, &projects)?;
     Ok(updated)
