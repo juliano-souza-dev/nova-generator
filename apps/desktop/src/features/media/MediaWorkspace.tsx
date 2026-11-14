@@ -14,7 +14,7 @@ type Progress = { projectId:string; status:string; percent:number; message:strin
 const time = (ms?:number|null) => ms == null ? "--:--" : String(Math.floor(ms/60000)).padStart(2,"0") + ":" + String(Math.floor(ms/1000%60)).padStart(2,"0");
 const size = (n:number) => n < 1048576 ? Math.round(n/1024) + " KB" : (n/1048576).toFixed(1) + " MB";
 
-export default function MediaWorkspace({projectId}:{projectId:string}) {
+export default function MediaWorkspace({projectId,onProjectUpdated}:{projectId:string;onProjectUpdated?:()=>void}) {
  const [assets,setAssets]=useState<Asset[]>([]),[url,setUrl]=useState(""),[info,setInfo]=useState<Inspection|null>(null),[cache,setCache]=useState<Cache|null>(null);
  const [quality,setQuality]=useState(1080),[start,setStart]=useState(0),[end,setEnd]=useState(0),[busy,setBusy]=useState(false);
  const [error,setError]=useState(""),[notice,setNotice]=useState(""),[progress,setProgress]=useState<Progress|null>(null);
@@ -62,7 +62,7 @@ export default function MediaWorkspace({projectId}:{projectId:string}) {
   </div>
   <div className="media-library-heading"><div><span className="eyebrow">ARQUIVOS VINCULADOS</span><h3>Conteúdo do projeto <small>{assets.length}</small></h3></div></div>
   {!assets.length?<div className="media-empty"><div><Film size={23}/></div><strong>Nenhuma mídia neste projeto</strong><span>Importe um arquivo local ou consulte um vídeo do YouTube.</span></div>:<div className="media-asset-list">{assets.map(a=><article className="media-asset" key={a.id}><span className="media-asset-icon">{a.kind==="video"?<Film size={17}/>:a.kind==="audio"?<Music2 size={17}/>:<FileImage size={17}/>}</span><div className="media-asset-info"><strong>{a.name}</strong><small>{a.kind.toUpperCase()} · {size(a.sizeBytes)} · {a.source==="youtube"?"YouTube":"Arquivo local"}</small>{a.sourceVideoId&&<small>Trecho {time(a.sourceStartMs)}–{time(a.sourceEndMs)} · ID {a.sourceVideoId}</small>}</div><span className="media-asset-state"><CheckCircle2 size={14}/> Importada</span>{a.kind==="video"&&<button className="media-asset-open" onClick={()=>setEditingAsset(a)}><Play size={14}/> Abrir editor</button>}</article>)}</div>}
-  {editingAsset&&<MediaEditor projectId={projectId} asset={editingAsset} onClose={()=>setEditingAsset(null)}/>}
+  {editingAsset&&<MediaEditor projectId={projectId} asset={editingAsset} onClose={()=>{setEditingAsset(null);onProjectUpdated?.();}}/>}
   {trimOpen&&cache&&<div className="trim-modal-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)closeTrim();}}>
    <section className="trim-modal" role="dialog" aria-modal="true" aria-labelledby="trim-modal-title">
     <header className="trim-modal-header"><div><span className="eyebrow">EDIÇÃO DO VÍDEO ORIGINAL</span><h2 id="trim-modal-title">Escolha o trecho</h2><p>{cache.title}</p></div><button className="icon-button" title="Fechar recorte" onClick={closeTrim}><X size={18}/></button></header>
