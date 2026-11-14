@@ -390,7 +390,7 @@ export default function PredictionListening({
     setDemoIndex(nextIndex);
     if (nextIndex >= approvedChallenges.length) {
       setDemoState("complete");
-      onDemoPause();
+      onDemoResume(challenge.resumeAtMs);
       return;
     }
     setDemoState("playing");
@@ -429,8 +429,8 @@ export default function PredictionListening({
   }, [demoState, demoIndex, approvedChallenges]);
 
   useEffect(() => () => {
-    if (demoState !== "idle") demoCallbacks.current.onDemoPause();
-  }, [demoState]);
+    demoCallbacks.current.onDemoPause();
+  }, []);
 
   return <div className={"prediction-listening-backdrop" + (demoState !== "idle" ? " demo-active" : "")}>
     <section className="prediction-listening-modal" role="dialog" aria-modal="true" aria-label="Prediction Listening">
