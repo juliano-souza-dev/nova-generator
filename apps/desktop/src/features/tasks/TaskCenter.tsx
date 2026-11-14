@@ -75,7 +75,7 @@ export default function TaskCenter() {
      <div className="nova-task-card-head"><span className="nova-task-icon">{task.status==="running"?<LoaderCircle className="nova-spin" size={15}/>:task.status==="completed"?<CheckCircle2 size={15}/>:<CircleAlert size={15}/>}</span><div><b>{task.title}</b><small>{labels[task.kind]} · {task.status==="running"?"Em andamento":task.status==="completed"?"Concluída":"Falhou"}</small></div>{task.progress!=null&&<strong>{Math.round(task.progress)}%</strong>}</div>
      <div className="nova-task-track"><i className={task.progress==null&&task.status==="running"?"indeterminate":""} style={{width:task.progress==null?(task.status==="completed"?"100%":"28%"):task.progress+"%"}}/></div>
      <p className="nova-task-message">{task.message}</p>
-     <details className="nova-task-logs" open={task.status==="running"}><summary><Terminal size={13}/> Logs da tarefa <span>{task.logs.length}</span><ChevronDown className="nova-task-chevron" size={13}/></summary><div>{task.logs.map((line,i)=><p key={task.id+"-"+i}>{line}</p>)}</div></details>
+     <details className="nova-task-logs" open={task.status!=="completed"}><summary><Terminal size={13}/> Detalhes e diagnóstico <span>{task.logs.length}</span><ChevronDown className="nova-task-chevron" size={13}/></summary><div>{task.logs.map((line,i)=><p key={task.id+"-"+i}>{line}</p>)}</div></details>
     </article>)}
    </div>
    <footer className="nova-task-footer"><button onClick={clear} disabled={tasks.every(t=>t.status==="running")}>Limpar concluídas</button><span>As tarefas continuam enquanto você trabalha.</span></footer>
