@@ -598,14 +598,14 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
           const positions = new Map<number, number>(expectedWords.map((word, index) => [word.number, index] as const));
           const used = new Set<number>();
           const semanticUnits = externalUnits.map((unit: any, unitIndex: number) => {
-            const numbers = Array.isArray(unit.word_ids) ? unit.word_ids.map(Number) : [];
+            const numbers: number[] = Array.isArray(unit.word_ids) ? unit.word_ids.map(Number) : [];
             const groupId = String(unit.id ?? `G${unitIndex + 1}`).trim();
             const pt = String(unit.pt ?? "").trim();
             const en = String(unit.en ?? "").trim();
             if (!groupId || numbers.length < 2 || !pt || !en) {
               throw new Error(`Há um agrupamento semântico incompleto na legenda ${cueNumber}.`);
             }
-            const indexes = numbers.map(number => positions.get(number));
+            const indexes = numbers.map((number: number) => positions.get(number));
             if (indexes.some(index => index === undefined)) {
               throw new Error(`Um agrupamento semântico da legenda ${cueNumber} referencia palavra inexistente ou de outra legenda.`);
             }
@@ -618,12 +618,12 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
               if (used.has(number)) throw new Error(`A palavra ${number} pertence a mais de um agrupamento semântico.`);
               used.add(number);
             }
-            const selectedWords = numbers.map(number => expectedWords[positions.get(number)!]);
-            const expectedExpression = selectedWords.map((word, index) => (index === 0 ? word.leading : (word.leading || " ")) + word.surface).join("").trim();
+            const selectedWords: (typeof expectedWords)[number][] = numbers.map((number: number) => expectedWords[positions.get(number)!]);
+            const expectedExpression = selectedWords.map((word: (typeof expectedWords)[number], index: number) => (index === 0 ? word.leading : (word.leading || " ")) + word.surface).join("").trim();
             if (en !== expectedExpression) {
               throw new Error(`A expressão EN do grupo "${en}" não corresponde às palavras numeradas do TXT. Esperado: "${expectedExpression}".`);
             }
-            const ids = selectedWords.map(word => word.word_id);
+            const ids = selectedWords.map((word: (typeof expectedWords)[number]) => word.word_id);
             const first = wordTranslations[positions.get(numbers[0])!];
             first.pt_original = first.pt;
             first.pt = pt;
