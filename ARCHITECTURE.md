@@ -61,9 +61,12 @@ A tradução contextual e as predições editoriais usam o contrato versionado 1
 - Entrada: `nova-generator-editorial-input/1.3`.
 - Saída: `nova-generator-editorial-suggestions/1.3`.
 - Predições selecionáveis: `word_translations` e `semantic_units`. Unidades semânticas dependem da presença de traduções por palavra.
-- Groq e IA externa recebem a mesma entrada, regras editoriais e esquema de saída. O pacote externo contém `CONTRACT.md`, `README.md`, `input.json` e `output-schema.json`.
+- A tradução via Groq mantém o contrato editorial interno 1.3. Para IA externa, o Generator exporta um único TXT enumerado (`entrada-editorial.txt`) e espera um JSON no contrato `nova-generator-external-editorial-output/1.0`.
+- O TXT expõe números temporários de cues e palavras, texto EN, campos PT a preencher e até duas cues anteriores/posteriores como contexto. Não expõe UUIDs internos nem timestamps.
+- O JSON externo devolve a tradução integral de cada cue, a tradução contextual de cada palavra e grupos semânticos com os números das palavras inglesas, a expressão EN e sua tradução PT.
+- Na importação, o Generator valida a cobertura, restaura os IDs e timestamps originais e converte a resposta externa para o contrato editorial interno 1.3. O iHub continua recebendo o formato que já conhece.
+- Unidades semânticas devem conter palavras contíguas da mesma cue, não podem se sobrepor e precisam reproduzir exatamente a sequência inglesa referenciada.
 - A resposta permanece como `draft` e exige revisão humana. Não gerar marcação pedagógica, mini-aulas, exercícios ou conteúdo Anki nesta etapa.
-- IDs, ordem e timestamps das cues e palavras são preservados e validados. Unidades semânticas devem ser contíguas e não podem se sobrepor.
 - O resultado editorial é salvo separadamente das traduções de linha, com revisão incremental e hash da entrada para invalidar predições desatualizadas.
 
 O contrato é a fonte das instruções e do formato de resposta, não o provedor. Trocar Groq por IA externa não altera o contrato.
