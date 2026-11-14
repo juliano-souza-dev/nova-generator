@@ -114,6 +114,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         if (!alive) return;
         setSrc(convertFileSrc(path));
         setCues(stored);
+        setSaved(stored.length > 0);
         setTranslations(storedTranslations);
         setEditorialResult(storedEditorial);
         if (storedEditorial?.predictions) {
@@ -356,6 +357,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         if (translations.length > 0 || translationDirty) {
           await invoke("save_project_translations", { projectId, assetId: asset.id, translations });
         }
+        await invoke("update_project_stage", { id: projectId, stage: "Shadowing" });
       });
       setSaved(true);
       setDirty(false);
