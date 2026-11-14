@@ -337,6 +337,8 @@ pub fn save_project_subtitles(app: AppHandle, project_id: String, asset_id: Stri
 pub struct ShadowingSelection {
     pub selected_cue_ids: Vec<String>,
     pub source_snapshot: Vec<SubtitleCue>,
+    #[serde(default)]
+    pub source_signature: String,
     pub updated_at: u64,
 }
 
@@ -351,7 +353,7 @@ fn shadowing_selection_file(app: &AppHandle, project_id: &str, asset_id: &str) -
 }
 
 #[tauri::command]
-pub fn load_shadowing_selection(app: AppHandle, project_id: String, asset_id: String, cues: Vec<SubtitleCue>) -> Result<Option<ShadowingSelection>, String> {
+pub fn load_shadowing_selection(app: AppHandle, project_id: String, asset_id: String, cues: Vec<SubtitleCue>, source_signature: String) -> Result<Option<ShadowingSelection>, String> {
     let path = shadowing_selection_file(&app, &project_id, &asset_id)?;
     if !path.exists() { return Ok(None); }
     let raw = fs::read_to_string(path).map_err(|e| e.to_string())?;
@@ -359,11 +361,12 @@ pub fn load_shadowing_selection(app: AppHandle, project_id: String, asset_id: St
     let mut plan: ShadowingSelection = serde_json::from_str(&raw).map_err(|e| format!("Seleção de Shadowing inválida: {e}"))?;
     let available: std::collections::HashSet<&str> = cues.iter().map(|cue| cue.id.as_str()).collect();
     plan.selected_cue_ids.retain(|id| available.contains(id.as_str()));
+    if !source_signature.is_empty() && !plan.source_signature.is_empty() && plan.source_signature != source_signature { return Ok(Some(plan)); }
     Ok(Some(plan))
 }
 
 #[tauri::command]
-pub fn save_shadowing_selection(app: AppHandle, project_id: String, asset_id: String, cues: Vec<SubtitleCue>, selected_cue_ids: Vec<String>) -> Result<(), String> {
+pub fn save_shadowing_selection(app: AppHandle, project_id: String, asset_id: String, cues: Vec<SubtitleCue>, selected_cue_ids: Vec<String>, source_signature: String) -> Result<(), String> {
     if cues.len() > 5000 || selected_cue_ids.is_empty() {
         return Err("Selecione ao menos um bloco e respeite o limite de 5.000 blocos.".into());
     }
@@ -379,7 +382,7 @@ pub fn save_shadowing_selection(app: AppHandle, project_id: String, asset_id: St
         return Err("A seleção contém um bloco inexistente ou duplicado.".into());
     }
     let path = shadowing_selection_file(&app, &project_id, &asset_id)?;
-    let plan = ShadowingSelection { selected_cue_ids, source_snapshot: cues, updated_at: now_ms() };
+    let plan = ShadowingSelection { selected_cue_ids, source_snapshot: cues, source_signature, updated_at: now_ms() };
     let temp = path.with_extension("json.tmp");
     fs::write(&temp, serde_json::to_vec_pretty(&plan).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     if path.exists() { fs::remove_file(&path).map_err(|e| e.to_string())?; }
