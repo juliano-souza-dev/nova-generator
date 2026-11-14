@@ -274,7 +274,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
         <select value={assetId} onChange={event => setAssetId(event.target.value)} aria-label="Vídeo de origem">{assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>
       </div>
 
-      {!predictionSaved ? <div className="materials-gate">
+      {loading ? <div className="materials-loading"><LoaderCircle className="spin" size={20}/> Carregando fontes do projeto...</div> : !predictionSaved ? <div className="materials-gate">
         <div><LockKeyhole size={23}/></div>
         <h3>Materiais ainda não liberados</h3>
         <p>Para liberar esta área, abra o editor da mídia, entre em Prediction Listening e clique em <strong>Salvar e liberar Materiais</strong>. Importar o JSON ou aprovar desafios, isoladamente, não libera a etapa.</p>
@@ -315,14 +315,14 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
             </div>
             <div className="materials-audio-row">
               {card.audioPath ? <audio controls preload="none" src={convertFileSrc(card.audioPath)}/> : <span><FileAudio size={15}/> Nenhum áudio gerado</span>}
-              <button className="secondary-button" onClick={() => void generateAudio(card)} disabled={!ttsReady || audioBusy.includes(card.id) || !card.audioText.trim() && !card.front.trim()}>
+              <button className="secondary-button" onClick={() => void generateAudio(card)} disabled={!ttsReady || audioBusy.length > 0 || !card.audioText.trim() && !card.front.trim()}>
                 {audioBusy.includes(card.id) ? <LoaderCircle className="spin" size={14}/> : card.audioPath ? <RefreshCw size={14}/> : <AudioLines size={14}/>}
                 {audioBusy.includes(card.id) ? "Gerando..." : card.audioPath ? "Regenerar áudio" : "Gerar áudio"}
               </button>
             </div>
             <footer className="materials-card-footer">
               <span>{card.sourceCueId ? "Vinculado à transcrição" : "Card manual"}</span>
-              <button className={card.status === "approved" ? "materials-approve approved" : "materials-approve"} onClick={() => updateCard(card.id, { status: card.status === "approved" ? "draft" : "approved" })}>
+              <button className={card.status === "approved" ? "materials-approve approved" : "materials-approve"} onClick={() => updateCard(card.id, { status: card.status === "approved" ? "draft" : "approved" })} disabled={card.status !== "approved" && (!card.front.trim() || !card.back.trim())}>
                 {card.status === "approved" ? <Check size={14}/> : <CheckCircle2 size={14}/>} {card.status === "approved" ? "Reabrir revisão" : "Aprovar card"}
               </button>
             </footer>
