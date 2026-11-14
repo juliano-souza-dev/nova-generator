@@ -37,6 +37,7 @@ type AnkiCard = {
 };
 type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
+type SharedVoice = { id: string; name: string };
 
 const createCardId = () => crypto.randomUUID();
 const newCard = (): AnkiCard => {
@@ -166,7 +167,9 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [predictionSaved, setPredictionSaved] = useState(false);
-  const [ttsReady, setTtsReady] = useState(false);
+  const [voices, setVoices] = useState<SharedVoice[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState("");
+  const [voiceCloningReady, setVoiceCloningReady] = useState(false);
   const [sourceInfo, setSourceInfo] = useState({ cues: 0, translations: 0, editorial: 0, shadowing: 0, predictions: 0 });
   const [sourceSignature, setSourceSignature] = useState("");
   const [sourceCues, setSourceCues] = useState<Cue[]>([]);
@@ -272,8 +275,15 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   useEffect(() => { if (assetId) void loadSource(assetId); else setLoading(false); }, [assetId, loadSource]);
   useEffect(() => {
     invoke<any>("get_shared_runtime_status")
-      .then(status => setTtsReady(Boolean(status?.qwen3TtsReady)))
-      .catch(() => setTtsReady(false));
+      .then(status => {
+        const available = Array.isArray(status?.voices) ? status.voices as SharedVoice[] : [];
+        setVoices(available);
+        setSelectedVoiceId(current => current && available.some(voice => voice.id === current)
+          ? current
+          : (available.find(voice => voice.id === status?.defaultVoiceId)?.id ?? available[0]?.id ?? ""));
+        setVoiceCloningReady(Boolean(status?.voiceCloningReady && available.length));
+      })
+      .catch(() => { setVoices([]); setSelectedVoiceId(""); setVoiceCloningReady(false); });
   }, []);
 
   function updateCard(id: string, patch: Partial<AnkiCard>) {
