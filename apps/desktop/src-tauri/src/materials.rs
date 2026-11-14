@@ -125,7 +125,7 @@ fn generate_audio_batch(app: &AppHandle, project_id: &str, asset_id: &str, reque
                 if response.get("status").and_then(Value::as_str) != Some("completed") {
                     let detail = response.get("error").and_then(Value::as_str).unwrap_or("Erro não especificado pelo sintetizador.");
                     let traceback = response.get("traceback").and_then(Value::as_str).unwrap_or("");
-                    let suffix = if traceback.is_empty() { String::new() } else { format!("\\n{traceback}") };
+                    let suffix = if traceback.is_empty() { String::new() } else { format!("\n{traceback}") };
                     return Err(format!("Falha ao sintetizar o card '{}': {detail}{suffix}", response.get("id").and_then(Value::as_str).unwrap_or("desconhecido")));
                 }
                 responses.push(response);
@@ -135,7 +135,7 @@ fn generate_audio_batch(app: &AppHandle, project_id: &str, asset_id: &str, reque
     }
 
     if !output.status.success() {
-        let diagnostic = stderr.lines().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\\n");
+        let diagnostic = stderr.lines().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
         return Err(if diagnostic.is_empty() {
             format!("O processo Qwen3-TTS terminou com código {}.", output.status)
         } else {
@@ -144,8 +144,8 @@ fn generate_audio_batch(app: &AppHandle, project_id: &str, asset_id: &str, reque
     }
     if responses.len() != requests.len() {
         let stdout_diagnostic = non_protocol_lines.into_iter().take(3).collect::<Vec<_>>().join(" | ");
-        let stderr_diagnostic = stderr.lines().rev().take(5).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\\n");
-        let details = [stdout_diagnostic, stderr_diagnostic].into_iter().filter(|value| !value.is_empty()).collect::<Vec<_>>().join("\\n");
+        let stderr_diagnostic = stderr.lines().rev().take(5).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
+        let details = [stdout_diagnostic, stderr_diagnostic].into_iter().filter(|value| !value.is_empty()).collect::<Vec<_>>().join("\n");
         return Err(if details.is_empty() {
             format!("O Qwen3-TTS retornou {} de {} áudios solicitados.", responses.len(), requests.len())
         } else {
