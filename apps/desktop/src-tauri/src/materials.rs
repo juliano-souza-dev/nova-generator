@@ -158,14 +158,14 @@ pub async fn generate_material_audio(
 }
 
 const APKG_EXPORT_SCRIPT: &str = r#"
-import hashlib, json, os, pathlib, shutil, sqlite3, sys, tempfile, time, uuid, zipfile
+import hashlib, html, json, os, pathlib, shutil, sqlite3, sys, tempfile, time, uuid, zipfile
 source = pathlib.Path(sys.argv[1])
 output = pathlib.Path(sys.argv[2])
 data = json.loads(source.read_text(encoding="utf-8"))
 cards = [card for card in data.get("cards", []) if card.get("status") == "approved"]
 if not cards:
     raise SystemExit("Aprove ao menos um card Anki antes de exportar.")
-if any(not str(card.get("front") or "").strip() or not str(card.get("back") or "").strip() for card in cards):
+if any(not str(card.get("focus") or "").strip() or not str(card.get("meaning") or "").strip() for card in cards):
     raise SystemExit("Todos os cards aprovados precisam ter frente e verso preenchidos.")
 for card in cards:
     audio = card.get("audioPath")
@@ -195,22 +195,62 @@ with tempfile.TemporaryDirectory(prefix="nova-anki-") as temporary:
     CREATE INDEX ix_revlog_cid on revlog (cid);
     """)
     now = stamp
-    fields = ["Front", "Back", "Expression", "Explanation", "Examples", "Audio"]
+    fields = ["FrontSentence", "BackSentence", "CardType", "FocusDetail", "MeaningDetail", "Explanation", "ExampleEn", "ExamplePt", "Speaker", "Audio"]
     field_defs = [{"name": name, "ord": index, "sticky": False, "rtl": False, "font": "Arial", "size": 20, "media": []} for index, name in enumerate(fields)]
+    front_template = """{{#Audio}}<div class='flashcard-audio'>{{Audio}}</div>{{/Audio}}<span class='flashcard-direction'>EN → PT</span><h2 class='flashcard-sentence'>{{FrontSentence}}</h2>"""
+    back_template = """<div class='flashcard-answer-primary'><h3 class='flashcard-sentence is-pt'>{{BackSentence}}</h3></div><div class='flashcard-mini-lesson'><span class='flashcard-mini-lesson-title'>MINI LESSON</span><section class='flashcard-lesson-summary'><span>{{CardType}}</span><strong>{{FocusDetail}}</strong><small>MEANING</small><b>{{MeaningDetail}}</b></section><section class='flashcard-lesson-explanation'><span>HOW TO UNDERSTAND / USE</span><p>{{Explanation}}</p></section><section class='flashcard-lesson-example'><span>ANOTHER EXAMPLE</span><strong>{{ExampleEn}}</strong><small>{{ExamplePt}}</small></section>{{#Speaker}}<p class='flashcard-speaker'>Speaker: {{Speaker}}</p>{{/Speaker}}{{#Audio}}<div class='flashcard-scene-audio'>Card audio: {{Audio}}</div>{{/Audio}}</div>"""
+    css = """
+    .card { font-family: Arial, sans-serif; font-size: 18px; text-align: left; color: #071828; background: #f4f7fa; padding: 18px; }
+    .flashcard-front,.flashcard-answer { max-width: 700px; margin: 0 auto; padding: 28px; background: #fff; border: 1px solid #dbe3ea; border-radius: 18px; }
+    .flashcard-audio { margin-bottom: 18px; }
+    .flashcard-direction { display: inline-flex; padding: 8px 12px; color: #08785f; background: #dcf8ea; border-radius: 8px; font-size: 12px; font-weight: 900; letter-spacing: .04em; }
+    .flashcard-sentence { margin: 20px 0 0; color: #071828; font-size: 30px; font-weight: 850; letter-spacing: -.035em; line-height: 1.25; }
+    .flashcard-sentence.is-pt { color: #078342; margin: 0; }
+    .flashcard-focus-highlight { padding: .08em .18em; color: #8a5100; background: #ffd56a; border-radius: .18em; font-weight: 900; }
+    .flashcard-answer-primary { padding: 18px 0 22px; border-bottom: 1px solid #dbe3ea; margin-bottom: 18px; }
+    .flashcard-mini-lesson { display: grid; gap: 12px; }
+    .flashcard-mini-lesson-title { color: #153049; font-size: 12px; font-weight: 950; letter-spacing: .13em; }
+    .flashcard-lesson-summary { display: grid; gap: 5px; padding: 16px 18px; background: #e9f3fd; border-left: 4px solid #317fd3; }
+    .flashcard-lesson-summary>span,.flashcard-lesson-summary>small,.flashcard-lesson-explanation>span,.flashcard-lesson-example>span { color: #2458a0; font-size: 10px; font-weight: 950; letter-spacing: .09em; }
+    .flashcard-lesson-summary>strong { color: #0b2f64; font-size: 22px; line-height: 1.22; }
+    .flashcard-lesson-summary>small { margin-top: 2px; color: #9a4c00; }
+    .flashcard-lesson-summary>b { color: #9a4c00; font-size: 16px; line-height: 1.35; }
+    .flashcard-lesson-explanation { padding: 15px 18px 16px; background: #f1f3f5; border-left: 4px solid #df6f67; }
+    .flashcard-lesson-explanation>span { color: #16314a; }
+    .flashcard-lesson-explanation>p { margin: 8px 0 0; color: #17324b; font-size: 15px; line-height: 1.6; }
+    .flashcard-lesson-example { display: grid; gap: 4px; padding: 13px 16px; background: #fff; border: 1px solid #dbe3ea; border-radius: 9px; }
+    .flashcard-lesson-example>span { color: #9a4c00; }
+    .flashcard-lesson-example>strong { color: #12283b; font-size: 15px; line-height: 1.45; }
+    .flashcard-lesson-example>small { color: #566574; font-size: 13px; line-height: 1.45; }
+    .flashcard-speaker { color: #566574; font-size: 12px; }
+    .flashcard-scene-audio { margin-top: 12px; color: #9a4c00; font-size: 12px; }
+    """
     model = {
-      "id": model_id, "name": "Nova Generator - English", "type": 0, "mod": now, "usn": -1, "sortf": 0, "did": deck_id,
-      "tmpls": [{"name": "Card 1", "ord": 0, "qfmt": "{{Front}}<br>{{Expression}}", "afmt": "{{FrontSide}}<hr id=answer>{{Back}}<br>{{Explanation}}<br>{{Examples}}<br>{{Audio}}", "bqfmt": "", "bafmt": "", "did": None, "bfont": "Arial", "bsize": 20}],
-      "flds": field_defs, "css": ".card { font-family: Arial; font-size: 20px; text-align: center; color: black; background: white; }", "latexPre": "", "latexPost": "", "req": [[0, "all", [0]]], "vers": []
+      "id": model_id, "name": "iHub English · Didactic v3", "type": 0, "mod": now, "usn": -1, "sortf": 0, "did": deck_id,
+      "tmpls": [{"name": "EN → PT · Didactic v3", "ord": 0, "qfmt": front_template, "afmt": back_template, "bqfmt": "", "bafmt": "", "did": None, "bfont": "Arial", "bsize": 20}],
+      "flds": field_defs, "css": css, "latexPre": "", "latexPost": "", "req": [[0, "all", [0]]], "vers": []
     }
-    deck = {"id": deck_id, "name": "Nova Generator - " + str(data.get("assetName") or "English Materials"), "mod": now, "usn": -1, "desc": "Created with Nova Generator", "dyn": 0, "collapsed": False, "browserCollapsed": False, "conf": 1}
+    deck = {"id": deck_id, "name": "iHubEnglish · " + str(data.get("assetName") or "English Materials"), "mod": now, "usn": -1, "desc": "iHub English Didactic v3 cards generated by Nova Generator", "dyn": 0, "collapsed": False, "browserCollapsed": False, "conf": 1}
     decks = {"1": {"id": 1, "name": "Default", "mod": now, "usn": -1, "desc": "", "dyn": 0, "collapsed": False, "browserCollapsed": False, "conf": 1}, str(deck_id): deck}
     conf = {"activeDecks": [deck_id], "curDeck": deck_id, "newSpread": 0, "collapseTime": 1200, "timeLim": 0, "estTimes": True, "dueCounts": True, "curModel": model_id}
     db.execute("INSERT INTO col VALUES (1,?,?,?,?,?,?,?,?,?,?,?,?)", (now - 86400, now, now, 11, 0, -1, 0, json.dumps({"activeDecks":[deck_id],"curDeck":deck_id,"newSpread":0,"curModel":model_id}), json.dumps({str(model_id):model}), json.dumps(decks), json.dumps({"1":{"id":1,"name":"Default","mod":now,"usn":-1,"maxTaken":60,"autoplay":True,"timer":0,"replayq":True,"new":{"bury":True,"delays":[1,10],"initialFactor":2500,"ints":[1,4],"order":1,"perDay":20},"rev":{"bury":True,"ease4":1.3,"ivlFct":1.0,"maxIvl":36500,"perDay":200},"lapse":{"delays":[10],"leechAction":0,"leechFails":8,"minInt":1,"mult":0.0}}}), "{}"))
     media_index = 0
+    def highlight_text(sentence, target):
+        sentence = str(sentence or "")
+        target = str(target or "")
+        if not sentence:
+            return ""
+        if not target:
+            return html.escape(sentence)
+        position = sentence.casefold().find(target.casefold())
+        if position < 0:
+            return html.escape(sentence)
+        end = position + len(target)
+        return html.escape(sentence[:position]) + '<span class="flashcard-focus-highlight">' + html.escape(sentence[position:end]) + '</span>' + html.escape(sentence[end:])
     for index, card in enumerate(cards):
-        front = str(card.get("front") or "").strip()
-        back = str(card.get("back") or "").strip()
-        if not front or not back:
+        focus = str(card.get("focus") or "").strip()
+        meaning = str(card.get("meaning") or "").strip()
+        if not focus or not meaning:
             continue
         audio_path = pathlib.Path(card["audioPath"])
         audio_name = "audio_%04d.wav" % (index + 1)
@@ -218,12 +258,26 @@ with tempfile.TemporaryDirectory(prefix="nova-anki-") as temporary:
         media_index += 1
         audio_entries.append((audio_name, audio_path))
         audio_field = "[sound:%s]" % audio_name
-        values = [front, back, str(card.get("expression") or ""), str(card.get("explanation") or ""), str(card.get("examples") or "").replace("\n", "<br>"), audio_field]
+        front_html = highlight_text(focus, card.get("markedEn") or card.get("highlightEn") or focus)
+        back_html = highlight_text(meaning, card.get("markedPt") or card.get("highlightPt") or meaning)
+        values = [
+            front_html,
+            back_html,
+            str(card.get("type") or "expression").replace("_", " ").upper(),
+            str(card.get("highlightEn") or focus),
+            str(card.get("highlightPt") or meaning),
+            str(card.get("explanation") or ""),
+            str(card.get("exampleEn") or ""),
+            str(card.get("examplePt") or ""),
+            str(card.get("speaker") or ""),
+            audio_field
+        ]
         joined = "\x1f".join(values)
         note_id = stamp * 100000 + index + 1
         card_id = note_id + 50000000
-        checksum = int(hashlib.sha1(front.encode("utf-8")).hexdigest()[:8], 16)
-        db.execute("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)", (note_id, uuid.uuid4().hex, model_id, now, -1, "", joined, front, checksum, 0, ""))
+        checksum = int(hashlib.sha1(focus.encode("utf-8")).hexdigest()[:8], 16)
+        card_tags = "nova_generator " + str(card.get("sourceType") or "manual")
+        db.execute("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)", (note_id, uuid.uuid4().hex, model_id, now, -1, card_tags, joined, focus, checksum, 0, ""))
         db.execute("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (card_id, note_id, deck_id, 0, now, -1, 0, 0, index + 1, 0, 2500, 0, 0, 0, 0, 0, 0, ""))
     db.commit()
     db.close()
