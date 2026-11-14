@@ -4,8 +4,6 @@ use tauri::AppHandle;
 
 pub const INPUT_CONTRACT: &str = "nova-generator-prediction-listening-input/1.0";
 pub const OUTPUT_CONTRACT: &str = "nova-generator-prediction-listening-output/1.0";
-pub const REVIEW_CONTRACT: &str = "nova-generator-prediction-listening-review/1.0";
-pub const MATERIALS_CONTRACT: &str = "nova-generator-prediction-listening-materials/1.0";
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -105,7 +103,7 @@ fn build_external_package(
     input["source_hash"] = json!(crate::translation_contract::input_hash(&input)?);
     let source_hash = input["source_hash"].as_str().unwrap_or_default().to_string();
 
-    let mut sections = vec![
+    let sections = vec![
         "NOVA GENERATOR | PREDICTION LISTENING".to_string(),
         "EXTERNAL AI GENERATION PACKAGE | INPUT 1.0".to_string(),
         format!("INPUT_CONTRACT: {INPUT_CONTRACT}"),
