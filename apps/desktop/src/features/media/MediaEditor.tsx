@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ArrowLeft, Captions, Check, Clock3, Download, Film, Languages, Pause, Play, Plus, Save, SkipBack, SkipForward, Trash2, X } from "lucide-react";
 import { runTrackedTask } from "../tasks/TaskCenter";
 import { downloadExternalTranslationPackage, type ExternalTranslationPackage } from "./translationPackage";
+import ShadowingEditor from "./ShadowingEditor";
 
 type Cue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; wordAlignment?: string | null; wordAlignmentHash?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
 type AlignmentProgress = { projectId: string; assetId: string; completed: number; total: number; message: string };
@@ -86,6 +87,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [shadowingOpen, setShadowingOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [transcriptionMode, setTranscriptionMode] = useState<"auto" | "cloud" | "local">("auto");
   const [transcriptionLanguage, setTranscriptionLanguage] = useState("");
@@ -814,6 +816,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         <div className="media-editor-title"><span className="eyebrow">EDITOR DE MÍDIA</span><strong>{asset.name}</strong></div>
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
+          <button className="secondary-button" onClick={() => setShadowingOpen(true)} disabled={!saved || cues.length === 0} title={!saved ? "Salve a Editorial para liberar o Shadowing" : "Preparar blocos para Shadowing"}><AudioLines size={15}/> Shadowing</button>
           <button className="primary-button" onClick={() => void save()} disabled={saving || loading}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button>
           <button className="icon-button" title="Fechar editor" onClick={() => { if (!aligning && (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?"))) onClose(); }} disabled={aligning}><X size={18}/></button>
         </div>
@@ -986,5 +989,5 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         </aside>
       </div>
     </section>
-  </div>;
+  </div>{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onClose={() => setShadowingOpen(false)}/>};
 }
