@@ -273,18 +273,23 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
 
   useEffect(() => { void refreshAssets().catch(e => setError(String(e))); }, [refreshAssets]);
   useEffect(() => { if (assetId) void loadSource(assetId); else setLoading(false); }, [assetId, loadSource]);
-  useEffect(() => {
-    invoke<any>("get_shared_runtime_status")
-      .then(status => {
-        const available = Array.isArray(status?.voices) ? status.voices as SharedVoice[] : [];
-        setVoices(available);
-        setSelectedVoiceId(current => current && available.some(voice => voice.id === current)
-          ? current
-          : (available.find(voice => voice.id === status?.defaultVoiceId)?.id ?? available[0]?.id ?? ""));
-        setVoiceCloningReady(Boolean(status?.voiceCloningReady && available.length));
-      })
-      .catch(() => { setVoices([]); setSelectedVoiceId(""); setVoiceCloningReady(false); });
+  const refreshVoices = useCallback(async () => {
+    const status = await invoke<any>("get_shared_runtime_status");
+    const available = Array.isArray(status?.voices) ? status.voices as SharedVoice[] : [];
+    setVoices(available);
+    setSelectedVoiceId(current => current && available.some(voice => voice.id === current)
+      ? current
+      : (available.find(voice => voice.id === status?.defaultVoiceId)?.id ?? available[0]?.id ?? ""));
+    setVoiceCloningReady(Boolean(status?.voiceCloningReady && available.length));
   }, []);
+
+  useEffect(() => {
+    void refreshVoices().catch(() => {
+      setVoices([]);
+      setSelectedVoiceId("");
+      setVoiceCloningReady(false);
+    });
+  }, [refreshVoices]);
 
   function updateCard(id: string, patch: Partial<AnkiCard>) {
     setCards(current => current.map(card => {
@@ -525,7 +530,10 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
               ? "A síntese utiliza o perfil selecionado na Biblioteca de vozes do Shared Runtime Manager."
               : "Nenhum perfil de voz pronto foi encontrado. Prepare uma voz no Shared Runtime Manager e sincronize o Nova Generator."}</p>
             <label className="materials-voice-select">
-              <span>Voz para os novos áudios</span>
+              <span className="materials-voice-select-head">
+                Voz para os novos áudios
+                <button type="button" className="materials-voice-refresh" onClick={() => void refreshVoices()} title="Atualizar a lista de vozes"><RefreshCw size={12}/> Atualizar</button>
+              </span>
               <select value={selectedVoiceId} onChange={event => setSelectedVoiceId(event.target.value)} disabled={!voiceCloningReady}>
                 {!voices.length && <option value="">Nenhuma voz disponível</option>}
                 {voices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
