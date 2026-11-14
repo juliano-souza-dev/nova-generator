@@ -54,3 +54,5 @@
 .prediction-demo-waiting .primary-button,.prediction-demo-waiting .secondary-button{margin-top:5px}
 .prediction-demo-progress{display:flex;justify-content:space-between;gap:10px;margin-top:auto;padding-top:13px;border-top:1px solid rgba(255,255,255,.12);color:#98a5bd;font-size:10px}
 @media(max-width:760px){.prediction-listening-backdrop.demo-active{padding:8px}.prediction-listening-backdrop.demo-active .prediction-listening-modal{width:min(430px,92vw);height:calc(100vh - 16px)}.prediction-demo-panel{padding:14px}.prediction-demo-panel h2{font-size:19px}}
+
+.prediction-listening-summary .prediction-materials-saved{color:#8fd5ad;font-weight:700;letter-spacing:.06em}
