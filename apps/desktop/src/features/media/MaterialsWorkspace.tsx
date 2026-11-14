@@ -13,13 +13,20 @@ type Translation = { id: string; text: string };
 type SourceType = "editorial" | "shadowing" | "prediction" | "manual";
 type AnkiCard = {
   id: string;
+  key: string;
   sourceCueId: string;
   sourceType: SourceType;
-  front: string;
-  back: string;
-  expression: string;
+  type: string;
+  focus: string;
+  meaning: string;
+  highlightEn: string;
+  markedEn: string;
+  highlightPt: string;
+  markedPt: string;
   explanation: string;
-  examples: string;
+  exampleEn: string;
+  examplePt: string;
+  speaker: string;
   audioText: string;
   audioPath?: string;
   status: "draft" | "approved";
@@ -27,37 +34,57 @@ type AnkiCard = {
 type MaterialDocument = { version: 1; cards: AnkiCard[]; updatedAt: string; sourceSignature: string };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 
-const newCard = (): AnkiCard => ({
-  id: crypto.randomUUID(), sourceCueId: "", sourceType: "manual", front: "", back: "",
-  expression: "", explanation: "", examples: "", audioText: "", status: "draft"
-});
+const createCardId = () => crypto.randomUUID();
+const newCard = (): AnkiCard => {
+  const id = createCardId();
+  return {
+    id, key: "anki-" + id, sourceCueId: "", sourceType: "manual", type: "expression",
+    focus: "", meaning: "", highlightEn: "", markedEn: "", highlightPt: "", markedPt: "",
+    explanation: "", exampleEn: "", examplePt: "", speaker: "", audioText: "", status: "draft"
+  };
+};
 const text = (value: unknown) => typeof value === "string" ? value : "";
-const cardFromSuggestion = (item: any, cue: Cue, translation?: Translation): AnkiCard => ({
-  id: crypto.randomUUID(), sourceCueId: cue.id, sourceType: "editorial",
-  front: text(item.approved_en) || cue.text,
-  back: text(item.approved_pt) || text(translation?.text),
-  expression: text(item.expression) || text(item.highlighted_expression),
-  explanation: text(item.mini_lesson) || text(item.explanation),
-  examples: Array.isArray(item.examples)
-    ? item.examples.map((example: any) => [text(example.en), text(example.pt)].filter(Boolean).join(" / ")).join("\n")
-    : "",
-  audioText: text(item.approved_en) || cue.text,
-  status: "draft"
-});
-const cardFromPrediction = (item: any): AnkiCard => ({
-  id: crypto.randomUUID(), sourceCueId: text(item.cueId), sourceType: "prediction",
-  front: text(item.prompt), back: text(item.answerText),
-  expression: text(item.type).toUpperCase(),
-  explanation: text(item.explanation),
-  examples: Array.isArray(item.choices) ? item.choices.map((choice: any) => text(choice.text)).filter(Boolean).join("\n") : "",
-  audioText: text(item.answerText), status: "draft"
-});
-const cardFromShadowing = (cue: Cue, translation?: Translation): AnkiCard => ({
-  id: crypto.randomUUID(), sourceCueId: cue.id, sourceType: "shadowing",
-  front: cue.text, back: text(translation?.text),
-  expression: "", explanation: "Trecho selecionado e concluído no Shadowing.",
-  examples: "", audioText: cue.text, status: "draft"
-});
+const cardFromSuggestion = (item: any, cue: Cue, translation?: Translation): AnkiCard => {
+  const focus = text(item.approved_en) || cue.text;
+  const highlightEn = text(item.highlight_en) || text(item.highlightEn) || text(item.expression) || text(item.highlighted_expression);
+  const highlightPt = text(item.highlight_pt) || text(item.highlightPt) || text(item.expression_pt);
+  const example = Array.isArray(item.examples) ? item.examples[0] : null;
+  return {
+    id: createCardId(), key: "anki-" + cue.id + "-" + createCardId(), sourceCueId: cue.id, sourceType: "editorial",
+    type: text(item.type) || "expression", focus,
+    meaning: text(item.meaning) || text(item.approved_pt) || text(translation?.text),
+    highlightEn, markedEn: text(item.marked) || text(item.marked_en) || highlightEn,
+    highlightPt, markedPt: text(item.marked_pt) || text(item.markedPt) || highlightPt,
+    explanation: text(item.mini_lesson) || text(item.explanation) || text(item.analysis),
+    exampleEn: text(item.example_en) || text(item.exampleEn) || text(example?.en),
+    examplePt: text(item.example_pt) || text(item.examplePt) || text(example?.pt),
+    speaker: text((cue as any).speaker), audioText: focus, status: "draft"
+  };
+};
+const cardFromPrediction = (item: any): AnkiCard => {
+  const id = createCardId();
+  const focus = text(item.prompt);
+  const answer = text(item.answerText);
+  return {
+    id, key: "anki-" + (text(item.cueId) || "prediction") + "-" + id,
+    sourceCueId: text(item.cueId), sourceType: "prediction", type: "listening",
+    focus, meaning: answer, highlightEn: text(item.highlightedText) || focus,
+    markedEn: text(item.markedEn) || text(item.highlightedText) || focus,
+    highlightPt: answer, markedPt: answer, explanation: text(item.explanation),
+    exampleEn: text(item.exampleEn), examplePt: text(item.examplePt),
+    speaker: "", audioText: answer || focus, status: "draft"
+  };
+};
+const cardFromShadowing = (cue: Cue, translation?: Translation): AnkiCard => {
+  const meaning = text(translation?.text);
+  return {
+    id: createCardId(), key: "anki-" + cue.id + "-" + createCardId(), sourceCueId: cue.id,
+    sourceType: "shadowing", type: "shadowing", focus: cue.text, meaning,
+    highlightEn: cue.text, markedEn: cue.text, highlightPt: meaning, markedPt: meaning,
+    explanation: "Trecho selecionado e concluído no Shadowing.",
+    exampleEn: "", examplePt: "", speaker: text((cue as any).speaker), audioText: cue.text, status: "draft"
+  };
+};
 
 export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { projectId: string; onProjectUpdated?: () => void }) {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -161,7 +188,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
   function updateCard(id: string, patch: Partial<AnkiCard>) {
     setCards(current => current.map(card => {
       if (card.id !== id) return card;
-      const audioTextChanged = patch.front !== undefined || patch.audioText !== undefined;
+      const audioTextChanged = patch.focus !== undefined || patch.audioText !== undefined;
       return {
         ...card,
         ...patch,
@@ -192,7 +219,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
 
   async function generateAudio(card: AnkiCard) {
     if (!assetId || !ttsReady || audioBusy.includes(card.id)) return;
-    const audioText = card.audioText.trim() || card.front.trim();
+    const audioText = card.audioText.trim() || card.focus.trim();
     if (!audioText) { setError("Preencha o texto para áudio antes de gerar."); return; }
     setAudioBusy(current => [...current, card.id]); setError(""); setNotice("");
     try {
@@ -210,14 +237,14 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
   async function generatePendingAudio() {
     const pending = approvedCards.filter(card => !card.audioPath);
     if (!assetId || !ttsReady || !pending.length || audioBusy.length) return;
-    const invalid = pending.find(card => !(card.audioText.trim() || card.front.trim()));
+    const invalid = pending.find(card => !(card.audioText.trim() || card.focus.trim()));
     if (invalid) { setError("O card " + invalid.id + " não possui texto para sintetização."); return; }
     setAudioBusy(pending.map(card => card.id)); setError(""); setNotice("");
     try {
       const result = await invoke<AudioResult[]>("generate_material_audio", {
         projectId, assetId,
         requests: pending.map(card => ({
-          cardId: card.id, text: card.audioText.trim() || card.front.trim(), language: "English", speaker: "Aiden"
+          cardId: card.id, text: card.audioText.trim() || card.focus.trim(), language: "English", speaker: "Aiden"
         }))
       });
       const byId = new Map(result.map(item => [item.cardId, item.audioPath]));
@@ -306,11 +333,16 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
               <button className="materials-icon-button" title="Excluir card" onClick={() => setCards(current => current.filter(item => item.id !== card.id))}><Trash2 size={15}/></button>
             </div>
             <div className="materials-card-fields">
-              <label>Frente <textarea value={card.front} onChange={e => updateCard(card.id, { front: e.target.value })} placeholder="Expressão ou frase em inglês"/></label>
-              <label>Verso <textarea value={card.back} onChange={e => updateCard(card.id, { back: e.target.value })} placeholder="Tradução ou significado em português"/></label>
-              <label>Expressão em destaque <input value={card.expression} onChange={e => updateCard(card.id, { expression: e.target.value })} placeholder="Ex.: figure out"/></label>
-              <label>Mini-aula / explicação <textarea value={card.explanation} onChange={e => updateCard(card.id, { explanation: e.target.value })} placeholder="Explique o uso e o contexto da expressão"/></label>
-              <label>Exemplos / alternativas <textarea value={card.examples} onChange={e => updateCard(card.id, { examples: e.target.value })} placeholder="Exemplos bilíngues ou alternativas"/></label>
+              <label>Frase em inglês (frente) <textarea value={card.focus} onChange={e => updateCard(card.id, { focus: e.target.value })} placeholder="Frase completa em inglês"/></label>
+              <label>Expressão destacada (EN) <input value={card.highlightEn} onChange={e => updateCard(card.id, { highlightEn: e.target.value })} placeholder="Ex.: figure out"/></label>
+              <label>Trecho exato destacado (EN) <input value={card.markedEn} onChange={e => updateCard(card.id, { markedEn: e.target.value })} placeholder="Texto exato dentro da frase"/></label>
+              <label>Tradução / significado (PT) <textarea value={card.meaning} onChange={e => updateCard(card.id, { meaning: e.target.value })} placeholder="Tradução contextual da frase ou expressão"/></label>
+              <label>Destaque (PT) <input value={card.highlightPt} onChange={e => updateCard(card.id, { highlightPt: e.target.value })} placeholder="Equivalente em português"/></label>
+              <label>Trecho exato destacado (PT) <input value={card.markedPt} onChange={e => updateCard(card.id, { markedPt: e.target.value })} placeholder="Texto exato dentro da tradução"/></label>
+              <label>Tipo do card <input value={card.type} onChange={e => updateCard(card.id, { type: e.target.value })} placeholder="EXPRESSION, PHRASAL VERB, STRUCTURE..."/></label>
+              <label>Mini-aula / explicação contextual <textarea value={card.explanation} onChange={e => updateCard(card.id, { explanation: e.target.value })} placeholder="Como entender e usar esta expressão no contexto"/></label>
+              <label>Outro exemplo (EN) <textarea value={card.exampleEn} onChange={e => updateCard(card.id, { exampleEn: e.target.value })} placeholder="Exemplo adicional em inglês"/></label>
+              <label>Outro exemplo (PT) <textarea value={card.examplePt} onChange={e => updateCard(card.id, { examplePt: e.target.value })} placeholder="Tradução do exemplo"/></label>
               <label>Texto para áudio <input value={card.audioText} onChange={e => updateCard(card.id, { audioText: e.target.value })} placeholder="Texto em inglês que será narrado"/></label>
             </div>
             <div className="materials-audio-row">
@@ -322,7 +354,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
             </div>
             <footer className="materials-card-footer">
               <span>{card.sourceCueId ? "Vinculado à transcrição" : "Card manual"}</span>
-              <button className={card.status === "approved" ? "materials-approve approved" : "materials-approve"} onClick={() => updateCard(card.id, { status: card.status === "approved" ? "draft" : "approved" })} disabled={card.status !== "approved" && (!card.front.trim() || !card.back.trim())}>
+              <button className={card.status === "approved" ? "materials-approve approved" : "materials-approve"} onClick={() => updateCard(card.id, { status: card.status === "approved" ? "draft" : "approved" })} disabled={card.status !== "approved" && (!card.focus.trim() || !card.meaning.trim())}>
                 {card.status === "approved" ? <Check size={14}/> : <CheckCircle2 size={14}/>} {card.status === "approved" ? "Reabrir revisão" : "Aprovar card"}
               </button>
             </footer>
