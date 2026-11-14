@@ -129,6 +129,20 @@ fn update_project_status(app: tauri::AppHandle, id: String, status: String) -> R
 }
 
 #[tauri::command]
+fn update_project_stage(app: tauri::AppHandle, id: String, stage: String) -> Result<Project, String> {
+    if !["Editorial", "Shadowing", "Materiais"].contains(&stage.as_str()) {
+        return Err("Etapa de projeto inválida.".into());
+    }
+    let mut projects = read_projects(&app)?;
+    let project = projects.iter_mut().find(|p| p.id == id).ok_or("Projeto não encontrado.")?;
+    project.stage = stage;
+    project.updated_at = now();
+    let updated = project.clone();
+    write_projects(&app, &projects)?;
+    Ok(updated)
+}
+
+#[tauri::command]
 fn save_external_translation_package(path: String, bytes: Vec<u8>) -> Result<(), String> {
     if !path.to_ascii_lowercase().ends_with(".txt") {
         return Err("A entrada editorial precisa ser salva como arquivo .txt.".into());
@@ -144,7 +158,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            list_projects, create_project, duplicate_project, delete_project, update_project_status, save_external_translation_package,
+            list_projects, create_project, duplicate_project, delete_project, update_project_status, update_project_stage, save_external_translation_package,
             media::inspect_youtube, media::prepare_youtube_cache, media::authorize_youtube_preview, media::list_project_media,
             media::import_media_files, media::trim_youtube_cache,
             media::open_project_media, media::load_project_subtitles, media::save_project_subtitles, media::load_shadowing_selection, media::save_shadowing_selection,
