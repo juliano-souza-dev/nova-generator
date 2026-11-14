@@ -227,10 +227,18 @@ pub fn build_external_package(
     sections.push(String::new());
     sections.push("INSTRUÇÕES".to_string());
     sections.push("Traduza cada legenda integralmente para português brasileiro natural. Não faça tradução literal nem resuma.".to_string());
-    sections.push("Para cada palavra numerada, preencha sua tradução contextual. Considere a frase inteira e o contexto do diálogo; não use equivalentes de dicionário desconectados.".to_string());
-    sections.push("Identifique expressões, phrasal verbs, locuções e construções cujo sentido dependa de várias palavras. Agrupe somente palavras inglesas CONTÍGUAS da mesma legenda. Não crie grupos artificiais.".to_string());
-    sections.push("Para cada grupo semântico, informe os números de todas as palavras inglesas que o compõem, a expressão EN completa e sua tradução natural PT. Uma palavra não pode pertencer a dois grupos.".to_string());
-    sections.push("A tradução da legenda completa (PT) e a tradução de cada palavra (PT) são obrigatórias. Preserve o texto EN. Não invente, remova ou renumere itens.".to_string());
+    if include_word_translations {
+        sections.push("Para cada palavra numerada, preencha sua tradução contextual. Considere a frase inteira e o contexto do diálogo; não use equivalentes de dicionário desconectados.".to_string());
+    } else {
+        sections.push("A tradução palavra por palavra está desativada. Não inclua itens em words no JSON.".to_string());
+    }
+    if include_semantic_units {
+        sections.push("Identifique expressões, phrasal verbs, locuções e construções cujo sentido dependa de várias palavras. Agrupe somente palavras inglesas CONTÍGUAS da mesma legenda. Não crie grupos artificiais.".to_string());
+        sections.push("Para cada grupo semântico, informe os números de todas as palavras inglesas que o compõem, a expressão EN completa e sua tradução natural PT. Uma palavra não pode pertencer a dois grupos.".to_string());
+    } else {
+        sections.push("Os agrupamentos semânticos estão desativados. Use semantic_units como array vazio em todas as legendas.".to_string());
+    }
+    sections.push("A tradução da legenda completa (PT) é obrigatória. Quando a tradução palavra por palavra estiver ativada, preencha o PT de todas as palavras. Preserve o texto EN. Não invente, remova ou renumere itens.".to_string());
     sections.push("Responda exclusivamente com JSON válido, sem Markdown ou comentários, no formato indicado ao final deste arquivo.".to_string());
     sections.push(String::new());
     sections.push("LEGENDA E PALAVRAS".to_string());
@@ -280,8 +288,16 @@ pub fn build_external_package(
     sections.push(String::new());
     sections.push("REGRAS DO JSON".to_string());
     sections.push("- Use o número CUE exibido no TXT em cues[].id.".to_string());
-    sections.push("- Em words[].id, use o número WORD global exibido no TXT. Inclua todas as palavras exatamente uma vez.".to_string());
-    sections.push("- semantic_units deve ser [] quando não houver agrupamentos pertinentes.".to_string());
+    sections.push(if include_word_translations {
+        "- Em words[].id, use o número WORD global exibido no TXT. Inclua todas as palavras exatamente uma vez.".to_string()
+    } else {
+        "- Como a tradução por palavra está desativada, use words: [].".to_string()
+    });
+    sections.push(if include_semantic_units {
+        "- semantic_units deve ser [] quando não houver agrupamentos pertinentes.".to_string()
+    } else {
+        "- Como os agrupamentos semânticos estão desativados, use semantic_units: [].".to_string()
+    });
     sections.push("- word_ids deve listar os números WORD em ordem, contíguos e pertencentes à mesma CUE.".to_string());
     sections.push("- semantic_units[].en deve reproduzir a expressão inglesa formada pelas palavras listadas; semantic_units[].pt deve traduzir a expressão como unidade de sentido.".to_string());
     sections.push("- Não inclua IDs internos, timestamps, explicações ou campos extras.".to_string());
