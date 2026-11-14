@@ -591,7 +591,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
           if (includeSemanticUnits && !Array.isArray(external.semantic_units)) {
             throw new Error(`A legenda ${cueNumber} não contém semantic_units.`);
           }
-          const positions = new Map(expectedWords.map((word, index) => [word.number, index]));
+          const positions = new Map<number, number>(expectedWords.map((word, index) => [word.number, index] as const));
           const used = new Set<number>();
           const semanticUnits = externalUnits.map((unit: any, unitIndex: number) => {
             const numbers = Array.isArray(unit.word_ids) ? unit.word_ids.map(Number) : [];
