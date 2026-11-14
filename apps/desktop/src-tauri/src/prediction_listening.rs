@@ -34,7 +34,7 @@ fn build_external_package(
     if selected.len() != selected_cue_ids.len() {
         return Err("A seleção de Shadowing contém blocos duplicados.".into());
     }
-    if selected.iter().any(|id| !cues.iter().any(|cue| cue.id == *id)) {
+    if selected.iter().any(|id| !cues.iter().any(|cue| cue.id.as_str() == *id)) {
         return Err("A seleção de Shadowing não corresponde à transcrição atual.".into());
     }
 
