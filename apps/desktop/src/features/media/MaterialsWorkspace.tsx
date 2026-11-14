@@ -299,8 +299,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     setSaving(true); setError(""); setNotice("");
     try {
       await runTrackedTask("materials", "Salvar Materiais", () => persistMaterials());
-      setNotice("Materiais salvos neste projeto. Cards, revisões e vínculos de áudio foram preservados.");
-    } catch (e) { setError(String(e)); }
+      
+    } catch { /* A Central de Processamento registra a falha. */ }
     finally { setSaving(false); }
   }
 
@@ -316,8 +316,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       const audio = result[0];
       if (!audio?.audioPath) throw new Error("O sintetizador não retornou o arquivo de áudio.");
       setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath: audio.audioPath, audioSource: "tts" } : item));
-      setNotice("Áudio gerado para o card. Salve os Materiais para registrar o vínculo no projeto.");
-    } catch (e) { setError(String(e)); }
+      
+    } catch { /* A Central de Processamento registra a falha. */ }
     finally { setAudioBusy(current => current.filter(id => id !== card.id)); }
   }
 
@@ -327,8 +327,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     try {
       const audioPath = await runTrackedTask("materials", "Extrair áudio original do card", () => invoke<string>("extract_material_source_audio", { projectId, assetId, cardId: card.id, startMs: card.sourceStartMs!, endMs: card.sourceEndMs! }));
       setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath, audioSource: "video" } : item));
-      setNotice("Áudio original extraído do trecho do vídeo e vinculado ao card.");
-    } catch (e) { setError(String(e)); }
+      
+    } catch { /* A Central de Processamento registra a falha. */ }
     finally { setAudioBusy(current => current.filter(id => id !== card.id)); }
   }
 
@@ -347,8 +347,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       }));
       const byId = new Map(result.map(item => [item.cardId, item.audioPath]));
       setCards(current => current.map(card => byId.has(card.id) ? { ...card, audioPath: byId.get(card.id), audioSource: "tts" } : card));
-      setNotice(result.length + " áudio(s) gerado(s). Salve os Materiais para registrar os vínculos.");
-    } catch (e) { setError(String(e)); }
+      
+    } catch { /* A Central de Processamento registra a falha. */ }
     finally { setAudioBusy([]); }
   }
 
@@ -366,8 +366,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       setExporting(true);
       await persistMaterials();
       await runTrackedTask("materials", "Exportar pacote de Materiais", () => invoke("export_project_materials_package", { projectId, assetId, outputPath: path }));
-      setNotice("Pacote completo exportado com Anki (.apkg), JSON, reel MP4, manifesto e áudios.");
-    } catch (e) { setError(String(e)); }
+      
+    } catch { /* A Central de Processamento registra a falha. */ }
     finally { setExporting(false); }
   }
 
