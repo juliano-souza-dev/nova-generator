@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { AudioLines, BookOpen, Check, CheckCircle2, CirclePlus, Download, FileAudio, Layers3, LoaderCircle, Plus, RefreshCw, Save, Sparkles, Trash2, Volume2 } from "lucide-react";
+import { AudioLines, BookOpen, Check, CheckCircle2, Download, FileAudio, Layers3, LoaderCircle, Plus, RefreshCw, Save, Sparkles, Trash2, Volume2 } from "lucide-react";
 import "./MaterialsWorkspace.css";
 
 type Asset = { id: string; name: string; kind: string; durationMs?: number | null };
@@ -45,13 +45,13 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
   if (!selectedId) { setCards([]); setSourceInfo({ cues: 0, translations: 0, editorial: 0, predictions: 0 }); return; }
   setLoading(true); setError(""); setNotice("");
   try {
-   const [cues, translations, editorial, prediction, stored] = await Promise.all([
+   const [cues, translations, prediction, stored] = await Promise.all([
     invoke<Cue[]>("load_project_subtitles", { projectId, assetId: selectedId }),
     invoke<Translation[]>("load_project_translations", { projectId, assetId: selectedId }).catch(() => [] as Translation[]),
-    invoke<any>("load_project_editorial_result", { projectId, assetId: selectedId }).catch(() => null),
     invoke<any>("load_prediction_listening_result", { projectId, assetId: selectedId }).catch(() => null),
     invoke<MaterialDocument | null>("load_project_materials", { projectId, assetId: selectedId }).catch(() => null)
    ]);
+   const editorial = await invoke<any>("load_project_editorial_result", { projectId, assetId: selectedId, cues }).catch(() => null);
    const signature = JSON.stringify([cues.map(c => [c.id, c.text]), translations.map(t => [t.id, t.text]), editorial?.approval, editorial?.suggestions?.length ?? 0]);
    setSourceSignature(signature);
    setSourceInfo({ cues: cues.length, translations: translations.length, editorial: editorial?.suggestions?.length ?? 0, predictions: Array.isArray(prediction?.challenges) ? prediction.challenges.length : 0 });
