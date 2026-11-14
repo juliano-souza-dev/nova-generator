@@ -8,7 +8,7 @@ import {
 import "./MaterialsWorkspace.css";
 
 type Asset = { id: string; name: string; kind: string; durationMs?: number | null };
-type Cue = { id: string; text: string; startMs: number; endMs: number };
+type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string };
 type Translation = { id: string; text: string };
 type SourceType = "editorial" | "shadowing" | "prediction" | "manual";
 type AnkiCard = {
@@ -58,7 +58,7 @@ const cardFromSuggestion = (item: any, cue: Cue, translation?: Translation): Ank
     explanation: text(item.mini_lesson) || text(item.explanation) || text(item.analysis),
     exampleEn: text(item.example_en) || text(item.exampleEn) || text(example?.en),
     examplePt: text(item.example_pt) || text(item.examplePt) || text(example?.pt),
-    speaker: text((cue as any).speaker), audioText: focus, status: "draft"
+    speaker: text(cue.speaker), audioText: focus, status: "draft"
   };
 };
 const cardFromPrediction = (item: any): AnkiCard => {
@@ -158,17 +158,17 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
           const cue = cues.find(candidate => candidate.id === (item.cue_id ?? item.cueId));
           if (!cue) return [];
           const card = cardFromSuggestion(item, cue, translationById.get(cue.id));
-          return card.front.trim() && card.back.trim() ? [card] : [];
+          return card.focus.trim() && card.meaning.trim() ? [card] : [];
         });
         const shadowingCards = shadowingIds.flatMap(id => {
           const cue = cues.find(candidate => candidate.id === id);
           if (!cue) return [];
           const card = cardFromShadowing(cue, translationById.get(cue.id));
-          return card.front.trim() && card.back.trim() ? [card] : [];
+          return card.focus.trim() && card.meaning.trim() ? [card] : [];
         });
         const predictionCards = isPredictionSaved && Array.isArray(prediction?.challenges)
           ? prediction.challenges.filter((item: any) => item.status === "approved").map(cardFromPrediction)
-            .filter((card: AnkiCard) => card.front.trim() && card.back.trim())
+            .filter((card: AnkiCard) => card.focus.trim() && card.meaning.trim())
           : [];
         setCards([...editorialCards, ...shadowingCards, ...predictionCards]);
       }
@@ -347,7 +347,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
             </div>
             <div className="materials-audio-row">
               {card.audioPath ? <audio controls preload="none" src={convertFileSrc(card.audioPath)}/> : <span><FileAudio size={15}/> Nenhum áudio gerado</span>}
-              <button className="secondary-button" onClick={() => void generateAudio(card)} disabled={!ttsReady || audioBusy.length > 0 || !card.audioText.trim() && !card.front.trim()}>
+              <button className="secondary-button" onClick={() => void generateAudio(card)} disabled={!ttsReady || audioBusy.length > 0 || !card.audioText.trim() && !card.focus.trim()}>
                 {audioBusy.includes(card.id) ? <LoaderCircle className="spin" size={14}/> : card.audioPath ? <RefreshCw size={14}/> : <AudioLines size={14}/>}
                 {audioBusy.includes(card.id) ? "Gerando..." : card.audioPath ? "Regenerar áudio" : "Gerar áudio"}
               </button>
