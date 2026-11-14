@@ -62,7 +62,13 @@ pub struct AudioResult {
     pub speaker: String,
 }
 
-fn generate_audio_batch(app: &AppHandle, project_id: &str, asset_id: &str, requests: Vec<AudioRequest>) -> Result<Vec<AudioResult>, String> {
+fn generate_audio_batch(
+    app: &AppHandle,
+    project_id: &str,
+    asset_id: &str,
+    voice_id: &str,
+    requests: Vec<AudioRequest>,
+) -> Result<Vec<AudioResult>, String> {
     if requests.is_empty() { return Ok(Vec::new()); }
     if requests.len() > 100 { return Err("Gere até 100 áudios por operação.".into()); }
     let mut seen = std::collections::HashSet::new();
@@ -79,7 +85,10 @@ fn generate_audio_batch(app: &AppHandle, project_id: &str, asset_id: &str, reque
         }
     }
 
-    let (python, runner, model) = crate::shared_runtime::qwen3_tts_paths(app)?;
+    // Voice profiles and their runtime are owned by Shared Runtime Manager.
+    // The Nova project stores only the generated card audio, never a profile copy.
+    let (python, runner, model, profile, voice_name) =
+        crate::shared_runtime::voice_profile_paths(app, voice_id)?;
     let target = materials_file(app, project_id, asset_id)?;
     let audio_dir = target.parent().ok_or("Pasta de Materiais inválida.")?.join("audio");
     fs::create_dir_all(&audio_dir).map_err(|e| format!("Não foi possível preparar a pasta de áudios: {e}"))?;
@@ -87,88 +96,93 @@ fn generate_audio_batch(app: &AppHandle, project_id: &str, asset_id: &str, reque
     let mut child = crate::process::hidden_command(&python)
         .arg(&runner)
         .arg(&model)
+        .arg(&profile)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Não foi possível iniciar o Qwen3-TTS compartilhado: {e}"))?;
+        .map_err(|e| format!("Não foi possível iniciar o executor da voz '{voice_name}' no Shared Runtime: {e}"))?;
 
     {
-        let stdin = child.stdin.as_mut().ok_or("Não foi possível abrir a entrada do Qwen3-TTS.")?;
+        let stdin = child.stdin.as_mut().ok_or("Não foi possível abrir a entrada do executor de voz.")?;
         for request in &requests {
             let output_path = audio_dir.join(format!("{}.wav", request.card_id));
             let payload = json!({
                 "id": request.card_id,
+                "operation": "synthesize",
                 "text": request.text.trim(),
                 "language": request.language,
-                "speaker": request.speaker,
                 "output_path": output_path
             });
-            serde_json::to_writer(&mut *stdin, &payload).map_err(|e| format!("Não foi possível preparar a solicitação de áudio: {e}"))?;
-            stdin.write_all(b"\n").map_err(|e| format!("Não foi possível enviar a solicitação ao Qwen3-TTS: {e}"))?;
+            serde_json::to_writer(&mut *stdin, &payload)
+                .map_err(|e| format!("Não foi possível preparar a solicitação de áudio: {e}"))?;
+            stdin.write_all(b"\n")
+                .map_err(|e| format!("Não foi possível enviar a solicitação ao executor de voz: {e}"))?;
         }
     }
     drop(child.stdin.take());
 
-    // Capture both streams together. Some Python/native dependencies may write startup
-    // diagnostics to stdout before the JSON-lines protocol begins; those lines must not
-    // abort an otherwise valid synthesis response.
-    let output = child.wait_with_output().map_err(|e| format!("Não foi possível finalizar o Qwen3-TTS: {e}"))?;
+    let output = child.wait_with_output()
+        .map_err(|e| format!("Não foi possível finalizar a síntese da voz '{voice_name}': {e}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let mut responses = Vec::with_capacity(requests.len());
-    let mut non_protocol_lines = Vec::new();
+    let mut diagnostics = Vec::new();
 
     for line in stdout.lines().map(str::trim).filter(|line| !line.is_empty()) {
         match serde_json::from_str::<Value>(line) {
             Ok(response) => {
                 if response.get("status").and_then(Value::as_str) != Some("completed") {
-                    let detail = response.get("error").and_then(Value::as_str).unwrap_or("Erro não especificado pelo sintetizador.");
-                    let traceback = response.get("traceback").and_then(Value::as_str).unwrap_or("");
-                    let suffix = if traceback.is_empty() { String::new() } else { format!("\n{traceback}") };
-                    return Err(format!("Falha ao sintetizar o card '{}': {detail}{suffix}", response.get("id").and_then(Value::as_str).unwrap_or("desconhecido")));
+                    let detail = response.get("error").and_then(Value::as_str)
+                        .unwrap_or("Erro não especificado pelo executor de clonagem.");
+                    return Err(format!("Falha ao sintetizar com a voz '{voice_name}': {detail}"));
                 }
                 responses.push(response);
             }
-            Err(_) => non_protocol_lines.push(line.to_string()),
+            Err(_) => diagnostics.push(line.to_owned()),
         }
     }
 
     if !output.status.success() {
-        let diagnostic = stderr.lines().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
-        return Err(if diagnostic.is_empty() {
-            format!("O processo Qwen3-TTS terminou com código {}.", output.status)
+        let detail = stderr.lines().rev().take(8).collect::<Vec<_>>()
+            .into_iter().rev().collect::<Vec<_>>().join("\n");
+        return Err(if detail.is_empty() {
+            format!("O executor da voz '{voice_name}' terminou com código {}.", output.status)
         } else {
-            format!("O processo Qwen3-TTS terminou com erro: {diagnostic}")
+            format!("O executor da voz '{voice_name}' falhou: {detail}")
         });
     }
     if responses.len() != requests.len() {
-        let stdout_diagnostic = non_protocol_lines.into_iter().take(3).collect::<Vec<_>>().join(" | ");
-        let stderr_diagnostic = stderr.lines().rev().take(5).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
-        let details = [stdout_diagnostic, stderr_diagnostic].into_iter().filter(|value| !value.is_empty()).collect::<Vec<_>>().join("\n");
-        return Err(if details.is_empty() {
-            format!("O Qwen3-TTS retornou {} de {} áudios solicitados.", responses.len(), requests.len())
+        let stdout_detail = diagnostics.into_iter().take(3).collect::<Vec<_>>().join(" | ");
+        let stderr_detail = stderr.lines().rev().take(5).collect::<Vec<_>>()
+            .into_iter().rev().collect::<Vec<_>>().join("\n");
+        let detail = [stdout_detail, stderr_detail].into_iter()
+            .filter(|value| !value.is_empty()).collect::<Vec<_>>().join("\n");
+        return Err(if detail.is_empty() {
+            format!("O executor da voz '{voice_name}' retornou {} de {} áudios solicitados.", responses.len(), requests.len())
         } else {
-            format!("O Qwen3-TTS retornou {} de {} áudios solicitados. Diagnóstico: {details}", responses.len(), requests.len())
+            format!("O executor da voz '{voice_name}' retornou {} de {} áudios. Diagnóstico: {detail}", responses.len(), requests.len())
         });
     }
 
     let mut results = Vec::with_capacity(responses.len());
     for response in responses {
-        let id = response.get("id").and_then(Value::as_str).ok_or("A resposta do Qwen3-TTS não contém o ID do card.")?.to_string();
+        let id = response.get("id").and_then(Value::as_str)
+            .ok_or("A resposta do executor de voz não contém o ID do card.")?.to_string();
         let path = audio_dir.join(format!("{id}.wav"));
         if !path.is_file() || fs::metadata(&path).map(|meta| meta.len() == 0).unwrap_or(true) {
-            return Err(format!("O Qwen3-TTS informou sucesso, mas o áudio do card '{id}' não foi encontrado ou está vazio."));
+            return Err(format!("A voz '{voice_name}' informou sucesso, mas o áudio do card '{id}' não foi encontrado ou está vazio."));
         }
-        let canonical = path.canonicalize().map_err(|e| format!("Não foi possível validar o áudio gerado: {e}"))?;
+        let canonical = path.canonicalize()
+            .map_err(|e| format!("Não foi possível validar o áudio gerado: {e}"))?;
         app.asset_protocol_scope().allow_file(&canonical)
             .map_err(|e| format!("Não foi possível liberar a reprodução do áudio gerado: {e}"))?;
         results.push(AudioResult {
             card_id: id,
             audio_path: path.to_string_lossy().into_owned(),
             sample_rate: response.get("sample_rate").and_then(Value::as_u64).unwrap_or(0) as u32,
-            language: response.get("language").and_then(Value::as_str).unwrap_or("English").to_string(),
-            speaker: response.get("speaker").and_then(Value::as_str).unwrap_or("Aiden").to_string(),
+            language: "English".into(),
+            speaker: voice_name.clone(),
         });
     }
     Ok(results)
@@ -209,9 +223,9 @@ pub async fn extract_material_source_audio(
 
 #[tauri::command]
 pub async fn generate_material_audio(
-    app: AppHandle, project_id: String, asset_id: String, requests: Vec<AudioRequest>,
+    app: AppHandle, project_id: String, asset_id: String, voice_id: String, requests: Vec<AudioRequest>,
 ) -> Result<Vec<AudioResult>, String> {
-    tauri::async_runtime::spawn_blocking(move || generate_audio_batch(&app, &project_id, &asset_id, requests))
+    tauri::async_runtime::spawn_blocking(move || generate_audio_batch(&app, &project_id, &asset_id, &voice_id, requests))
         .await.map_err(|e| format!("A geração de áudio foi interrompida: {e}"))?
 }
 
