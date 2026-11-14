@@ -48,6 +48,10 @@ const newCard = (): AnkiCard => {
   };
 };
 const text = (value: unknown) => typeof value === "string" ? value : "";
+const normalizeCardType = (value: unknown) => {
+  const candidate = text(value).trim();
+  return !candidate || /^(shadowing|listening|editorial|manual)$/i.test(candidate) ? "expression" : candidate;
+};
 const highlightedText = (sentence: string, target: string) => {
   if (!sentence || !target) return sentence;
   const start = sentence.toLocaleLowerCase().indexOf(target.toLocaleLowerCase());
@@ -93,7 +97,7 @@ const normalizeStoredCard = (raw: any): AnkiCard => {
   return {
     id, key: text(raw?.key) || "anki-" + id,
     sourceCueId: text(raw?.sourceCueId), sourceType: raw?.sourceType || "manual",
-    type: text(raw?.type) || "expression", focus, meaning,
+    type: normalizeCardType(raw?.type), focus, meaning,
     highlightEn, markedEn: text(raw?.markedEn) || highlightEn,
     highlightPt, markedPt: text(raw?.markedPt) || highlightPt,
     explanation: text(raw?.explanation),
@@ -115,7 +119,7 @@ const cardFromSuggestion = (item: any, cue: Cue, translation?: Translation, inde
   const example = Array.isArray(item.examples) ? item.examples[0] : null;
   return {
     id: createCardId(), key: "source:editorial:" + cue.id + ":" + (text(item.id) || String(index)), sourceCueId: cue.id, sourceType: "editorial",
-    type: text(item.type) || "expression", focus,
+    type: normalizeCardType(item.type), focus,
     meaning: text(item.meaning) || text(item.approved_pt) || text(translation?.text),
     highlightEn, markedEn: text(item.marked) || text(item.marked_en) || highlightEn,
     highlightPt, markedPt: text(item.marked_pt) || text(item.markedPt) || highlightPt,
@@ -420,35 +424,36 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       });
       const path = await saveFile({ title: "Salvar entrada de enriquecimento dos Materiais", defaultPath: "materiais-entrada-ia.txt", filters: [{ name: "Texto para IA externa", extensions: ["txt"] }] });
       if (!path) return;
-      await invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode(lines.join("\n"))) });
-      setNotice("Entrada TXT gerada. Envie à IA externa e importe o JSON de retorno para preencher a mini-aula e os exemplos.");
-    } catch (e) { setError("Não foi possível preparar a entrada para IA externa: " + String(e)); }
+      await runTrackedTask("materials", "Preparar entrada para IA externa", () => invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode(lines.join("\n"))) }));
+    } catch { /* A Central de Processamento registra a falha. */ }
   }
 
   async function importExternalResult(file?: File) {
     if (!file) return;
     setError(""); setNotice("");
     try {
-      const parsed = JSON.parse(await file.text());
-      if (parsed?.contract !== "nova-generator-materials-enrichment-output/1.0") throw new Error("Contrato de saída inválido. Importe o JSON gerado a partir do TXT de Materiais.");
-      const payload = buildEnrichmentPayload(projectId, assetId, selectedAsset?.sourceVideoId ?? null, sourceSignature, cards, sourceCues, sourceTranslations);
-      const expectedHash = await hashPayload(payload);
-      if (parsed.source_hash !== expectedHash) throw new Error("SOURCE_HASH não corresponde aos cards e tempos atuais. Gere uma nova entrada TXT.");
-      if (!Array.isArray(parsed.items) || parsed.items.length !== cards.length) throw new Error("O JSON precisa retornar exatamente um item para cada card enviado.");
-      const returned = new Map<string, any>();
-      for (const item of parsed.items) {
-        if (!item || typeof item.card_id !== "string" || returned.has(item.card_id)) throw new Error("Há card_id ausente ou duplicado no retorno.");
-        if (![item.card_type, item.mini_lesson_pt, item.example_en, item.example_pt].every(value => typeof value === "string" && value.trim())) throw new Error("Cada item precisa conter card_type, mini_lesson_pt, example_en e example_pt preenchidos.");
-        returned.set(item.card_id, item);
-      }
-      const expectedIds = new Set(cards.map(card => card.id));
-      if (returned.size !== expectedIds.size || [...returned.keys()].some(id => !expectedIds.has(id))) throw new Error("Os IDs do JSON não correspondem aos cards atuais.");
-      setCards(current => current.map(card => {
-        const result = returned.get(card.id)!;
-        return { ...card, type: result.card_type.trim().toUpperCase(), explanation: result.mini_lesson_pt, exampleEn: result.example_en, examplePt: result.example_pt, status: "draft" };
-      }));
-      setNotice("Enriquecimento importado. Revise os cards e salve os Materiais para registrar as alterações.");
-    } catch (e) { setError("Não foi possível importar o retorno da IA: " + String(e)); }
+      await runTrackedTask("materials", "Importar classificação e enriquecimento da IA", async () => {
+        const parsed = JSON.parse(await file.text());
+        if (parsed?.contract !== "nova-generator-materials-enrichment-output/1.1") throw new Error("Contrato de saída inválido. Importe o JSON gerado a partir do TXT de Materiais.");
+        const payload = buildEnrichmentPayload(projectId, assetId, selectedAsset?.sourceVideoId ?? null, sourceSignature, cards, sourceCues, sourceTranslations);
+        const expectedHash = await hashPayload(payload);
+        if (parsed.source_hash !== expectedHash) throw new Error("SOURCE_HASH não corresponde aos cards e tempos atuais. Gere uma nova entrada TXT.");
+        if (!Array.isArray(parsed.items) || parsed.items.length !== cards.length) throw new Error("O JSON precisa retornar exatamente um item para cada card enviado.");
+        const returned = new Map<string, any>();
+        for (const item of parsed.items) {
+          if (!item || typeof item.card_id !== "string" || returned.has(item.card_id)) throw new Error("Há card_id ausente ou duplicado no retorno.");
+          if (![item.card_type, item.mini_lesson_pt, item.example_en, item.example_pt].every(value => typeof value === "string" && value.trim())) throw new Error("Cada item precisa conter card_type, mini_lesson_pt, example_en e example_pt preenchidos.");
+          returned.set(item.card_id, item);
+        }
+        const expectedIds = new Set(cards.map(card => card.id));
+        if (returned.size !== expectedIds.size || [...returned.keys()].some(id => !expectedIds.has(id))) throw new Error("Os IDs do JSON não correspondem aos cards atuais.");
+        setCards(current => current.map(card => {
+          const result = returned.get(card.id)!;
+          return { ...card, type: normalizeCardType(result.card_type).toUpperCase(), explanation: result.mini_lesson_pt, exampleEn: result.example_en, examplePt: result.example_pt, status: "draft" };
+        }));
+      });
+      
+    } catch { /* A Central de Processamento registra a falha. */ }
     finally { if (importInput.current) importInput.current.value = ""; }
   }
 
