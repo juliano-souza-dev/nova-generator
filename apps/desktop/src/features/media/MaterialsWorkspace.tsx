@@ -519,8 +519,20 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
 
         <div className="materials-runtime">
           <div className="materials-runtime-icon"><AudioLines size={18}/></div>
-          <div><strong>Qwen3-TTS 1.7B · voz em inglês</strong><p>{voiceCloningReady ? "Runtime compartilhado pronto. A geração usa o ambiente isolado do Shared Runtime Manager." : "Runtime não disponível. Sincronize o Nova Generator e instale qwen3-tts pelo Shared Runtime Manager."}</p></div>
-          <span className={voiceCloningReady ? "ready" : "missing"}>{voiceCloningReady ? "Disponível" : "Não instalado"}</span>
+          <div className="materials-runtime-copy">
+            <strong>Vozes compartilhadas</strong>
+            <p>{voiceCloningReady
+              ? "A síntese utiliza o perfil selecionado na Biblioteca de vozes do Shared Runtime Manager."
+              : "Nenhum perfil de voz pronto foi encontrado. Prepare uma voz no Shared Runtime Manager e sincronize o Nova Generator."}</p>
+            <label className="materials-voice-select">
+              <span>Voz para os novos áudios</span>
+              <select value={selectedVoiceId} onChange={event => setSelectedVoiceId(event.target.value)} disabled={!voiceCloningReady}>
+                {!voices.length && <option value="">Nenhuma voz disponível</option>}
+                {voices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <span className={voiceCloningReady ? "ready" : "missing"}>{voiceCloningReady ? voices.length + (voices.length === 1 ? " voz" : " vozes") : "Indisponível"}</span>
         </div>
 
         <div className="materials-section-title">
