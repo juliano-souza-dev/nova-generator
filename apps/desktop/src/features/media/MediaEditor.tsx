@@ -884,7 +884,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
                 </div>
                 <pre style={{ margin: 0, maxHeight: 150, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 11, lineHeight: 1.45 }}>{translationStream.text}</pre>
               </div>}
-              <button className="media-editor-secondary-action" onClick={() => void downloadExternalPackage()} disabled={loading || preparingExternalPackage || cues.length === 0}><Download size={14}/>{preparingExternalPackage ? "Preparando pacote..." : "Baixar pacote para IA externa"}</button>
+              <button className="media-editor-secondary-action" onClick={() => void downloadExternalPackage()} disabled={loading || preparingExternalPackage || cues.length === 0}><Download size={14}/>{preparingExternalPackage ? "Preparando pacote..." : "Baixar TXT para IA externa"}</button>
               {editorialResult && <div className="media-editor-editorial-status">
                 <span>{editorialResult.approval === "approved" ? "Resultado aprovado" : "Resultado aguardando revisão humana"}</span>
                 {editorialResult.approval === "draft" && <button className="media-editor-secondary-action" onClick={() => void approveEditorial()} disabled={loading || saving || dirty || translationDirty}>Aprovar resultado revisado</button>}
