@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import { Check, FileJson, FileText, PlayCircle, RefreshCw, RotateCcw, X } from "lucide-react";
 import "./PredictionListening.css";
 
