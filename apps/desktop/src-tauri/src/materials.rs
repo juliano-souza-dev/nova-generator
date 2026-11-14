@@ -282,6 +282,12 @@ with tempfile.TemporaryDirectory(prefix="nova-anki-") as temporary:
         db.execute("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (card_id, note_id, deck_id, 0, now, -1, 0, 0, index + 1, 0, 2500, 0, 0, 0, 0, 0, 0, ""))
     db.commit()
     db.close()
+    check_db = sqlite3.connect("file:" + str(db_path) + "?mode=ro", uri=True)
+    integrity = check_db.execute("PRAGMA integrity_check").fetchone()[0]
+    required_tables = {row[0] for row in check_db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    check_db.close()
+    if integrity != "ok" or not {"col", "notes", "cards", "revlog", "graves"}.issubset(required_tables):
+        raise SystemExit("O banco interno do pacote Anki não passou na validação de integridade.")
     media_path = work / "media"
     media_path.write_text(json.dumps(media_map, ensure_ascii=False), encoding="utf-8")
     apkg = work / "nova-generator.apkg"

@@ -345,7 +345,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
       {loading ? <div className="materials-loading"><LoaderCircle className="spin" size={20}/> Carregando fontes do projeto...</div> : !predictionSaved ? <div className="materials-gate">
         <div><LockKeyhole size={23}/></div>
         <h3>Materiais ainda não liberados</h3>
-        <p>Para liberar esta área, abra o editor da mídia, entre em Prediction Listening e clique em <strong>Salvar e liberar Materiais</strong>. Importar o JSON ou aprovar desafios, isoladamente, não libera a etapa.</p>
+        <p>Para liberar esta área, abra o editor da mídia, entre em Prediction Listening e clique em <strong>Salvar</strong>. Importar o JSON ou aprovar desafios, isoladamente, não libera a etapa.</p>
       </div> : <>
         <div className="materials-stats">
           <div><BookOpen size={17}/><strong>{sourceInfo.cues}</strong><span>trechos</span></div>

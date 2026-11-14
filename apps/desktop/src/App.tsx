@@ -108,7 +108,6 @@ export default function App() {
         <button className="back-button" onClick={() => { setView("home"); setActiveProject(null); }}><ArrowLeft size={17}/> <span>Projetos</span></button>
         <div className="workspace-crumb"><span className="crumb-dot"/>{activeProject.name}</div>
         <div className="workspace-top-actions">
-          <button type="button" className="workspace-materials-shortcut" onClick={() => setProjectModule("materials")}><Layers3 size={15}/> Materiais</button>
           <span className={activeProject.status === "completed" ? "status-pill completed" : "status-pill"}>{activeProject.status === "completed" ? "Concluído" : "Em andamento"}</span>
           <button className="icon-button" title="Duplicar projeto" onClick={() => void duplicateProject(activeProject)}><Copy size={16}/></button>
         </div>
@@ -116,7 +115,7 @@ export default function App() {
       <main className="project-workspace">
         <div className="project-heading">
           <div><div className="eyebrow">ESPAÇO DO PROJETO</div><h1>{activeProject.name}</h1><p>Criado em {dateLabel(activeProject.created_at)} · Última alteração {timeLabel(activeProject.updated_at)}</p></div>
-          <button className="complete-button" onClick={() => void toggleStatus(activeProject)}>{activeProject.status === "completed" ? <Clock3 size={16}/> : <Check size={16}/>} {activeProject.status === "completed" ? "Reabrir projeto" : "Marcar como concluído"}</button>
+          <div className="project-heading-actions"><button type="button" className="workspace-materials-shortcut" onClick={() => setProjectModule("materials")}><Layers3 size={15}/> Abrir Materiais</button><button className="complete-button" onClick={() => void toggleStatus(activeProject)}>{activeProject.status === "completed" ? <Clock3 size={16}/> : <Check size={16}/>} {activeProject.status === "completed" ? "Reabrir projeto" : "Marcar como concluído"}</button></div>
         </div>
         <nav className="project-module-tabs" aria-label="Áreas do projeto">
           <button type="button" className={projectModule === "media" ? "active" : ""} aria-current={projectModule === "media" ? "page" : undefined} onClick={() => setProjectModule("media")}><FileText size={16}/> <span><strong>Mídias e edição</strong><small>Editorial, Shadowing e Prediction Listening</small></span></button>

@@ -129,3 +129,5 @@
 @media(max-width:650px){.project-module-tabs{grid-template-columns:1fr}.project-module-tabs button{min-height:52px}}
 
 .workspace-materials-shortcut{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid #715b91;border-radius:7px;background:#2a2335;color:#e7dcf7;font-size:11px;font-weight:700;white-space:nowrap}.workspace-materials-shortcut:hover{background:#382b49;border-color:#ad91ed;color:#fff}
+
+.project-heading-actions{display:flex;align-items:center;gap:10px;flex:none}.workspace-materials-shortcut{display:inline-flex;align-items:center;gap:7px;padding:10px 13px;border:1px solid #715b91;border-radius:7px;background:#2a2335;color:#e7dcf7;font-size:11px;font-weight:700;white-space:nowrap}.workspace-materials-shortcut:hover{background:#382b49;border-color:#ad91ed;color:#fff}@media(max-width:760px){.project-heading-actions{width:100%;justify-content:flex-start;flex-wrap:wrap}}
