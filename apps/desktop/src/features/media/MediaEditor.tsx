@@ -525,7 +525,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         const expectedByCue = cues.map((cue, cueIndex) => {
           const words = (includeWordTranslations ? (cue.words ?? []) : []).map((word, wordIndex) => {
             nextWordNumber += 1;
-            const leading = word.text.match(/^\\s*/u)?.[0] ?? "";
+            const leading = word.text.match(/^\s*/u)?.[0] ?? "";
             return {
               number: nextWordNumber,
               word_id: `${cue.id}:word:${String(wordIndex + 1).padStart(4, "0")}`,
