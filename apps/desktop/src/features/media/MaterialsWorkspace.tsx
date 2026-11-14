@@ -314,11 +314,14 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     if (!audioText) { setError("Preencha o texto para áudio antes de gerar."); return; }
     setAudioBusy(current => [...current, card.id]); setError(""); setNotice("");
     try {
-      const result = await runTrackedTask("materials", "Gerar áudio do card Anki", () => invoke<AudioResult[]>("generate_material_audio", {
-        projectId, assetId, requests: [{ cardId: card.id, text: audioText, language: "English", speaker: "Aiden" }]
-      }));
-      const audio = result[0];
-      if (!audio?.audioPath) throw new Error("O sintetizador não retornou o arquivo de áudio.");
+      const audio = await runTrackedTask("materials", "Gerar áudio do card Anki", async () => {
+        const result = await invoke<AudioResult[]>("generate_material_audio", {
+          projectId, assetId, requests: [{ cardId: card.id, text: audioText, language: "English", speaker: "Aiden" }]
+        });
+        const generated = result[0];
+        if (!generated?.audioPath) throw new Error("O sintetizador não retornou o arquivo de áudio.");
+        return generated;
+      });
       setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath: audio.audioPath, audioSource: "tts" } : item));
       
     } catch { /* A Central de Processamento registra a falha. */ }
