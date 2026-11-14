@@ -158,9 +158,10 @@ pub async fn generate_material_audio(
 }
 
 const APKG_EXPORT_SCRIPT: &str = r#"
-import hashlib, html, json, os, pathlib, shutil, sqlite3, sys, tempfile, time, uuid, zipfile
+import hashlib, html, json, os, pathlib, shutil, sqlite3, subprocess, sys, tempfile, time, uuid, zipfile
 source = pathlib.Path(sys.argv[1])
 output = pathlib.Path(sys.argv[2])
+ffmpeg = pathlib.Path(sys.argv[3])
 data = json.loads(source.read_text(encoding="utf-8"))
 cards = [card for card in data.get("cards", []) if card.get("status") == "approved"]
 if not cards:
@@ -297,19 +298,63 @@ with tempfile.TemporaryDirectory(prefix="nova-anki-") as temporary:
             card["audioPath"] = "audio/" + pathlib.Path(audio_path).name
     package_json = work / "materiais.json"
     package_json.write_text(json.dumps(package_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    hub_final = work / "hub_final.json"
+    hub_payload = {
+        "schema": "ihub-english-hub-final/1.0",
+        "projectId": package_data.get("projectId"),
+        "assetId": package_data.get("assetId"),
+        "assetName": package_data.get("assetName"),
+        "youtubeVideoId": package_data.get("sourceVideoId"),
+        "cards": package_data.get("cards", []),
+        "audio": [{"cardId": card.get("id"), "file": card.get("audioFile")} for card in package_data.get("cards", []) if card.get("audioFile")]
+    }
+    hub_final.write_text(json.dumps(hub_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    concat_file = work / "audio-reel-concat.txt"
+    concat_lines = []
+    for _, audio_path in audio_entries:
+        safe_path = str(audio_path.resolve()).replace("\\", "/").replace("'", "'\\''")
+        concat_lines.append("file '" + safe_path + "'")
+    concat_file.write_text("\n".join(concat_lines) + "\n", encoding="utf-8")
+    reel = work / "anki_audio_reel.mp4"
+    reel_command = [
+        str(ffmpeg), "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file),
+        "-f", "lavfi", "-i", "color=c=0x101014:s=1280x720:r=30", "-shortest",
+        "-map", "1:v:0", "-map", "0:a:0",
+        "-vf", "drawtext=text='NOVA GENERATOR | ANKI AUDIO REEL':fontcolor=white:fontsize=42:x=(w-text_w)/2:y=(h-text_h)/2",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", str(reel)
+    ]
+    reel_result = subprocess.run(reel_command, capture_output=True, text=True)
+    if reel_result.returncode != 0 or not reel.is_file() or reel.stat().st_size == 0:
+        detail = (reel_result.stderr or reel_result.stdout)[-1800:]
+        raise SystemExit("Não foi possível gerar anki_audio_reel.mp4 com o FFmpeg compartilhado: " + detail)
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(apkg, "anki/anki.apkg")
         archive.write(package_json, "materiais.json")
         archive.write(package_json, "cards/cards.json")
+        archive.write(hub_final, "hub_final.json")
+        archive.write(reel, "anki_audio_reel.mp4")
         manifest_lines = []
-        for archive_name, file_path in [("anki/anki.apkg", apkg), ("materiais.json", package_json), ("cards/cards.json", package_json)]:
+        package_files = [
+            ("anki/anki.apkg", apkg), ("materiais.json", package_json),
+            ("cards/cards.json", package_json), ("hub_final.json", hub_final),
+            ("anki_audio_reel.mp4", reel)
+        ]
+        for archive_name, file_path in package_files:
             digest = hashlib.sha256(file_path.read_bytes()).hexdigest()
             manifest_lines.append(digest + "  " + archive_name)
-        for name, path in audio_entries:
+        for name, audio_path in audio_entries:
             archive_name = "audio/" + name
-            archive.write(path, archive_name)
-            manifest_lines.append(hashlib.sha256(path.read_bytes()).hexdigest() + "  " + archive_name)
+            archive.write(audio_path, archive_name)
+            manifest_lines.append(hashlib.sha256(audio_path.read_bytes()).hexdigest() + "  " + archive_name)
         archive.writestr("manifest.sha256", "\n".join(manifest_lines) + "\n")
+    with zipfile.ZipFile(output, "r") as archive:
+        bad_entry = archive.testzip()
+        if bad_entry:
+            raise SystemExit("O pacote ZIP contém um arquivo inválido: " + bad_entry)
+        required = {"anki/anki.apkg", "materiais.json", "cards/cards.json", "hub_final.json", "anki_audio_reel.mp4", "manifest.sha256"}
+        missing = required.difference(archive.namelist())
+        if missing:
+            raise SystemExit("O pacote final está incompleto: " + ", ".join(sorted(missing)))
 print(str(output))
 "#;
 
@@ -329,13 +374,14 @@ pub async fn export_project_materials_package(
             return Err("Aprove ao menos um card Anki antes de exportar.".into());
         }
         let (python, _, _) = crate::shared_runtime::qwen3_tts_paths(&app)?;
+        let ffmpeg = crate::media::shared_ffmpeg_path(&app)?;
         let parent = path.parent().ok_or("Caminho de exportação inválido.")?;
         fs::create_dir_all(parent).map_err(|e| format!("Não foi possível preparar o destino do pacote: {e}"))?;
         let input_path = parent.join(format!(".nova-materials-{}-input.json", uuid::Uuid::new_v4()));
         fs::write(&input_path, serde_json::to_vec_pretty(&stored).map_err(|e| e.to_string())?)
             .map_err(|e| format!("Não foi possível preparar os dados do pacote: {e}"))?;
         let result = crate::process::hidden_command(&python)
-            .arg("-c").arg(APKG_EXPORT_SCRIPT).arg(&input_path).arg(&path)
+            .arg("-c").arg(APKG_EXPORT_SCRIPT).arg(&input_path).arg(&path).arg(&ffmpeg)
             .output().map_err(|e| format!("Não foi possível iniciar o exportador Anki: {e}"));
         let _ = fs::remove_file(&input_path);
         let output = result?;

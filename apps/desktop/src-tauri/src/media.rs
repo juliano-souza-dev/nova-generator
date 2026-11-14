@@ -80,6 +80,8 @@ fn shared_resource(config: &Value, id: &str) -> Result<PathBuf, String> {
     names.into_iter().map(|n| p.join(n)).find(|candidate| candidate.is_file())
         .ok_or_else(|| format!("Executável compartilhado '{id}' não encontrado em {}.", p.display()))
 }
+pub fn shared_ffmpeg_path(app: &AppHandle) -> Result<PathBuf, String> { Ok(shared(app)?.ffmpeg) }
+
 fn shared(app: &AppHandle) -> Result<Shared, String> {
     let path = shared_manifest_path(app)?;
     let raw = fs::read(&path).map_err(|e| e.to_string())?;
