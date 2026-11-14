@@ -883,7 +883,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
           <section className="media-editor-preview-v2">
             {loading ? <div className="media-editor-placeholder">Preparando vídeo...</div> : src ? <>
               <div className="media-editor-video-wrap">
-                <video ref={video} src={src} controls playsInline preload="metadata"
+                <video ref={video} src={src} controls={ !predictionListeningOpen } playsInline preload="metadata"
                   onLoadedMetadata={e => { const ms = e.currentTarget.duration * 1000; setDuration(ms); }}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
@@ -1045,5 +1045,5 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         </aside>
       </div>
     </section>
-  </div>{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onSaved={ids => { setShadowingComplete(true); setShadowingSelectedCueIds(ids); }} onClose={() => setShadowingOpen(false)}/>}{predictionListeningOpen && predictionListeningReady && <PredictionListening projectId={projectId} assetId={asset.id} assetName={asset.name} cues={cues} selectedCueIds={shadowingSelectedCueIds} sourceSignature={shadowingSourceSignature} onClose={() => setPredictionListeningOpen(false)} onPreview={timeMs => { setPredictionListeningOpen(false); video.current?.pause(); seek(timeMs); }}/>}</>;
+  </div>{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onSaved={ids => { setShadowingComplete(true); setShadowingSelectedCueIds(ids); }} onClose={() => setShadowingOpen(false)}/>}{predictionListeningOpen && predictionListeningReady && <PredictionListening projectId={projectId} assetId={asset.id} assetName={asset.name} cues={cues} selectedCueIds={shadowingSelectedCueIds} sourceSignature={shadowingSourceSignature} onClose={() => setPredictionListeningOpen(false)} onPreview={timeMs => { setPredictionListeningOpen(false); video.current?.pause(); seek(timeMs); }} onDemoSeekAndPlay={timeMs => { seek(timeMs); void video.current?.play(); }} onDemoPause={() => video.current?.pause()} onDemoResume={timeMs => { seek(timeMs); void video.current?.play(); }} getCurrentTime={() => (video.current?.currentTime ?? 0) * 1000}/>}</>;
 }
