@@ -3,9 +3,8 @@ import MediaWorkspace from "./features/media/MediaWorkspace";
 import TaskCenter from "./features/tasks/TaskCenter";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy,
-  FolderKanban, Layers3, MoreHorizontal, Plus, Search, Sparkles, Trash2,
-  X, LayoutGrid, Clapperboard, FileText, AudioLines
+  ArrowLeft, ArrowRight, Check, Clock3, Copy, FolderKanban, Layers3,
+  Plus, Search, Sparkles, Trash2, X, LayoutGrid, FileText, AudioLines
 } from "lucide-react";
 
 type ProjectStatus = "in_progress" | "completed";
@@ -19,8 +18,9 @@ type Project = {
 };
 type View = "home" | "project";
 
-const stages = ["Planejamento", "Editorial", "Transcrição", "Tradução", "Materiais", "Exportação"];
-const stageIcons = [FileText, Layers3, AudioLines, BookOpen, BookOpen, Clapperboard];
+const stages = ["Editorial", "Shadowing", "Materiais"];
+const stageIcons = [FileText, AudioLines, Layers3];
+const stageLabel = (value: string) => stages.includes(value) ? value : "Editorial";
 
 function dateLabel(value: string) {
   const date = new Date(value);
@@ -99,7 +99,7 @@ export default function App() {
   }
 
   if (view === "project" && activeProject) {
-    const currentStage = Math.max(0, stages.indexOf(activeProject.stage));
+    const currentStage = Math.max(0, stages.indexOf(stageLabel(activeProject.stage)));
     return <div className="workspace-shell">\n      <TaskCenter />
       <header className="workspace-topbar">
         <button className="back-button" onClick={() => { setView("home"); setActiveProject(null); }}><ArrowLeft size={17}/> <span>Projetos</span></button>
@@ -117,7 +117,7 @@ export default function App() {
         <section className="stage-panel">
           <div className="panel-heading"><div><span className="eyebrow">ACOMPANHAMENTO</span><h2>Etapas do projeto</h2></div><span className="stage-count">{currentStage + 1} de {stages.length}</span></div>
           <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <div className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></div>; })}</div>
-          <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {activeProject.stage}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
+          <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {stageLabel(activeProject.stage)}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
         </section>
         <MediaWorkspace projectId={activeProject.id} />
       </main>
@@ -154,7 +154,7 @@ export default function App() {
           <button className={filter === "completed" ? "filter-tab active" : "filter-tab"} onClick={() => setFilter("completed")}>Concluídos <span>{completed.length}</span></button>
         </div>
         {filtered.length > 0 ? <div className="project-grid">{filtered.map(project => <article className="project-card" key={project.id}>
-          <button className="project-card-main" onClick={() => openProject(project)}><div className="project-card-art"><FolderKanban size={22}/><span className={project.status === "completed" ? "mini-status completed" : "mini-status"}/></div><div className="project-card-copy"><h3>{project.name}</h3><p>{project.stage} · Atualizado {dateLabel(project.updated_at)}</p></div></button>
+          <button className="project-card-main" onClick={() => openProject(project)}><div className="project-card-art"><FolderKanban size={22}/><span className={project.status === "completed" ? "mini-status completed" : "mini-status"}/></div><div className="project-card-copy"><h3>{project.name}</h3><p>{stageLabel(project.stage)} · Atualizado {dateLabel(project.updated_at)}</p></div></button>
           <div className="project-card-footer"><span className={project.status === "completed" ? "status-text completed" : "status-text"}>{project.status === "completed" ? "Concluído" : "Em andamento"}</span><div className="card-actions"><button title="Duplicar" onClick={() => void duplicateProject(project)}><Copy size={15}/></button><button title="Excluir" onClick={() => void deleteProject(project)}><Trash2 size={15}/></button><button title="Abrir" onClick={() => openProject(project)}><ArrowRight size={16}/></button></div></div>
         </article>)}</div> : <div className="empty-projects"><div className="empty-icon"><LayoutGrid size={22}/></div><h3>{search ? "Nenhum projeto encontrado" : filter === "completed" ? "Nenhum projeto concluído" : filter === "in_progress" ? "Nenhum projeto em andamento" : "Seu estúdio está pronto"}</h3><p>{search ? "Tente buscar por outro nome." : "Crie seu primeiro projeto para começar a organizar suas produções."}</p>{!search && filter !== "completed" && <button className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={16}/> Criar projeto</button>}</div>}
       </section>
