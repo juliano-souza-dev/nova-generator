@@ -399,7 +399,7 @@ export default function PredictionListening({
             <div className="prediction-challenge-rationale"><b>Justificativa editorial:</b> {challenge.editorialRationale}</div>
             <footer>
               <span>Início {challenge.clipStartMs} ms · Pausa {challenge.pauseAtMs} ms · Retomada {challenge.resumeAtMs} ms</span>
-              <button className="secondary-button" onClick={() => onPreview(challenge.pauseAtMs)}>Ver momento</button>
+              <button className="secondary-button" onClick={() => onPreview(challenge.clipStartMs)}>Pré-visualizar trecho</button>
               {challenge.status !== "approved" && <button className="primary-button" onClick={() => void changeStatus(challenge.id, "approved")} disabled={busy}>Aprovar</button>}
               {challenge.status !== "rejected" && <button className="secondary-button" onClick={() => void changeStatus(challenge.id, "rejected")} disabled={busy}>Rejeitar</button>}
               {challenge.status !== "draft" && <button className="secondary-button" onClick={() => void changeStatus(challenge.id, "draft")} disabled={busy}>Revisar novamente</button>}
