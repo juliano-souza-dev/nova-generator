@@ -46,11 +46,8 @@ pub struct AudioRequest {
     pub text: String,
     #[serde(default = "default_language")]
     pub language: String,
-    #[serde(default = "default_speaker")]
-    pub speaker: String,
 }
 fn default_language() -> String { "English".into() }
-fn default_speaker() -> String { "Aiden".into() }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
