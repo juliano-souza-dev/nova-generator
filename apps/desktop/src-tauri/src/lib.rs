@@ -179,7 +179,7 @@ pub fn run() {
             translation::load_project_editorial_result, translation::save_project_editorial_result, translation::clear_project_editorial_result, translation::approve_project_editorial_result,
             translation_contract::prepare_external_translation_package,
             prediction_listening::prepare_prediction_listening_package, prediction_listening::load_prediction_listening_result,
-            prediction_listening::save_prediction_listening_result, prediction_listening::save_prediction_listening_export
+            prediction_listening::save_prediction_listening_result
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Nova Generator");
