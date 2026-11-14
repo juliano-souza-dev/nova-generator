@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
-import { Check, Download, FileJson, FileText, PlayCircle, RefreshCw, RotateCcw, X } from "lucide-react";
+import { Check, FileJson, FileText, PlayCircle, RefreshCw, RotateCcw, X } from "lucide-react";
 import "./PredictionListening.css";
 
 type Cue = {
@@ -40,11 +39,27 @@ type Challenge = {
   editorialRationale: string;
   status: "draft" | "approved" | "rejected";
 };
+type Materials = {
+  contract: string;
+  source_hash: string;
+  media: { name: string };
+  challenges: {
+    id: string;
+    type: Challenge["type"];
+    clip_start_ms: number;
+    pause_at_ms: number;
+    resume_at_ms: number;
+    prompt: string;
+    choices: { id: string; text: string; is_correct: boolean }[];
+    explanation: string;
+  }[];
+};
 type Review = {
   contract: string;
   approval: "draft";
   source_hash: string;
   challenges: Challenge[];
+  materials?: Materials;
 };
 type Props = {
   projectId: string;
@@ -65,6 +80,25 @@ const OUTPUT_CONTRACT = "nova-generator-prediction-listening-output/1.0";
 const REVIEW_CONTRACT = "nova-generator-prediction-listening-review/1.0";
 const MATERIALS_CONTRACT = "nova-generator-prediction-listening-materials/1.0";
 const normalize = (value: string) => (value.replace(/[’‘]/g, "'").match(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu) ?? []).join(" ").toLowerCase();
+const buildMaterials = (review: Review, assetName: string): Materials => ({
+  contract: MATERIALS_CONTRACT,
+  source_hash: review.source_hash,
+  media: { name: assetName },
+  challenges: review.challenges.filter(item => item.status === "approved").map(item => ({
+    id: item.id,
+    type: item.type,
+    clip_start_ms: item.clipStartMs,
+    pause_at_ms: item.pauseAtMs,
+    resume_at_ms: item.resumeAtMs,
+    prompt: item.prompt,
+    choices: item.choices.map((choice, index) => ({
+      id: item.id + "-choice-" + (index + 1),
+      text: choice.text,
+      is_correct: choice.is_correct
+    })),
+    explanation: item.explanation
+  }))
+});
 
 export default function PredictionListening({
   projectId, assetId, assetName, cues, selectedCueIds, sourceSignature, onClose, onPreview,
@@ -104,7 +138,11 @@ export default function PredictionListening({
         if (!alive) return;
         setSourceHash(pkg.sourceHash);
         if (stored?.contract === REVIEW_CONTRACT && stored.source_hash === pkg.sourceHash) {
-          setReview(stored);
+          const hydrated = { ...stored, materials: buildMaterials(stored, assetName) };
+          setReview(hydrated);
+          if (JSON.stringify(stored.materials) !== JSON.stringify(hydrated.materials)) {
+            await invoke("save_prediction_listening_result", { projectId, assetId, result: hydrated });
+          }
         } else if (stored) {
           setNotice("A transcrição ou a seleção do Shadowing mudou. O resultado anterior foi preservado, mas precisa ser gerado novamente.");
         }
@@ -118,8 +156,9 @@ export default function PredictionListening({
   }, [projectId, assetId, sourceSignature]);
 
   async function persist(next: Review) {
-    await invoke("save_prediction_listening_result", { projectId, assetId, result: next });
-    setReview(next);
+    const persisted = { ...next, materials: buildMaterials(next, assetName) };
+    await invoke("save_prediction_listening_result", { projectId, assetId, result: persisted });
+    setReview(persisted);
   }
 
   async function downloadInput() {
@@ -310,53 +349,6 @@ export default function PredictionListening({
     }
   }
 
-  async function exportApproved() {
-    if (!review || busy) return;
-    const approved = review.challenges.filter(item => item.status === "approved");
-    if (!approved.length) {
-      setError("Aprove ao menos um desafio antes de exportar.");
-      return;
-    }
-    setBusy(true); setError(""); setNotice("");
-    try {
-      const output = {
-        contract: MATERIALS_CONTRACT,
-        source_hash: review.source_hash,
-        media: { name: assetName },
-        challenges: approved.map(item => ({
-          id: item.id,
-          type: item.type,
-          clip_start_ms: item.clipStartMs,
-          pause_at_ms: item.pauseAtMs,
-          resume_at_ms: item.resumeAtMs,
-          prompt: item.prompt,
-          choices: item.choices.map((choice, index) => ({
-            id: item.id + "-choice-" + (index + 1),
-            text: choice.text,
-            is_correct: choice.is_correct
-          })),
-          explanation: item.explanation
-        }))
-      };
-      const path = await save({
-        title: "Exportar Prediction Listening aprovado",
-        defaultPath: "prediction-listening-aprovados.json",
-        filters: [{ name: "Arquivo JSON", extensions: ["json"] }]
-      });
-      if (!path) return;
-      await invoke("save_prediction_listening_export", {
-        path,
-        bytes: Array.from(new TextEncoder().encode(JSON.stringify(output, null, 2)))
-      });
-      setNotice(approved.length + " desafio(s) aprovado(s) exportado(s).");
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-
   const approvedChallenges = useMemo(
     () => (review?.challenges ?? []).filter(item => item.status === "approved").slice().sort((a, b) => a.pauseAtMs - b.pauseAtMs),
     [review]
@@ -450,9 +442,6 @@ export default function PredictionListening({
         </button>
         <button className="secondary-button" onClick={() => fileInput.current?.click()} disabled={busy || loading || !sourceHash}>
           <FileJson size={15}/> Importar JSON
-        </button>
-        <button className="primary-button" onClick={() => void exportApproved()} disabled={busy || loading || counts.approved === 0}>
-          <Download size={15}/> Exportar aprovados ({counts.approved})
         </button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={event => void importResult(event.target.files?.[0])}/>
       </div>
