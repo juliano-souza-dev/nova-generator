@@ -96,6 +96,35 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
     return () => { alive = false; video.current?.pause(); };
   }, [projectId, asset.id, cues, sourceSignature]);
 
+
+  function seek(ms: number) {
+    const next = Math.max(0, Math.min(ms, duration || ms));
+    if (video.current) video.current.currentTime = next / 1000;
+    setCurrent(next);
+  }
+  function choose(block: ShadowingBlock) {
+    stopDemo();
+    setActiveId(block.cueIds[0] ?? "");
+    const first = cueById.get(block.cueIds[0]);
+    if (first) seek(first.startMs);
+  }
+  const startDemoBlock = useCallback((index: number) => {
+    const block = blocks[index];
+    const first = block ? cueById.get(block.cueIds[0]) : null;
+    if (!block || !first || !video.current) return;
+    setDemoIndex(index);
+    setActiveId(first.id);
+    setCurrent(first.startMs);
+    setDemoCountdown(0);
+    setDemoPhase("playing");
+    const player = video.current;
+    player.currentTime = first.startMs / 1000;
+    void player.play().catch(e => {
+      setError("Não foi possível iniciar o teste de Shadowing: " + String(e));
+      setDemoPhase("idle");
+    });
+  }, [blocks, cueById]);
+
   useEffect(() => {
     if (demoPhase !== "pause" || !demoBlock) return;
     const durationMs = Math.max(1000, Number(demoBlock.pauseDurationMs) || DEFAULT_PAUSE_MS);
@@ -125,34 +154,6 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
       window.clearTimeout(timeout);
     };
   }, [demoPhase, demoIndex, demoBlock, blocks.length, repeatEachBlock, repeatPass, startDemoBlock]);
-
-  function seek(ms: number) {
-    const next = Math.max(0, Math.min(ms, duration || ms));
-    if (video.current) video.current.currentTime = next / 1000;
-    setCurrent(next);
-  }
-  function choose(block: ShadowingBlock) {
-    stopDemo();
-    setActiveId(block.cueIds[0] ?? "");
-    const first = cueById.get(block.cueIds[0]);
-    if (first) seek(first.startMs);
-  }
-  const startDemoBlock = useCallback((index: number) => {
-    const block = blocks[index];
-    const first = block ? cueById.get(block.cueIds[0]) : null;
-    if (!block || !first || !video.current) return;
-    setDemoIndex(index);
-    setActiveId(first.id);
-    setCurrent(first.startMs);
-    setDemoCountdown(0);
-    setDemoPhase("playing");
-    const player = video.current;
-    player.currentTime = first.startMs / 1000;
-    void player.play().catch(e => {
-      setError("Não foi possível iniciar o teste de Shadowing: " + String(e));
-      setDemoPhase("idle");
-    });
-  }, [blocks, cueById]);
   function startDemo() {
     if (!blocks.length) return;
     setError("");
