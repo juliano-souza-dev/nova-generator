@@ -31,7 +31,7 @@ type AnkiCard = {
   audioPath?: string;
   status: "draft" | "approved";
 };
-type MaterialDocument = { version: 2; cards: AnkiCard[]; updatedAt: string; sourceSignature: string };
+type MaterialDocument = { version: 2; projectId: string; assetId: string; assetName: string; cards: AnkiCard[]; updatedAt: string; sourceSignature: string };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 
 const createCardId = () => crypto.randomUUID();
@@ -221,7 +221,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
 
   async function persistMaterials() {
     if (!assetId) throw new Error("Selecione uma mídia de origem.");
-    const document: MaterialDocument = { version: 2, cards, updatedAt: new Date().toISOString(), sourceSignature };
+    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", cards, updatedAt: new Date().toISOString(), sourceSignature };
     await invoke("save_project_materials", { projectId, assetId, materials: document });
     await invoke("update_project_stage", { id: projectId, stage: "Materiais" }).catch(() => undefined);
     onProjectUpdated?.();
