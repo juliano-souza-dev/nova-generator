@@ -208,8 +208,11 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
 
 /// Read voice names and the default selection from the Shared-owned voice catalog.
 fn voice_profiles_from_config(config: &Value) -> Result<(Option<String>, Vec<SharedVoiceSummary>), String> {
-    let voices = config.pointer("/shared/voices")
-        .ok_or("O Shared Runtime não publicou shared.voices. Atualize o Shared Runtime Manager e sincronize o Nova Generator.")?;
+    let Some(voices) = config.pointer("/shared/voices") else {
+        // Older Shared installations may not have published the voice catalog yet.
+        // Keep existing media/alignment features available and expose an empty list.
+        return Ok((None, Vec::new()));
+    };
     let default_voice_id = voices.get("default").and_then(Value::as_str).map(str::to_owned);
     let entries = voices.get("available").and_then(Value::as_array)
         .ok_or("O catálogo shared.voices.available está ausente ou inválido.")?;
