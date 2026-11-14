@@ -50,7 +50,7 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
     const suggestion = editorialResult?.suggestions?.find((s: any) => s.cue_id === id);
     return suggestion?.approved_pt || translations.find(t => t.id === id)?.text || "";
   };
-  const cueById = useMemo(() => new Map(cues.map(c => [c.id,c])), [cues]);
+  const cueById = useMemo(() => new Map<string, Cue>(cues.map(c => [c.id,c] as const)), [cues]);
   const demoBlock = blocks[demoIndex] ?? null;
   const demoCues = demoBlock?.cueIds.map(id => cueById.get(id)).filter((c): c is Cue => Boolean(c)) ?? [];
   const mergeIndexes = blocks.map((b,i) => mergeSelection.includes(blockKey(b)) ? i : -1).filter(i => i >= 0);
