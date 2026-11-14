@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import MediaWorkspace from "./features/media/MediaWorkspace";
-import MaterialsWorkspace from "./features/media/MaterialsWorkspace";
 import TaskCenter from "./features/tasks/TaskCenter";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -44,7 +43,6 @@ export default function App() {
   const [projectName, setProjectName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [projectModule, setProjectModule] = useState<"media" | "materials">("media");
 
   async function refreshProjects() {
     try {
@@ -115,21 +113,14 @@ export default function App() {
       <main className="project-workspace">
         <div className="project-heading">
           <div><div className="eyebrow">ESPAÇO DO PROJETO</div><h1>{activeProject.name}</h1><p>Criado em {dateLabel(activeProject.created_at)} · Última alteração {timeLabel(activeProject.updated_at)}</p></div>
-          <div className="project-heading-actions"><button type="button" className="workspace-materials-shortcut" onClick={() => setProjectModule("materials")}><Layers3 size={15}/> Abrir Materiais</button><button className="complete-button" onClick={() => void toggleStatus(activeProject)}>{activeProject.status === "completed" ? <Clock3 size={16}/> : <Check size={16}/>} {activeProject.status === "completed" ? "Reabrir projeto" : "Marcar como concluído"}</button></div>
+          <button className="complete-button" onClick={() => void toggleStatus(activeProject)}>{activeProject.status === "completed" ? <Clock3 size={16}/> : <Check size={16}/>} {activeProject.status === "completed" ? "Reabrir projeto" : "Marcar como concluído"}</button>
         </div>
-        <nav className="project-module-tabs" aria-label="Áreas do projeto">
-          <button type="button" className={projectModule === "media" ? "active" : ""} aria-current={projectModule === "media" ? "page" : undefined} onClick={() => setProjectModule("media")}><FileText size={16}/> <span><strong>Mídias e edição</strong><small>Editorial, Shadowing e Prediction Listening</small></span></button>
-          <button type="button" className={projectModule === "materials" ? "active" : ""} aria-current={projectModule === "materials" ? "page" : undefined} onClick={() => setProjectModule("materials")}><Layers3 size={16}/> <span><strong>Materiais</strong><small>Cards Anki, áudios e exportação</small></span></button>
-        </nav>
         <section className="stage-panel">
           <div className="panel-heading"><div><span className="eyebrow">ACOMPANHAMENTO</span><h2>Etapas do projeto</h2></div><span className="stage-count">{currentStage + 1} de {stages.length}</span></div>
           <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <div className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></div>; })}</div>
           <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {stageLabel(activeProject.stage)}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
         </section>
-        {projectModule === "media"
-          ? <MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />
-          : <MaterialsWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />
-        }
+        <MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />
       </main>
     </div>;
   }

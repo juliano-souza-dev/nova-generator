@@ -150,6 +150,39 @@ fn generate_audio_batch(app: &AppHandle, project_id: &str, asset_id: &str, reque
 }
 
 #[tauri::command]
+pub async fn extract_material_source_audio(
+    app: AppHandle, project_id: String, asset_id: String, card_id: String, start_ms: u64, end_ms: u64,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if card_id.is_empty() || card_id.len() > 80 || !card_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            return Err("Identificador de card inválido para extração de áudio.".into());
+        }
+        if end_ms <= start_ms || end_ms - start_ms > 120_000 {
+            return Err("O intervalo de áudio do card é inválido ou excede 2 minutos.".into());
+        }
+        let source = PathBuf::from(crate::media::open_project_media(app.clone(), project_id.clone(), asset_id.clone())?);
+        let target = materials_file(&app, &project_id, &asset_id)?;
+        let audio_dir = target.parent().ok_or("Pasta de Materiais inválida.")?.join("audio");
+        fs::create_dir_all(&audio_dir).map_err(|e| format!("Não foi possível preparar a pasta de áudio: {e}"))?;
+        let output = audio_dir.join(format!("{card_id}-source.wav"));
+        let ffmpeg = crate::media::shared_ffmpeg_path(&app)?;
+        let result = crate::process::hidden_command(&ffmpeg)
+            .arg("-y").arg("-ss").arg(format!("{:.3}", start_ms as f64 / 1000.0))
+            .arg("-i").arg(&source).arg("-t").arg(format!("{:.3}", (end_ms - start_ms) as f64 / 1000.0))
+            .args(["-vn", "-ac", "1", "-ar", "44100", "-c:a", "pcm_s16le"])
+            .arg(&output).output().map_err(|e| format!("Não foi possível iniciar o FFmpeg para extrair o áudio original: {e}"))?;
+        if !result.status.success() || !output.is_file() || fs::metadata(&output).map(|meta| meta.len() == 0).unwrap_or(true) {
+            let detail = String::from_utf8_lossy(&result.stderr);
+            return Err(format!("Não foi possível extrair o áudio original deste trecho: {}", detail.trim()));
+        }
+        let canonical = output.canonicalize().map_err(|e| e.to_string())?;
+        app.asset_protocol_scope().allow_file(&canonical)
+            .map_err(|e| format!("Não foi possível liberar a reprodução do áudio original: {e}"))?;
+        Ok(output.to_string_lossy().into_owned())
+    }).await.map_err(|e| format!("A extração do áudio foi interrompida: {e}"))?
+}
+
+#[tauri::command]
 pub async fn generate_material_audio(
     app: AppHandle, project_id: String, asset_id: String, requests: Vec<AudioRequest>,
 ) -> Result<Vec<AudioResult>, String> {
