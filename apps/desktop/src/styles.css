@@ -102,8 +102,8 @@
 .nova-task-logs summary span{color:#81798b;font-family:'DM Mono'}
 .nova-task-chevron{margin-left:auto;transition:transform .15s}
 .nova-task-logs[open] .nova-task-chevron{transform:rotate(180deg)}
-.nova-task-logs>div{max-height:130px;overflow:auto;margin-top:8px;padding:8px;border-radius:6px;background:#121116}
-.nova-task-logs p{margin:0 0 5px;color:#96909f;font:9px/1.55 'DM Mono';overflow-wrap:anywhere}
+.nova-task-logs>div{max-height:320px;overflow:auto;margin-top:8px;padding:8px;border-radius:6px;background:#121116}
+.nova-task-logs p{margin:0 0 5px;color:#96909f;font:9px/1.55 'DM Mono';overflow-wrap:anywhere;white-space:pre-wrap}
 .nova-task-logs p:last-child{margin-bottom:0}
 .nova-task-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 15px;border-top:1px solid #302b38;background:#19171e}
 .nova-task-footer button{border:1px solid #40394a;border-radius:6px;padding:7px 9px;background:#24212b;color:#c9c1d2;font-size:9px}
