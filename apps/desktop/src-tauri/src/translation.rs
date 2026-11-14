@@ -259,9 +259,6 @@ fn parse_streamed_json(raw: &str) -> Result<Value, String> {
 }
 
 fn translate_cue_streaming(
-    app: &AppHandle,
-    project_id: &str,
-    asset_id: &str,
     model: &str,
     key: &str,
     endpoint: &str,
@@ -484,12 +481,6 @@ fn translate_cue_streaming(
         }).collect::<Vec<_>>();
         parsed["semantic_units"] = json!(valid_units);
     }
-    let _ = app.emit("translation-stream", TranslationStream {
-        project_id: project_id.into(),
-        asset_id: asset_id.into(),
-        cue_id: cue.id.clone(),
-        delta: raw,
-    });
     Ok(parsed)
 }
 
@@ -718,7 +709,7 @@ pub async fn translate_project_subtitles(
                     let mut last_error = String::from("Nenhuma tentativa executada.");
                     for attempt in 0..MAX_ATTEMPTS_PER_MODEL {
                         match translate_cue_streaming(
-                            &app2, &project_id, &asset_id, model, &key, &endpoint, cue, &context,
+                            model, &key, &endpoint, cue, &context,
                             include_word_translations, include_semantic_units
                         ) {
                             Ok(value) => {
@@ -744,6 +735,13 @@ pub async fn translate_project_subtitles(
 
                                 match candidate {
                                     Ok(suggestion) => {
+                                        let stream_delta = serde_json::to_string(&suggestion).unwrap_or_default();
+                                        let _ = app2.emit("translation-stream", TranslationStream {
+                                            project_id: project_id.clone(),
+                                            asset_id: asset_id.clone(),
+                                            cue_id: cue.id.clone(),
+                                            delta: stream_delta,
+                                        });
                                         successful_suggestion = Some(suggestion);
                                         break 'model_fallback;
                                     }
@@ -755,7 +753,7 @@ pub async fn translate_project_subtitles(
 
                         if is_fatal_provider_error(&last_error) {
                             return Err(format!(
-                                "A Groq recusou a autenticação ou a permissão da conta.                                  A tradução foi interrompida sem descartar o progresso salvo. Detalhe: {last_error}"
+                                "A Groq recusou a autenticação ou a permissão da conta. A tradução foi interrompida sem descartar o progresso salvo. Detalhe: {last_error}"
                             ));
                         }
                         if should_skip_model(&last_error) {
@@ -789,7 +787,7 @@ pub async fn translate_project_subtitles(
                 }
 
                 let suggestion = successful_suggestion.ok_or_else(|| format!(
-                    "Não foi possível traduzir o trecho '{}' após esgotar as tentativas e os modelos disponíveis.                      O progresso anterior foi preservado. Falhas: {}",
+                    "Não foi possível traduzir o trecho '{}' após esgotar as tentativas e os modelos disponíveis. O progresso anterior foi preservado. Falhas: {}",
                     cue.id, failures.join(" | ")
                 ))?;
                 suggestion
