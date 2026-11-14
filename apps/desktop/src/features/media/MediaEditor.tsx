@@ -509,18 +509,149 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
-      const isEditorialContract = !Array.isArray(parsed) && parsed.contract === "nova-generator-editorial-suggestions/1.3";
-      if (!Array.isArray(parsed) && parsed.suggestions && !isEditorialContract) {
-        throw new Error("Contrato editorial não reconhecido. Use nova-generator-editorial-suggestions/1.3.");
+      let normalized = parsed;
+      const isExternalEditorial = !Array.isArray(parsed)
+        && parsed.contract === "nova-generator-external-editorial-output/1.0";
+
+      if (isExternalEditorial) {
+        if (typeof parsed.source_hash !== "string" || !parsed.source_hash) {
+          throw new Error("O JSON externo não contém o hash da entrada TXT.");
+        }
+        if (!Array.isArray(parsed.cues) || parsed.cues.length !== cues.length) {
+          throw new Error("O JSON precisa conter exatamente uma tradução para cada legenda do TXT.");
+        }
+
+        let nextWordNumber = 0;
+        const expectedByCue = cues.map((cue, cueIndex) => {
+          const words = (cue.words ?? []).map((word, wordIndex) => {
+            nextWordNumber += 1;
+            const leading = word.text.match(/^\\s*/u)?.[0] ?? "";
+            return {
+              number: nextWordNumber,
+              word_id: `${cue.id}:word:${String(wordIndex + 1).padStart(4, "0")}`,
+              order: wordIndex + 1,
+              leading,
+              surface: word.text.slice(leading.length),
+              start_ms: word.startMs,
+              end_ms: word.endMs
+            };
+          });
+          return { cue, cueNumber: cueIndex + 1, words };
+        });
+
+        const externalCueByNumber = new Map<number, any>();
+        for (const item of parsed.cues) {
+          const number = Number(item?.id);
+          if (!Number.isInteger(number) || number < 1 || externalCueByNumber.has(number)) {
+            throw new Error("O JSON contém números de legenda inválidos ou duplicados.");
+          }
+          externalCueByNumber.set(number, item);
+        }
+
+        const suggestions = expectedByCue.map(({ cue, cueNumber, words: expectedWords }) => {
+          const external = externalCueByNumber.get(cueNumber);
+          if (!external) throw new Error(`A legenda ${cueNumber} não foi devolvida pela IA.`);
+          const approvedPt = String(external.pt ?? "").trim();
+          if (!approvedPt) throw new Error(`A tradução PT da legenda ${cueNumber} está vazia.`);
+
+          const externalWords = Array.isArray(external.words) ? external.words : [];
+          const wordByNumber = new Map<number, any>();
+          for (const item of externalWords) {
+            const number = Number(item?.id);
+            if (!Number.isInteger(number) || wordByNumber.has(number)) {
+              throw new Error(`A legenda ${cueNumber} contém números de palavra inválidos ou duplicados.`);
+            }
+            wordByNumber.set(number, item);
+          }
+
+          const wordTranslations = expectedWords.map(expected => {
+            const translated = wordByNumber.get(expected.number);
+            const pt = String(translated?.pt ?? "").trim();
+            if (!pt) throw new Error(`A palavra ${expected.number} está sem tradução PT.`);
+            return { ...expected, pt };
+          });
+          if (wordByNumber.size !== expectedWords.length) {
+            throw new Error(`A quantidade de palavras da legenda ${cueNumber} não corresponde ao TXT.`);
+          }
+
+          const externalUnits = Array.isArray(external.semantic_units) ? external.semantic_units : [];
+          const positions = new Map(expectedWords.map((word, index) => [word.number, index]));
+          const used = new Set<number>();
+          const semanticUnits = externalUnits.map((unit: any, unitIndex: number) => {
+            const numbers = Array.isArray(unit.word_ids) ? unit.word_ids.map(Number) : [];
+            const groupId = String(unit.id ?? `G${unitIndex + 1}`).trim();
+            const pt = String(unit.pt ?? "").trim();
+            const en = String(unit.en ?? "").trim();
+            if (!groupId || numbers.length < 2 || !pt || !en) {
+              throw new Error(`Há um agrupamento semântico incompleto na legenda ${cueNumber}.`);
+            }
+            const indexes = numbers.map(number => positions.get(number));
+            if (indexes.some(index => index === undefined)) {
+              throw new Error(`Um agrupamento semântico da legenda ${cueNumber} referencia palavra inexistente ou de outra legenda.`);
+            }
+            for (let index = 1; index < indexes.length; index++) {
+              if (indexes[index] !== (indexes[index - 1] as number) + 1) {
+                throw new Error(`O agrupamento "${en}" não contém palavras contíguas.`);
+              }
+            }
+            for (const number of numbers) {
+              if (used.has(number)) throw new Error(`A palavra ${number} pertence a mais de um agrupamento semântico.`);
+              used.add(number);
+            }
+            const ids = numbers.map(number => expectedWords[positions.get(number)!].word_id);
+            const first = wordTranslations[positions.get(numbers[0])!];
+            first.pt_original = first.pt;
+            first.pt = pt;
+            first.semantic_group_id = groupId;
+            first.semantic_group_role = "lead";
+            for (const number of numbers.slice(1)) {
+              const member = wordTranslations[positions.get(number)!];
+              member.pt_original = member.pt;
+              member.semantic_group_id = groupId;
+              member.semantic_group_role = "member";
+            }
+            return { semantic_group_id: groupId, word_ids: ids, en, pt };
+          });
+
+          if (external.en && String(external.en).trim() !== cue.text.trim()) {
+            throw new Error(`O texto EN da legenda ${cueNumber} foi alterado. Preserve o original do TXT.`);
+          }
+          return {
+            cue_id: cue.id,
+            approved_en: cue.text,
+            approved_pt: approvedPt,
+            trailing: "",
+            notes: "",
+            ...(includeWordTranslations ? { word_translations: wordTranslations } : {}),
+            ...(includeSemanticUnits ? { semantic_units: semanticUnits } : {})
+          };
+        });
+
+        normalized = {
+          contract: "nova-generator-editorial-suggestions/1.3",
+          approval: "draft",
+          source_hash: parsed.source_hash,
+          predictions: {
+            word_translations: includeWordTranslations,
+            semantic_units: includeSemanticUnits
+          },
+          suggestions
+        };
+      }
+
+      const isEditorialContract = !Array.isArray(normalized)
+        && normalized.contract === "nova-generator-editorial-suggestions/1.3";
+      if (!Array.isArray(normalized) && normalized.suggestions && !isEditorialContract) {
+        throw new Error("Contrato editorial não reconhecido. Use o JSON retornado a partir do TXT atual.");
       }
       if (isEditorialContract) {
-        if (parsed.approval !== "draft") throw new Error("O resultado precisa estar em estado draft para revisão humana.");
-        if (typeof parsed.source_hash !== "string" || !parsed.source_hash) throw new Error("O JSON não contém o hash da transcrição do pacote. Gere o resultado usando o pacote atual.");
-        if (parsed.predictions?.word_translations !== includeWordTranslations || parsed.predictions?.semantic_units !== includeSemanticUnits) {
-          throw new Error("As predições do JSON não correspondem às opções selecionadas. Selecione as mesmas opções usadas na geração do pacote.");
+        if (normalized.approval !== "draft") throw new Error("O resultado precisa estar em estado draft para revisão humana.");
+        if (typeof normalized.source_hash !== "string" || !normalized.source_hash) throw new Error("O JSON não contém o hash da transcrição do pacote. Gere o resultado usando o TXT atual.");
+        if (normalized.predictions?.word_translations !== includeWordTranslations || normalized.predictions?.semantic_units !== includeSemanticUnits) {
+          throw new Error("As predições do JSON não correspondem às opções selecionadas. Selecione as mesmas opções usadas na geração do TXT.");
         }
       }
-      const items = Array.isArray(parsed) ? parsed : (parsed.translations ?? parsed.suggestions ?? parsed.cues);
+      const items = Array.isArray(normalized) ? normalized : (normalized.translations ?? normalized.suggestions ?? normalized.cues);
       if (!Array.isArray(items)) throw new Error("O JSON precisa conter uma lista de traduções.");
       const byId = new Map<string, string>();
       for (const item of items) {
@@ -534,7 +665,9 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
       }));
       if (!imported.length) throw new Error("Nenhum ID do JSON corresponde aos trechos desta transcrição.");
       if (imported.length !== cues.length) throw new Error("O arquivo contém " + imported.length + " traduções correspondentes para " + cues.length + " trechos. Importe um JSON completo com os mesmos IDs.");
-      setTranslations(imported); if (isEditorialContract) setEditorialResult(parsed); setTranslationDirty(true); setDirty(true); setSaved(false);
+      setTranslations(imported);
+      if (isEditorialContract) setEditorialResult(normalized);
+      setTranslationDirty(true); setDirty(true); setSaved(false);
       setTranslationInfo(imported.length + " traduções importadas. Revise e salve.");
     } catch (e) { setError("Falha ao importar JSON: " + String(e)); }
     finally { if (translationFileInput.current) translationFileInput.current.value = ""; }
