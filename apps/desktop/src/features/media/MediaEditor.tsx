@@ -606,7 +606,12 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
               if (used.has(number)) throw new Error(`A palavra ${number} pertence a mais de um agrupamento semântico.`);
               used.add(number);
             }
-            const ids = numbers.map(number => expectedWords[positions.get(number)!].word_id);
+            const selectedWords = numbers.map(number => expectedWords[positions.get(number)!]);
+            const expectedExpression = selectedWords.map(word => word.leading + word.surface).join("").trim();
+            if (en !== expectedExpression) {
+              throw new Error(`A expressão EN do grupo "${en}" não corresponde às palavras numeradas do TXT. Esperado: "${expectedExpression}".`);
+            }
+            const ids = selectedWords.map(word => word.word_id);
             const first = wordTranslations[positions.get(numbers[0])!];
             first.pt_original = first.pt;
             first.pt = pt;
@@ -621,8 +626,8 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             return { semantic_group_id: groupId, word_ids: ids, en, pt };
           });
 
-          if (external.en && String(external.en).trim() !== cue.text.trim()) {
-            throw new Error(`O texto EN da legenda ${cueNumber} foi alterado. Preserve o original do TXT.`);
+          if (typeof external.en !== "string" || external.en.trim() !== cue.text.trim()) {
+            throw new Error(`O texto EN da legenda ${cueNumber} foi alterado ou omitido. Preserve o original do TXT.`);
           }
           return {
             cue_id: cue.id,
@@ -892,7 +897,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
               <div className="media-editor-section-title"><strong>Trecho selecionado</strong><button className="media-editor-inline-link" onClick={() => { setActiveTrack("transcript"); seek(chosen.startMs); }}>Ver original</button></div>
               <div className="media-editor-source-text">{selectedEditorialSuggestion?.approved_en || chosen.text}</div>
               {selectedEditorialSuggestion && <div className="media-editor-inspector-section" style={{ marginTop: 12, padding: 12, border: "1px solid var(--border-subtle, #343a46)", borderRadius: 10 }}>
-                <div className="media-editor-section-title"><strong>Prévia da tradução editorial</strong><span className="media-editor-translation-count">Contrato 1.3</span></div>
+                <div className="media-editor-section-title"><strong>Prévia da tradução editorial</strong><span className="media-editor-translation-count">Contrato editorial</span></div>
                 <div className="media-editor-source-text" style={{ marginTop: 8 }}>{selectedEditorialSuggestion.approved_en || chosen.text}</div>
                 <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5, fontWeight: 600 }}>{selectedEditorialSuggestion.approved_pt || translations.find(t => t.id === chosen.id)?.text || "Tradução ainda não disponível"}</div>
               </div>}
