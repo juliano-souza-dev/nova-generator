@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import "./MaterialsWorkspace.css";
 
-type Asset = { id: string; name: string; kind: string; durationMs?: number | null };
+type Asset = { id: string; name: string; kind: string; durationMs?: number | null; sourceVideoId?: string | null };
 type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string };
 type Translation = { id: string; text: string };
 type SourceType = "editorial" | "shadowing" | "prediction" | "manual";
@@ -31,7 +31,7 @@ type AnkiCard = {
   audioPath?: string;
   status: "draft" | "approved";
 };
-type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string };
+type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 
 const createCardId = () => crypto.randomUUID();
@@ -44,6 +44,16 @@ const newCard = (): AnkiCard => {
   };
 };
 const text = (value: unknown) => typeof value === "string" ? value : "";
+const mergeSourceCards = (stored: AnkiCard[], generated: AnkiCard[]) => {
+  const used = new Set<string>();
+  const merged = generated.map(next => {
+    const match = stored.find(card => !used.has(card.id) && (card.key === next.key || (card.sourceType === next.sourceType && card.sourceCueId === next.sourceCueId && card.focus === next.focus)));
+    if (!match) return next;
+    used.add(match.id);
+    return { ...next, ...match, key: next.key, sourceCueId: next.sourceCueId, sourceType: next.sourceType };
+  });
+  return [...merged, ...stored.filter(card => !used.has(card.id))];
+};
 const normalizeStoredCard = (raw: any): AnkiCard => {
   const id = text(raw?.id) || createCardId();
   const focus = text(raw?.focus) || text(raw?.front);
@@ -65,13 +75,13 @@ const normalizeStoredCard = (raw: any): AnkiCard => {
     status: raw?.status === "approved" ? "approved" : "draft"
   };
 };
-const cardFromSuggestion = (item: any, cue: Cue, translation?: Translation): AnkiCard => {
+const cardFromSuggestion = (item: any, cue: Cue, translation?: Translation, index = 0): AnkiCard => {
   const focus = text(item.approved_en) || cue.text;
   const highlightEn = text(item.highlight_en) || text(item.highlightEn) || text(item.expression) || text(item.highlighted_expression);
   const highlightPt = text(item.highlight_pt) || text(item.highlightPt) || text(item.expression_pt);
   const example = Array.isArray(item.examples) ? item.examples[0] : null;
   return {
-    id: createCardId(), key: "anki-" + cue.id + "-" + createCardId(), sourceCueId: cue.id, sourceType: "editorial",
+    id: createCardId(), key: "source:editorial:" + cue.id + ":" + (text(item.id) || String(index)), sourceCueId: cue.id, sourceType: "editorial",
     type: text(item.type) || "expression", focus,
     meaning: text(item.meaning) || text(item.approved_pt) || text(translation?.text),
     highlightEn, markedEn: text(item.marked) || text(item.marked_en) || highlightEn,
@@ -82,24 +92,25 @@ const cardFromSuggestion = (item: any, cue: Cue, translation?: Translation): Ank
     speaker: text(cue.speaker), audioText: focus, status: "draft"
   };
 };
-const cardFromPrediction = (item: any): AnkiCard => {
+const cardFromPrediction = (item: any, cue: Cue, translation?: Translation): AnkiCard => {
   const id = createCardId();
-  const focus = text(item.prompt);
+  const focus = cue.text;
   const answer = text(item.answerText);
+  const meaning = text(translation?.text);
   return {
-    id, key: "anki-" + (text(item.cueId) || "prediction") + "-" + id,
-    sourceCueId: text(item.cueId), sourceType: "prediction", type: "listening",
-    focus, meaning: answer, highlightEn: text(item.highlightedText) || focus,
-    markedEn: text(item.markedEn) || text(item.highlightedText) || focus,
-    highlightPt: answer, markedPt: answer, explanation: text(item.explanation),
+    id, key: "source:prediction:" + text(item.id),
+    sourceCueId: cue.id, sourceType: "prediction", type: "listening",
+    focus, meaning, highlightEn: answer || text(item.highlightedText) || focus,
+    markedEn: answer || text(item.markedEn) || text(item.highlightedText) || focus,
+    highlightPt: "", markedPt: "", explanation: text(item.explanation),
     exampleEn: text(item.exampleEn), examplePt: text(item.examplePt),
-    speaker: "", audioText: answer || focus, status: "draft"
+    speaker: text(cue.speaker), audioText: focus, status: "draft"
   };
 };
 const cardFromShadowing = (cue: Cue, translation?: Translation): AnkiCard => {
   const meaning = text(translation?.text);
   return {
-    id: createCardId(), key: "anki-" + cue.id + "-" + createCardId(), sourceCueId: cue.id,
+    id: createCardId(), key: "source:shadowing:" + cue.id, sourceCueId: cue.id,
     sourceType: "shadowing", type: "shadowing", focus: cue.text, meaning,
     highlightEn: cue.text, markedEn: cue.text, highlightPt: meaning, markedPt: meaning,
     explanation: "Trecho selecionado e concluído no Shadowing.",
@@ -158,7 +169,15 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
         "load_shadowing_selection", { projectId, assetId: selectedId, cues, sourceSignature: signature }
       ).catch(() => null);
       const shadowingIds = shadowing?.sourceSignature === signature ? shadowing.selectedCueIds : [];
-      const isPredictionSaved = Boolean(prediction?.saved_at);
+      const translationById = new Map(translations.map(item => [item.id, item]));
+      let currentPredictionHash = "";
+      if (shadowingIds.length) {
+        const predictionPackage = await invoke<{ sourceHash: string }>("prepare_prediction_listening_package", {
+          projectId, assetId: selectedId, cues, selectedCueIds: shadowingIds, sourceSignature: signature
+        }).catch(() => null);
+        currentPredictionHash = predictionPackage?.sourceHash ?? "";
+      }
+      const isPredictionSaved = Boolean(currentPredictionHash && prediction?.contract === "nova-generator-prediction-listening-review/1.0" && prediction?.saved_at && prediction?.source_hash === currentPredictionHash);
       setPredictionSaved(isPredictionSaved);
       setSourceSignature(signature);
       setSourceInfo({
@@ -166,33 +185,34 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
         translations: translations.length,
         editorial: editorial?.suggestions?.length ?? 0,
         shadowing: shadowingIds.length,
-        predictions: Array.isArray(prediction?.challenges) ? prediction.challenges.filter((item: any) => item.status === "approved").length : 0
+        predictions: isPredictionSaved && Array.isArray(prediction?.challenges) ? prediction.challenges.filter((item: any) => item.status === "approved").length : 0
       });
 
-      if ((stored?.version === 1 || stored?.version === 2) && Array.isArray(stored.cards)) {
-        setCards(stored.cards.map(normalizeStoredCard));
-        if (stored.sourceSignature !== signature) setNotice("As fontes do projeto mudaram. Seus cards salvos foram preservados para revisão.");
-      } else {
-        const translationById = new Map(translations.map(item => [item.id, item]));
-        const suggestions = Array.isArray(editorial?.suggestions) ? editorial.suggestions : [];
-        const editorialCards = suggestions.flatMap((item: any) => {
-          const cue = cues.find(candidate => candidate.id === (item.cue_id ?? item.cueId));
-          if (!cue) return [];
-          const card = cardFromSuggestion(item, cue, translationById.get(cue.id));
-          return card.focus.trim() && card.meaning.trim() ? [card] : [];
-        });
-        const shadowingCards = shadowingIds.flatMap(id => {
-          const cue = cues.find(candidate => candidate.id === id);
-          if (!cue) return [];
-          const card = cardFromShadowing(cue, translationById.get(cue.id));
-          return card.focus.trim() && card.meaning.trim() ? [card] : [];
-        });
-        const predictionCards = isPredictionSaved && Array.isArray(prediction?.challenges)
-          ? prediction.challenges.filter((item: any) => item.status === "approved").map(cardFromPrediction)
-            .filter((card: AnkiCard) => card.focus.trim() && card.meaning.trim())
-          : [];
-        setCards([...editorialCards, ...shadowingCards, ...predictionCards]);
-      }
+      const suggestions = Array.isArray(editorial?.suggestions) ? editorial.suggestions : [];
+      const editorialCards = suggestions.flatMap((item: any, index: number) => {
+        const cue = cues.find(candidate => candidate.id === (item.cue_id ?? item.cueId));
+        if (!cue) return [];
+        const card = cardFromSuggestion(item, cue, translationById.get(cue.id), index);
+        return card.focus.trim() && card.meaning.trim() ? [card] : [];
+      });
+      const shadowingCards = shadowingIds.flatMap(id => {
+        const cue = cues.find(candidate => candidate.id === id);
+        if (!cue) return [];
+        const card = cardFromShadowing(cue, translationById.get(cue.id));
+        return card.focus.trim() && card.meaning.trim() ? [card] : [];
+      });
+      const predictionCards = isPredictionSaved && Array.isArray(prediction?.challenges)
+        ? prediction.challenges.filter((item: any) => item.status === "approved").flatMap((item: any) => {
+            const cue = cues.find(candidate => candidate.id === item.cueId);
+            if (!cue) return [];
+            const card = cardFromPrediction(item, cue, translationById.get(cue.id));
+            return card.focus.trim() && card.meaning.trim() ? [card] : [];
+          })
+        : [];
+      const generated = [...editorialCards, ...shadowingCards, ...predictionCards];
+      const savedCards = (stored?.version === 1 || stored?.version === 2) && Array.isArray(stored.cards) ? stored.cards.map(normalizeStoredCard) : [];
+      setCards(mergeSourceCards(savedCards, generated));
+      if (savedCards.length && stored?.sourceSignature !== signature) setNotice("As fontes mudaram. Novos cards foram incorporados; suas edições e cards anteriores foram preservados para revisão.");
     } catch (e) {
       setError(String(e)); setCards([]); setPredictionSaved(false);
     } finally { setLoading(false); }
@@ -221,9 +241,9 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
 
   async function persistMaterials() {
     if (!assetId) throw new Error("Selecione uma mídia de origem.");
-    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", cards, updatedAt: new Date().toISOString(), sourceSignature };
+    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, updatedAt: new Date().toISOString(), sourceSignature };
     await invoke("save_project_materials", { projectId, assetId, materials: document });
-    await invoke("update_project_stage", { id: projectId, stage: "Materiais" }).catch(() => undefined);
+    await invoke("update_project_stage", { id: projectId, stage: "Materiais" });
     onProjectUpdated?.();
     return document;
   }
@@ -289,7 +309,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
       setExporting(true);
       await persistMaterials();
       await invoke("export_project_materials_package", { projectId, assetId, outputPath: path });
-      setNotice("Pacote exportado com Anki (.apkg), JSON e áudios.");
+      setNotice("Pacote completo exportado com Anki (.apkg), JSON, reel MP4, manifesto e áudios.");
     } catch (e) { setError(String(e)); }
     finally { setExporting(false); }
   }
@@ -365,6 +385,21 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
               <label>Outro exemplo (EN) <textarea value={card.exampleEn} onChange={e => updateCard(card.id, { exampleEn: e.target.value })} placeholder="Exemplo adicional em inglês"/></label>
               <label>Outro exemplo (PT) <textarea value={card.examplePt} onChange={e => updateCard(card.id, { examplePt: e.target.value })} placeholder="Tradução do exemplo"/></label>
               <label>Texto para áudio <input value={card.audioText} onChange={e => updateCard(card.id, { audioText: e.target.value })} placeholder="Texto em inglês que será narrado"/></label>
+            </div>
+            <div className="materials-preview" aria-label="Prévia do card Anki Didactic v3">
+              <div className="materials-preview-side">
+                <span>FRENTE · EN → PT</span>
+                <strong>{card.focus || "Sua frase em inglês aparecerá aqui"}</strong>
+                <small>{card.highlightEn || "Expressão destacada"}</small>
+                {card.audioPath && <span className="materials-preview-audio"><Volume2 size={13}/> Áudio vinculado</span>}
+              </div>
+              <div className="materials-preview-side back">
+                <span>VERSO · MINI-AULA</span>
+                <strong>{card.meaning || "A tradução contextual aparecerá aqui"}</strong>
+                <small>{card.type.toUpperCase()} · {card.highlightPt || "Significado da expressão"}</small>
+                <p>{card.explanation || "A explicação contextual será exibida nesta área."}</p>
+                {(card.exampleEn || card.examplePt) && <footer>{card.exampleEn}<small>{card.examplePt}</small></footer>}
+              </div>
             </div>
             <div className="materials-audio-row">
               {card.audioPath ? <audio controls preload="none" src={convertFileSrc(card.audioPath)}/> : <span><FileAudio size={15}/> Nenhum áudio gerado</span>}

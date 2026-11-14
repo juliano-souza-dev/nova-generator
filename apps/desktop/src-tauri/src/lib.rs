@@ -132,7 +132,7 @@ fn update_project_status(app: tauri::AppHandle, id: String, status: String) -> R
 
 #[tauri::command]
 fn update_project_stage(app: tauri::AppHandle, id: String, stage: String) -> Result<Project, String> {
-    if !["Editorial", "Shadowing", "Materiais"].contains(&stage.as_str()) {
+    if !["Editorial", "Shadowing", "Prediction Listening", "Materiais"].contains(&stage.as_str()) {
         return Err("Etapa de projeto inválida.".into());
     }
     let mut projects = read_projects(&app)?;
@@ -140,7 +140,8 @@ fn update_project_stage(app: tauri::AppHandle, id: String, stage: String) -> Res
     let stage_rank = |value: &str| match value {
         "Editorial" => 0,
         "Shadowing" => 1,
-        "Materiais" => 2,
+        "Prediction Listening" => 2,
+        "Materiais" => 3,
         _ => -1,
     };
     // Etapas concluídas não devem regredir quando uma operação anterior for salva novamente.

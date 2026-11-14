@@ -19,8 +19,8 @@ type Project = {
 };
 type View = "home" | "project";
 
-const stages = ["Editorial", "Shadowing", "Materiais"];
-const stageIcons = [FileText, AudioLines, Layers3];
+const stages = ["Editorial", "Shadowing", "Prediction Listening", "Materiais"];
+const stageIcons = [FileText, AudioLines, AudioLines, Layers3];
 const stageLabel = (value: string) => stages.includes(value) ? value : "Editorial";
 
 function dateLabel(value: string) {
@@ -108,6 +108,7 @@ export default function App() {
         <button className="back-button" onClick={() => { setView("home"); setActiveProject(null); }}><ArrowLeft size={17}/> <span>Projetos</span></button>
         <div className="workspace-crumb"><span className="crumb-dot"/>{activeProject.name}</div>
         <div className="workspace-top-actions">
+          <button type="button" className="workspace-materials-shortcut" onClick={() => setProjectModule("materials")}><Layers3 size={15}/> Materiais</button>
           <span className={activeProject.status === "completed" ? "status-pill completed" : "status-pill"}>{activeProject.status === "completed" ? "Concluído" : "Em andamento"}</span>
           <button className="icon-button" title="Duplicar projeto" onClick={() => void duplicateProject(activeProject)}><Copy size={16}/></button>
         </div>
