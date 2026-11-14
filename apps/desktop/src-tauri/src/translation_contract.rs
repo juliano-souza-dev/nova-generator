@@ -264,7 +264,7 @@ pub fn build_external_package(
         sections.push("PT:".to_string());
         if include_word_translations {
             sections.push("PALAVRAS (preencha cada PT):".to_string());
-            for (order, word) in cue.words.as_deref().unwrap_or(&[]).iter().enumerate() {
+            for word in cue.words.as_deref().unwrap_or(&[]) {
                 word_number += 1;
                 let (leading, surface) = split_leading(&word.text);
                 sections.push(format!("[WORD {word_number:06}] EN: {}{} | PT:", leading, surface));
