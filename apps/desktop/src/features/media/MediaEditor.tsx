@@ -743,6 +743,54 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   }, [isPlaying]);
 
   const chosen = cues.find(c => c.id === selected) ?? null;
+
+  useEffect(() => {
+    function handleBlockNavigation(event: KeyboardEvent) {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+      const target = event.target as HTMLElement | null;
+      if (target && (
+        target.isContentEditable
+        || ["INPUT", "TEXTAREA", "SELECT", "VIDEO"].includes(target.tagName)
+      )) return;
+      if (!cues.length || loading || saving || aligning) return;
+
+      const direction = event.key === "ArrowRight" ? 1 : -1;
+      const selectedIndex = cues.findIndex(cue => cue.id === selected);
+      const activeIndex = selectedIndex >= 0
+        ? selectedIndex
+        : cues.findIndex(cue => current >= cue.startMs && current <= cue.endMs);
+
+      let nextIndex: number;
+      if (activeIndex >= 0) {
+        nextIndex = activeIndex + direction;
+      } else if (direction > 0) {
+        nextIndex = cues.findIndex(cue => cue.startMs > current);
+        if (nextIndex < 0 && current <= cues[0].startMs) nextIndex = 0;
+      } else {
+        nextIndex = -1;
+        for (let index = cues.length - 1; index >= 0; index--) {
+          if (cues[index].endMs < current) {
+            nextIndex = index;
+            break;
+          }
+        }
+        if (nextIndex < 0 && current >= cues[cues.length - 1].endMs) nextIndex = cues.length - 1;
+      }
+
+      if (nextIndex < 0 || nextIndex >= cues.length) return;
+      event.preventDefault();
+      const nextCue = cues[nextIndex];
+      setActiveTrack("transcript");
+      setSelected(nextCue.id);
+      seek(nextCue.startMs);
+    }
+
+    window.addEventListener("keydown", handleBlockNavigation);
+    return () => window.removeEventListener("keydown", handleBlockNavigation);
+  }, [cues, selected, current, loading, saving, aligning]);
+
   const selectedEditorialSuggestion = useMemo(() => {
     if (!chosen || !Array.isArray(editorialResult?.suggestions)) return null;
     return editorialResult.suggestions.find((item: any) => item.cue_id === chosen.id) ?? null;
