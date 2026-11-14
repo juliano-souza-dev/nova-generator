@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import MediaWorkspace from "./features/media/MediaWorkspace";
+import MaterialsWorkspace from "./features/media/MaterialsWorkspace";
 import TaskCenter from "./features/tasks/TaskCenter";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -43,6 +44,7 @@ export default function App() {
   const [projectName, setProjectName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [projectModule, setProjectModule] = useState<"media" | "materials">("media");
 
   async function refreshProjects() {
     try {
@@ -120,7 +122,14 @@ export default function App() {
           <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <div className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></div>; })}</div>
           <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {stageLabel(activeProject.stage)}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
         </section>
-        <MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />
+        <nav className="project-module-tabs" aria-label="Áreas do projeto">
+          <button className={projectModule === "media" ? "active" : ""} onClick={() => setProjectModule("media")}><FileText size={15}/> Mídias e edição</button>
+          <button className={projectModule === "materials" ? "active" : ""} onClick={() => setProjectModule("materials")}><Layers3 size={15}/> Materiais</button>
+        </nav>
+        {projectModule === "media"
+          ? <MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />
+          : <MaterialsWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />
+        }
       </main>
     </div>;
   }
