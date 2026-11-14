@@ -130,13 +130,13 @@ fn update_project_status(app: tauri::AppHandle, id: String, status: String) -> R
 
 #[tauri::command]
 fn save_external_translation_package(path: String, bytes: Vec<u8>) -> Result<(), String> {
-    if !path.to_ascii_lowercase().ends_with(".zip") {
-        return Err("O pacote precisa ser salvo como arquivo .zip.".into());
+    if !path.to_ascii_lowercase().ends_with(".txt") {
+        return Err("A entrada editorial precisa ser salva como arquivo .txt.".into());
     }
-    if bytes.is_empty() || bytes.len() > 100 * 1024 * 1024 {
-        return Err("O pacote ZIP está vazio ou excede o limite de 100 MB.".into());
+    if bytes.is_empty() || bytes.len() > 20 * 1024 * 1024 {
+        return Err("O arquivo TXT está vazio ou excede o limite de 20 MB.".into());
     }
-    fs::write(&path, bytes).map_err(|e| format!("Não foi possível gravar o pacote ZIP: {e}"))
+    fs::write(&path, bytes).map_err(|e| format!("Não foi possível gravar o arquivo TXT: {e}"))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
