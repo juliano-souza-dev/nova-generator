@@ -153,7 +153,7 @@ export default function PredictionListening({
       }
     })();
     return () => { alive = false; };
-  }, [projectId, assetId, sourceSignature]);
+  }, [projectId, assetId, assetName, sourceSignature]);
 
   async function persist(next: Review) {
     const persisted = { ...next, materials: buildMaterials(next, assetName) };
