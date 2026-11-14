@@ -25,3 +25,6 @@
 .shadowing-demo-options span{font-variant-numeric:tabular-nums}
 .shadowing-clip.merge-selected{outline:2px solid #80dfb9;outline-offset:2px}
 @media(max-width:700px){.shadowing-demo-options{align-items:flex-start}.shadowing-demo-options span{width:100%}.shadowing-merge-toolbar{padding:9px}}
+
+.shadowing-pause-setting{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--text-secondary,#9ca8b9);font-size:11px}
+.shadowing-pause-setting select{min-height:32px;padding:0 9px;color:var(--text-primary,#f3f5f8);background:var(--panel,#111722);border:1px solid var(--border-subtle,#303949);border-radius:7px;font:inherit}
