@@ -236,6 +236,19 @@ pub fn build_external_package(
         cue_number += 1;
         sections.push(String::new());
         sections.push(format!("[CUE {cue_number:04}]"));
+        let previous = index.saturating_sub(2);
+        if previous < index {
+            sections.push("CONTEXTO ANTERIOR (somente para compreender; não traduzir novamente):".to_string());
+            for context_cue in &cues[previous..index] {
+                sections.push(format!("- {}", context_cue.text));
+            }
+        }
+        if index + 1 < cues.len() {
+            sections.push("CONTEXTO POSTERIOR (somente para compreender; não traduzir novamente):".to_string());
+            for context_cue in cues.iter().skip(index + 1).take(2) {
+                sections.push(format!("- {}", context_cue.text));
+            }
+        }
         sections.push(format!("EN: {}", cue.text));
         sections.push("PT:".to_string());
         if include_word_translations {
