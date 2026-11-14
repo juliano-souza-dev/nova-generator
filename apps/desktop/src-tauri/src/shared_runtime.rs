@@ -7,6 +7,23 @@ const APPLICATION_ID: &str = "nova-generator";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SharedVoiceSummary {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone)]
+struct VoiceProfileRuntime {
+    id: String,
+    name: String,
+    python: PathBuf,
+    runner: PathBuf,
+    model: PathBuf,
+    profile: PathBuf,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SharedProviderSummary {
     pub id: String,
     pub name: String,
@@ -27,6 +44,9 @@ pub struct SharedRuntimeStatus {
     pub forced_alignment_ready: bool,
     pub qwen3_tts_path: Option<String>,
     pub qwen3_tts_ready: bool,
+    pub default_voice_id: Option<String>,
+    pub voices: Vec<SharedVoiceSummary>,
+    pub voice_cloning_ready: bool,
     pub providers: Vec<SharedProviderSummary>,
 }
 
@@ -150,6 +170,11 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
         python.is_file() && runner.is_file() && model.as_ref().is_some_and(|path| path.join("config.json").is_file())
     });
 
+    let (default_voice_id, voices) = voice_profiles_from_config(&config)?;
+    let voice_cloning_ready = voices.iter().any(|voice| {
+        voice_profile_runtime(&config, &voice.id).is_ok()
+    });
+
     let providers = shared_runtime_manager::api::get_authorized_providers_from_config(&path, APPLICATION_ID)
         .map_err(|error| format!("Não foi possível ler os provedores autorizados pelo Shared Runtime: {error}"))?
         .into_iter()
@@ -172,10 +197,81 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
         forced_alignment_ready: alignment_ready,
         qwen3_tts_path: qwen_runtime.map(|value| value.to_string_lossy().into_owned()),
         qwen3_tts_ready,
+        default_voice_id,
+        voices,
+        voice_cloning_ready,
         providers,
     })
 }
 
+
+
+/// Read voice names and the default selection from the Shared-owned voice catalog.
+fn voice_profiles_from_config(config: &Value) -> Result<(Option<String>, Vec<SharedVoiceSummary>), String> {
+    let voices = config.pointer("/shared/voices")
+        .ok_or("O Shared Runtime não publicou shared.voices. Atualize o Shared Runtime Manager e sincronize o Nova Generator.")?;
+    let default_voice_id = voices.get("default").and_then(Value::as_str).map(str::to_owned);
+    let entries = voices.get("available").and_then(Value::as_array)
+        .ok_or("O catálogo shared.voices.available está ausente ou inválido.")?;
+    let mut available = Vec::with_capacity(entries.len());
+    let mut seen = std::collections::HashSet::new();
+    for entry in entries {
+        let id = entry.get("id").and_then(Value::as_str).ok_or("Um perfil de voz não possui identificador.")?;
+        let name = entry.get("name").and_then(Value::as_str).ok_or("Um perfil de voz não possui nome.")?;
+        if id.trim().is_empty() || name.trim().is_empty() || !seen.insert(id.to_owned()) {
+            return Err("O catálogo de vozes contém identificadores ou nomes inválidos/duplicados.".into());
+        }
+        available.push(SharedVoiceSummary { id: id.to_owned(), name: name.to_owned() });
+    }
+    if default_voice_id.as_ref().is_some_and(|id| !seen.contains(id)) {
+        return Err("A voz padrão informada pelo Shared não existe no catálogo disponível.".into());
+    }
+    Ok((default_voice_id, available))
+}
+
+fn voice_profile_runtime(config: &Value, voice_id: &str) -> Result<VoiceProfileRuntime, String> {
+    if voice_id.trim().is_empty() {
+        return Err("Selecione uma voz da Biblioteca do Shared Runtime.".into());
+    }
+    let (_, available) = voice_profiles_from_config(config)?;
+    let entries = config.pointer("/shared/voices/available").and_then(Value::as_array)
+        .ok_or("O catálogo de vozes do Shared está indisponível.")?;
+    let entry = entries.iter().find(|entry| entry.get("id").and_then(Value::as_str) == Some(voice_id))
+        .ok_or_else(|| format!("A voz '{voice_id}' não está disponível neste computador. Atualize a Biblioteca de vozes no Shared Runtime Manager."))?;
+    let name = available.iter().find(|voice| voice.id == voice_id).map(|voice| voice.name.clone())
+        .ok_or("Não foi possível identificar o nome da voz selecionada.")?;
+    let required_path = |field: &str| -> Result<PathBuf, String> {
+        let raw = entry.get(field).and_then(Value::as_str)
+            .ok_or_else(|| format!("O perfil '{name}' não informa o caminho '{field}'."))?;
+        let path = PathBuf::from(raw);
+        if !path.is_absolute() {
+            return Err(format!("O caminho '{field}' do perfil '{name}' precisa ser absoluto."));
+        }
+        Ok(path)
+    };
+    let python = required_path("python")?;
+    let runner = required_path("runner")?;
+    let model = required_path("model_path")?;
+    let profile = required_path("profile_path")?;
+    if !python.is_file() || !runner.is_file() || !model.join("config.json").is_file()
+        || !profile.join("voice_clone_prompt.pt").is_file() {
+        return Err(format!("O perfil '{name}' está incompleto. Abra o Shared Runtime Manager e prepare novamente essa voz."));
+    }
+    Ok(VoiceProfileRuntime { id: voice_id.to_owned(), name, python, runner, model, profile })
+}
+
+/// Return the configured default voice and all profiles ready for selection.
+pub(crate) fn available_voices(app: &AppHandle) -> Result<(Option<String>, Vec<SharedVoiceSummary>), String> {
+    let (_, config) = load_config(app)?;
+    voice_profiles_from_config(&config)
+}
+
+/// Resolve all absolute paths needed by the shared Qwen3-TTS Base voice-cloning worker.
+pub(crate) fn voice_profile_paths(app: &AppHandle, voice_id: &str) -> Result<(PathBuf, PathBuf, PathBuf, PathBuf, String), String> {
+    let (_, config) = load_config(app)?;
+    let voice = voice_profile_runtime(&config, voice_id)?;
+    Ok((voice.python, voice.runner, voice.model, voice.profile, voice.name))
+}
 
 /// Resolve the isolated Qwen3-TTS runtime provisioned and owned by Shared Runtime Manager.
 pub(crate) fn qwen3_tts_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf, PathBuf), String> {
