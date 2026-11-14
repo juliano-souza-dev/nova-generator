@@ -23,7 +23,7 @@
 .materials-card-fields{display:grid;grid-template-columns:1fr 1fr;gap:11px}
 .materials-card-fields label{display:grid;gap:6px;color:#aaa4b2;font-size:9px}
 .materials-card-fields label:nth-child(n+3){grid-column:span 2}
-.materials-card-fields input,.materials-card-fields textarea{width:100%;min-width:0;padding:9px 10px;border:1px solid #3a3542;border-radius:6px;outline:0;background:#141318;color:#eee;font:10px/1.55 inherit;resize:vertical}
+.materials-card-fields input,.materials-card-fields textarea{width:100%;min-width:0;padding:9px 10px;border:1px solid #3a3542;border-radius:6px;outline:0;background:#141318;color:#eee;font:inherit;font-size:10px;line-height:1.55;resize:vertical}
 .materials-card-fields input:focus,.materials-card-fields textarea:focus{border-color:#9d80d1}
 .materials-card-fields textarea{min-height:54px}
 .materials-card-fields input::placeholder,.materials-card-fields textarea::placeholder{color:#625d69}
