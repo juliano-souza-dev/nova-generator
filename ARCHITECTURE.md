@@ -74,3 +74,12 @@ O contrato é a fonte das instruções e do formato de resposta, não o provedor
 ## Regra de modularização
 
 Extrações estruturais não devem alterar comportamento. Mudanças funcionais e refatorações devem ser separadas sempre que possível. Cada módulo precisa de responsabilidade clara, API pública pequena e testes próximos às regras que possui.
+
+## Biblioteca compartilhada de vozes
+
+- O Shared Runtime Manager é o proprietário dos perfis de clonagem Qwen3-TTS Base e publica `shared.voices.default` e `shared.voices.available` no `shared.config.json` de cada aplicativo registrado.
+- Cada entrada disponível contém o identificador, o nome amigável e os caminhos absolutos do perfil, modelo, Python e executor. O Nova Generator nunca copia nem instala esses recursos.
+- A área Materiais lê os nomes disponíveis pelo comando nativo `get_shared_runtime_status` e permite selecionar a voz para a síntese.
+- A síntese nativa resolve o identificador selecionado no catálogo local do Shared, valida os caminhos e chama o executor Base com o perfil correspondente. Não existe fallback silencioso para CustomVoice nem seleção aleatória.
+- Os arquivos WAV sintetizados pertencem ao projeto consumidor e são armazenados na pasta `materials/audio` do asset. O perfil de voz permanece exclusivamente no diretório central do Shared Runtime.
+- Se o catálogo não estiver publicado ou o perfil não estiver preparado, o Nova informa a indisponibilidade e não inicia a síntese.
