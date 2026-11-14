@@ -357,7 +357,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         if (translations.length > 0 || translationDirty) {
           await invoke("save_project_translations", { projectId, assetId: asset.id, translations });
         }
-        await invoke("update_project_stage", { id: projectId, stage: "Shadowing" });
+        if (cues.length > 0) await invoke("update_project_stage", { id: projectId, stage: "Shadowing" });
       });
       setSaved(true);
       setDirty(false);
