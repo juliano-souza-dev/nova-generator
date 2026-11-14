@@ -169,10 +169,14 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
         python.is_file() && runner.is_file() && model.as_ref().is_some_and(|path| path.join("config.json").is_file())
     });
 
-    let (default_voice_id, voices) = voice_profiles_from_config(&config)?;
-    let voice_cloning_ready = voices.iter().any(|voice| {
-        voice_profile_runtime(&config, &voice.id).is_ok()
-    });
+    let (configured_default_voice_id, configured_voices) = voice_profiles_from_config(&config)?;
+    // Only expose profiles whose executor, model and prepared prompt are present.
+    let voices: Vec<SharedVoiceSummary> = configured_voices.into_iter()
+        .filter(|voice| voice_profile_runtime(&config, &voice.id).is_ok())
+        .collect();
+    let default_voice_id = configured_default_voice_id
+        .filter(|id| voices.iter().any(|voice| &voice.id == id));
+    let voice_cloning_ready = !voices.is_empty();
 
     let providers = shared_runtime_manager::api::get_authorized_providers_from_config(&path, APPLICATION_ID)
         .map_err(|error| format!("Não foi possível ler os provedores autorizados pelo Shared Runtime: {error}"))?
@@ -260,12 +264,6 @@ fn voice_profile_runtime(config: &Value, voice_id: &str) -> Result<VoiceProfileR
         return Err(format!("O perfil '{name}' está incompleto. Abra o Shared Runtime Manager e prepare novamente essa voz."));
     }
     Ok(VoiceProfileRuntime { name, python, runner, model, profile })
-}
-
-/// Return the configured default voice and all profiles ready for selection.
-pub(crate) fn available_voices(app: &AppHandle) -> Result<(Option<String>, Vec<SharedVoiceSummary>), String> {
-    let (_, config) = load_config(app)?;
-    voice_profiles_from_config(&config)
 }
 
 /// Resolve all absolute paths needed by the shared Qwen3-TTS Base voice-cloning worker.
