@@ -232,8 +232,6 @@ pub fn build_external_package(
     sections.push(String::new());
     sections.push("LEGENDA E PALAVRAS".to_string());
 
-    let mut cue_map = Vec::new();
-    let mut word_map = Vec::new();
     for (index, cue) in cues.iter().enumerate() {
         cue_number += 1;
         sections.push(String::new());
@@ -246,19 +244,8 @@ pub fn build_external_package(
                 word_number += 1;
                 let (leading, surface) = split_leading(&word.text);
                 sections.push(format!("[WORD {word_number:06}] EN: {}{} | PT:", leading, surface));
-                word_map.push(json!({
-                    "number": word_number,
-                    "cue_number": cue_number,
-                    "order": order + 1,
-                    "word_id": format!("{}:word:{:04}", cue.id, order + 1),
-                    "leading": leading,
-                    "surface": surface,
-                    "start_ms": word.start_ms,
-                    "end_ms": word.end_ms
-                }));
             }
         }
-        cue_map.push(json!({"number":cue_number,"cue_id":cue.id,"order":index+1,"start_ms":cue.start_ms,"end_ms":cue.end_ms,"text":cue.text}));
     }
 
     sections.push(String::new());
