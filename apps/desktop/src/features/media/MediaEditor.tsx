@@ -571,7 +571,15 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             const translated = wordByNumber.get(expected.number);
             const pt = String(translated?.pt ?? "").trim();
             if (!pt) throw new Error(`A palavra ${expected.number} está sem tradução PT.`);
-            return { ...expected, pt };
+            return {
+              word_id: expected.word_id,
+              order: expected.order,
+              leading: expected.leading,
+              surface: expected.surface,
+              start_ms: expected.start_ms,
+              end_ms: expected.end_ms,
+              pt
+            };
           });
           if (wordByNumber.size !== expectedWords.length) {
             throw new Error(`A quantidade de palavras da legenda ${cueNumber} não corresponde ao TXT.`);
@@ -623,7 +631,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
               member.semantic_group_id = groupId;
               member.semantic_group_role = "member";
             }
-            return { semantic_group_id: groupId, word_ids: ids, en, pt };
+            return { semantic_group_id: groupId, word_ids: ids, pt };
           });
 
           if (typeof external.en !== "string" || external.en.trim() !== cue.text.trim()) {
