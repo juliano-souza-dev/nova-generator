@@ -1034,5 +1034,5 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         </aside>
       </div>
     </section>
-  </div>{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onSaved={ids => { setShadowingComplete(true); setShadowingSelectedCueIds(ids); }} onClose={() => setShadowingOpen(false)}/ >}{predictionListeningOpen && shadowingComplete && <PredictionListening projectId={projectId} assetId={asset.id} assetName={asset.name} cues={cues} selectedCueIds={shadowingSelectedCueIds} onClose={() => setPredictionListeningOpen(false)} onPreview={timeMs => { setPredictionListeningOpen(false); video.current?.pause(); seek(timeMs); }}/>}</>;
+  </div>{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onSaved={ids => { setShadowingComplete(true); setShadowingSelectedCueIds(ids); }} onClose={() => setShadowingOpen(false)}/>}{predictionListeningOpen && shadowingComplete && <PredictionListening projectId={projectId} assetId={asset.id} assetName={asset.name} cues={cues} selectedCueIds={shadowingSelectedCueIds} onClose={() => setPredictionListeningOpen(false)} onPreview={timeMs => { setPredictionListeningOpen(false); video.current?.pause(); seek(timeMs); }}/>}</>;
 }
