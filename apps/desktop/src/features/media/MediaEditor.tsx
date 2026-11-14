@@ -620,8 +620,10 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             }
             const selectedWords: (typeof expectedWords)[number][] = numbers.map((number: number) => expectedWords[positions.get(number)!]);
             const expectedExpression = selectedWords.map((word: (typeof expectedWords)[number], index: number) => (index === 0 ? word.leading : (word.leading || " ")) + word.surface).join("").trim();
-            if (en !== expectedExpression) {
-              throw new Error(`A expressão EN do grupo "${en}" não corresponde às palavras numeradas do TXT. Esperado: "${expectedExpression}".`);
+            const normalizeSemanticExpression = (value: string) =>
+              (value.match(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*/gu) ?? []).join(" ").toLowerCase();
+            if (normalizeSemanticExpression(en) !== normalizeSemanticExpression(expectedExpression)) {
+              throw new Error(`A expressão EN do grupo "${en}" não corresponde às palavras numeradas do TXT. Esperado: "${expectedExpression}". Confira as palavras e a ordem, desconsiderando apenas pontuação e espaços.`);
             }
             const ids = selectedWords.map((word: (typeof expectedWords)[number]) => word.word_id);
             const first = wordTranslations[positions.get(numbers[0])!];
