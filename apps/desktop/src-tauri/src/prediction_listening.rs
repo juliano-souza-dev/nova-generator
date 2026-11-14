@@ -220,11 +220,19 @@ fn result_file(app: &AppHandle, project_id: &str, asset_id: &str) -> Result<std:
 
 #[tauri::command]
 pub fn prepare_prediction_listening_package(
+    app: AppHandle,
     project_id: String,
     asset_id: String,
     cues: Vec<crate::media::SubtitleCue>,
     selected_cue_ids: Vec<String>,
+    source_signature: String,
 ) -> Result<PredictionListeningPackage, String> {
+    let plan = crate::media::load_shadowing_selection(
+        app.clone(), project_id.clone(), asset_id.clone(), cues.clone(), source_signature.clone()
+    )?.ok_or("Conclua e salve o Shadowing antes de preparar o Prediction Listening.")?;
+    if plan.source_signature != source_signature || plan.selected_cue_ids != selected_cue_ids {
+        return Err("A seleção salva do Shadowing não corresponde à transcrição atual. Revise e salve o Shadowing novamente.".into());
+    }
     build_external_package(&cues, &selected_cue_ids)
 }
 
