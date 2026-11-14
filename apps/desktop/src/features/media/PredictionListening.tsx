@@ -76,6 +76,7 @@ type Props = {
   onDemoPause: () => void;
   onDemoResume: (timeMs: number) => void;
   getCurrentTime: () => number;
+  onProjectUpdated?: () => void;
 };
 
 const OUTPUT_CONTRACT = "nova-generator-prediction-listening-output/1.0";
@@ -104,7 +105,7 @@ const buildMaterials = (review: Review, assetName: string): Materials => ({
 
 export default function PredictionListening({
   projectId, assetId, assetName, cues, selectedCueIds, sourceSignature, onClose, onPreview,
-  onDemoSeekAndPlay, onDemoPause, onDemoResume, getCurrentTime
+  onDemoSeekAndPlay, onDemoPause, onDemoResume, getCurrentTime, onProjectUpdated
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [sourceHash, setSourceHash] = useState("");
@@ -173,6 +174,7 @@ export default function PredictionListening({
       const persisted = { ...next, materials: buildMaterials(next, assetName) };
       await invoke("save_prediction_listening_result", { projectId, assetId, result: persisted });
       await invoke("update_project_stage", { id: projectId, stage: "Prediction Listening" });
+      onProjectUpdated?.();
       setReview(persisted);
       setNotice(approved.length
         ? `Prediction Listening salvo. ${approved.length} desafio(s) aprovado(s) liberados na área Materiais.`
