@@ -202,53 +202,95 @@ pub fn build_external_package(
     include_word_translations: bool,
     include_semantic_units: bool,
 ) -> Result<ExternalPackage, String> {
-    if include_semantic_units && !include_word_translations { return Err("Unidades semânticas dependem das traduções palavra por palavra. Ative as duas predições.".into()); }
-    if cues.is_empty() { return Err("Não há trechos de transcrição para preparar o pacote.".into()); }
+    if include_semantic_units && !include_word_translations {
+        return Err("Unidades semânticas dependem das traduções palavra por palavra. Ative as duas predições.".into());
+    }
+    if cues.is_empty() { return Err("Não há trechos de transcrição para preparar o arquivo.".into()); }
     if cues.len() > 5000 { return Err("O projeto excede o limite de 5.000 trechos.".into()); }
     if cues.iter().any(|c| c.id.trim().is_empty() || c.text.trim().is_empty() || c.end_ms <= c.start_ms) {
         return Err("A transcrição contém trechos inválidos.".into());
     }
+
     let input = build_editorial_input(project_id, asset_id, cues, include_word_translations, include_semantic_units)?;
-    let schema = output_schema(include_word_translations, include_semantic_units, input["source_hash"].as_str().unwrap_or(""));
-    let input_schema = input_schema(include_word_translations, include_semantic_units);
-    let contract_md = format!("# Contrato editorial Nova Generator 1.3\n\nIdentificador de entrada: `{INPUT_CONTRACT}`\n\nIdentificador de saída: `{OUTPUT_CONTRACT}`\n\n## Regras obrigatórias\n\n{EDITORIAL_RULES}\n\n## Predições selecionadas\n\n- Tradução por palavra: {}\n- Unidades semânticas: {}\n- Revisão humana obrigatória; a resposta deve permanecer em estado `draft`.\n",
-        if include_word_translations { "incluída" } else { "não incluída" },
-        if include_semantic_units { "incluídas" } else { "não incluídas" });
-    let readme = format!("# Pacote editorial para IA externa\n\n1. Leia `CONTRACT.md` integralmente.\n2. Leia `input-schema.json` e use `input.json` como fonte dos textos, IDs e tempos.\n3. Produza somente um JSON que respeite `output-schema.json`.\n4. Salve a resposta como `output.json`.\n5. Copie `source_hash` exatamente como está em `input.json`.\n6. Não altere IDs, ordem ou timestamps. Não omita conteúdo.\n7. Não produza conteúdo pedagógico, mini-aulas, exercícios ou Anki.\n8. Mantenha `approval` como `draft`; a aprovação será humana no Nova Generator.\n\nContrato: `{OUTPUT_CONTRACT}`.\n");
+    let source_hash = input["source_hash"].as_str().unwrap_or("");
+    let mut cue_number = 0usize;
+    let mut word_number = 0usize;
+    let mut sections = Vec::new();
+    sections.push("NOVA GENERATOR | TRADUÇÃO EDITORIAL EXTERNA".to_string());
+    sections.push("ENTRADA TXT 1.0 | RESPOSTA OBRIGATÓRIA: JSON".to_string());
+    sections.push(format!("SOURCE_HASH: {source_hash}"));
+    sections.push(format!("TRADUÇÃO POR PALAVRA: {}", if include_word_translations { "SIM" } else { "NÃO" }));
+    sections.push(format!("AGRUPAMENTOS SEMÂNTICOS: {}", if include_semantic_units { "SIM" } else { "NÃO" }));
+    sections.push(String::new());
+    sections.push("INSTRUÇÕES".to_string());
+    sections.push("Traduza cada legenda integralmente para português brasileiro natural. Não faça tradução literal nem resuma.".to_string());
+    sections.push("Para cada palavra numerada, preencha sua tradução contextual. Considere a frase inteira e o contexto do diálogo; não use equivalentes de dicionário desconectados.".to_string());
+    sections.push("Identifique expressões, phrasal verbs, locuções e construções cujo sentido dependa de várias palavras. Agrupe somente palavras inglesas CONTÍGUAS da mesma legenda. Não crie grupos artificiais.".to_string());
+    sections.push("Para cada grupo semântico, informe os números de todas as palavras inglesas que o compõem, a expressão EN completa e sua tradução natural PT. Uma palavra não pode pertencer a dois grupos.".to_string());
+    sections.push("A tradução da legenda completa (PT) e a tradução de cada palavra (PT) são obrigatórias. Preserve o texto EN. Não invente, remova ou renumere itens.".to_string());
+    sections.push("Responda exclusivamente com JSON válido, sem Markdown ou comentários, no formato indicado ao final deste arquivo.".to_string());
+    sections.push(String::new());
+    sections.push("LEGENDA E PALAVRAS".to_string());
+
+    let mut cue_map = Vec::new();
+    let mut word_map = Vec::new();
+    for (index, cue) in cues.iter().enumerate() {
+        cue_number += 1;
+        sections.push(String::new());
+        sections.push(format!("[CUE {cue_number:04}]"));
+        sections.push(format!("EN: {}", cue.text));
+        sections.push("PT:".to_string());
+        if include_word_translations {
+            sections.push("PALAVRAS (preencha cada PT):".to_string());
+            for (order, word) in cue.words.as_deref().unwrap_or(&[]).iter().enumerate() {
+                word_number += 1;
+                let (leading, surface) = split_leading(&word.text);
+                sections.push(format!("[WORD {word_number:06}] EN: {}{} | PT:", leading, surface));
+                word_map.push(json!({
+                    "number": word_number,
+                    "cue_number": cue_number,
+                    "order": order + 1,
+                    "word_id": format!("{}:word:{:04}", cue.id, order + 1),
+                    "leading": leading,
+                    "surface": surface,
+                    "start_ms": word.start_ms,
+                    "end_ms": word.end_ms
+                }));
+            }
+        }
+        cue_map.push(json!({"number":cue_number,"cue_id":cue.id,"order":index+1,"start_ms":cue.start_ms,"end_ms":cue.end_ms,"text":cue.text}));
+    }
+
+    sections.push(String::new());
+    sections.push("FORMATO OBRIGATÓRIO DO JSON DE RESPOSTA".to_string());
+    sections.push("{".to_string());
+    sections.push("  \"contract\": \"nova-generator-external-editorial-output/1.0\",".to_string());
+    sections.push(format!("  \"source_hash\": \"{source_hash}\","));
+    sections.push("  \"cues\": [".to_string());
+    sections.push("    {".to_string());
+    sections.push("      \"id\": 1, \"en\": \"legenda original\", \"pt\": \"tradução natural completa\",".to_string());
+    sections.push("      \"words\": [{\"id\": 1, \"pt\": \"tradução contextual\"}],".to_string());
+    sections.push("      \"semantic_units\": [{\"id\": \"G1\", \"word_ids\": [2, 3], \"en\": \"expressão em inglês\", \"pt\": \"sentido natural em português\"}]".to_string());
+    sections.push("    }".to_string());
+    sections.push("  ]".to_string());
+    sections.push("}".to_string());
+    sections.push(String::new());
+    sections.push("REGRAS DO JSON".to_string());
+    sections.push("- Use o número CUE exibido no TXT em cues[].id.".to_string());
+    sections.push("- Em words[].id, use o número WORD global exibido no TXT. Inclua todas as palavras exatamente uma vez.".to_string());
+    sections.push("- semantic_units deve ser [] quando não houver agrupamentos pertinentes.".to_string());
+    sections.push("- word_ids deve listar os números WORD em ordem, contíguos e pertencentes à mesma CUE.".to_string());
+    sections.push("- semantic_units[].en deve reproduzir a expressão inglesa formada pelas palavras listadas; semantic_units[].pt deve traduzir a expressão como unidade de sentido.".to_string());
+    sections.push("- Não inclua IDs internos, timestamps, explicações ou campos extras.".to_string());
+    sections.push("- O source_hash deve ser copiado exatamente.".to_string());
+
     let mut files = std::collections::BTreeMap::new();
-    files.insert("CONTRACT.md".into(), contract_md);
-    files.insert("README.md".into(), readme);
-    files.insert("input.json".into(), serde_json::to_string_pretty(&input).map_err(|e| e.to_string())?);
-    files.insert("input-schema.json".into(), serde_json::to_string_pretty(&input_schema).map_err(|e| e.to_string())?);
-    files.insert("output-schema.json".into(), serde_json::to_string_pretty(&schema).map_err(|e| e.to_string())?);
-
-    // Arquivo autossuficiente em texto puro para uso direto em qualquer IA externa.
-    // Mantém o conteúdo estruturado completo do pacote e explica como produzir a saída.
-    let complete_instructions = [
-        "NOVA GENERATOR — INSTRUÇÕES COMPLETAS PARA TRADUÇÃO EDITORIAL".to_string(),
-        "==============================================================".to_string(),
-        format!("Versão do pacote: 1.0\nContrato de entrada: {INPUT_CONTRACT}\nContrato de saída: {OUTPUT_CONTRACT}"),
-        format!("\nPREDIÇÕES SELECIONADAS\nTradução palavra por palavra: {}\nUnidades semânticas: {}",
-            if include_word_translations { "SIM" } else { "NÃO" },
-            if include_semantic_units { "SIM" } else { "NÃO" }),
-        "\nOBJETIVO E REGRAS EDITORIAIS\n".to_string(),
-        EDITORIAL_RULES.to_string(),
-        "\nINSTRUÇÕES OPERACIONAIS\nLeia todo este arquivo antes de processar. Use a transcrição integral abaixo como fonte de verdade. Gere exatamente uma sugestão para cada cue_id, preservando IDs, ordem e timestamps. Não invente nem descarte trechos ou palavras. A tradução deve ser integral, contextual e natural em português brasileiro. Não resuma. Não inclua comentários fora do JSON. A resposta deve ser somente JSON válido, sem cercas Markdown.".to_string(),
-        "\nENTRADA COMPLETA (JSON)\n".to_string(),
-        serde_json::to_string_pretty(&input).map_err(|e| e.to_string())?,
-        "\nESQUEMA DA ENTRADA (JSON SCHEMA)\n".to_string(),
-        serde_json::to_string_pretty(&input_schema).map_err(|e| e.to_string())?,
-        "\nESQUEMA OBRIGATÓRIO DA SAÍDA (JSON SCHEMA)\n".to_string(),
-        serde_json::to_string_pretty(&schema).map_err(|e| e.to_string())?,
-        "\nFORMATO DE SAÍDA ESPERADO\n".to_string(),
-        format!("{{\n  \"contract\": \"{OUTPUT_CONTRACT}\",\n  \"approval\": \"draft\",\n  \"source_hash\": \"{}\",\n  \"predictions\": {{ \"word_translations\": {}, \"semantic_units\": {} }},\n  \"suggestions\": [ ... uma sugestão para cada cue_id ... ]\n}}",
-            input["source_hash"].as_str().unwrap_or(""),
-            include_word_translations, include_semantic_units),
-        "\nVALIDAÇÃO ANTES DE RESPONDER\n- O JSON deve ser válido e respeitar output-schema.json.\n- contract deve ser exatamente nova-generator-editorial-suggestions/1.3.\n- approval deve permanecer draft.\n- source_hash deve ser copiado sem qualquer alteração.\n- predictions deve repetir exatamente as duas opções selecionadas acima.\n- suggestions deve conter todos os cue_id, uma única vez, na ordem original.\n- Não altere timestamps, IDs ou conteúdo de origem.\n- Quando habilitada, word_translations deve conter cada palavra recebida exatamente uma vez, com word_id, order, leading, surface, start_ms e end_ms preservados.\n- Quando habilitadas, semantic_units devem agrupar somente palavras contíguas da mesma cue, sem sobreposição; não force grupos desnecessários.\n- Não aprove automaticamente. O resultado será revisado por uma pessoa no Nova Generator.\n- Salve ou devolva somente o objeto JSON final, sem explicações adicionais.".to_string()
-    ].join("\n");
-    files.insert("INSTRUCOES_COMPLETAS.txt".into(), complete_instructions);
-
-    Ok(ExternalPackage { package_version: "1.0".into(), contract_id: OUTPUT_CONTRACT.into(), files })
+    files.insert("entrada-editorial.txt".into(), sections.join("\n"));
+    Ok(ExternalPackage {
+        package_version: "1.0".into(),
+        contract_id: "nova-generator-external-editorial-output/1.0".into(),
+        files,
+    })
 }
 
 #[tauri::command]
