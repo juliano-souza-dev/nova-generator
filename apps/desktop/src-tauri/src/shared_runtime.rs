@@ -14,7 +14,6 @@ pub struct SharedVoiceSummary {
 
 #[derive(Debug, Clone)]
 struct VoiceProfileRuntime {
-    id: String,
     name: String,
     python: PathBuf,
     runner: PathBuf,
@@ -260,7 +259,7 @@ fn voice_profile_runtime(config: &Value, voice_id: &str) -> Result<VoiceProfileR
         || !profile.join("voice_clone_prompt.pt").is_file() {
         return Err(format!("O perfil '{name}' está incompleto. Abra o Shared Runtime Manager e prepare novamente essa voz."));
     }
-    Ok(VoiceProfileRuntime { id: voice_id.to_owned(), name, python, runner, model, profile })
+    Ok(VoiceProfileRuntime { name, python, runner, model, profile })
 }
 
 /// Return the configured default voice and all profiles ready for selection.
