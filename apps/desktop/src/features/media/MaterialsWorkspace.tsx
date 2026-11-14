@@ -159,9 +159,16 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
   }, []);
 
   function updateCard(id: string, patch: Partial<AnkiCard>) {
-    setCards(current => current.map(card => card.id === id
-      ? { ...card, ...patch, status: patch.status ?? (Object.keys(patch).some(key => key !== "audioPath") ? "draft" : card.status) }
-      : card));
+    setCards(current => current.map(card => {
+      if (card.id !== id) return card;
+      const audioTextChanged = patch.front !== undefined || patch.audioText !== undefined;
+      return {
+        ...card,
+        ...patch,
+        audioPath: audioTextChanged ? undefined : (patch.audioPath ?? card.audioPath),
+        status: patch.status ?? (Object.keys(patch).some(key => key !== "audioPath") ? "draft" : card.status)
+      };
+    }));
   }
 
   async function persistMaterials() {
