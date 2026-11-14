@@ -334,8 +334,17 @@ pub fn save_project_subtitles(app: AppHandle, project_id: String, asset_id: Stri
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ShadowingBlock {
+    pub cue_ids: Vec<String>,
+    pub pause_duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ShadowingSelection {
     pub selected_cue_ids: Vec<String>,
+    #[serde(default)]
+    pub blocks: Vec<ShadowingBlock>,
     pub source_snapshot: Vec<SubtitleCue>,
     #[serde(default)]
     pub source_signature: String,
@@ -366,7 +375,7 @@ pub fn load_shadowing_selection(app: AppHandle, project_id: String, asset_id: St
 }
 
 #[tauri::command]
-pub fn save_shadowing_selection(app: AppHandle, project_id: String, asset_id: String, cues: Vec<SubtitleCue>, selected_cue_ids: Vec<String>, source_signature: String) -> Result<(), String> {
+pub fn save_shadowing_selection(app: AppHandle, project_id: String, asset_id: String, cues: Vec<SubtitleCue>, selected_cue_ids: Vec<String>, blocks: Vec<ShadowingBlock>, source_signature: String) -> Result<(), String> {
     if cues.len() > 5000 || selected_cue_ids.is_empty() {
         return Err("Selecione ao menos um bloco e respeite o limite de 5.000 blocos.".into());
     }
@@ -381,8 +390,39 @@ pub fn save_shadowing_selection(app: AppHandle, project_id: String, asset_id: St
     if selected_cue_ids.iter().any(|id| !available.contains(id.as_str()) || !selected_seen.insert(id.as_str())) {
         return Err("A seleção contém um bloco inexistente ou duplicado.".into());
     }
+    if blocks.is_empty() {
+        return Err("Monte ao menos um bloco de prática antes de salvar.".into());
+    }
+    let positions: std::collections::HashMap<&str, usize> = cues.iter().enumerate().map(|(index, cue)| (cue.id.as_str(), index)).collect();
+    let mut block_seen = std::collections::HashSet::new();
+    let mut flattened = Vec::new();
+    let mut previous_last_position: Option<usize> = None;
+    for block in &blocks {
+        if block.cue_ids.is_empty() || !(1_000..=30_000).contains(&block.pause_duration_ms) {
+            return Err("Cada bloco precisa conter falas e uma pausa entre 1 e 30 segundos.".into());
+        }
+        let mut previous_position: Option<usize> = None;
+        for id in &block.cue_ids {
+            let position = *positions.get(id.as_str()).ok_or("Um bloco contém uma fala inexistente.")?;
+            if !block_seen.insert(id.as_str()) {
+                return Err("Uma fala não pode aparecer em mais de um bloco.".into());
+            }
+            if previous_position.is_some_and(|previous| position != previous + 1) {
+                return Err("As falas mescladas precisam ser consecutivas na transcrição.".into());
+            }
+            previous_position = Some(position);
+            flattened.push(id.clone());
+        }
+        if previous_last_position.is_some_and(|previous| previous >= previous_position.unwrap_or(0)) {
+            return Err("Os blocos precisam respeitar a ordem da transcrição.".into());
+        }
+        previous_last_position = previous_position;
+    }
+    if flattened != selected_cue_ids {
+        return Err("A seleção de falas não corresponde aos blocos de prática.".into());
+    }
     let path = shadowing_selection_file(&app, &project_id, &asset_id)?;
-    let plan = ShadowingSelection { selected_cue_ids, source_snapshot: cues, source_signature, updated_at: now_ms() };
+    let plan = ShadowingSelection { selected_cue_ids, blocks, source_snapshot: cues, source_signature, updated_at: now_ms() };
     let temp = path.with_extension("json.tmp");
     fs::write(&temp, serde_json::to_vec_pretty(&plan).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     if path.exists() { fs::remove_file(&path).map_err(|e| e.to_string())?; }
