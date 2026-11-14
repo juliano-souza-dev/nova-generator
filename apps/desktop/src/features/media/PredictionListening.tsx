@@ -466,7 +466,7 @@ export default function PredictionListening({
           <FileJson size={15}/> Importar JSON
         </button>
         <button className="primary-button" onClick={() => void saveForMaterials()} disabled={!review || busy || loading || Boolean(review?.saved_at)} title={review?.saved_at ? "Este resultado já foi salvo para Materiais" : "Salvar explicitamente e liberar a área Materiais"}>
-          <Save size={15}/>{review?.saved_at ? "Salvo para Materiais" : "Salvar e liberar Materiais"}
+          <Save size={15}/>{review?.saved_at ? "Salvo para Materiais" : "Salvar"}
         </button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={event => void importResult(event.target.files?.[0])}/>
       </div>
