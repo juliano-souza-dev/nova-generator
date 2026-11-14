@@ -40,6 +40,10 @@
       {
         "id": "forced-alignment",
         "required": true
+      },
+      {
+        "id": "qwen3-tts",
+        "required": true
       }
     ],
     "providers": [
