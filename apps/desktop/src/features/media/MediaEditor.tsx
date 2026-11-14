@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowLeft, Captions, Check, Clock3, Download, Film, Languages, Pause, Play, Plus, Save, SkipBack, SkipForward, Trash2, X } from "lucide-react";
+import { ArrowLeft, AudioLines, Captions, Check, Clock3, Download, Film, Languages, Pause, Play, Plus, Save, SkipBack, SkipForward, Trash2, X } from "lucide-react";
 import { runTrackedTask } from "../tasks/TaskCenter";
 import { downloadExternalTranslationPackage, type ExternalTranslationPackage } from "./translationPackage";
 import ShadowingEditor from "./ShadowingEditor";
@@ -809,7 +809,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
   ];
   const pct = (ms: number) => duration > 0 ? Math.max(0, Math.min(100, ms / duration * 100)) : 0;
 
-  return <div className="media-editor-backdrop">
+  return <><div className="media-editor-backdrop">
     <section className="media-editor media-editor-v2" role="dialog" aria-modal="true" aria-label="Editor de mídia">
       <header className="media-editor-header">
         <button className="media-editor-back" onClick={() => { if (!aligning && (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?"))) onClose(); }} disabled={aligning}><ArrowLeft size={16}/> Biblioteca</button>
@@ -989,5 +989,5 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         </aside>
       </div>
     </section>
-  </div>{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onClose={() => setShadowingOpen(false)}/>};
+  </div>{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onClose={() => setShadowingOpen(false)}/>}</>;
 }
