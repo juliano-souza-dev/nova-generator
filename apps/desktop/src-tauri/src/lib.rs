@@ -147,7 +147,7 @@ pub fn run() {
             list_projects, create_project, duplicate_project, delete_project, update_project_status, save_external_translation_package,
             media::inspect_youtube, media::prepare_youtube_cache, media::authorize_youtube_preview, media::list_project_media,
             media::import_media_files, media::trim_youtube_cache,
-            media::open_project_media, media::load_project_subtitles, media::save_project_subtitles,
+            media::open_project_media, media::load_project_subtitles, media::save_project_subtitles, media::load_shadowing_selection, media::save_shadowing_selection,
             alignment::align_project_subtitles,
             shared_runtime::get_shared_runtime_status,
             transcription::transcribe_media, transcription::check_local_asr, transcription::install_local_asr,
