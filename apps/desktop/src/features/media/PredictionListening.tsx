@@ -52,6 +52,7 @@ type Props = {
   assetName: string;
   cues: Cue[];
   selectedCueIds: string[];
+  sourceSignature: string;
   onClose: () => void;
   onPreview: (timeMs: number) => void;
 };
@@ -62,7 +63,7 @@ const MATERIALS_CONTRACT = "nova-generator-prediction-listening-materials/1.0";
 const normalize = (value: string) => (value.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) ?? []).join(" ").toLowerCase();
 
 export default function PredictionListening({
-  projectId, assetId, assetName, cues, selectedCueIds, onClose, onPreview
+  projectId, assetId, assetName, cues, selectedCueIds, sourceSignature, onClose, onPreview
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [sourceHash, setSourceHash] = useState("");
@@ -85,7 +86,7 @@ export default function PredictionListening({
       try {
         const [pkg, stored] = await Promise.all([
           invoke<Package>("prepare_prediction_listening_package", {
-            projectId, assetId, cues, selectedCueIds
+            projectId, assetId, cues, selectedCueIds, sourceSignature
           }),
           invoke<Review | null>("load_prediction_listening_result", { projectId, assetId })
         ]);
@@ -103,7 +104,7 @@ export default function PredictionListening({
       }
     })();
     return () => { alive = false; };
-  }, [projectId, assetId]);
+  }, [projectId, assetId, sourceSignature]);
 
   async function persist(next: Review) {
     await invoke("save_prediction_listening_result", { projectId, assetId, result: next });
@@ -115,7 +116,7 @@ export default function PredictionListening({
     setBusy(true); setError(""); setNotice("");
     try {
       const pkg = await invoke<Package>("prepare_prediction_listening_package", {
-        projectId, assetId, cues, selectedCueIds
+        projectId, assetId, cues, selectedCueIds, sourceSignature
       });
       const content = pkg.files["prediction-listening-entrada.txt"];
       if (!content) throw new Error("O TXT de entrada não foi gerado.");
