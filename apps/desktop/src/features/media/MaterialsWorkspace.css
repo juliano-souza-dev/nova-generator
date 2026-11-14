@@ -90,3 +90,7 @@
 .materials-voice-select{display:grid;gap:5px;max-width:360px;color:#aaa4b2;font-size:9px;font-weight:700}
 .materials-voice-select select{width:100%;min-width:0;padding:9px 11px;border:1px solid #51465f;border-radius:7px;background:#211e27;color:#f2edf7;font:inherit;font-size:11px}
 .materials-voice-select select:disabled{opacity:.55;cursor:not-allowed}
+
+.materials-voice-select-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.materials-voice-refresh{display:inline-flex;align-items:center;gap:4px;padding:3px 6px;border:0;border-radius:5px;background:transparent;color:#b99bf1;font:inherit;font-size:9px;cursor:pointer}
+.materials-voice-refresh:hover{background:#30263e;color:#e3d5ff}
