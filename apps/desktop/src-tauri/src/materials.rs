@@ -162,6 +162,8 @@ data = json.loads(source.read_text(encoding="utf-8"))
 cards = [card for card in data.get("cards", []) if card.get("status") == "approved"]
 if not cards:
     raise SystemExit("Aprove ao menos um card Anki antes de exportar.")
+if any(not str(card.get("front") or "").strip() or not str(card.get("back") or "").strip() for card in cards):
+    raise SystemExit("Todos os cards aprovados precisam ter frente e verso preenchidos.")
 for card in cards:
     audio = card.get("audioPath")
     if not audio or not pathlib.Path(audio).is_file():
