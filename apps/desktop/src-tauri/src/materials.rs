@@ -210,6 +210,7 @@ with tempfile.TemporaryDirectory(prefix="nova-anki-") as temporary:
         audio_path = pathlib.Path(card["audioPath"])
         audio_name = "audio_%04d.wav" % (index + 1)
         media_map[str(media_index)] = audio_name
+        media_index += 1
         audio_entries.append((audio_name, audio_path))
         audio_field = "[sound:%s]" % audio_name
         values = [front, back, str(card.get("expression") or ""), str(card.get("explanation") or ""), str(card.get("examples") or "").replace("\n", "<br>"), audio_field]
