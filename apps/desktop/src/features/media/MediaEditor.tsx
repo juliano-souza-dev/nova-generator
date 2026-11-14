@@ -567,7 +567,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
             wordByNumber.set(number, item);
           }
 
-          const wordTranslations = expectedWords.map(expected => {
+          const wordTranslations: any[] = expectedWords.map(expected => {
             const translated = wordByNumber.get(expected.number);
             const pt = String(translated?.pt ?? "").trim();
             if (!pt) throw new Error(`A palavra ${expected.number} está sem tradução PT.`);
@@ -607,7 +607,7 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
               used.add(number);
             }
             const selectedWords = numbers.map(number => expectedWords[positions.get(number)!]);
-            const expectedExpression = selectedWords.map(word => word.leading + word.surface).join("").trim();
+            const expectedExpression = selectedWords.map((word, index) => (index === 0 ? word.leading : (word.leading || " ")) + word.surface).join("").trim();
             if (en !== expectedExpression) {
               throw new Error(`A expressão EN do grupo "${en}" não corresponde às palavras numeradas do TXT. Esperado: "${expectedExpression}".`);
             }
