@@ -181,7 +181,8 @@ pub fn run() {
             translation_contract::prepare_external_translation_package,
             prediction_listening::prepare_prediction_listening_package, prediction_listening::load_prediction_listening_result,
             prediction_listening::save_prediction_listening_result,
-            materials::load_project_materials, materials::save_project_materials
+            materials::load_project_materials, materials::save_project_materials,
+            materials::generate_material_audio, materials::export_project_materials_package
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Nova Generator");
