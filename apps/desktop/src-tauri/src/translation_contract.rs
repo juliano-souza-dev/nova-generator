@@ -205,6 +205,9 @@ pub fn build_external_package(
     if include_semantic_units && !include_word_translations {
         return Err("Unidades semânticas dependem das traduções palavra por palavra. Ative as duas predições.".into());
     }
+    if include_word_translations && cues.iter().any(|cue| cue.words.as_deref().map_or(true, |words| words.is_empty())) {
+        return Err("Execute a sincronização palavra por palavra antes de exportar o TXT. Cada legenda precisa ter suas palavras alinhadas.".into());
+    }
     if cues.is_empty() { return Err("Não há trechos de transcrição para preparar o arquivo.".into()); }
     if cues.len() > 5000 { return Err("O projeto excede o limite de 5.000 trechos.".into()); }
     if cues.iter().any(|c| c.id.trim().is_empty() || c.text.trim().is_empty() || c.end_ms <= c.start_ms) {
