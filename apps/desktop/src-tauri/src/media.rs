@@ -332,6 +332,60 @@ pub fn save_project_subtitles(app: AppHandle, project_id: String, asset_id: Stri
 }
 
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShadowingSelection {
+    pub selected_cue_ids: Vec<String>,
+    pub source_snapshot: Vec<SubtitleCue>,
+    pub updated_at: u64,
+}
+
+fn shadowing_selection_file(app: &AppHandle, project_id: &str, asset_id: &str) -> Result<PathBuf, String> {
+    if !valid_id(asset_id) { return Err("Identificador de mídia inválido.".into()); }
+    let root = project_dir(app, project_id)?;
+    let assets = read_assets(&root)?;
+    if !assets.iter().any(|item| item.id == asset_id) { return Err("Mídia não encontrada neste projeto.".into()); }
+    let dir = root.join("shadowing");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join(format!("{asset_id}.json")))
+}
+
+#[tauri::command]
+pub fn load_shadowing_selection(app: AppHandle, project_id: String, asset_id: String, cues: Vec<SubtitleCue>) -> Result<Option<ShadowingSelection>, String> {
+    let path = shadowing_selection_file(&app, &project_id, &asset_id)?;
+    if !path.exists() { return Ok(None); }
+    let raw = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    if raw.trim().is_empty() { return Ok(None); }
+    let mut plan: ShadowingSelection = serde_json::from_str(&raw).map_err(|e| format!("Seleção de Shadowing inválida: {e}"))?;
+    let available: std::collections::HashSet<&str> = cues.iter().map(|cue| cue.id.as_str()).collect();
+    plan.selected_cue_ids.retain(|id| available.contains(id.as_str()));
+    Ok(Some(plan))
+}
+
+#[tauri::command]
+pub fn save_shadowing_selection(app: AppHandle, project_id: String, asset_id: String, cues: Vec<SubtitleCue>, selected_cue_ids: Vec<String>) -> Result<(), String> {
+    if cues.len() > 5000 || selected_cue_ids.is_empty() {
+        return Err("Selecione ao menos um bloco e respeite o limite de 5.000 blocos.".into());
+    }
+    let mut seen = std::collections::HashSet::new();
+    for cue in &cues {
+        if !valid_id(&cue.id) || cue.text.len() > 2000 || cue.end_ms <= cue.start_ms || !seen.insert(cue.id.as_str()) {
+            return Err("A transcrição contém blocos inválidos ou identificadores repetidos.".into());
+        }
+    }
+    let available: std::collections::HashSet<&str> = cues.iter().map(|cue| cue.id.as_str()).collect();
+    let mut selected_seen = std::collections::HashSet::new();
+    if selected_cue_ids.iter().any(|id| !available.contains(id.as_str()) || !selected_seen.insert(id.as_str())) {
+        return Err("A seleção contém um bloco inexistente ou duplicado.".into());
+    }
+    let path = shadowing_selection_file(&app, &project_id, &asset_id)?;
+    let plan = ShadowingSelection { selected_cue_ids, source_snapshot: cues, updated_at: now_ms() };
+    let temp = path.with_extension("json.tmp");
+    fs::write(&temp, serde_json::to_vec_pretty(&plan).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    if path.exists() { fs::remove_file(&path).map_err(|e| e.to_string())?; }
+    fs::rename(temp, path).map_err(|e| e.to_string())
+}
+
 pub(crate) fn project_media_root(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
     project_dir(app, project_id)
 }
