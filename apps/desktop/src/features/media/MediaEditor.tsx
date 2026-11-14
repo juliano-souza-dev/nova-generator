@@ -64,6 +64,8 @@ const fmt = (ms: number) => {
 
 export default function MediaEditor({ projectId, asset, onClose, onProjectUpdated }: { projectId: string; asset: Asset; onClose: () => void; onProjectUpdated?: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
+  const onProjectUpdatedRef = useRef(onProjectUpdated);
+  useEffect(() => { onProjectUpdatedRef.current = onProjectUpdated; }, [onProjectUpdated]);
   const translationFileInput = useRef<HTMLInputElement>(null);
   const timelineDragMoved = useRef(false);
   const [src, setSrc] = useState("");
@@ -123,6 +125,9 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         }
         setSelected(stored[0]?.id ?? null);
         if (stored.length) setActiveTrack("transcript");
+        if (stored.length > 0) {
+          await invoke("update_project_stage", { id: projectId, stage: "Shadowing" }).then(() => onProjectUpdatedRef.current?.()).catch(error => console.warn("Não foi possível sincronizar a etapa Shadowing:", error));
+        }
       } catch (e) { if (alive) setError(String(e)); }
       finally { if (alive) setLoading(false); }
     })();
