@@ -202,6 +202,14 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
     setMergeSelection([]);
     setSaved(false);
   }
+  function removeBlock(block: ShadowingBlock) {
+    const removed = new Set(block.cueIds);
+    const next = blocks.filter(item => item !== block);
+    setBlocks(next);
+    if (removed.has(activeId)) setActiveId(next[0]?.cueIds[0] ?? "");
+    setMergeSelection([]);
+    setSaved(false);
+  }
   function toggleExcluded(id: string) {
     if (selectedSet.has(id)) {
       const next = blocks.flatMap(block => {
@@ -342,7 +350,7 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
                   <CheckCircle2 size={16}/>
                   <span><strong>{block.cueIds.map(id => cueById.get(id)?.text ?? "").filter(Boolean).join(" ") || "Bloco sem texto"}</strong><small>Bloco {index+1} · {clock(first?.startMs ?? 0)} – {clock(last?.endMs ?? 0)} · {block.cueIds.length} fala(s)</small></span>
                 </button>
-                <button className="shadowing-block-action" title="Retirar bloco da prática" onClick={()=>block.cueIds.forEach(id=>toggleExcluded(id))}><Trash2 size={15}/></button>
+                <button className="shadowing-block-action" title="Retirar bloco da prática" onClick={()=>removeBlock(block)}><Trash2 size={15}/></button>
               </article>;
             })}
             {showExcluded && excluded.map(cue=><article key={cue.id} className="shadowing-block">
