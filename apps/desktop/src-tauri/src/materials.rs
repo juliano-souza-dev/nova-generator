@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     fs,
-    io::{BufRead, BufReader, Write},
+    io::Write,
     path::PathBuf,
     process::Stdio,
 };
@@ -110,22 +110,47 @@ fn generate_audio_batch(app: &AppHandle, project_id: &str, asset_id: &str, reque
     }
     drop(child.stdin.take());
 
-    let stdout = child.stdout.take().ok_or("Não foi possível ler a resposta do Qwen3-TTS.")?;
+    // Capture both streams together. Some Python/native dependencies may write startup
+    // diagnostics to stdout before the JSON-lines protocol begins; those lines must not
+    // abort an otherwise valid synthesis response.
+    let output = child.wait_with_output().map_err(|e| format!("Não foi possível finalizar o Qwen3-TTS: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     let mut responses = Vec::with_capacity(requests.len());
-    for line in BufReader::new(stdout).lines() {
-        let line = line.map_err(|e| format!("Falha ao ler a resposta do Qwen3-TTS: {e}"))?;
-        if line.trim().is_empty() { continue; }
-        let response: Value = serde_json::from_str(&line).map_err(|e| format!("Resposta inválida do Qwen3-TTS: {e}"))?;
-        if response.get("status").and_then(Value::as_str) != Some("completed") {
-            let detail = response.get("error").and_then(Value::as_str).unwrap_or("Erro não especificado pelo sintetizador.");
-            return Err(format!("Falha ao sintetizar o card '{}': {detail}", response.get("id").and_then(Value::as_str).unwrap_or("desconhecido")));
+    let mut non_protocol_lines = Vec::new();
+
+    for line in stdout.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        match serde_json::from_str::<Value>(line) {
+            Ok(response) => {
+                if response.get("status").and_then(Value::as_str) != Some("completed") {
+                    let detail = response.get("error").and_then(Value::as_str).unwrap_or("Erro não especificado pelo sintetizador.");
+                    let traceback = response.get("traceback").and_then(Value::as_str).unwrap_or("");
+                    let suffix = if traceback.is_empty() { String::new() } else { format!("\\n{traceback}") };
+                    return Err(format!("Falha ao sintetizar o card '{}': {detail}{suffix}", response.get("id").and_then(Value::as_str).unwrap_or("desconhecido")));
+                }
+                responses.push(response);
+            }
+            Err(_) => non_protocol_lines.push(line.to_string()),
         }
-        responses.push(response);
     }
-    let status = child.wait().map_err(|e| format!("Não foi possível finalizar o Qwen3-TTS: {e}"))?;
-    if !status.success() { return Err("O processo Qwen3-TTS terminou com erro.".into()); }
+
+    if !output.status.success() {
+        let diagnostic = stderr.lines().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\\n");
+        return Err(if diagnostic.is_empty() {
+            format!("O processo Qwen3-TTS terminou com código {}.", output.status)
+        } else {
+            format!("O processo Qwen3-TTS terminou com erro: {diagnostic}")
+        });
+    }
     if responses.len() != requests.len() {
-        return Err(format!("O Qwen3-TTS retornou {} de {} áudios solicitados.", responses.len(), requests.len()));
+        let stdout_diagnostic = non_protocol_lines.into_iter().take(3).collect::<Vec<_>>().join(" | ");
+        let stderr_diagnostic = stderr.lines().rev().take(5).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\\n");
+        let details = [stdout_diagnostic, stderr_diagnostic].into_iter().filter(|value| !value.is_empty()).collect::<Vec<_>>().join("\\n");
+        return Err(if details.is_empty() {
+            format!("O Qwen3-TTS retornou {} de {} áudios solicitados.", responses.len(), requests.len())
+        } else {
+            format!("O Qwen3-TTS retornou {} de {} áudios solicitados. Diagnóstico: {details}", responses.len(), requests.len())
+        });
     }
 
     let mut results = Vec::with_capacity(responses.len());
