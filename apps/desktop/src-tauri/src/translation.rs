@@ -586,13 +586,13 @@ fn editorial_fallback_models() -> [&'static str; 3] {
 }
 
 fn is_fatal_provider_error(error: &str) -> bool {
-    error.contains("Groq HTTP 401") || error.contains("Groq HTTP 402") || error.contains("Groq HTTP 403")
+    error.contains("Groq HTTP 401") || error.contains("Groq HTTP 402")
 }
 
 fn should_skip_model(error: &str) -> bool {
     // Rate limits and model/parameter incompatibilities should move directly
     // to the next model instead of wasting retries against the same one.
-    ["Groq HTTP 400", "Groq HTTP 404", "Groq HTTP 422", "Groq HTTP 429"]
+    ["Groq HTTP 400", "Groq HTTP 403", "Groq HTTP 404", "Groq HTTP 422", "Groq HTTP 429"]
         .iter()
         .any(|marker| error.contains(marker))
 }
@@ -788,7 +788,7 @@ pub async fn translate_project_subtitles(
                     failures.push(format!("{model}: {last_error}"));
                     if model_index + 1 < models.len() {
                         emit(
-                            &app2, &project_id, &asset_id, "fallback",
+                            &app2, &project_id, &asset_id, "retrying",
                             index as f32 / total as f32 * 100.0, index, total,
                             &format!(
                                 "O modelo {model} não concluiu este trecho. Alternando para {}...",
