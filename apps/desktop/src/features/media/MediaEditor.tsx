@@ -517,6 +517,10 @@ export default function MediaEditor({ projectId, asset, onClose }: { projectId: 
         if (typeof parsed.source_hash !== "string" || !parsed.source_hash) {
           throw new Error("O JSON externo não contém o hash da entrada TXT.");
         }
+        if (parsed.predictions?.word_translations !== includeWordTranslations
+          || parsed.predictions?.semantic_units !== includeSemanticUnits) {
+          throw new Error("As opções predictions do JSON não correspondem às selecionadas para o TXT.");
+        }
         if (!Array.isArray(parsed.cues) || parsed.cues.length !== cues.length) {
           throw new Error("O JSON precisa conter exatamente uma tradução para cada legenda do TXT.");
         }
