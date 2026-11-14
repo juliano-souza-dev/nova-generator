@@ -7,7 +7,7 @@ type Cue = { id: string; startMs: number; endMs: number; text: string };
 type Translation = { id: string; text: string };
 type Asset = { id: string; name: string };
 type ShadowingBlock = { cueIds: string[]; pauseDurationMs: number };
-type Props = { projectId: string; asset: Asset; cues: Cue[]; translations: Translation[]; editorialResult: Record<string, any> | null; onClose: () => void };
+type Props = { projectId: string; asset: Asset; cues: Cue[]; translations: Translation[]; editorialResult: Record<string, any> | null; onClose: () => void; onSaved?: (selectedCueIds: string[], sourceSignature: string) => void };
 type StoredPlan = { selectedCueIds: string[]; blocks?: ShadowingBlock[]; sourceSnapshot: Cue[]; sourceSignature?: string; updatedAt: number };
 type DemoPhase = "idle" | "playing" | "pause" | "complete";
 
@@ -250,6 +250,7 @@ export default function ShadowingEditor({ projectId, asset, cues, translations, 
     try {
       await invoke("save_shadowing_selection", { projectId, assetId: asset.id, cues, selectedCueIds: selectedIds, blocks, sourceSignature });
       setSaved(true); setStale(false);
+      onSaved?.(selectedIds, sourceSignature);
     } catch (e) { setError(String(e)); }
     finally { setSaving(false); }
   }
