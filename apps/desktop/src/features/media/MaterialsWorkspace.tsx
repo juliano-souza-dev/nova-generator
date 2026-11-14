@@ -178,8 +178,16 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
         currentPredictionHash = predictionPackage?.sourceHash ?? "";
       }
       const isPredictionSaved = Boolean(currentPredictionHash && prediction?.contract === "nova-generator-prediction-listening-review/1.0" && prediction?.saved_at && prediction?.source_hash === currentPredictionHash);
+      const materialSignature = JSON.stringify([
+        signature,
+        shadowingIds,
+        currentPredictionHash,
+        isPredictionSaved && Array.isArray(prediction?.challenges)
+          ? prediction.challenges.map((item: any) => [item.id, item.status, item.answerText])
+          : []
+      ]);
       setPredictionSaved(isPredictionSaved);
-      setSourceSignature(signature);
+      setSourceSignature(materialSignature);
       setSourceInfo({
         cues: cues.length,
         translations: translations.length,
@@ -212,7 +220,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
       const generated = [...editorialCards, ...shadowingCards, ...predictionCards];
       const savedCards = (stored?.version === 1 || stored?.version === 2) && Array.isArray(stored.cards) ? stored.cards.map(normalizeStoredCard) : [];
       setCards(mergeSourceCards(savedCards, generated));
-      if (savedCards.length && stored?.sourceSignature !== signature) setNotice("As fontes mudaram. Novos cards foram incorporados; suas edições e cards anteriores foram preservados para revisão.");
+      if (savedCards.length && stored?.sourceSignature !== materialSignature) setNotice("As fontes mudaram. Novos cards foram incorporados; suas edições e cards anteriores foram preservados para revisão.");
     } catch (e) {
       setError(String(e)); setCards([]); setPredictionSaved(false);
     } finally { setLoading(false); }
