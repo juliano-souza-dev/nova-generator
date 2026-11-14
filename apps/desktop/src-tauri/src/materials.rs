@@ -289,13 +289,27 @@ with tempfile.TemporaryDirectory(prefix="nova-anki-") as temporary:
         archive.write(media_path, "media")
         for name, path in audio_entries:
             archive.write(path, name)
+    package_data = json.loads(json.dumps(data))
+    for card in package_data.get("cards", []):
+        audio_path = card.get("audioPath")
+        if audio_path:
+            card["audioFile"] = pathlib.Path(audio_path).name
+            card["audioPath"] = "audio/" + pathlib.Path(audio_path).name
     package_json = work / "materiais.json"
-    package_json.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    package_json.write_text(json.dumps(package_data, ensure_ascii=False, indent=2), encoding="utf-8")
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.write(apkg, "anki/nova-generator.apkg")
+        archive.write(apkg, "anki/anki.apkg")
         archive.write(package_json, "materiais.json")
+        archive.write(package_json, "cards/cards.json")
+        manifest_lines = []
+        for archive_name, file_path in [("anki/anki.apkg", apkg), ("materiais.json", package_json), ("cards/cards.json", package_json)]:
+            digest = hashlib.sha256(file_path.read_bytes()).hexdigest()
+            manifest_lines.append(digest + "  " + archive_name)
         for name, path in audio_entries:
-            archive.write(path, "audio/" + name)
+            archive_name = "audio/" + name
+            archive.write(path, archive_name)
+            manifest_lines.append(hashlib.sha256(path.read_bytes()).hexdigest() + "  " + archive_name)
+        archive.writestr("manifest.sha256", "\n".join(manifest_lines) + "\n")
 print(str(output))
 "#;
 
