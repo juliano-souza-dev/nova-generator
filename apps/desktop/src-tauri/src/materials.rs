@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
     process::Stdio,
 };
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 fn materials_file(app: &AppHandle, project_id: &str, asset_id: &str) -> Result<PathBuf, String> {
     let _ = crate::media::load_project_subtitles(app.clone(), project_id.to_string(), asset_id.to_string())?;
@@ -135,6 +135,9 @@ fn generate_audio_batch(app: &AppHandle, project_id: &str, asset_id: &str, reque
         if !path.is_file() || fs::metadata(&path).map(|meta| meta.len() == 0).unwrap_or(true) {
             return Err(format!("O Qwen3-TTS informou sucesso, mas o áudio do card '{id}' não foi encontrado ou está vazio."));
         }
+        let canonical = path.canonicalize().map_err(|e| format!("Não foi possível validar o áudio gerado: {e}"))?;
+        app.asset_protocol_scope().allow_file(&canonical)
+            .map_err(|e| format!("Não foi possível liberar a reprodução do áudio gerado: {e}"))?;
         results.push(AudioResult {
             card_id: id,
             audio_path: path.to_string_lossy().into_owned(),
