@@ -212,6 +212,13 @@ export default function PredictionListening({
         if (answerWords.length > 40 || clipStart.startMs > answerStart.startMs) {
           throw new Error("O desafio " + number + " possui um intervalo de reprodução inválido.");
         }
+        for (let index = 1; index < answerWords.length; index++) {
+          const previous = answerWords[index - 1];
+          const currentWord = answerWords[index];
+          if (currentWord.cueNumber < previous.cueNumber || currentWord.cueNumber > previous.cueNumber + 1) {
+            throw new Error("A resposta do desafio " + number + " atravessa um trecho sem continuidade.");
+          }
+        }
         const answerText = answerWords.map(word => word.text).join(" ").trim();
         const prompt = String(item?.prompt ?? "").trim();
         const explanation = String(item?.explanation ?? "").trim();
