@@ -31,7 +31,7 @@ type AnkiCard = {
   audioPath?: string;
   status: "draft" | "approved";
 };
-type MaterialDocument = { version: 1; cards: AnkiCard[]; updatedAt: string; sourceSignature: string };
+type MaterialDocument = { version: 2; cards: AnkiCard[]; updatedAt: string; sourceSignature: string };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 
 const createCardId = () => crypto.randomUUID();
@@ -44,6 +44,27 @@ const newCard = (): AnkiCard => {
   };
 };
 const text = (value: unknown) => typeof value === "string" ? value : "";
+const normalizeStoredCard = (raw: any): AnkiCard => {
+  const id = text(raw?.id) || createCardId();
+  const focus = text(raw?.focus) || text(raw?.front);
+  const meaning = text(raw?.meaning) || text(raw?.back);
+  const highlightEn = text(raw?.highlightEn) || text(raw?.expression);
+  const highlightPt = text(raw?.highlightPt);
+  return {
+    id, key: text(raw?.key) || "anki-" + id,
+    sourceCueId: text(raw?.sourceCueId), sourceType: raw?.sourceType || "manual",
+    type: text(raw?.type) || "expression", focus, meaning,
+    highlightEn, markedEn: text(raw?.markedEn) || highlightEn,
+    highlightPt, markedPt: text(raw?.markedPt) || highlightPt,
+    explanation: text(raw?.explanation),
+    exampleEn: text(raw?.exampleEn),
+    examplePt: text(raw?.examplePt),
+    speaker: text(raw?.speaker),
+    audioText: text(raw?.audioText) || focus,
+    audioPath: text(raw?.audioPath) || undefined,
+    status: raw?.status === "approved" ? "approved" : "draft"
+  };
+};
 const cardFromSuggestion = (item: any, cue: Cue, translation?: Translation): AnkiCard => {
   const focus = text(item.approved_en) || cue.text;
   const highlightEn = text(item.highlight_en) || text(item.highlightEn) || text(item.expression) || text(item.highlighted_expression);
@@ -148,8 +169,8 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
         predictions: Array.isArray(prediction?.challenges) ? prediction.challenges.filter((item: any) => item.status === "approved").length : 0
       });
 
-      if (stored?.version === 1 && Array.isArray(stored.cards)) {
-        setCards(stored.cards);
+      if ((stored?.version === 1 || stored?.version === 2) && Array.isArray(stored.cards)) {
+        setCards(stored.cards.map(normalizeStoredCard));
         if (stored.sourceSignature !== signature) setNotice("As fontes do projeto mudaram. Seus cards salvos foram preservados para revisão.");
       } else {
         const translationById = new Map(translations.map(item => [item.id, item]));
@@ -200,7 +221,7 @@ export default function MaterialsWorkspace({ projectId, onProjectUpdated }: { pr
 
   async function persistMaterials() {
     if (!assetId) throw new Error("Selecione uma mídia de origem.");
-    const document: MaterialDocument = { version: 1, cards, updatedAt: new Date().toISOString(), sourceSignature };
+    const document: MaterialDocument = { version: 2, cards, updatedAt: new Date().toISOString(), sourceSignature };
     await invoke("save_project_materials", { projectId, assetId, materials: document });
     await invoke("update_project_stage", { id: projectId, stage: "Materiais" }).catch(() => undefined);
     onProjectUpdated?.();
