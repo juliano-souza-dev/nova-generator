@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { Check, Download, FileJson, FileText, RefreshCw, X } from "lucide-react";
+import { Check, Download, FileJson, FileText, PlayCircle, RefreshCw, RotateCcw, X } from "lucide-react";
 import "./PredictionListening.css";
 
 type Cue = {
@@ -55,6 +55,10 @@ type Props = {
   sourceSignature: string;
   onClose: () => void;
   onPreview: (timeMs: number) => void;
+  onDemoSeekAndPlay: (timeMs: number) => void;
+  onDemoPause: () => void;
+  onDemoResume: (timeMs: number) => void;
+  getCurrentTime: () => number;
 };
 
 const OUTPUT_CONTRACT = "nova-generator-prediction-listening-output/1.0";
@@ -63,7 +67,8 @@ const MATERIALS_CONTRACT = "nova-generator-prediction-listening-materials/1.0";
 const normalize = (value: string) => (value.replace(/[’‘]/g, "'").match(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu) ?? []).join(" ").toLowerCase();
 
 export default function PredictionListening({
-  projectId, assetId, assetName, cues, selectedCueIds, sourceSignature, onClose, onPreview
+  projectId, assetId, assetName, cues, selectedCueIds, sourceSignature, onClose, onPreview,
+  onDemoSeekAndPlay, onDemoPause, onDemoResume, getCurrentTime
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [sourceHash, setSourceHash] = useState("");
@@ -72,6 +77,12 @@ export default function PredictionListening({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
+  const [demoState, setDemoState] = useState<"idle" | "playing" | "question" | "complete">("idle");
+  const [demoIndex, setDemoIndex] = useState(0);
+  const [demoFeedback, setDemoFeedback] = useState("");
+  const [demoReplayCount, setDemoReplayCount] = useState(0);
+  const demoCallbacks = useRef({ onDemoPause, onDemoResume, getCurrentTime });
+  demoCallbacks.current = { onDemoPause, onDemoResume, getCurrentTime };
 
   const selectedSet = useMemo(() => new Set(selectedCueIds), [selectedCueIds]);
   const counts = useMemo(() => ({
@@ -345,7 +356,83 @@ export default function PredictionListening({
     }
   }
 
-  return <div className="prediction-listening-backdrop">
+
+  const approvedChallenges = useMemo(
+    () => (review?.challenges ?? []).filter(item => item.status === "approved").slice().sort((a, b) => a.pauseAtMs - b.pauseAtMs),
+    [review]
+  );
+  const activeDemoChallenge = approvedChallenges[demoIndex] ?? null;
+
+  function startDemo() {
+    if (!approvedChallenges.length || busy || loading) return;
+    setDemoIndex(0);
+    setDemoFeedback("");
+    setDemoReplayCount(0);
+    setDemoState("playing");
+    onDemoSeekAndPlay(approvedChallenges[0].clipStartMs);
+  }
+
+  function stopDemo() {
+    onDemoPause();
+    setDemoState("idle");
+    setDemoFeedback("");
+  }
+
+  function answerDemo(choice: Choice) {
+    const challenge = activeDemoChallenge;
+    if (!challenge || demoState !== "question") return;
+    if (!choice.is_correct) {
+      setDemoFeedback("Ainda não. O vídeo continua pausado. Você pode ouvir o trecho novamente.");
+      return;
+    }
+    setDemoFeedback("Correto! Continuando a reprodução...");
+    const nextIndex = demoIndex + 1;
+    setDemoIndex(nextIndex);
+    if (nextIndex >= approvedChallenges.length) {
+      setDemoState("complete");
+      onDemoPause();
+      return;
+    }
+    setDemoState("playing");
+    onDemoResume(challenge.resumeAtMs);
+  }
+
+  function replayDemoSegment() {
+    if (!activeDemoChallenge || demoState !== "question") return;
+    setDemoFeedback("Ouça novamente o trecho antes de responder.");
+    setDemoReplayCount(value => value + 1);
+    setDemoState("playing");
+    onDemoSeekAndPlay(activeDemoChallenge.clipStartMs);
+  }
+
+  useEffect(() => {
+    if (demoState !== "playing") return;
+    let frame = 0;
+    let lastCheck = 0;
+    const tick = (now: number) => {
+      if (now - lastCheck >= 25) {
+        lastCheck = now;
+        const challenge = approvedChallenges[demoIndex];
+        if (!challenge) {
+          setDemoState("complete");
+          return;
+        }
+        if (demoCallbacks.current.getCurrentTime() >= challenge.pauseAtMs) {
+          demoCallbacks.current.onDemoPause();
+          setDemoState("question");
+        }
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [demoState, demoIndex, approvedChallenges]);
+
+  useEffect(() => () => {
+    if (demoState !== "idle") demoCallbacks.current.onDemoPause();
+  }, [demoState]);
+
+  return <div className={"prediction-listening-backdrop" + (demoState !== "idle" ? " demo-active" : "")}>
     <section className="prediction-listening-modal" role="dialog" aria-modal="true" aria-label="Prediction Listening">
       <header className="prediction-listening-header">
         <div>
@@ -353,10 +440,11 @@ export default function PredictionListening({
           <h2>Prediction Listening</h2>
           <p>{assetName} · {selectedCueIds.length} blocos concluídos no Shadowing</p>
         </div>
-        <button className="icon-button" title="Fechar" onClick={onClose}><X size={18}/></button>
+        <button className="icon-button" title="Fechar" onClick={() => { if (demoState !== "idle") onDemoPause(); onClose(); }}><X size={18}/></button>
       </header>
       <div className="prediction-listening-toolbar">
         <div className="prediction-listening-prerequisite"><Check size={15}/> Shadowing concluído</div>
+        <button className="primary-button" onClick={startDemo} disabled={busy || loading || approvedChallenges.length === 0 || demoState !== "idle"} title={approvedChallenges.length === 0 ? "Aprove ao menos um desafio para testar" : "Executar a experiência do aluno"}><PlayCircle size={15}/> Testar experiência</button>
         <button className="secondary-button" onClick={() => void downloadInput()} disabled={busy || loading}>
           <FileText size={15}/>{busy ? "Processando..." : "Baixar TXT para IA"}
         </button>
@@ -376,6 +464,37 @@ export default function PredictionListening({
         <span><b>{counts.rejected}</b> rejeitados</span>
         {sourceHash && <small>HASH {sourceHash}</small>}
       </div>
+      {demoState !== "idle" && <section className="prediction-demo-panel" aria-live="polite">
+        <div className="prediction-demo-topline">
+          <span>SIMULAÇÃO DO ALUNO</span>
+          <button className="icon-button" title="Parar teste" onClick={stopDemo}><X size={16}/></button>
+        </div>
+        {demoState === "playing" && <div className="prediction-demo-waiting">
+          <RefreshCw size={22}/>
+          <strong>Reproduzindo trecho...</strong>
+          <span>O desafio {activeDemoChallenge?.challengeNumber ?? ""} será apresentado no ponto de previsão.</span>
+        </div>}
+        {demoState === "question" && activeDemoChallenge && <>
+          <span className="prediction-demo-eyebrow">LISTENING CHECKPOINT · {activeDemoChallenge.type.toUpperCase()}</span>
+          <h2>{activeDemoChallenge.prompt}</h2>
+          <div className="prediction-demo-choices">
+            {activeDemoChallenge.choices.map((choice, index) => <button key={index} onClick={() => answerDemo(choice)}>
+              <span>{String.fromCharCode(65 + index)}</span>{choice.text}
+            </button>)}
+          </div>
+          {demoFeedback && <p className="prediction-demo-feedback">{demoFeedback}</p>}
+          <button className="secondary-button prediction-demo-replay" onClick={replayDemoSegment}><RotateCcw size={14}/> Ouvir trecho novamente</button>
+          <small>O vídeo está pausado até a resposta correta.</small>
+        </>}
+        {demoState === "complete" && <div className="prediction-demo-waiting">
+          <Check size={26}/>
+          <strong>Experiência concluída!</strong>
+          <span>Todos os {approvedChallenges.length} desafios aprovados foram testados.</span>
+          <button className="primary-button" onClick={startDemo}><RotateCcw size={14}/> Repetir teste</button>
+          <button className="secondary-button" onClick={stopDemo}>Voltar à revisão</button>
+        </div>}
+        <div className="prediction-demo-progress"><span>Desafio {Math.min(demoIndex + (demoState === "complete" ? 0 : 1), approvedChallenges.length)} de {approvedChallenges.length}</span><span>{demoReplayCount ? `Reproduções extras: ${demoReplayCount}` : "Fluxo do iHubEnglish"}</span></div>
+      </section>}
       <main className="prediction-listening-content">
         {loading ? <div className="prediction-listening-empty"><RefreshCw size={18}/> Preparando módulo...</div>
           : !review?.challenges.length ? <div className="prediction-listening-empty">
