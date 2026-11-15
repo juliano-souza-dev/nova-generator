@@ -245,7 +245,7 @@ fn generate_audio_batch(
         app.asset_protocol_scope().allow_file(&canonical)
             .map_err(|e| format!("Não foi possível liberar a reprodução do áudio gerado: {e}"))?;
         results.push(AudioResult {
-            card_id: id,
+            card_id: id.clone(),
             audio_path: path.to_string_lossy().into_owned(),
             sample_rate: response.get("sample_rate").and_then(Value::as_u64).unwrap_or(0) as u32,
             language: normalize_qwen_language(
