@@ -39,6 +39,7 @@ type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; 
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 type SharedVoice = { id: string; name: string };
 
+const MATERIAL_TTS_LANGUAGE = "English" as const;
 const createCardId = () => crypto.randomUUID();
 const newCard = (): AnkiCard => {
   const id = createCardId();
@@ -331,7 +332,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     try {
       const audio = await runTrackedTask("materials", "Gerar áudio do card Anki", async () => {
         const result = await invoke<AudioResult[]>("generate_material_audio", {
-          projectId, assetId, voiceId: selectedVoiceId, requests: [{ cardId: card.id, text: audioText, language: "English" }]
+          projectId, assetId, voiceId: selectedVoiceId, requests: [{ cardId: card.id, text: audioText, language: MATERIAL_TTS_LANGUAGE }]
         });
         const generated = result[0];
         if (!generated?.audioPath) throw new Error("O sintetizador não retornou o arquivo de áudio.");
@@ -364,7 +365,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       const result = await runTrackedTask("materials", "Gerar áudios dos cards aprovados", () => invoke<AudioResult[]>("generate_material_audio", {
         projectId, assetId, voiceId: selectedVoiceId,
         requests: pending.map(card => ({
-          cardId: card.id, text: card.audioText.trim() || card.focus.trim(), language: "English"
+          cardId: card.id, text: card.audioText.trim() || card.focus.trim(), language: MATERIAL_TTS_LANGUAGE
         }))
       }));
       const byId = new Map(result.map(item => [item.cardId, item]));
