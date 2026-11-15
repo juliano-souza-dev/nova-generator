@@ -49,6 +49,26 @@ pub struct AudioRequest {
 }
 fn default_language() -> String { "English".into() }
 
+/// Qwen3-TTS expects its canonical language names, not locale codes such as en-US.
+fn normalize_qwen_language(language: &str) -> Result<&'static str, String> {
+    let normalized = language.trim().to_ascii_lowercase().replace('_', "-");
+    match normalized.as_str() {
+        "english" | "en" | "en-us" | "en-gb" | "en-au" | "en-ca" => Ok("English"),
+        "portuguese" | "pt" | "pt-br" | "pt-pt" => Ok("Portuguese"),
+        "chinese" | "zh" | "zh-cn" | "zh-tw" => Ok("Chinese"),
+        "japanese" | "ja" => Ok("Japanese"),
+        "korean" | "ko" => Ok("Korean"),
+        "german" | "de" => Ok("German"),
+        "french" | "fr" => Ok("French"),
+        "russian" | "ru" => Ok("Russian"),
+        "spanish" | "es" => Ok("Spanish"),
+        "italian" | "it" => Ok("Italian"),
+        _ => Err(format!(
+            "Idioma de síntese '{language}' não reconhecido pelo Nova Generator. Use um idioma suportado pelo Qwen3-TTS."
+        )),
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioResult {
@@ -80,6 +100,8 @@ fn generate_audio_batch(
         if request.text.trim().is_empty() || request.text.chars().count() > 2000 {
             return Err(format!("O texto do card '{}' está vazio ou excede 2.000 caracteres.", request.card_id));
         }
+        // Normalize locale tags to the exact language labels expected by Qwen3-TTS.
+        normalize_qwen_language(&request.language)?;
     }
 
     // Voice profiles and their runtime are owned by Shared Runtime Manager.
@@ -108,7 +130,7 @@ fn generate_audio_batch(
                 "id": request.card_id,
                 "operation": "synthesize",
                 "text": request.text.trim(),
-                "language": request.language,
+                "language": normalize_qwen_language(&request.language)?,
                 "output_path": output_path
             });
             serde_json::to_writer(&mut *stdin, &payload)
@@ -226,7 +248,11 @@ fn generate_audio_batch(
             card_id: id,
             audio_path: path.to_string_lossy().into_owned(),
             sample_rate: response.get("sample_rate").and_then(Value::as_u64).unwrap_or(0) as u32,
-            language: "English".into(),
+            language: normalize_qwen_language(
+                &requests.iter().find(|request| request.card_id == id)
+                    .map(|request| request.language.as_str())
+                    .unwrap_or("English")
+            )?.into(),
             speaker: voice_name.clone(),
         });
     }
