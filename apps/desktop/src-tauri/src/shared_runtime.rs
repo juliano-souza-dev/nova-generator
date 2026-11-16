@@ -55,6 +55,24 @@ fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
     if let Some(path) = std::env::var_os("NOVA_GENERATOR_SHARED_CONFIG") {
         candidates.push(PathBuf::from(path));
     }
+
+    // Shared Runtime Manager keeps the generated configuration beside the
+    // managed source checkout, while the installed executable lives in the
+    // sibling "installed" directory. A packaged app must not depend on its
+    // current working directory or on the source tree being its executable's
+    // parent. Resolve the canonical Windows Shared Runtime location explicitly.
+    #[cfg(windows)]
+    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
+        candidates.push(
+            PathBuf::from(local_app_data)
+                .join("JulianoDev")
+                .join("SharedRuntime")
+                .join("applications")
+                .join(APPLICATION_ID)
+                .join("source")
+                .join("shared.config.json"),
+        );
+    }
     if let Ok(cwd) = std::env::current_dir() {
         let mut current = Some(cwd.as_path());
         while let Some(path) = current {
