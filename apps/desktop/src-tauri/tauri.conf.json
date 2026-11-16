@@ -10,11 +10,37 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{"title":"Nova Generator","width":1440,"height":920,"minWidth":980,"minHeight":680,"center":true,"resizable":true}],
+    "windows": [
+      {
+        "title": "Nova Generator",
+        "width": 1440,
+        "height": 920,
+        "minWidth": 980,
+        "minHeight": 680,
+        "center": true,
+        "resizable": true
+      }
+    ],
     "security": {
-      "assetProtocol": {"enable":true,"scope":["$APPDATA/**"]},
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/**"
+        ]
+      },
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost blob:; connect-src ipc: http://ipc.localhost"
     }
   },
-  "bundle": {"active":true,"targets":["nsis","msi"],"shortDescription":"Estúdio de criação de materiais de inglês","category":"Productivity"}
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis",
+      "msi"
+    ],
+    "shortDescription": "Estúdio de criação de materiais de inglês",
+    "category": "Productivity",
+    "icon": [
+      "icons/icon.ico"
+    ]
+  }
 }
