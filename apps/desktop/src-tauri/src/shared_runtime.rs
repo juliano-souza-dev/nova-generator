@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::{fs, path::{Path, PathBuf}};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const APPLICATION_ID: &str = "nova-generator";
 
@@ -49,7 +49,7 @@ pub struct SharedRuntimeStatus {
     pub providers: Vec<SharedProviderSummary>,
 }
 
-fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
+fn config_path(_app: &AppHandle) -> Result<PathBuf, String> {
     let mut candidates = Vec::<PathBuf>::new();
 
     if let Some(path) = std::env::var_os("SHARED_RUNTIME_CONFIG")
