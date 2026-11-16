@@ -52,16 +52,15 @@ pub struct SharedRuntimeStatus {
 fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
     let mut candidates = Vec::<PathBuf>::new();
 
-    if let Some(path) = std::env::var_os("NOVA_GENERATOR_SHARED_CONFIG") {
+    if let Some(path) = std::env::var_os("SHARED_RUNTIME_CONFIG")
+        .or_else(|| std::env::var_os("NOVA_GENERATOR_SHARED_CONFIG"))
+    {
         candidates.push(PathBuf::from(path));
     }
 
-    // Shared Runtime Manager keeps the generated configuration beside the
-    // managed source checkout, while the installed executable lives in the
-    // sibling "installed" directory. A packaged app must not depend on its
-    // current working directory or on the source tree being its executable's
-    // parent. Resolve the canonical Windows Shared Runtime location explicitly.
-    #[cfg(windows)]
+    // Every registered application reads its generated configuration from the
+    // same per-user Shared Runtime environment. The project source folder and
+    // executable location are deliberately not used as configuration stores.
     if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
         candidates.push(
             PathBuf::from(local_app_data)
@@ -69,30 +68,8 @@ fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
                 .join("SharedRuntime")
                 .join("applications")
                 .join(APPLICATION_ID)
-                .join("source")
                 .join("shared.config.json"),
         );
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        let mut current = Some(cwd.as_path());
-        while let Some(path) = current {
-            candidates.push(path.join("shared.config.json"));
-            current = path.parent();
-        }
-    }
-    if let Ok(executable) = std::env::current_exe() {
-        let mut current = executable.parent();
-        while let Some(path) = current {
-            candidates.push(path.join("shared.config.json"));
-            current = path.parent();
-        }
-    }
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        let mut current = Some(resource_dir.as_path());
-        while let Some(path) = current {
-            candidates.push(path.join("shared.config.json"));
-            current = path.parent();
-        }
     }
 
     let mut seen = std::collections::HashSet::new();
