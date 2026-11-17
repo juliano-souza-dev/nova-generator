@@ -37,7 +37,7 @@ type AnkiCard = {
 };
 type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
-type SharedVoice = { id: string; name: string };
+type SharedVoice = { id: string; name: string; mode?: "voice_clone" | "voice_design" };
 
 const MATERIAL_TTS_LANGUAGE = "English" as const;
 const createCardId = () => crypto.randomUUID();
@@ -537,7 +537,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
               </span>
               <select value={selectedVoiceId} onChange={event => setSelectedVoiceId(event.target.value)} disabled={!voiceCloningReady}>
                 {!voices.length && <option value="">Nenhuma voz disponível</option>}
-                {voices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
+                {voices.map(voice => <option key={voice.id} value={voice.id}>{voice.name} · {voice.mode === "voice_design" ? "VoiceDesign" : "Base · Clonagem"}</option>)}
               </select>
             </label>
           </div>
