@@ -106,8 +106,12 @@ fn generate_audio_batch(
 
     // Voice profiles and their runtime are owned by Shared Runtime Manager.
     // The Nova project stores only the generated card audio, never a profile copy.
-    let (python, runner, model, profile, voice_name) =
-        crate::shared_runtime::voice_profile_paths(app, voice_id)?;
+    let voice = crate::shared_runtime::voice_profile_runtime_for_app(app, voice_id)?;
+    let python = &voice.python;
+    let runner = &voice.runner;
+    let model = &voice.model;
+    let profile = &voice.profile;
+    let voice_name = &voice.name;
     let target = materials_file(app, project_id, asset_id)?;
     let audio_dir = target.parent().ok_or("Pasta de Materiais inválida.")?.join("audio");
     fs::create_dir_all(&audio_dir).map_err(|e| format!("Não foi possível preparar a pasta de áudios: {e}"))?;
@@ -131,7 +135,9 @@ fn generate_audio_batch(
                 "operation": "synthesize",
                 "text": request.text.trim(),
                 "language": normalize_qwen_language(&request.language)?,
-                "output_path": output_path
+                "output_path": output_path,
+                "voice_mode": voice.mode,
+                "instruct": voice.instruct
             });
             serde_json::to_writer(&mut *stdin, &payload)
                 .map_err(|e| format!("Não foi possível preparar a solicitação de áudio: {e}"))?;
