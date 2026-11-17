@@ -10,15 +10,18 @@ const APPLICATION_ID: &str = "nova-generator";
 pub struct SharedVoiceSummary {
     pub id: String,
     pub name: String,
+    pub mode: String,
 }
 
 #[derive(Debug, Clone)]
-struct VoiceProfileRuntime {
-    name: String,
-    python: PathBuf,
-    runner: PathBuf,
-    model: PathBuf,
-    profile: PathBuf,
+pub(crate) struct VoiceProfileRuntime {
+    pub name: String,
+    pub python: PathBuf,
+    pub runner: PathBuf,
+    pub model: PathBuf,
+    pub profile: PathBuf,
+    pub mode: String,
+    pub instruct: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -167,7 +170,10 @@ pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, 
     let (configured_default_voice_id, configured_voices) = voice_profiles_from_config(&config)?;
     // Only expose profiles whose executor, model and prepared prompt are present.
     let voices: Vec<SharedVoiceSummary> = configured_voices.into_iter()
-        .filter(|voice| voice_profile_runtime(&config, &voice.id).is_ok())
+        .filter_map(|voice| {
+            let runtime = voice_profile_runtime(&config, &voice.id).ok()?;
+            Some(SharedVoiceSummary { mode: runtime.mode, ..voice })
+        })
         .collect();
     let default_voice_id = configured_default_voice_id
         .filter(|id| voices.iter().any(|voice| &voice.id == id));
@@ -222,7 +228,12 @@ fn voice_profiles_from_config(config: &Value) -> Result<(Option<String>, Vec<Sha
         if id.trim().is_empty() || name.trim().is_empty() || !seen.insert(id.to_owned()) {
             return Err("O catálogo de vozes contém identificadores ou nomes inválidos/duplicados.".into());
         }
-        available.push(SharedVoiceSummary { id: id.to_owned(), name: name.to_owned() });
+        let mode = if entry.get("model_id").and_then(Value::as_str) == Some("Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign") {
+            "voice_design"
+        } else {
+            "voice_clone"
+        };
+        available.push(SharedVoiceSummary { id: id.to_owned(), name: name.to_owned(), mode: mode.into() });
     }
     if default_voice_id.as_ref().is_some_and(|id| !seen.contains(id)) {
         return Err("A voz padrão informada pelo Shared não existe no catálogo disponível.".into());
@@ -254,17 +265,41 @@ fn voice_profile_runtime(config: &Value, voice_id: &str) -> Result<VoiceProfileR
     let runner = required_path("runner")?;
     let model = required_path("model_path")?;
     let profile = required_path("profile_path")?;
-    if !python.is_file() || !runner.is_file() || !model.join("config.json").is_file()
-        || !profile.join("voice_clone_prompt.pt").is_file() {
+    let model_id = entry.get("model_id").and_then(Value::as_str).unwrap_or("Qwen/Qwen3-TTS-12Hz-1.7B-Base");
+    let (mode, instruct) = if model_id == "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign" {
+        let instruction = entry.get("instruct").and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_owned)
+            .or_else(|| fs::read_to_string(profile.join("voice_design_instruct.txt")).ok())
+            .ok_or_else(|| format!("O perfil VoiceDesign '{name}' não contém a descrição da voz. Abra o Shared Runtime Manager e prepare novamente esse perfil."))?;
+        if !profile.join("voice_design_instruct.txt").is_file() {
+            return Err(format!("O perfil VoiceDesign '{name}' está incompleto. Abra o Shared Runtime Manager e prepare novamente essa voz."));
+        }
+        ("voice_design".to_owned(), Some(instruction))
+    } else {
+        if !profile.join("voice_clone_prompt.pt").is_file() {
+            return Err(format!("O perfil Base '{name}' está incompleto. Abra o Shared Runtime Manager e prepare novamente essa voz."));
+        }
+        ("voice_clone".to_owned(), None)
+    };
+    if !python.is_file() || !runner.is_file() || !model.join("config.json").is_file() {
         return Err(format!("O perfil '{name}' está incompleto. Abra o Shared Runtime Manager e prepare novamente essa voz."));
     }
-    Ok(VoiceProfileRuntime { name, python, runner, model, profile })
+    Ok(VoiceProfileRuntime { name, python, runner, model, profile, mode, instruct })
 }
 
-/// Resolve all absolute paths needed by the shared Qwen3-TTS Base voice-cloning worker.
-pub(crate) fn voice_profile_paths(app: &AppHandle, voice_id: &str) -> Result<(PathBuf, PathBuf, PathBuf, PathBuf, String), String> {
+/// Resolve the executable and model information for either Qwen3-TTS Base cloning or VoiceDesign. 
+pub(crate) fn voice_profile_runtime_for_app(app: &AppHandle, voice_id: &str) -> Result<VoiceProfileRuntime, String> {
     let (_, config) = load_config(app)?;
-    let voice = voice_profile_runtime(&config, voice_id)?;
+    voice_profile_runtime(&config, voice_id)
+}
+
+/// Backward-compatible path resolver for Base voice-cloning integrations.
+pub(crate) fn voice_profile_paths(app: &AppHandle, voice_id: &str) -> Result<(PathBuf, PathBuf, PathBuf, PathBuf, String), String> {
+    let voice = voice_profile_runtime_for_app(app, voice_id)?;
+    if voice.mode != "voice_clone" {
+        return Err("Este perfil usa VoiceDesign. Atualize a integração de síntese do Nova Generator.".into());
+    }
     Ok((voice.python, voice.runner, voice.model, voice.profile, voice.name))
 }
 
