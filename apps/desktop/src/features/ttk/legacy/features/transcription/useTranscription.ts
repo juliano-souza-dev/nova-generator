@@ -99,6 +99,15 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   }
 
 
+
+  function updateTranscriptionCue(cueId: string, text: string) {
+    setTranscriptionResult(current => current ? {
+      ...current,
+      cues: current.cues.map(cue => cue.id === cueId ? { ...cue, text, words: [] } : cue)
+    } : current);
+    setTranscriptionTranslations(current => current.filter(item => item.id !== cueId));
+  }
+
   async function translateTranscription() {
     if (!transcriptionResult || translationBusy || !transcriptionResult.cues.length) return;
     setTranslationBusy(true);
@@ -133,7 +142,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
 
   return {
     transcriptionResult, transcriptionTranslations, translationBusy,
-    translateTranscription, insertTranscription,
+    translateTranscription, insertTranscription, updateTranscriptionCue,
     transcriptionAssetId, setTranscriptionAssetId,
     transcriptionContext, setTranscriptionContext,
     transcriptionMode, setTranscriptionMode,
