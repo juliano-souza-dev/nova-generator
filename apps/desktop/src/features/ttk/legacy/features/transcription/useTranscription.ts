@@ -3,6 +3,7 @@ import type { MediaAsset, Project } from "../../shared/types";
 import type { TranscriptionProgress, TranscriptResult, CueTranslation } from "../../services/desktop-api";
 import { desktopApi } from "../../services/desktop-api";
 import { runTrackedTask } from "../../services/task-center";
+import { downloadExternalTranslationPackage } from "../../../../media/translationPackage";
 
 type TranscriptionContext = {
   clipId: string;
@@ -28,6 +29,8 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   const [transcriptionTranslations, setTranscriptionTranslations] = useState<CueTranslation[]>([]);
   const [translationBusy, setTranslationBusy] = useState(false);
   const [alignmentBusy, setAlignmentBusy] = useState(false);
+  const [externalSourceHash, setExternalSourceHash] = useState("");
+  const [externalPackageBusy, setExternalPackageBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +138,51 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   }
 
 
+
+  async function downloadExternalPackage() {
+    if (!project || !transcriptionContext || !transcriptionResult || externalPackageBusy) return;
+    setExternalPackageBusy(true);
+    try {
+      const pkg = await desktopApi.prepareClipExternalTranslationPackage(project.id, transcriptionContext.clipId, transcriptionResult.cues);
+      const content = pkg.files["entrada-editorial.txt"] ?? "";
+      const hash = content.match(/^SOURCE_HASH:\\s*(.+)$/m)?.[1]?.trim() ?? "";
+      if (!hash) throw new Error("O pacote não retornou o identificador da transcrição.");
+      const saved = await downloadExternalTranslationPackage(pkg);
+      if (saved) {
+        setExternalSourceHash(hash);
+        setTranscriptionMessage("TXT editorial salvo. Envie-o à IA externa e importe o JSON correspondente.");
+      }
+    } catch (error) {
+      setTranscriptionMessage("Não foi possível preparar o TXT: " + (error instanceof Error ? error.message : String(error)));
+    } finally { setExternalPackageBusy(false); }
+  }
+
+  async function importExternalTranslation(file?: File) {
+    if (!file || !transcriptionResult) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (parsed?.contract !== "nova-generator-external-editorial-output/1.0") throw new Error("O JSON não corresponde ao contrato editorial esperado.");
+      if (!externalSourceHash || parsed.source_hash !== externalSourceHash) throw new Error("Este JSON não corresponde ao TXT exportado para esta transcrição.");
+      if (!Array.isArray(parsed.cues) || parsed.cues.length !== transcriptionResult.cues.length) throw new Error("O JSON precisa conter exatamente uma tradução para cada trecho.");
+      const byNumber = new Map<number, any>();
+      for (const item of parsed.cues) {
+        const id = Number(item?.id);
+        if (!Number.isInteger(id) || id < 1 || byNumber.has(id)) throw new Error("O JSON contém números de trecho inválidos ou duplicados.");
+        byNumber.set(id, item);
+      }
+      const translated = transcriptionResult.cues.map((cue, index) => {
+        const item = byNumber.get(index + 1);
+        const text = String(item?.pt ?? "").trim();
+        if (!text) throw new Error("A tradução do trecho " + (index + 1) + " está vazia.");
+        return { id: cue.id, translation: text };
+      });
+      setTranscriptionTranslations(translated);
+      setTranscriptionMessage(translated.length + " traduções importadas e associadas a esta transcrição.");
+    } catch (error) {
+      setTranscriptionMessage("Falha ao importar JSON: " + (error instanceof Error ? error.message : String(error)));
+    }
+  }
+
   async function alignTranscriptionWords() {
     if (!project || !transcriptionResult || !transcriptionContext || alignmentBusy) return;
     const language = transcriptionResult.language || transcriptionLanguage;
@@ -183,8 +231,8 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   }
 
   return {
-    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, openTranscriptionForClip,
-    translateTranscription, alignTranscriptionWords, insertTranscription, updateTranscriptionCue,
+    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, openTranscriptionForClip,
+    translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue,
     transcriptionAssetId, setTranscriptionAssetId,
     transcriptionContext, setTranscriptionContext,
     transcriptionMode, setTranscriptionMode,
