@@ -270,7 +270,7 @@ pub fn save_prediction_listening_result(
 mod tests {
     use super::*;
     use crate::media::SubtitleCue;
-    use crate::transcription::TranscriptWord;
+    use crate::nova_transcription::TranscriptWord;
 
     fn cue(id: &str, text: &str, start: u64, words: Vec<TranscriptWord>, aligned: bool) -> SubtitleCue {
         let end = words.last().map(|word| word.end_ms).unwrap_or(start + 1000);

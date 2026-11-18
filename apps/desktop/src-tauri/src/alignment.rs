@@ -318,7 +318,7 @@ pub async fn align_project_subtitles(
                         let start = clip_start.saturating_add(word.start_ms).max(cue_start).min(cue_end.saturating_sub(1));
                         let end = clip_start.saturating_add(word.end_ms).min(cue_end).max(start.saturating_add(1));
                         if end <= start || word.text.trim().is_empty() { continue; }
-                        mapped.push(crate::transcription::TranscriptWord {
+                        mapped.push(crate::nova_transcription::TranscriptWord {
                             text: word.text,
                             start_ms: start,
                             end_ms: end,

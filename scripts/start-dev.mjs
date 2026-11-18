@@ -89,7 +89,7 @@ async function main() {
   try {
     await access(path.join(root, "package.json"));
     await run("git", ["switch", "main"], "1/4 · Selecionando a branch principal");
-    await run("git", ["pull", "--ff-only", "origin", "main"], "2/5 · Atualizando o código do GitHub");
+    await run("git", ["pull", "--ff-only", "origin", "main"], "2/4 · Atualizando o código do GitHub");
     await run("npm", ["install", "--no-audit", "--no-fund", "--no-package-lock"], "3/4 · Preparando dependências");
     await run("npm", ["run", "build-web"], "4/4 · Validando TypeScript e compilando a interface");
 

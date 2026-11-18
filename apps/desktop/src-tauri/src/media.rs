@@ -266,7 +266,7 @@ pub struct SubtitleCue {
     pub end_ms: u64,
     pub text: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub words: Option<Vec<crate::transcription::TranscriptWord>>,
+    pub words: Option<Vec<crate::nova_transcription::TranscriptWord>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
