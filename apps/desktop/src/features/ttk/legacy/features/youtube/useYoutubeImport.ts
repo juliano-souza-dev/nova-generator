@@ -49,7 +49,10 @@ export function useYoutubeImport({ project, setAssets, setBusy, setError, setNot
     setProgress({ projectId: project?.id ?? "", percent: 0, status: "starting" });
     try {
       const cached = await runTrackedTask("download", "Preparando vídeo do YouTube", () => desktopApi.prepareYoutubeCache(youtubeInfo.url, quality));
-      setYoutubeCache(cached);
+      // mediaShared fica fora do escopo padrão do asset:// do Tauri. Autorize somente
+      // o arquivo validado pelo backend antes de entregar o caminho ao preview.
+      const previewPath = await desktopApi.authorizeYoutubePreview(cached.videoId);
+      setYoutubeCache({ ...cached, filePath: previewPath });
       setTrimStartMs(0);
       setTrimEndMs(cached.durationMs ?? youtubeInfo.durationMs ?? 0);
       setMediaModal(false);
