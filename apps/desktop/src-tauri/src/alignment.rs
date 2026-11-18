@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Stdio},
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, State};
 
 const PADDING_MS: u64 = 350;
 const ALIGNMENT_MODEL_KEY: &str = "whisperx-default-aligner-v1";
@@ -149,6 +149,37 @@ fn project_source(app: &AppHandle, project_id: &str, asset_id: &str) -> Result<P
     Ok(source)
 }
 
+// TTK-Creator is integrated into Nova Generator but keeps its own project/media
+// repository under app_data/ttk/projects. Do not resolve its asset IDs through
+// the legacy Nova media registry (crate::media), which belongs to another store.
+fn ttk_project_source(
+    media: &crate::application::services::MediaService,
+    storage: &crate::infrastructure::media_storage::MediaStorage,
+    project_id: &str,
+    asset_id: &str,
+) -> Result<PathBuf, String> {
+    let assets = media.list(project_id)?;
+    let asset = assets.iter().find(|item| item.id == asset_id)
+        .ok_or("Mídia não encontrada neste projeto TTK.")?;
+    if asset.kind != "video" && asset.kind != "audio" {
+        return Err("O alinhamento exige um arquivo de vídeo ou áudio.".into());
+    }
+    let relative = Path::new(&asset.relative_path);
+    if relative.is_absolute() || relative.components().any(|part| matches!(part, std::path::Component::ParentDir)) {
+        return Err("Caminho da mídia inválido.".into());
+    }
+    let media_directory = storage.project_media_directory(project_id)?;
+    let project_root = media_directory.parent()
+        .ok_or_else(|| "Diretório do projeto TTK inválido.".to_string())?
+        .canonicalize().map_err(|e| e.to_string())?;
+    let source = project_root.join(relative).canonicalize()
+        .map_err(|e| format!("Arquivo de mídia TTK não encontrado: {e}"))?;
+    if !source.starts_with(&project_root) || !source.is_file() {
+        return Err("O arquivo de mídia não pertence a este projeto TTK.".into());
+    }
+    Ok(source)
+}
+
 fn extract_block(
     ffmpeg: &Path,
     source: &Path,
@@ -246,6 +277,7 @@ pub struct TimelineClipAlignedCue {
 #[tauri::command]
 pub async fn align_timeline_clip_cues(
     app: AppHandle,
+    state: State<'_, crate::state::AppState>,
     project_id: String,
     asset_id: String,
     source_start_ms: u64,
@@ -254,11 +286,15 @@ pub async fn align_timeline_clip_cues(
     cues: Vec<TimelineClipCue>,
 ) -> Result<Vec<TimelineClipAlignedCue>, String> {
     let app = app.clone();
+    let media = state.media.clone();
+    let media_storage = state.media_storage.clone();
     tauri::async_runtime::spawn_blocking(move || {
         if source_end_ms <= source_start_ms { return Err("O intervalo do clipe é inválido.".into()); }
         if cues.is_empty() { return Err("Não há legendas para alinhar.".into()); }
         let lang = language_code(&language)?;
-        let source = project_source(&app, &project_id, &asset_id)?;
+        // Resolve the asset from the integrated TTK media library, not the
+        // legacy Nova media registry. The IDs are scoped to the TTK project.
+        let source = ttk_project_source(&media, &media_storage, &project_id, &asset_id)?;
         let (python, runner) = crate::shared_runtime::forced_alignment_paths(&app)?;
         let runner_bytes = fs::read(&runner).map_err(|e| format!("Não foi possível verificar a versão do alinhador: {e}"))?;
         let ffmpeg = crate::media::shared_ffmpeg(&app)?;
