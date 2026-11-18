@@ -729,3 +729,26 @@
 .youtube-format-preview{position:relative;isolation:isolate}
 .youtube-format-preview-background{position:absolute;inset:-5%;width:110%;height:110%;object-fit:cover;filter:blur(24px) brightness(.62);transform:scale(1.08);pointer-events:none}
 .youtube-format-preview .youtube-trim-preview{position:relative;z-index:1;width:100%;height:100%;max-height:42vh;object-fit:contain;background:transparent}
+
+/* Integrated transcription workflow inside the Captions workspace */
+.caption-transcription-panel{display:grid;gap:14px;padding:14px;overflow:auto}
+.caption-transcription-section{display:grid;gap:11px;padding:13px;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:12px;background:rgba(127,127,127,.045)}
+.caption-transcription-title{display:grid;gap:4px}
+.caption-transcription-title b{font-size:13px}
+.caption-transcription-title small,.caption-transcription-source small{font-size:11px;color:var(--muted,#999)}
+.caption-transcription-source{display:grid;gap:4px;padding:10px;border-radius:9px;background:rgba(127,127,127,.08)}
+.caption-transcription-source span{font-size:9px;letter-spacing:.08em;color:var(--muted,#999)}
+.caption-transcription-source strong{font-size:12px;overflow-wrap:anywhere}
+.caption-transcription-config{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.caption-transcription-config label{display:grid;gap:5px;font-size:11px;color:var(--muted,#aaa)}
+.caption-transcription-config label:first-child{grid-column:1/-1}
+.caption-transcription-config select{width:100%;min-width:0;min-height:34px;padding:0 8px;border:1px solid var(--border,rgba(255,255,255,.15));border-radius:8px;background:var(--surface,#222);color:inherit;font-size:11px}
+.caption-transcription-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.caption-transcription-actions>small{font-size:10px;color:var(--muted,#999)}
+.caption-transcription-panel .transcription-review{display:grid;gap:8px;max-height:300px;overflow:auto}
+.caption-transcription-panel .transcription-review-cue{display:grid;gap:5px}
+.caption-transcription-panel .transcription-review-cue textarea{width:100%;min-height:54px;resize:vertical}
+.caption-transcription-panel .transcription-review-translation{margin:0;padding:7px 9px;border-radius:7px;background:rgba(127,127,127,.08);font-size:12px}
+.caption-insert-transcription{width:100%;justify-content:center}
+.caption-transcription-panel .transcription-privacy{font-size:10px;line-height:1.5;color:var(--muted,#999)}
+@media(max-width:720px){.caption-transcription-config{grid-template-columns:1fr}.caption-transcription-config label:first-child{grid-column:auto}}
