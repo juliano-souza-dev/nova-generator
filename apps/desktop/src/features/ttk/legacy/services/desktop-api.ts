@@ -26,8 +26,8 @@ export type TranscriptionProgress = { projectId: string; stage: string; percent:
 
 export const desktopApi = {
   getGroqSettings: () => invoke<GroqSettings>("get_groq_settings"),
-  transcribeMedia: (projectId: string, assetId: string, mode: "auto" | "cloud" | "local", language: string, localModel: string) =>
-    runTrackedTask("transcription", "Transcrição de mídia", () => invoke<TranscriptResult>("transcribe_media", { projectId, assetId, mode, language: language || null, localModel })),
+  transcribeMedia: (projectId: string, assetId: string, mode: "auto" | "cloud" | "local", language: string, localModel: string, sourceStartMs?: number, sourceEndMs?: number) =>
+    runTrackedTask("transcription", "Transcrição do clipe", () => invoke<TranscriptResult>("transcribe_media", { projectId, assetId, mode, language: language || null, localModel, sourceStartMs: sourceStartMs ?? null, sourceEndMs: sourceEndMs ?? null })),
   prepareClipExternalTranslationPackage: (projectId: string, clipId: string, cues: TranscriptCue[]) =>
     invoke<ExternalClipTranslationPackage>("prepare_timeline_clip_external_translation_package", { projectId, clipId, cues: cues.map(cue => ({ ...cue, words: cue.words ?? [], wordAlignment: null, wordAlignmentHash: null })) }),
   alignTimelineClip: (projectId: string, assetId: string, sourceStartMs: number, sourceEndMs: number, language: string, cues: Array<{id:string;text:string;startMs:number;endMs:number}>) =>
