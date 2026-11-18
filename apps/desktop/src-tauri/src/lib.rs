@@ -1,6 +1,7 @@
 mod media;
 mod alignment;
 mod shared_runtime;
+mod shared_runtime_manager;
 #[path = "transcription.rs"] mod nova_transcription;
 #[path = "translation.rs"] mod nova_translation;
 mod translation_contract;
