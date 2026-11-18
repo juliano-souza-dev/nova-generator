@@ -194,7 +194,7 @@ pub fn run() {
             media::nova_inspect_youtube, media::nova_prepare_youtube_cache, media::nova_authorize_youtube_preview, media::list_project_media,
             media::nova_import_media_files, media::nova_trim_youtube_cache,
             media::open_project_media, media::load_project_subtitles, media::save_project_subtitles, media::load_shadowing_selection, media::save_shadowing_selection,
-            alignment::align_project_subtitles,
+            alignment::align_project_subtitles, alignment::align_timeline_clip_cues,
             shared_runtime::get_shared_runtime_status,
             shared_runtime::get_shared_settings,
             shared_runtime::synchronize_shared_dependencies,
