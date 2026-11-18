@@ -50,8 +50,6 @@ export const desktopApi = {
 
   getAssetPath: (projectId: string, assetId: string) =>
     invoke<string>("get_project_asset_path", { projectId, assetId }),
-  syncProjectAssetsForEditor: (projectId: string) =>
-    invoke<void>("ttk_sync_project_assets_for_editor", { projectId }),
 
   importMediaFiles: (projectId: string, paths: string[]) =>
     invoke<MediaAsset[]>("import_media_files", { projectId, paths }),
@@ -61,8 +59,6 @@ export const desktopApi = {
 
   prepareYoutubeCache: (url: string, maxHeight: number) =>
     runTrackedTask("download", "Download para cache temporário do YouTube", () => invoke<YoutubeCacheEntry>("prepare_youtube_cache", { url, maxHeight })),
-  authorizeYoutubePreview: (videoId: string) =>
-    invoke<string>("nova_authorize_youtube_preview", { videoId }),
   trimYoutubeCache: (projectId: string, videoId: string, startMs: number, endMs: number) =>
     runTrackedTask("export", "Recorte do vídeo do YouTube", () => invoke<MediaAsset>("trim_youtube_cache", { projectId, videoId, startMs: Math.round(startMs), endMs: Math.round(endMs) })),
 
