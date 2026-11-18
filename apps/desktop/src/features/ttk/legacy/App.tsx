@@ -265,7 +265,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     {youtubeCache&&activeProject&&<div className="backdrop youtube-trim-backdrop">
       <section className="youtube-trim-dialog" role="dialog" aria-modal="true" aria-labelledby="youtube-trim-title">
         <header className="youtube-trim-header">
-          <div><label className="eyebrow muted">EDIÇÃO DO TRECHO</label><h2 id="youtube-trim-title">Escolha o trecho do vídeo</h2><p>{youtubeCache.title}</p></div>
+          <div><label className="eyebrow muted">PREPARAÇÃO DO VÍDEO</label><h2 id="youtube-trim-title">Ajuste o trecho e o formato</h2><p>{youtubeCache.title}</p></div>
           <button className="close" type="button" disabled={trimBusy} onClick={()=>setYoutubeCache(null)}><X size={18}/></button>
         </header>
         <div className={"youtube-format-preview " + (frameMode==="blur"?"blur-background":"")} style={{aspectRatio:"9 / 16",backgroundColor:frameMode==="color"?frameColor:"#000000"}}>
