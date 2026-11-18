@@ -36,79 +36,6 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("groq-settings.json"))
 }
 
-/// Finds the local Shared Runtime config without requiring the manager process to be running.
-fn shared_manifest(app: &AppHandle) -> Result<Option<(PathBuf, serde_json::Value)>, String> {
-    let mut candidates = Vec::<PathBuf>::new();
-
-    if let Some(path) = std::env::var_os("NOVA_GENERATOR_SHARED_CONFIG") {
-        candidates.push(PathBuf::from(path));
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        let mut current = Some(cwd.as_path());
-        while let Some(path) = current {
-            candidates.push(path.join("shared.config.json"));
-            current = path.parent();
-        }
-    }
-    if let Ok(executable) = std::env::current_exe() {
-        let mut current = executable.parent();
-        while let Some(path) = current {
-            candidates.push(path.join("shared.config.json"));
-            current = path.parent();
-        }
-    }
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        let mut current = Some(resource_dir.as_path());
-        while let Some(path) = current {
-            candidates.push(path.join("shared.config.json"));
-            current = path.parent();
-        }
-    }
-
-    let mut seen = std::collections::HashSet::new();
-    for candidate in candidates {
-        let path = if candidate.is_dir() {
-            candidate.join("shared.config.json")
-        } else {
-            candidate
-        };
-        if !seen.insert(path.clone()) || !path.is_file() {
-            continue;
-        }
-
-        let raw = std::fs::read(&path).map_err(|error| {
-            format!(
-                "Não foi possível ler o vínculo Shared Runtime em {}: {error}",
-                path.display()
-            )
-        })?;
-        let manifest: serde_json::Value = serde_json::from_slice(&raw).map_err(|error| {
-            format!(
-                "Manifesto Shared Runtime inválido em {}: {error}",
-                path.display()
-            )
-        })?;
-
-        if manifest.get("schemaVersion").and_then(|value| value.as_str()) != Some("1.0") {
-            return Err(
-                "A versão do shared.config.json não é compatível. Atualize o vínculo pelo Shared Runtime Manager."
-                    .into(),
-            );
-        }
-        if manifest
-            .pointer("/shared/enabled")
-            .and_then(|value| value.as_bool())
-            != Some(true)
-        {
-            return Err("O Shared Runtime está desativado para esta aplicação.".into());
-        }
-
-        return Ok(Some((path, manifest)));
-    }
-
-    Ok(None)
-}
-
 /// Loads the authorized Groq provider from this application's own Shared config.
 /// The Shared Runtime Manager does not need to be open.
 fn shared_provider_settings(
@@ -140,7 +67,7 @@ pub(crate) fn resolve_api_endpoint(app: &AppHandle) -> Result<String, String> {
 
 /// Returns the provider model configured centrally in Shared Runtime.
 pub(crate) fn resolve_api_model(app: &AppHandle) -> Result<String, String> {
-    let (_, _, provider) = shared_provider_settings(app)?;
+    let provider = shared_provider_settings(app)?;
     Ok(provider.model)
 }
 
@@ -162,8 +89,7 @@ pub fn save_groq_settings(
     delay_ms: u64,
     target_language: String,
 ) -> Result<GroqSettings, String> {
-    // This also verifies that the application is authorized and that a Groq
-    // provider entry is present in its own shared.config.json.
+    // This also verifies that Nova is authorized to use the Groq provider.
     let provider = shared_provider_settings(&app)?;
 
     let settings = GroqSettings {
