@@ -27,6 +27,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   const [transcriptionResult, setTranscriptionResult] = useState<TranscriptResult | null>(null);
   const [transcriptionTranslations, setTranscriptionTranslations] = useState<CueTranslation[]>([]);
   const [translationBusy, setTranslationBusy] = useState(false);
+  const [alignmentBusy, setAlignmentBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +124,37 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     } finally { setTranslationBusy(false); }
   }
 
+
+  async function alignTranscriptionWords() {
+    if (!project || !transcriptionResult || !transcriptionContext || alignmentBusy) return;
+    const language = transcriptionResult.language || transcriptionLanguage;
+    if (!language) {
+      setTranscriptionMessage("Informe o idioma da fala antes de executar o alinhamento WbW.");
+      return;
+    }
+    setAlignmentBusy(true);
+    setTranscriptionMessage("Alinhando palavras com WhisperX...");
+    try {
+      const aligned = await desktopApi.alignTimelineClip(
+        project.id, transcriptionAssetId,
+        transcriptionContext.sourceStartMs, transcriptionContext.sourceEndMs,
+        language,
+        transcriptionResult.cues.map(cue => ({ id: cue.id, text: cue.text, startMs: cue.startMs, endMs: cue.endMs }))
+      );
+      const byId = new Map(aligned.map(cue => [cue.id, cue]));
+      setTranscriptionResult(current => current ? {
+        ...current,
+        cues: current.cues.map(cue => {
+          const match = byId.get(cue.id);
+          return match ? { ...cue, words: match.words } : cue;
+        })
+      } : current);
+      setTranscriptionMessage(aligned.length + " trechos alinhados pelo WhisperX.");
+    } catch (error) {
+      setTranscriptionMessage("Falha no alinhamento WhisperX: " + (error instanceof Error ? error.message : String(error)));
+    } finally { setAlignmentBusy(false); }
+  }
+
   function insertTranscription() {
     if (!project || !transcriptionResult || !transcriptionContext) return;
     window.dispatchEvent(new CustomEvent("framelab:transcription-ready", {
@@ -141,8 +173,8 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   }
 
   return {
-    transcriptionResult, transcriptionTranslations, translationBusy,
-    translateTranscription, insertTranscription, updateTranscriptionCue,
+    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy,
+    translateTranscription, alignTranscriptionWords, insertTranscription, updateTranscriptionCue,
     transcriptionAssetId, setTranscriptionAssetId,
     transcriptionContext, setTranscriptionContext,
     transcriptionMode, setTranscriptionMode,
