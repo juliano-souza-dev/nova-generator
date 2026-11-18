@@ -214,14 +214,14 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
   function addCue() {
     const startMs = Math.max(0, Math.floor(current / 100) * 100);
     const endMs = Math.min(duration || startMs + 2500, startMs + 2500);
-    const cue: Cue = { id: `cue-${Date.now()}-${cues.length}`, startMs, endMs: Math.max(startMs + 100, endMs), text: "" };
+    const cue: MediaEditorCue = { id: `cue-${Date.now()}-${cues.length}`, startMs, endMs: Math.max(startMs + 100, endMs), text: "" };
     setCues(items => [...items, cue].sort((a, b) => a.startMs - b.startMs));
     setEditorialResult(null);
     setSelected(cue.id);
     setSaved(false);
     setDirty(true);
   }
-  function updateCue(id: string, patch: Partial<Cue>) {
+  function updateCue(id: string, patch: Partial<MediaEditorCue>) {
     const invalidatesAlignment = "text" in patch || "startMs" in patch || "endMs" in patch;
     setCues(items => items.map(c => c.id === id ? { ...c, ...patch, ...(invalidatesAlignment ? { words: [], wordAlignment: null, wordAlignmentHash: null } : {}) } : c).sort((a, b) => a.startMs - b.startMs));
     setEditorialResult(null);
@@ -280,7 +280,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
     setTranslationDirty(true);
   }
 
-  function beginCueDrag(event: ReactPointerEvent<HTMLButtonElement>, cue: Cue, mode: "move" | "start" | "end") {
+  function beginCueDrag(event: ReactPointerEvent<HTMLButtonElement>, cue: MediaEditorCue, mode: "move" | "start" | "end") {
     if (saving || aligning || !duration) return;
     event.preventDefault();
     event.stopPropagation();
@@ -357,14 +357,14 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
       return;
     }
 
-    const secondCue: Cue = {
+    const secondCue: MediaEditorCue = {
       ...chosen,
       id: `cue-${Date.now()}-${cues.length}-split`,
       startMs: splitMs,
       text: secondText,
       words: secondWords
     };
-    const firstCue: Cue = {
+    const firstCue: MediaEditorCue = {
       ...chosen,
       endMs: splitMs,
       text: firstText,
