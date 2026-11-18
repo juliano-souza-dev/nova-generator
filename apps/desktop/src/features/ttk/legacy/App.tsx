@@ -5,7 +5,8 @@ import { desktopApi, isDesktopRuntime } from "./services/desktop-api";
 import EditorWorkspace, { supportedLucideIconNames } from "./EditorWorkspace";
 import TaskCenter from "./TaskCenter";
 import type { MediaAsset, Project } from "./shared/types";
-import { useTranscription } from "./features/transcription/useTranscription";
+import MediaEditor, { type MediaEditorCue, type MediaEditorTranslationCue } from "../../media/MediaEditor";
+import "../../media/MediaWorkspace.css";
 import { useGroqSettings } from "./features/groq/useGroqSettings";
 import { useYoutubeImport } from "./features/youtube/useYoutubeImport";
 import { validateSceneSpec, type SceneSpec } from "./shared/scene-spec";
@@ -41,13 +42,58 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     groqDelay, setGroqDelay, groqLanguage, setGroqLanguage, groqSettingsBusy,
     groqSettingsMessage, openGroqSettings, saveAndTestGroq
   } = useGroqSettings();
-  const {
-    transcriptionAssetId, setTranscriptionAssetId, setTranscriptionContext,
-    transcriptionMode, setTranscriptionMode, transcriptionLanguage, setTranscriptionLanguage,
-    transcriptionModel, setTranscriptionModel, transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
-    localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage,
-    transcriptionOpen, setTranscriptionOpen, installLocalTranscription, transcribeSelectedMedia
-  } = useTranscription(activeProject, assets);
+  const [transcriptionAssetId, setTranscriptionAssetId] = useState("");
+  const [transcriptionContext, setTranscriptionContext] = useState<{ clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number } | null>(null);
+  const [transcriptionOpen, setTranscriptionOpen] = useState(false);
+  const [transcriptionEditorAsset, setTranscriptionEditorAsset] = useState<MediaAsset | null>(null);
+  const [transcriptionEditorBusy, setTranscriptionEditorBusy] = useState(false);
+
+  async function openTranscriptionEditor(assetId = transcriptionAssetId) {
+    if (!activeProject || !assetId || transcriptionEditorBusy) return;
+    const asset = assets.find(item => item.id === assetId && (item.kind === "video" || item.kind === "audio"));
+    if (!asset) { setError("Selecione uma mídia de vídeo ou áudio deste projeto."); return; }
+    setTranscriptionEditorBusy(true);
+    setError("");
+    try {
+      await desktopApi.syncProjectAssetsForEditor(activeProject.id);
+      setTranscriptionEditorAsset(asset);
+      setTranscriptionOpen(false);
+    } catch (error) {
+      setError("Não foi possível abrir o editor de transcrição: " + String(error));
+    } finally {
+      setTranscriptionEditorBusy(false);
+    }
+  }
+
+  function requestTranscription(assetId?: string, context?: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number }) {
+    setTranscriptionContext(context ?? null);
+    if (assetId) {
+      setTranscriptionAssetId(assetId);
+      void openTranscriptionEditor(assetId);
+    } else {
+      setTranscriptionAssetId(assets.find(item => item.kind === "video" || item.kind === "audio")?.id ?? "");
+      setTranscriptionOpen(true);
+    }
+  }
+
+  function applyMediaCaptions(payload: { cues: MediaEditorCue[]; translations: MediaEditorTranslationCue[] }) {
+    if (!activeProject || !transcriptionEditorAsset) return;
+    const durationMs = transcriptionEditorAsset.durationMs ?? Math.max(0, ...payload.cues.map(cue => cue.endMs));
+    window.dispatchEvent(new CustomEvent("framelab:transcription-ready", {
+      detail: {
+        projectId: activeProject.id,
+        result: {
+          engine: "nova-media-editor",
+          model: "editorial",
+          language: payload.cues.find(cue => cue.language)?.language ?? null,
+          durationMs,
+          cues: payload.cues.map(cue => ({ ...cue, words: cue.words ?? [] }))
+        },
+        translations: payload.translations,
+        context: transcriptionContext
+      }
+    }));
+  }
 
   async function refresh() {
     if (!isDesktopRuntime) return;
@@ -206,28 +252,29 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
         </> : activeProject ? <>
         {error&&!mediaModal&&<div className="error editor-error">{error}</div>}
         {notice&&<div className="notice"><CheckCircle2 size={15}/>{notice}</div>}
-        <EditorWorkspace projectId={activeProject.id} assets={assets} onAddMedia={()=>{setMediaTab("local");setMediaModal(true);}} onOpenTranscription={(assetId,context)=>{if(assetId)setTranscriptionAssetId(assetId);setTranscriptionContext(context??null);setTranscriptionOpen(true);}}/>
+        <EditorWorkspace projectId={activeProject.id} assets={assets} onAddMedia={()=>{setMediaTab("local");setMediaModal(true);}} onOpenTranscription={requestTranscription}/>
         </> : null}
         <footer>FRAME LAB · FEITO PARA IDEIAS EM MOVIMENTO <span>EARLY ACCESS · 0.2.0</span></footer>
       </div>
     </section>
     {creating&&<div className="backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setCreating(false);}}><form className="modal" onSubmit={createProject}><button type="button" className="close" onClick={()=>setCreating(false)}><X size={18}/></button><div className="modal-icon"><FolderPlus size={21}/></div><label className="eyebrow muted">NOVO PROJETO</label><h2>Vamos dar forma à ideia?</h2><p>Seu projeto será salvo no computador e poderá ser aberto novamente quando quiser.</p><label className="field-label" htmlFor="project-name">Nome do projeto</label><input id="project-name" autoFocus maxLength={80} value={name} onChange={e=>setName(e.target.value)} placeholder="Ex.: Inglês em 1 minuto"/><div className="canvas-info"><span>Canvas vertical</span><b>1080 × 1920 · 30 FPS</b></div><button className="primary submit" disabled={!name.trim()||busy}>{busy?"Criando...":"Criar projeto"} <ArrowUpRight size={16}/></button></form></div>}
-    {transcriptionOpen&&activeProject&&<div className="backdrop transcription-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!transcriptionBusy)setTranscriptionOpen(false);}}>
+    {transcriptionOpen&&activeProject&&<div className="backdrop transcription-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!transcriptionEditorBusy)setTranscriptionOpen(false);}}>
       <section className="transcription-dialog" role="dialog" aria-modal="true" aria-labelledby="transcription-title">
-        <div className="transcription-dialog-top"><div className="transcription-heading"><div><label className="eyebrow muted">RECONHECIMENTO DE FALA</label><h3 id="transcription-title">Gerar legendas automaticamente</h3><p>Configure a transcrição e envie as falas para a timeline como legendas editáveis.</p></div><span className="transcription-chip"><Mic size={13}/> WHISPER</span></div><button className="close" type="button" title="Fechar" disabled={transcriptionBusy} onClick={()=>setTranscriptionOpen(false)}><X size={18}/></button></div>
+        <div className="transcription-dialog-top"><div className="transcription-heading"><div><label className="eyebrow muted">EDITOR DE TRANSCRIÇÃO</label><h3 id="transcription-title">Escolha a mídia</h3><p>Abra o editor completo para transcrever, revisar, traduzir e alinhar somente esta mídia.</p></div><span className="transcription-chip"><Captions size={13}/> POR MÍDIA</span></div><button className="close" type="button" title="Fechar" disabled={transcriptionEditorBusy} onClick={()=>setTranscriptionOpen(false)}><X size={18}/></button></div>
         <div className="transcription-controls">
-          <label>Arquivo de mídia<select value={transcriptionAssetId} onChange={event=>{setTranscriptionAssetId(event.target.value);setTranscriptionContext(null);}}><option value="">Selecione um vídeo ou áudio</option>{assets.filter(asset=>asset.kind==="video"||asset.kind==="audio").map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
-          <label>Processamento<select value={transcriptionMode} onChange={event=>setTranscriptionMode(event.target.value as "auto"|"cloud"|"local")}><option value="auto">Automático (Groq + fallback local)</option><option value="cloud">Somente Groq na nuvem</option><option value="local">Somente local (privado)</option></select></label>
-          <label>Idioma<select value={transcriptionLanguage} onChange={event=>setTranscriptionLanguage(event.target.value)}><option value="">Detectar automaticamente</option><option value="pt">Português</option><option value="en">Inglês</option><option value="es">Espanhol</option><option value="fr">Francês</option></select></label>
-          <label>Modelo local<select value={transcriptionModel} onChange={event=>setTranscriptionModel(event.target.value)}><option value="tiny">Tiny · mais rápido</option><option value="base">Base · leve</option><option value="small">Small · equilibrado</option><option value="medium">Medium · mais preciso</option><option value="large-v3">Large v3 · maior qualidade</option></select></label>
-          <button className="primary transcription-start" disabled={!transcriptionAssetId||transcriptionBusy||(!localAsrInstalled&&transcriptionMode==="local")} onClick={()=>void transcribeSelectedMedia()}>{transcriptionBusy?<><LoaderCircle className="spin" size={15}/> Transcrevendo...</>:<><Captions size={15}/> Transcrever</>}</button>
+          <label>Mídia selecionada<select value={transcriptionAssetId} onChange={event=>setTranscriptionAssetId(event.target.value)}><option value="">Selecione um vídeo ou áudio</option>{assets.filter(asset=>asset.kind==="video"||asset.kind==="audio").map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
+          <button className="primary transcription-start" disabled={!transcriptionAssetId||transcriptionEditorBusy} onClick={()=>void openTranscriptionEditor()}>{transcriptionEditorBusy?<><LoaderCircle className="spin" size={15}/> Preparando editor...</>:<><Captions size={15}/> Abrir editor da mídia</>}</button>
         </div>
-        <div className="transcription-footer"><span>{localAsrChecking?"Verificando suporte local...":localAsrInstalled?<><CheckCircle2 size={13}/> Faster-Whisper instalado</>:<><Info size={13}/> Processamento local ainda não instalado</>}</span>{!localAsrInstalled&&<button className="secondary-action" disabled={localAsrChecking||localAsrInstalling} onClick={()=>void installLocalTranscription()}>{localAsrInstalling?<><LoaderCircle className="spin" size={13}/> Instalando...</>:<><Download size={13}/> Instalar suporte local</>}</button>}</div>
-        {transcriptionBusy&&transcriptionProgress&&<div className="transcription-progress"><div className="progress-heading"><b>{transcriptionProgress.message}</b><span>{Math.round(transcriptionProgress.percent)}%</span></div><div className="progress-track"><i style={{width:Math.max(0,Math.min(100,transcriptionProgress.percent))+"%"}}/></div>{transcriptionProgress.totalChunks>0&&<small>Blocos concluídos: {transcriptionProgress.completedChunks} de {transcriptionProgress.totalChunks}</small>}</div>}
-        {transcriptionMessage&&<div className="transcription-message" role="status">{transcriptionMessage}</div>}
-        <small className="transcription-privacy">Somente o modo local mantém o áudio no computador. Os modos Automático e Groq enviam o áudio à API da Groq; no Automático, o processamento local é usado como fallback. O modelo local é baixado na primeira utilização. O arquivo original não é modificado.</small>
+        <small className="transcription-privacy">A transcrição, a tradução e o alinhamento serão salvos separadamente para a mídia selecionada. Você poderá retornar ao projeto sem perder o trabalho.</small>
       </section>
     </div>}
+    {transcriptionEditorAsset&&activeProject&&<MediaEditor
+      projectId={activeProject.id}
+      asset={transcriptionEditorAsset}
+      onProjectUpdated={()=>void refreshAssets(activeProject)}
+      onApplyCaptions={applyMediaCaptions}
+      onClose={()=>{setTranscriptionEditorAsset(null);setTranscriptionContext(null);}}
+    />}
     {mediaModal&&activeProject&&<div className="backdrop media-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setMediaModal(false);}}><section className="media-modal">
       <button type="button" className="close" onClick={()=>!busy&&setMediaModal(false)}><X size={18}/></button><label className="eyebrow muted">ADICIONAR À BIBLIOTECA</label><h2>Importar mídia</h2><p className="media-modal-subtitle">Destino: <strong>{activeProject.name}</strong></p>
       <div className="media-tabs"><button className={mediaTab==="local"?"active":""} onClick={()=>{setMediaTab("local");setError("");}}><FolderOpen size={15}/> Arquivos locais</button><button className={mediaTab==="youtube"?"active":""} onClick={()=>{setMediaTab("youtube");setError("");}}><Youtube size={15}/> YouTube</button></div>
