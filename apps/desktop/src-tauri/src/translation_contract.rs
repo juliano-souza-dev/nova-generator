@@ -314,6 +314,18 @@ pub fn build_external_package(
     })
 }
 
+
+#[tauri::command]
+pub fn prepare_timeline_clip_external_translation_package(
+    project_id: String,
+    clip_id: String,
+    cues: Vec<crate::media::SubtitleCue>,
+) -> Result<ExternalPackage, String> {
+    // clip_id is deliberately used as the package identity. No asset-level
+    // translation record is created or overwritten by this workflow.
+    build_external_package(&project_id, &clip_id, &cues, false, false)
+}
+
 #[tauri::command]
 pub fn prepare_external_translation_package(
     project_id: String,
