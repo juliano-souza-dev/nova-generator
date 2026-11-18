@@ -48,7 +48,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     transcriptionModel, setTranscriptionModel, transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
     localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage, setTranscriptionMessage,
     installLocalTranscription, transcribeSelectedMedia,
-    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, openTranscriptionForClip, translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue
+    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, transcriptionInserted, openTranscriptionForClip, translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue
   } = useTranscription(activeProject, assets);
 
   async function refresh() {
@@ -208,7 +208,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
         </> : activeProject ? <>
         {error&&!mediaModal&&<div className="error editor-error">{error}</div>}
         {notice&&<div className="notice"><CheckCircle2 size={15}/>{notice}</div>}
-        <EditorWorkspace projectId={activeProject.id} assets={assets} onAddMedia={()=>{setMediaTab("local");setMediaModal(true);}} onStartTranscription={openTranscriptionForClip} transcription={{transcriptionAssetId,setTranscriptionAssetId,transcriptionContext,setTranscriptionContext,transcriptionMessage,setTranscriptionMessage,transcriptionMode,setTranscriptionMode,transcriptionLanguage,setTranscriptionLanguage,transcriptionModel,setTranscriptionModel,transcriptionBusy,transcriptionProgress,setTranscriptionProgress,localAsrInstalled,localAsrChecking,localAsrInstalling,installLocalTranscription,transcribeSelectedMedia,transcriptionResult,transcriptionTranslations,translationBusy,alignmentBusy,externalPackageBusy,externalSourceHash,openTranscriptionForClip,translateTranscription,alignTranscriptionWords,downloadExternalPackage,importExternalTranslation,insertTranscription,updateTranscriptionCue}}/>
+        <EditorWorkspace projectId={activeProject.id} assets={assets} onAddMedia={()=>{setMediaTab("local");setMediaModal(true);}} onStartTranscription={openTranscriptionForClip} transcription={{transcriptionAssetId,setTranscriptionAssetId,transcriptionContext,setTranscriptionContext,transcriptionMessage,setTranscriptionMessage,transcriptionMode,setTranscriptionMode,transcriptionLanguage,setTranscriptionLanguage,transcriptionModel,setTranscriptionModel,transcriptionBusy,transcriptionProgress,setTranscriptionProgress,localAsrInstalled,localAsrChecking,localAsrInstalling,installLocalTranscription,transcribeSelectedMedia,transcriptionResult,transcriptionTranslations,translationBusy,alignmentBusy,externalPackageBusy,externalSourceHash,transcriptionInserted,openTranscriptionForClip,translateTranscription,alignTranscriptionWords,downloadExternalPackage,importExternalTranslation,insertTranscription,updateTranscriptionCue}}/>
         </> : null}
         <footer>FRAME LAB · FEITO PARA IDEIAS EM MOVIMENTO <span>EARLY ACCESS · 0.2.0</span></footer>
       </div>
