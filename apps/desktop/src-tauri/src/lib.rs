@@ -223,6 +223,7 @@ pub fn run() {
             ttk::commands::media::projects::open_project,
             ttk::commands::media::projects::list_project_assets,
             ttk::commands::media::projects::get_project_asset_path,
+            ttk::commands::media::projects::ttk_sync_project_assets_for_editor,
             ttk::commands::media::projects::import_media_files,
             ttk::commands::media::youtube::inspect_youtube,
             ttk::commands::media::youtube::download_youtube,
