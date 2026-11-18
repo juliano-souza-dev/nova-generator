@@ -226,7 +226,9 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
         const endMs = Number.isFinite(item.endMs) ? Math.max(startMs + 300, Number(item.endMs)) : startMs + legacyDuration;
         const legacyComposition = item.preset === "composition";
         const legacyIcon = item.icon || (legacyComposition ? item.elements?.find(element => element.type === "icon")?.content : "");
-        return { ...item, preset: legacyComposition ? "pop" : item.preset, entranceDurationMs: Math.max(100, Math.min(10000, Number(item.entranceDurationMs) || 700)), typewriterDurationMs: Math.max(100, Math.min(10000, Number(item.typewriterDurationMs) || 1500)), icon: legacyIcon || "", fontFamily: item.fontFamily || "Arial", fontWeight: item.fontWeight || 900, textAlign: item.textAlign || "center", startMs, endMs, durationMs: endMs - startMs, x: Number.isFinite(item.x) ? item.x : 50, y: Number.isFinite(item.y) ? item.y : 50 };
+        const hasWordTiming = item.isCaption && Array.isArray(item.captionWords) && item.captionWords.length > 0;
+        const captionMode = item.captionMode || (hasWordTiming ? "karaoke" : item.captionTranslation ? "bilingual" : "source");
+        return { ...item, captionMode, preset: legacyComposition ? "pop" : item.preset, entranceDurationMs: Math.max(100, Math.min(10000, Number(item.entranceDurationMs) || 700)), typewriterDurationMs: Math.max(100, Math.min(10000, Number(item.typewriterDurationMs) || 1500)), icon: legacyIcon || "", fontFamily: item.fontFamily || "Arial", fontWeight: item.fontWeight || 900, textAlign: item.textAlign || "center", startMs, endMs, durationMs: endMs - startMs, x: Number.isFinite(item.x) ? item.x : 50, y: Number.isFinite(item.y) ? item.y : 50 };
       });
       setTextLayers(normalized.filter(item => !item.isCaption));
       setCaptions(normalized.filter(item => !!item.isCaption));
