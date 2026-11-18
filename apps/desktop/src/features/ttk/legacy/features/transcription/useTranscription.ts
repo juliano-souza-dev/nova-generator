@@ -30,6 +30,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   const [alignmentBusy, setAlignmentBusy] = useState(false);
   const [externalSourceHash, setExternalSourceHash] = useState("");
   const [externalPackageBusy, setExternalPackageBusy] = useState(false);
+  const [transcriptionInserted, setTranscriptionInserted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +56,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionResult(null);
     setTranscriptionTranslations([]);
     setExternalSourceHash("");
+    setTranscriptionInserted(false);
     setTranscriptionMessage("");
   }
 
@@ -121,6 +123,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     } : current);
     setTranscriptionTranslations(current => current.filter(item => item.id !== cueId));
     setExternalSourceHash("");
+    setTranscriptionInserted(false);
   }
 
   async function translateTranscription() {
@@ -146,7 +149,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     try {
       const pkg = await desktopApi.prepareClipExternalTranslationPackage(project.id, transcriptionContext.clipId, transcriptionResult.cues);
       const content = pkg.files["entrada-editorial.txt"] ?? "";
-      const hash = content.match(/^SOURCE_HASH:\\s*(.+)$/m)?.[1]?.trim() ?? "";
+      const hash = content.match(/^SOURCE_HASH:\s*(.+)$/m)?.[1]?.trim() ?? "";
       if (!hash) throw new Error("O pacote não retornou o identificador da transcrição.");
       const saved = await downloadExternalTranslationPackage(pkg);
       if (saved) {
@@ -226,14 +229,12 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
         translations: transcriptionTranslations.map(item => ({ id: item.id, text: item.translation }))
       }
     }));
-    setTranscriptionMessage("Transcrição inserida na timeline e vinculada ao clipe selecionado.");
-    setTranscriptionContext(null);
-    setTranscriptionResult(null);
-    setTranscriptionTranslations([]);
+    setTranscriptionMessage("Transcrição inserida na timeline. O resultado foi mantido neste painel para permitir tradução, exportação do TXT e alinhamento sem reprocessar o áudio.");
+    setTranscriptionInserted(true);
   }
 
   return {
-    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, openTranscriptionForClip,
+    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, transcriptionInserted, openTranscriptionForClip,
     translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue,
     transcriptionAssetId, setTranscriptionAssetId,
     transcriptionContext, setTranscriptionContext,
