@@ -30,7 +30,7 @@ export { supportedLucideIconNames } from "./features/motion-graphics/icon-librar
 import { AudioLines, Film, Plus, Play, Pause, Trash2, Scissors, Copy, SkipBack, SkipForward, Volume2, VolumeX, Music2, Type, WandSparkles, MousePointer2, ChevronLeft, ChevronRight, Download, LoaderCircle, PanelsTopLeft, FileJson, Upload, Eye, Search, Image, ShieldCheck, Captions, Layers } from "lucide-react";
 import { SCENE_TEMPLATES, buildTemplateScene, createSceneSpecFromMotion, validateSceneSpec } from "./shared/scene-spec";
 
-type Props = { projectId: string; assets: MediaAsset[]; onAddMedia: () => void; onStartTranscription?: (assetId?: string, context?: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number }) => void; transcription: ReturnType<typeof useTranscription> };
+type Props = { projectId: string; assets: MediaAsset[]; onAddMedia: () => void; onStartTranscription?: (assetId: string | undefined, context: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number }) => void; transcription: ReturnType<typeof useTranscription> };
 const motionPresets = [{id:"pop",label:"Pop Impact",sound:"pop"},{id:"slide",label:"Slide + Whoosh",sound:"whoosh"},{id:"zoom",label:"Zoom + Impact",sound:"impact"},{id:"typewriter",label:"Typewriter",sound:"click"},{id:"impact",label:"Big Impact",sound:"impact"}] as const;
 
 
