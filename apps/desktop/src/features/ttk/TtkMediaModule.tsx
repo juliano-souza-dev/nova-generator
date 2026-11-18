@@ -1,8 +1,8 @@
 import LegacyTtkApp from "./legacy/App";
 import "./legacy/styles.css";
 
-export default function TtkMediaModule({ projectId }: { projectId: string }) {
+export default function TtkMediaModule({ projectId, onBack }: { projectId: string; onBack: () => void }) {
   return <div className="ttk-module">
-    <LegacyTtkApp embeddedProjectId={projectId} />
+    <LegacyTtkApp embeddedProjectId={projectId} onBack={onBack} />
   </div>;
 }
