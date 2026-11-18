@@ -47,7 +47,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     transcriptionModel, setTranscriptionModel, transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
     localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage,
     transcriptionOpen, setTranscriptionOpen, installLocalTranscription, transcribeSelectedMedia,
-    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, translateTranscription, alignTranscriptionWords, insertTranscription, updateTranscriptionCue
+    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, openTranscriptionForClip, translateTranscription, alignTranscriptionWords, insertTranscription, updateTranscriptionCue
   } = useTranscription(activeProject, assets);
 
   async function refresh() {
@@ -207,7 +207,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
         </> : activeProject ? <>
         {error&&!mediaModal&&<div className="error editor-error">{error}</div>}
         {notice&&<div className="notice"><CheckCircle2 size={15}/>{notice}</div>}
-        <EditorWorkspace projectId={activeProject.id} assets={assets} onAddMedia={()=>{setMediaTab("local");setMediaModal(true);}} onOpenTranscription={(assetId,context)=>{if(assetId)setTranscriptionAssetId(assetId);setTranscriptionContext(context??null);setTranscriptionOpen(true);}}/>
+        <EditorWorkspace projectId={activeProject.id} assets={assets} onAddMedia={()=>{setMediaTab("local");setMediaModal(true);}} onOpenTranscription={(assetId,context)=>openTranscriptionForClip(assetId,context??null)}/>
         </> : null}
         <footer>FRAME LAB · FEITO PARA IDEIAS EM MOVIMENTO <span>EARLY ACCESS · 0.2.0</span></footer>
       </div>
