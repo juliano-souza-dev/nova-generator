@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { MediaAsset, Project } from "../../shared/types";
-import type { TranscriptionProgress } from "../../services/desktop-api";
+import type { TranscriptionProgress, TranscriptResult, CueTranslation } from "../../services/desktop-api";
 import { desktopApi } from "../../services/desktop-api";
 import { runTrackedTask } from "../../services/task-center";
 
@@ -24,6 +24,9 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   const [localAsrInstalling, setLocalAsrInstalling] = useState(false);
   const [transcriptionMessage, setTranscriptionMessage] = useState("");
   const [transcriptionOpen, setTranscriptionOpen] = useState(false);
+  const [transcriptionResult, setTranscriptionResult] = useState<TranscriptResult | null>(null);
+  const [transcriptionTranslations, setTranscriptionTranslations] = useState<CueTranslation[]>([]);
+  const [translationBusy, setTranslationBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +62,8 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   async function transcribeSelectedMedia() {
     if (!project || !transcriptionAssetId || transcriptionBusy) return;
     setTranscriptionBusy(true);
+    setTranscriptionResult(null);
+    setTranscriptionTranslations([]);
     setTranscriptionMessage("");
     setTranscriptionProgress(null);
     try {
@@ -69,14 +74,12 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
         transcriptionLanguage,
         transcriptionModel
       ));
-      window.dispatchEvent(new CustomEvent("framelab:transcription-ready", {
-        detail: { projectId: project.id, result, context: transcriptionContext }
-      }));
-      setTranscriptionContext(null);
+      const scopedCues = transcriptionContext
+        ? result.cues.filter(cue => cue.endMs > transcriptionContext.sourceStartMs && cue.startMs < transcriptionContext.sourceEndMs)
+        : result.cues;
+      setTranscriptionResult({ ...result, cues: scopedCues });
       setTranscriptionMessage(
-        result.cues.length + " legendas criadas com " +
-        (result.engine === "groq" ? "Groq Whisper" : "Faster-Whisper local") +
-        ". Elas foram adicionadas à faixa exclusiva de transcrição."
+        scopedCues.length + " trechos reconhecidos para o clipe selecionado. Revise e traduza antes de inserir na timeline."
       );
       setTranscriptionProgress({
         projectId: project.id,
@@ -93,7 +96,42 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     }
   }
 
+
+  async function translateTranscription() {
+    if (!transcriptionResult || translationBusy || !transcriptionResult.cues.length) return;
+    setTranslationBusy(true);
+    setTranscriptionMessage("");
+    try {
+      const translated = await desktopApi.translateGroqChunk("Português do Brasil", transcriptionResult.cues.map(cue => ({
+        id: cue.id, text: cue.text, words: cue.words.map(word => word.text)
+      })));
+      setTranscriptionTranslations(translated);
+      setTranscriptionMessage(translated.length + " trechos traduzidos. Revise o resultado antes de inserir.");
+    } catch (error) {
+      setTranscriptionMessage("Falha na tradução: " + (error instanceof Error ? error.message : String(error)));
+    } finally { setTranslationBusy(false); }
+  }
+
+  function insertTranscription() {
+    if (!project || !transcriptionResult || !transcriptionContext) return;
+    window.dispatchEvent(new CustomEvent("framelab:transcription-ready", {
+      detail: {
+        projectId: project.id,
+        result: transcriptionResult,
+        context: transcriptionContext,
+        translations: transcriptionTranslations.map(item => ({ id: item.id, text: item.translation }))
+      }
+    }));
+    setTranscriptionMessage("Transcrição inserida na timeline e vinculada ao clipe selecionado.");
+    setTranscriptionContext(null);
+    setTranscriptionResult(null);
+    setTranscriptionTranslations([]);
+    setTranscriptionOpen(false);
+  }
+
   return {
+    transcriptionResult, transcriptionTranslations, translationBusy,
+    translateTranscription, insertTranscription,
     transcriptionAssetId, setTranscriptionAssetId,
     transcriptionContext, setTranscriptionContext,
     transcriptionMode, setTranscriptionMode,
