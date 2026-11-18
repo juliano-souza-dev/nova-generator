@@ -133,6 +133,31 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
       setSceneSpecMessage("Transcrição adicionada à faixa exclusiva: " + created.length + " legendas. Revise o texto e os tempos antes de exportar.");
     };
     window.addEventListener("framelab:transcription-ready", onTranscript);
+    const onTranscriptUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ projectId?: string; result: TranscriptResult; translations?: Array<{ id: string; text: string }>; context?: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number } }>).detail;
+      if (!detail || detail.projectId !== projectId || !detail.context) return;
+      const refreshed = transcriptToCaptions(detail.result, detail.context, () => "", detail.translations ?? []);
+      const bySourceCue = new Map(refreshed.map(item => [item.captionSourceCueId, item]));
+      setMotion(current => current.map(item => {
+        if (!item.isCaption || item.sourceClipId !== detail.context!.clipId || !item.captionSourceCueId) return item;
+        const update = bySourceCue.get(item.captionSourceCueId);
+        if (!update) return item;
+        return {
+          ...item,
+          captionEnglish: update.captionEnglish,
+          captionTranslation: update.captionTranslation,
+          captionTranslationLanguage: update.captionTranslationLanguage,
+          captionMode: update.captionMode,
+          captionWords: update.captionWords,
+          text: update.text,
+          startMs: update.startMs,
+          endMs: update.endMs,
+          durationMs: update.durationMs,
+        };
+      }));
+    };
+    window.addEventListener("framelab:transcription-update", onTranscriptUpdate);
+    return () => window.removeEventListener("framelab:transcription-update", onTranscriptUpdate);
     return () => window.removeEventListener("framelab:transcription-ready", onTranscript);
   }, [projectId]);
 
