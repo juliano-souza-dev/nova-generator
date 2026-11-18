@@ -203,6 +203,8 @@ pub fn run() {
             prediction_listening::save_prediction_listening_result,
             materials::load_project_materials, materials::save_project_materials,
             materials::generate_material_audio, materials::extract_material_source_audio, materials::export_project_materials_package,
+            ttk::commands::media::projects::ttk_list_projects,
+            ttk::commands::media::projects::ttk_create_project,
             ttk::commands::media::projects::open_project,
             ttk::commands::media::projects::list_project_assets,
             ttk::commands::media::projects::get_project_asset_path,
