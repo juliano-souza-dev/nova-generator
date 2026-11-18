@@ -20,7 +20,13 @@ base64 = "0.22"
 tokio = { version = "1", features = ["time"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 tracing-appender = "0.2"
-shared-runtime-manager = { git = "https://github.com/juliano-souza-dev/shared-runtime-manager-", rev = "857d7259733e9c67d4ced5124cd610f18afcadea", version = "0.6.0" }
+anyhow = "1"
+dirs = "6"
+sha1 = "0.10"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
 tauri = { version = "2", features = ["protocol-asset"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
