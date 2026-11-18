@@ -65,6 +65,8 @@ export const desktopApi = {
 
   prepareYoutubeCache: (url: string, maxHeight: number) =>
     runTrackedTask("download", "Download para cache temporário do YouTube", () => invoke<YoutubeCacheEntry>("prepare_youtube_cache", { url, maxHeight })),
+  authorizeYoutubePreview: (videoId: string) =>
+    invoke<string>("nova_authorize_youtube_preview", { videoId }),
   trimYoutubeCache: (projectId: string, videoId: string, startMs: number, endMs: number) =>
     runTrackedTask("export", "Recorte do vídeo do YouTube", () => invoke<MediaAsset>("trim_youtube_cache", { projectId, videoId, startMs: Math.round(startMs), endMs: Math.round(endMs) })),
 
