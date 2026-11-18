@@ -68,6 +68,9 @@ pub async fn trim_youtube_cache(
     video_id: String,
     start_ms: u64,
     end_ms: u64,
+    aspect_ratio: String,
+    frame_mode: String,
+    frame_color: String,
 ) -> Result<MediaAsset, String> {
     let cache = state.youtube_cache.clone();
     let storage = state.media_storage.clone();
@@ -86,12 +89,50 @@ pub async fn trim_youtube_cache(
         let output = media_dir.join(format!("{id}.mp4"));
         let (ffmpeg, _) = resolve_ffmpeg_executable()?;
         let duration = end_ms - start_ms;
-        let result = crate::process::hidden_command(ffmpeg)
-            .args(["-y", "-hide_banner", "-loglevel", "error", "-ss"])
+        let (width, height) = match aspect_ratio.as_str() {
+            "9:16" => (1080, 1920),
+            "16:9" => (1920, 1080),
+            "1:1" => (1080, 1080),
+            "original" => (0, 0),
+            _ => return Err("Formato de vídeo inválido.".into()),
+        };
+        let color = frame_color.trim_start_matches('#');
+        if color.len() != 6 || !color.chars().all(|ch| ch.is_ascii_hexdigit()) {
+            return Err("A cor de fundo precisa estar no formato hexadecimal.".into());
+        }
+        let filter = if aspect_ratio == "original" {
+            None
+        } else {
+            let base = match frame_mode.as_str() {
+                "blur" => format!(
+                    "[0:v]split=2[bg][fg];[bg]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},boxblur=24:12[bg];[fg]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v]"
+                ),
+                "contain" => format!(
+                    "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
+                ),
+                "color" => format!(
+                    "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:0x{color},setsar=1"
+                ),
+                _ => return Err("Modo de enquadramento inválido.".into()),
+            };
+            Some(base)
+        };
+        let mut command = crate::process::hidden_command(ffmpeg);
+        command.args(["-y", "-hide_banner", "-loglevel", "error", "-ss"])
             .arg(format!("{:.3}", start_ms as f64 / 1000.0))
             .arg("-i").arg(&entry.file_path)
-            .arg("-t").arg(format!("{:.3}", duration as f64 / 1000.0))
-            .args(["-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"])
+            .arg("-t").arg(format!("{:.3}", duration as f64 / 1000.0));
+        if let Some(filter) = filter {
+            if frame_mode == "blur" {
+                command.args(["-filter_complex", &filter, "-map", "[v]"]);
+            } else {
+                command.args(["-vf", &filter, "-map", "0:v:0"]);
+            }
+        } else {
+            command.args(["-map", "0:v:0"]);
+        }
+        let result = command
+            .args(["-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"])
             .arg(&output)
             .output()
             .map_err(|e| format!("Não foi possível iniciar o recorte: {e}"))?;
