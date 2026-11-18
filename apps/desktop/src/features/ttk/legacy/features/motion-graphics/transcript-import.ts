@@ -12,6 +12,7 @@ export function transcriptToCaptions(
   result: TranscriptResult,
   context?: TranscriptTimelineContext,
   createId: () => string = () => crypto.randomUUID(),
+  translations: Array<{ id: string; text: string }> = [],
 ): MotionGraphic[] {
   const selectedCues = result.cues.filter(cue =>
     !context || (cue.endMs > context.sourceStartMs && cue.startMs < context.sourceEndMs)
@@ -26,14 +27,15 @@ export function transcriptToCaptions(
       startMs: timelineStart + Math.max(word.startMs, sourceStart) - sourceStart,
       endMs: timelineStart + Math.min(word.endMs, sourceEnd) - sourceStart,
     }));
+    const translated = translations.find(item => item.id === cue.id)?.text?.trim() ?? "";
     return {
       id: createId(),
       isCaption: true,
-      captionMode: words.length ? "karaoke" as const : "source" as const,
+      captionMode: translated ? "bilingual" as const : words.length ? "karaoke" as const : "source" as const,
       captionEnglish: cue.text,
       captionSourceLanguage: result.language || "auto",
-      captionTranslationLanguage: "",
-      captionTranslation: "",
+      captionTranslationLanguage: translated ? "pt-BR" : "",
+      captionTranslation: translated,
       captionWords: words,
       captionBackgroundColor: "#000000",
       captionBackgroundOpacity: 0.76,
