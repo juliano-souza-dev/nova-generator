@@ -1031,7 +1031,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
                 {transcription.transcriptionTranslations.find(item=>item.id===cue.id)&&<p className="transcription-review-translation">{transcription.transcriptionTranslations.find(item=>item.id===cue.id)?.translation}</p>}
               </div>)}
             </div>
-            <button className="primary caption-insert-transcription" type="button" disabled={transcription.translationBusy||transcription.alignmentBusy||transcription.externalPackageBusy} onClick={()=>transcription.insertTranscription()}><Captions size={14}/> 3. Inserir legendas na timeline</button>
+            <button className="primary caption-insert-transcription" type="button" disabled={transcription.transcriptionInserted||transcription.translationBusy||transcription.alignmentBusy||transcription.externalPackageBusy} onClick={()=>transcription.insertTranscription()}><Captions size={14}/> {transcription.transcriptionInserted?"Legendas já inseridas na timeline":"3. Inserir legendas na timeline"}</button>
           </div>}
           <div className="caption-transcription-section">
             <div className="caption-transcription-title"><b>3. Tradução e alinhamento</b><small>Exporte o TXT para tradução externa, importe o JSON correspondente ou alinhe cada palavra com WhisperX antes de inserir.</small></div>
