@@ -80,6 +80,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionResult(null);
     setTranscriptionTranslations([]);
     setExternalSourceHash("");
+    setTranscriptionInserted(false);
     setTranscriptionMessage("");
     setTranscriptionProgress(null);
     try {
