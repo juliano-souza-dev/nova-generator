@@ -75,7 +75,7 @@ export function useYoutubeImport({ project, setAssets, setBusy, setError, setNot
     try {
       const asset = await runTrackedTask("trim", "Recortando vídeo", () => desktopApi.trimYoutubeCache(project.id, youtubeCache.videoId, trimStartMs, trimEndMs, outputRatio, frameMode, frameColor));
       setAssets(current => [asset, ...current]);
-      setNotice("Trecho importado para a biblioteca. O vídeo original permanece no cache temporário por até 7 dias.");
+      setNotice("Trecho preparado em 9:16 e importado para a biblioteca. A imagem original foi preservada, com preenchimento de fundo. O download original permanece no cache temporário por até 7 dias.");
       setYoutubeCache(null);
       setYoutubeUrl("");
       setYoutubeInfo(null);
