@@ -30,7 +30,7 @@ export { supportedLucideIconNames } from "./features/motion-graphics/icon-librar
 import { AudioLines, Film, Plus, Play, Pause, Trash2, Scissors, Copy, SkipBack, SkipForward, Volume2, VolumeX, Music2, Type, WandSparkles, MousePointer2, ChevronLeft, ChevronRight, Download, LoaderCircle, PanelsTopLeft, FileJson, Upload, Eye, Search, Image, ShieldCheck, Captions, Layers } from "lucide-react";
 import { SCENE_TEMPLATES, buildTemplateScene, createSceneSpecFromMotion, validateSceneSpec } from "./shared/scene-spec";
 
-type CaptionGlobalStyle = Pick<MotionGraphic, "fontFamily" | "fontSize" | "fontWeight" | "textAlign" | "x" | "y" | "captionWidth" | "captionBackgroundColor" | "captionBackgroundOpacity" | "captionPaddingEm" | "color" | "accent">;
+type CaptionGlobalStyle = Required<Pick<MotionGraphic, "fontFamily" | "fontSize" | "fontWeight" | "textAlign" | "x" | "y" | "captionWidth" | "captionBackgroundColor" | "captionBackgroundOpacity" | "captionPaddingEm" | "color" | "accent">>;
 const DEFAULT_CAPTION_GLOBAL_STYLE: CaptionGlobalStyle = { fontFamily: "Arial", fontSize: 48, fontWeight: 900, textAlign: "center", x: 50, y: 82, captionWidth: 90, captionBackgroundColor: "#000000", captionBackgroundOpacity: 0.76, captionPaddingEm: 0.32, color: "#ffffff", accent: "#65d6c0" };
 
 type Props = { projectId: string; assets: MediaAsset[]; onAddMedia: () => void; onStartTranscription?: (assetId: string | undefined, context: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number }) => void; transcription: ReturnType<typeof useTranscription> };
@@ -1158,8 +1158,8 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
                 return <><span>{previewWords.map((word, index) => {
                   const active = captionPlayheadMs >= word.startMs && captionPlayheadMs < word.endMs;
                   return <span key={index} style={{ color: active ? item.accent : item.color, textShadow: active ? "0 0 12px " + item.accent : "none" }}>{word.text}{index < previewWords.length - 1 ? " " : ""}</span>;
-                })}</span>{(semanticGroups.length > 0 || item.captionTranslation) && <><br/><span style={{color:"#d8d4df",fontSize:"0.72em"}}>{semanticGroups.length ? semanticGroups.map((group,index) => <span key={group.id} style={{color:group.id===activeGroupId?item.accent:"#d8d4df",textShadow:group.id===activeGroupId?"0 0 10px "+item.accent:"none"}}>{group.text}{index<semanticGroups.length-1?" ":""}</span>) : item.captionTranslation}</span></>}</>;
-              })() : item.captionTranslation && item.captionMode !== "source" ? <>{item.captionEnglish || item.text}<br/><span style={{color:"#d8d4df",fontSize:"0.72em"}}>{item.captionTranslation}</span></> : animation.text}</span>
+                })}</span>{(semanticGroups.length > 0 || item.captionTranslation) && <><br/><span style={{color:item.color,fontSize:"0.72em"}}>{semanticGroups.length ? semanticGroups.map((group,index) => <span key={group.id} style={{color:group.id===activeGroupId?item.accent:"#d8d4df",textShadow:group.id===activeGroupId?"0 0 10px "+item.accent:"none"}}>{group.text}{index<semanticGroups.length-1?" ":""}</span>) : item.captionTranslation}</span></>}</>;
+              })() : item.captionTranslation && item.captionMode !== "source" ? <>{item.captionEnglish || item.text}<br/><span style={{color:item.color,fontSize:"0.72em"}}>{item.captionTranslation}</span></> : animation.text}</span>
             </span>
           </div>;
         })}
