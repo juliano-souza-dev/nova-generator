@@ -3,10 +3,11 @@ import MediaWorkspace from "./features/media/MediaWorkspace";
 import MaterialsWorkspace from "./features/media/MaterialsWorkspace";
 import TtkMediaModule from "./features/ttk/TtkMediaModule";
 import TaskCenter from "./features/tasks/TaskCenter";
+import Settings from "./features/settings/Settings";
 import { invoke } from "@tauri-apps/api/core";
 import {
   ArrowLeft, ArrowRight, Check, Clock3, Copy, FolderKanban, Layers3,
-  Plus, Search, Sparkles, Trash2, X, LayoutGrid, FileText, AudioLines
+  Plus, Search, Sparkles, Trash2, X, LayoutGrid, FileText, AudioLines, Settings2
 } from "lucide-react";
 
 type ProjectStatus = "in_progress" | "completed";
@@ -20,7 +21,7 @@ type Project = {
   project_type: "materials" | "ttk_media" | "original";
   ttk_project_id?: string | null;
 };
-type View = "home" | "project";
+type View = "home" | "project" | "settings";
 
 const stages = ["Editorial", "Shadowing", "Prediction Listening", "Materiais"];
 const stageIcons = [FileText, AudioLines, AudioLines, Layers3];
@@ -104,6 +105,10 @@ export default function App() {
     setActiveProject(project); setView("project");
   }
 
+  if (view === "settings") {
+    return <div className="home-shell"><TaskCenter /><header className="home-topbar"><div className="brand"><div className="brand-mark"><Sparkles size={18}/></div><div><strong>NOVA<span>GENERATOR</span></strong><small>ESTÚDIO DE CRIAÇÃO</small></div></div><div className="home-top-actions"><button className="secondary-button" onClick={() => setView("home")}><ArrowLeft size={15}/> Projetos</button></div></header><Settings /></div>;
+  }
+
   if (view === "project" && activeProject?.project_type === "ttk_media" && activeProject.ttk_project_id) {
     return <TtkMediaModule
       key={activeProject.id}
@@ -141,7 +146,7 @@ export default function App() {
   return <div className="home-shell">\n    <TaskCenter />
     <header className="home-topbar">
       <div className="brand"><div className="brand-mark"><Sparkles size={18}/></div><div><strong>NOVA<span>GENERATOR</span></strong><small>ESTÚDIO DE CRIAÇÃO</small></div></div>
-      <div className="home-top-actions"><span className="local-status"><i/> Ambiente local</span><button className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={17}/> Novo projeto</button></div>
+      <div className="home-top-actions"><span className="local-status"><i/> Ambiente local</span><button className="secondary-button" onClick={() => setView("settings")}><Settings2 size={15}/> Configurações</button><button className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={17}/> Novo projeto</button></div>
     </header>
     <main className="home-content">
       <section className="overview-head">
