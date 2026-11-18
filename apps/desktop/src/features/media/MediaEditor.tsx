@@ -11,8 +11,8 @@ import MaterialsWorkspace from "./MaterialsWorkspace";
 export type MediaEditorCue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; wordAlignment?: string | null; wordAlignmentHash?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
 type AlignmentProgress = { projectId: string; assetId: string; completed: number; total: number; message: string };
 type AlignmentResult = { aligned: number; skipped: number; total: number; language?: string | null };
-type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: MediaEditorMediaEditorCue[] };
-export export type MediaEditorTranslationCue = { id: string; startMs: number; endMs: number; text: string };
+type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: MediaEditorCue[] };
+export type MediaEditorTranslationCue = { id: string; startMs: number; endMs: number; text: string };
 type SharedRuntimeStatus = { providers: { id: string; name: string; model: string }[] };
 type Asset = { id: string; name: string; durationMs?: number | null; sourceStartMs?: number | null; sourceEndMs?: number | null };
 function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: number) {
@@ -64,7 +64,7 @@ const fmt = (ms: number) => {
   return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0") + "." + String(Math.floor(ms % 1000 / 100));
 };
 
-export default function MediaEditor({ projectId, asset, onClose, onProjectUpdated, onApplyCaptions }: { projectId: string; asset: Asset; onClose: () => void; onProjectUpdated?: () => void; onApplyCaptions?: (payload: { cues: MediaEditorMediaEditorCue[]; translations: MediaEditorTranslationMediaEditorCue[] }) => void }) {
+export default function MediaEditor({ projectId, asset, onClose, onProjectUpdated, onApplyCaptions }: { projectId: string; asset: Asset; onClose: () => void; onProjectUpdated?: () => void; onApplyCaptions?: (payload: { cues: MediaEditorCue[]; translations: MediaEditorMediaEditorTranslationCue[] }) => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const onProjectUpdatedRef = useRef(onProjectUpdated);
   useEffect(() => { onProjectUpdatedRef.current = onProjectUpdated; }, [onProjectUpdated]);
@@ -72,7 +72,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
   const timelineDragMoved = useRef(false);
   const [src, setSrc] = useState("");
   const [cues, setCues] = useState<MediaEditorCue[]>([]);
-  const [translations, setTranslations] = useState<TranslationMediaEditorCue[]>([]);
+  const [translations, setTranslations] = useState<MediaEditorTranslationCue[]>([]);
   const [editorialResult, setEditorialResult] = useState<Record<string, any> | null>(null);
   const [translationDirty, setTranslationDirty] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -128,7 +128,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         const [path, stored, storedTranslations] = await Promise.all([
           invoke<string>("open_project_media", { projectId, assetId: asset.id }),
           invoke<MediaEditorCue[]>("load_project_subtitles", { projectId, assetId: asset.id }),
-          invoke<TranslationMediaEditorCue[]>("load_project_translations", { projectId, assetId: asset.id }).catch(() => [] as TranslationMediaEditorCue[])
+          invoke<MediaEditorTranslationCue[]>("load_project_translations", { projectId, assetId: asset.id }).catch(() => [] as MediaEditorTranslationCue[])
         ]);
         const storedEditorial = await invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id, cues: stored }).catch(() => null);
         if (!alive) return;
@@ -503,7 +503,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
     setTranslating(true); setError(""); setTranslationInfo(""); setTranslationStream(null);
     try {
       const result = await runTrackedTask("translation", "Traduzir transcrição para PT-BR", () =>
-        invoke<TranslationMediaEditorCue[]>("translate_project_subtitles", { projectId, assetId: asset.id, cues, includeWordTranslations, includeSemanticUnits }));
+        invoke<MediaEditorTranslationCue[]>("translate_project_subtitles", { projectId, assetId: asset.id, cues, includeWordTranslations, includeSemanticUnits }));
       setTranslations(result);
       setEditorialResult(await invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id, cues }));
       setTranslationDirty(true); setDirty(true); setSaved(false);
