@@ -268,10 +268,14 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
           <div><label className="eyebrow muted">EDIÇÃO DO TRECHO</label><h2 id="youtube-trim-title">Escolha o trecho do vídeo</h2><p>{youtubeCache.title}</p></div>
           <button className="close" type="button" disabled={trimBusy} onClick={()=>setYoutubeCache(null)}><X size={18}/></button>
         </header>
-        <div className="youtube-format-preview" style={{aspectRatio:outputRatio==="9:16"?"9 / 16":outputRatio==="16:9"?"16 / 9":outputRatio==="1:1"?"1 / 1":"auto"}}>
+        <div className={"youtube-format-preview " + (frameMode==="blur"?"blur-background":"")} style={{aspectRatio:"9 / 16",backgroundColor:frameMode==="color"?frameColor:"#000000"}}>
+          {frameMode==="blur"&&<video className="youtube-format-preview-background" src={convertFileSrc(youtubeCache.filePath)} muted playsInline preload="metadata" aria-hidden="true"/>}
           <video ref={trimVideoRef} className="youtube-trim-preview" src={convertFileSrc(youtubeCache.filePath)} controls preload="metadata"
-            onTimeUpdate={event=>{const ms=event.currentTarget.currentTime*1000;if(ms<trimStartMs||ms>trimEndMs)event.currentTarget.pause();}}
-            onLoadedMetadata={event=>{event.currentTarget.currentTime=trimStartMs/1000;}} />
+            onPlay={event=>{const bg=event.currentTarget.parentElement?.querySelector(".youtube-format-preview-background") as HTMLVideoElement|null;if(bg){bg.currentTime=event.currentTarget.currentTime;void bg.play().catch(()=>{});}}}
+            onPause={event=>{const bg=event.currentTarget.parentElement?.querySelector(".youtube-format-preview-background") as HTMLVideoElement|null;bg?.pause();}}
+            onSeeking={event=>{const bg=event.currentTarget.parentElement?.querySelector(".youtube-format-preview-background") as HTMLVideoElement|null;if(bg)bg.currentTime=event.currentTarget.currentTime;}}
+            onTimeUpdate={event=>{const ms=event.currentTarget.currentTime*1000;if(ms<trimStartMs||ms>trimEndMs)event.currentTarget.pause();const bg=event.currentTarget.parentElement?.querySelector(".youtube-format-preview-background") as HTMLVideoElement|null;if(bg&&Math.abs(bg.currentTime-event.currentTarget.currentTime)>.2)bg.currentTime=event.currentTarget.currentTime;}}
+            onLoadedMetadata={event=>{event.currentTarget.currentTime=trimStartMs/1000;const bg=event.currentTarget.parentElement?.querySelector(".youtube-format-preview-background") as HTMLVideoElement|null;if(bg)bg.currentTime=trimStartMs/1000;}} />
         </div>
         <section className="youtube-format-panel">
           <div><label className="eyebrow muted">FORMATO DE SAÍDA</label><h3>Prepare para a plataforma</h3><p>Escolha o formato antes de abrir o editor. A cena original será preservada, sem cortes.</p></div>
