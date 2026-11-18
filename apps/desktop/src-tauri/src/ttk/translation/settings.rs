@@ -36,8 +36,8 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("groq-settings.json"))
 }
 
-/// Loads the authorized Groq provider from this application's own Shared config.
-/// The Shared Runtime Manager does not need to be open.
+/// Loads the authorized Groq provider from Nova's integrated Shared Runtime.
+/// No separate Shared Runtime Manager process is required.
 fn shared_provider_settings(
     app: &AppHandle,
 ) -> Result<shared_runtime_manager::api::ProviderRuntimeConfig, String> {
