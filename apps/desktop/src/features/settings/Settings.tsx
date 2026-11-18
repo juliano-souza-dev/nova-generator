@@ -23,6 +23,11 @@ export default function Settings() {
   const [endpoint, setEndpoint] = useState("https://api.groq.com/openai/v1");
   const [model, setModel] = useState("llama-3.3-70b-versatile");
   const [apiKey, setApiKey] = useState("");
+  const [voiceMode, setVoiceMode] = useState<"clone" | "design">("clone");
+  const [voiceName, setVoiceName] = useState("");
+  const [voiceInstruction, setVoiceInstruction] = useState("");
+  const [voiceAudio, setVoiceAudio] = useState<File | null>(null);
+  const [voiceReferenceText, setVoiceReferenceText] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -82,6 +87,32 @@ export default function Settings() {
     finally { setBusy(false); }
   }
 
+  async function createVoice() {
+    if (!voiceName.trim()) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      if (voiceMode === "design") {
+        if (!voiceInstruction.trim()) throw new Error("Descreva a voz que deseja criar.");
+        await invoke("create_shared_voice_design_profile", { name: voiceName.trim(), instruct: voiceInstruction.trim() });
+      } else {
+        if (!voiceAudio) throw new Error("Selecione um áudio de referência.");
+        if (!voiceReferenceText.trim()) throw new Error("Informe a transcrição exata do áudio.");
+        if (voiceAudio.size > 100 * 1024 * 1024) throw new Error("O áudio excede o limite de 100 MB.");
+        const audioBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+          reader.onerror = () => reject(new Error("Não foi possível ler o áudio selecionado."));
+          reader.readAsDataURL(voiceAudio);
+        });
+        await invoke("create_shared_voice_profile", { name: voiceName.trim(), filename: voiceAudio.name, audioBase64, referenceText: voiceReferenceText.trim() });
+      }
+      setSnapshot(current => current ? { ...current, queue: { status: "running", current: "Preparando perfil de voz..." } } : current);
+      setNotice("Preparação da voz iniciada. O perfil aparecerá na biblioteca quando estiver pronto.");
+      setVoiceName(""); setVoiceInstruction(""); setVoiceReferenceText(""); setVoiceAudio(null);
+    } catch (e) { setError(String(e)); }
+    finally { setBusy(false); }
+  }
+
   async function setDefaultVoice(id: string) {
     setBusy(true); setError(""); setNotice("");
     try {
@@ -119,7 +150,7 @@ export default function Settings() {
 
     {tab === "voices" && <section className="settings-panel">
       <div className="settings-panel-head"><div><span className="eyebrow">SÍNTESE DE ÁUDIO</span><h2>Biblioteca de vozes</h2><p>Perfis preparados pelo Qwen3-TTS e disponibilizados aos módulos do Nova.</p></div><span className="settings-count">{voices.length} {voices.length === 1 ? "voz" : "vozes"}</span></div>
-      {voices.length ? <div className="voice-list">{voices.map(voice => <article className="voice-row" key={voice.id}><div className="voice-avatar"><Volume2 size={18}/></div><div className="voice-copy"><strong>{voice.name}</strong><span>{voice.model_id?.includes("VoiceDesign") ? "Voice Design" : "Clonagem de voz"}{voice.duration_seconds ? ` · ${Math.round(voice.duration_seconds)}s de referência` : ""}</span></div>{defaultVoice === voice.id ? <span className="default-voice"><Check size={13}/> Padrão</span> : <button className="text-action" onClick={() => void setDefaultVoice(voice.id)} disabled={busy}>Definir como padrão</button>}</article>)}</div> : <div className="settings-empty"><AudioLines size={24}/><strong>Nenhuma voz preparada</strong><span>Sincronize as dependências de áudio para preparar e adicionar perfis à biblioteca.</span></div>}
+      <div className="voice-create"><div className="voice-create-head"><div><strong>Adicionar perfil de voz</strong><span>Crie uma voz por clonagem de áudio ou por descrição.</span></div><div className="voice-mode-tabs"><button className={voiceMode === "clone" ? "active" : ""} onClick={() => setVoiceMode("clone")}>Clonar voz</button><button className={voiceMode === "design" ? "active" : ""} onClick={() => setVoiceMode("design")}>Voice Design</button></div></div><div className="voice-create-fields"><label>Nome do perfil</label><input value={voiceName} onChange={e => setVoiceName(e.target.value)} placeholder="Ex.: Minha voz em inglês"/>{voiceMode === "clone" ? <><label>Áudio de referência (10 a 200 segundos)</label><input type="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,.wma,audio/*" onChange={e => setVoiceAudio(e.target.files?.[0] ?? null)}/><label>Transcrição exata do áudio</label><textarea rows={3} value={voiceReferenceText} onChange={e => setVoiceReferenceText(e.target.value)} placeholder="Digite exatamente o que é falado no áudio."/></> : <><label>Descrição da voz</label><textarea rows={3} value={voiceInstruction} onChange={e => setVoiceInstruction(e.target.value)} placeholder="Descreva idioma, timbre, ritmo, idade vocal percebida e estilo de fala."/></>}</div><button className="primary-button voice-create-button" onClick={() => void createVoice()} disabled={busy || !voiceName.trim()}><WandSparkles size={15}/>{busy ? "Preparando..." : "Preparar perfil"}</button></div>{voices.length ? <div className="voice-list">{voices.map(voice => <article className="voice-row" key={voice.id}><div className="voice-avatar"><Volume2 size={18}/></div><div className="voice-copy"><strong>{voice.name}</strong><span>{voice.model_id?.includes("VoiceDesign") ? "Voice Design" : "Clonagem de voz"}{voice.duration_seconds ? ` · ${Math.round(voice.duration_seconds)}s de referência` : ""}</span></div>{defaultVoice === voice.id ? <span className="default-voice"><Check size={13}/> Padrão</span> : <button className="text-action" onClick={() => void setDefaultVoice(voice.id)} disabled={busy}>Definir como padrão</button>}</article>)}</div> : <div className="settings-empty"><AudioLines size={24}/><strong>Nenhuma voz preparada</strong><span>Sincronize as dependências de áudio para preparar e adicionar perfis à biblioteca.</span></div>}
     </section>}
 
     {tab === "providers" && <section className="settings-panel">
