@@ -46,6 +46,16 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     }
   }, [assets, transcriptionAssetId]);
 
+
+  function openTranscriptionForClip(assetId: string | undefined, context: TranscriptionContext | null) {
+    setTranscriptionAssetId(assetId ?? "");
+    setTranscriptionContext(context);
+    setTranscriptionResult(null);
+    setTranscriptionTranslations([]);
+    setTranscriptionMessage("");
+    setTranscriptionOpen(true);
+  }
+
   async function installLocalTranscription() {
     setLocalAsrInstalling(true);
     setTranscriptionMessage("");
@@ -173,7 +183,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   }
 
   return {
-    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy,
+    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, openTranscriptionForClip,
     translateTranscription, alignTranscriptionWords, insertTranscription, updateTranscriptionCue,
     transcriptionAssetId, setTranscriptionAssetId,
     transcriptionContext, setTranscriptionContext,
