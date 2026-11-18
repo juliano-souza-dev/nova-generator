@@ -154,8 +154,8 @@ pub async fn trim_youtube_cache(
             source: "youtube".into(),
             source_url: Some(format!("https://www.youtube.com/watch?v={video_id}")),
             duration_ms: Some(duration),
-            width: None,
-            height: None,
+            width: if width > 0 { Some(width) } else { None },
+            height: if height > 0 { Some(height) } else { None },
             created_at: crate::domain::models::timestamp_millis(),
         };
         media.register_download(&project_id, &asset, &output)?;
