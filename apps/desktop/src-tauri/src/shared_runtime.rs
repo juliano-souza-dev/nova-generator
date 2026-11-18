@@ -282,20 +282,29 @@ fn load_config(app: &AppHandle) -> Result<(PathBuf, Value), String> {
     Ok((path, config))
 }
 
+/// Resolves the media cache directory from the Nova application's integrated Shared Runtime config.
+pub(crate) fn resolve_media_shared_directory(app: &AppHandle) -> Result<PathBuf, String> {
+    ensure_nova_registration(app)?;
+    let (_, config) = load_config(app)?;
+    let raw = config.pointer("/shared/directories/mediaShared")
+        .and_then(Value::as_str)
+        .ok_or("A biblioteca compartilhada de mídia não foi configurada. Abra Configurações > Biblioteca de dependências e sincronize o ambiente.")?;
+    let directory = PathBuf::from(raw);
+    if !directory.is_absolute() {
+        return Err("O caminho da biblioteca compartilhada de mídia precisa ser absoluto.".into());
+    }
+    fs::create_dir_all(&directory)
+        .map_err(|error| format!("Não foi possível preparar a biblioteca compartilhada de mídia: {error}"))?;
+    Ok(directory)
+}
+
 /// Resolves the shared media directory and executables from Nova's own libs.json.
 /// Registration is performed lazily so media features work even before Settings is opened.
 pub(crate) fn resolve_media_runtime(
     app: &AppHandle,
 ) -> Result<(PathBuf, PathBuf, PathBuf), String> {
-    ensure_nova_registration(app)?;
+    let media = resolve_media_shared_directory(app)?;
     let (_, config) = load_config(app)?;
-    let media = config.pointer("/shared/directories/mediaShared")
-        .and_then(Value::as_str)
-        .ok_or("A biblioteca compartilhada de mídia não foi configurada. Abra Configurações e sincronize as dependências.")?;
-    let media = PathBuf::from(media);
-    if !media.is_absolute() {
-        return Err("O caminho da biblioteca compartilhada de mídia precisa ser absoluto.".into());
-    }
 
     fn executable(config: &Value, id: &str) -> Result<PathBuf, String> {
         let raw = config.pointer(&format!("/shared/resolvedDependencies/{id}"))
