@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 use crate::{domain::models::{MediaAsset, ProjectSummary}, state::AppState};
 
 #[tauri::command]
@@ -55,4 +55,14 @@ pub fn get_project_asset_path(
         return Err("O arquivo solicitado não pertence a este projeto.".into());
     }
     Ok(file_path.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub fn ttk_sync_project_assets_for_editor(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<(), String> {
+    let assets = state.media.list(&project_id)?;
+    crate::media::sync_ttk_project_assets(&app, &project_id, &assets)
 }
