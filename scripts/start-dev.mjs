@@ -50,6 +50,8 @@ async function run(command, args, label) {
 
     let output = "";
     let settled = false;
+    let stderrLogStarted = false;
+    let stderrLogQueue = Promise.resolve();
     const capture = chunk => {
       const value = chunk.toString();
       process.stdout.write(value);
@@ -59,6 +61,23 @@ async function run(command, args, label) {
       const value = chunk.toString();
       process.stderr.write(value);
       output = (output + value).slice(-maxCapturedOutput);
+
+      // Persist stderr as it happens, even if the process keeps running.
+      const header = stderrLogStarted ? "" : [
+        "",
+        "=".repeat(90),
+        "DATA: " + new Date().toISOString(),
+        "ETAPA: " + label,
+        "COMANDO: " + printable,
+        "SAÍDA DE ERRO (stderr):",
+        ""
+      ].join("\\n") + "\\n";
+      stderrLogStarted = true;
+      stderrLogQueue = stderrLogQueue
+        .then(() => appendFile(errorLog, header + value, "utf8"))
+        .catch(logError => {
+          console.error("Não foi possível atualizar error.log:", logError);
+        });
     };
 
     child.stdout.on("data", capture);
@@ -66,12 +85,14 @@ async function run(command, args, label) {
     child.once("error", async error => {
       if (settled) return;
       settled = true;
+      await stderrLogQueue;
       await recordFailure(printable, label, null, output, error);
       reject(error);
     });
     child.once("close", async (code, signal) => {
       if (settled) return;
       settled = true;
+      await stderrLogQueue;
       if (code === 0) {
         resolve();
         return;
