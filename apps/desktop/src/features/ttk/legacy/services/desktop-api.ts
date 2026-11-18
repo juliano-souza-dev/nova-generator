@@ -37,13 +37,13 @@ export const desktopApi = {
   importGlobalSound: (sourcePath: string, name: string) => invoke<GlobalSound>("import_global_sound", { sourcePath, name }),
   getGlobalSoundPath: (soundId: string) => invoke<string>("get_global_sound_path", { soundId }),
   deleteGlobalSound: (soundId: string) => invoke<void>("delete_global_sound", { soundId }),
-  listProjects: () => invoke<Project[]>("list_projects"),
+  listProjects: () => invoke<Project[]>("ttk_list_projects"),
 
   openProject: (projectId: string) =>
     invoke<Project>("open_project", { projectId }),
 
   createProject: (name: string) =>
-    invoke<Project>("create_project", { name }),
+    invoke<Project>("ttk_create_project", { name }),
 
   listProjectAssets: (projectId: string) =>
     invoke<MediaAsset[]>("list_project_assets", { projectId }),
