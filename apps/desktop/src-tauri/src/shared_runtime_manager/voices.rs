@@ -1,0 +1,548 @@
+use anyhow::{anyhow, bail, Context, Result};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::{
+    fs,
+    ffi::OsStr,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    io::Write,
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+
+const MODEL_ID: &str = "Qwen/Qwen3-TTS-12Hz-1.7B-Base";
+const VOICE_DESIGN_MODEL_ID: &str = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign";
+
+fn run_cancellable(command: &mut Command, description: &str) -> Result<()> {
+    if super::dependency_queue::cancel_requested() { bail!("Operação cancelada pelo usuário."); }
+    let mut child = command.spawn().with_context(|| format!("Não foi possível iniciar {description}"))?;
+    loop {
+        if super::dependency_queue::cancel_requested() {
+            let _ = child.kill();
+            let _ = child.wait();
+            bail!("Operação cancelada pelo usuário.");
+        }
+        if let Some(status) = child.try_wait()? {
+            if status.success() { return Ok(()); }
+            bail!("{description} terminou com código de saída {status}.");
+        }
+        thread::sleep(Duration::from_millis(250));
+    }
+}
+
+fn directory_size(path: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(path) else { return 0; };
+    entries.filter_map(Result::ok).map(|entry| {
+        let path = entry.path();
+        match entry.file_type() {
+            Ok(kind) if kind.is_dir() => directory_size(&path),
+            Ok(kind) if kind.is_file() || kind.is_symlink() => entry.metadata().map(|metadata| metadata.len()).unwrap_or(0),
+            _ => 0,
+        }
+    }).sum()
+}
+
+fn silent_command<S: AsRef<OsStr>>(program: S) -> Command {
+    let mut command = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    command
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct VoiceProfile {
+    id: String,
+    name: String,
+    profile_path: String,
+    source_audio: String,
+    reference_text: String,
+    #[serde(default)]
+    instruct: String,
+    duration_seconds: f64,
+    created_at: u64,
+    model_id: String,
+    runtime_path: String,
+    model_path: String,
+    runner: String,
+    python: String,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct VoiceRegistry {
+    schema_version: String,
+    default_voice_id: Option<String>,
+    voices: Vec<VoiceProfile>,
+}
+
+fn root() -> Result<PathBuf> { super::manager::root() }
+fn registry_path(root: &Path) -> PathBuf { root.join("registry/voices.json") }
+
+fn read_registry(root: &Path) -> Result<VoiceRegistry> {
+    let path = registry_path(root);
+    if !path.is_file() {
+        return Ok(VoiceRegistry { schema_version: "1.0".into(), ..VoiceRegistry::default() });
+    }
+    serde_json::from_slice(&fs::read(&path)?).context("A biblioteca de vozes contém um JSON inválido")
+}
+
+fn write_registry(root: &Path, registry: &VoiceRegistry) -> Result<()> {
+    let path = registry_path(root);
+    fs::create_dir_all(path.parent().unwrap())?;
+    let temporary = path.with_extension("json.tmp");
+    fs::write(&temporary, serde_json::to_vec_pretty(registry)?)?;
+    if path.exists() { fs::remove_file(&path)?; }
+    fs::rename(temporary, path)?;
+    Ok(())
+}
+
+fn find_file(directory: &Path, filename: &str) -> Option<PathBuf> {
+    let entries = fs::read_dir(directory).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_file(&path, filename) { return Some(found); }
+        } else if path.file_name().and_then(|v| v.to_str()).is_some_and(|v| v.eq_ignore_ascii_case(filename)) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn executable(root: &Path, name: &str) -> Result<PathBuf> {
+    let filename = if cfg!(windows) { format!("{name}.exe") } else { name.to_owned() };
+    find_file(&root.join("tools"), &filename)
+        .or_else(|| {
+            let output = if cfg!(windows) {
+                silent_command("where").arg(&filename).output().ok()?
+            } else {
+                silent_command("which").arg(&filename).output().ok()?
+            };
+            if !output.status.success() { return None; }
+            let found = String::from_utf8_lossy(&output.stdout).lines().next()?.trim().to_owned();
+            (!found.is_empty()).then(|| PathBuf::from(found))
+        })
+        .ok_or_else(|| anyhow!("{name} não está disponível. Instale FFmpeg e FFprobe pela Biblioteca de dependências."))
+}
+
+fn runtime_info(root: &Path) -> Result<(PathBuf, PathBuf, PathBuf)> {
+    let runtime = root.join("runtimes/qwen3-tts-clone");
+    let manifest_path = runtime.join("runtime.json");
+    if !manifest_path.is_file() {
+        bail!("O runtime de clonagem Qwen3-TTS Base não está instalado. Instale 'Qwen3-TTS Base · Voice Cloning' na Biblioteca de dependências.");
+    }
+    let manifest: Value = serde_json::from_slice(&fs::read(&manifest_path)?)?;
+    let python = manifest.get("python").and_then(Value::as_str).ok_or_else(|| anyhow!("Runtime sem caminho do Python"))?;
+    let runner = PathBuf::from(manifest.get("runner").and_then(Value::as_str).ok_or_else(|| anyhow!("Runtime sem caminho do executor"))?);
+    let model = PathBuf::from(manifest.get("model").and_then(Value::as_str).ok_or_else(|| anyhow!("Runtime sem caminho do modelo"))?);
+    let python = PathBuf::from(python);
+    // Keep already-installed Shared runtimes in sync with the bundled worker after app updates.
+    let source = include_str!("assets/qwen3_tts/voice_runner.py");
+    if !runner.is_file() || fs::read_to_string(&runner).ok().as_deref() != Some(source) {
+        fs::write(&runner, source).with_context(|| format!("Não foi possível atualizar o executor em {}", runner.display()))?;
+    }
+    Ok((python, runner, model))
+}
+
+fn diagnostic_excerpt(value: &str, limit: usize) -> String {
+    let trimmed = value.trim();
+    let mut chars = trimmed.chars();
+    let mut excerpt: String = chars.by_ref().take(limit).collect();
+    if chars.next().is_some() {
+        excerpt.push_str("\n... [saída truncada]");
+    }
+    excerpt
+}
+
+fn parse_worker_response(stdout: &str) -> Result<(Value, String)> {
+    // Python libraries may print warnings to stdout before the worker's JSON.
+    for (offset, character) in stdout.char_indices() {
+        if character != '{' {
+            continue;
+        }
+        if let Ok(value) = serde_json::from_str::<Value>(&stdout[offset..]) {
+            if value.is_object() {
+                return Ok((value, stdout[..offset].trim().to_owned()));
+            }
+        }
+    }
+    bail!("Nenhum objeto JSON válido foi encontrado na saída do executor.")
+}
+
+fn run_worker(python: &Path, runner: &Path, model: &Path, profile: &Path, request: Value) -> Result<Value> {
+    let mut child = silent_command(python)
+        .arg(runner).arg(model).arg(profile)
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .spawn().context("Não foi possível iniciar o executor Qwen3-TTS Base")?;
+    child.stdin.take().ok_or_else(|| anyhow!("Entrada do executor indisponível"))?
+        .write_all(format!("{}\n", serde_json::to_string(&request)?).as_bytes())?;
+    let stdout_pipe = child.stdout.take().ok_or_else(|| anyhow!("Saída do executor Qwen indisponível"))?;
+    let stderr_pipe = child.stderr.take().ok_or_else(|| anyhow!("Diagnóstico do executor Qwen indisponível"))?;
+    let stdout_reader = thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = std::io::Read::read_to_end(&mut std::io::BufReader::new(stdout_pipe), &mut bytes);
+        bytes
+    });
+    let stderr_reader = thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = std::io::Read::read_to_end(&mut std::io::BufReader::new(stderr_pipe), &mut bytes);
+        bytes
+    });
+    let status = loop {
+        if super::dependency_queue::cancel_requested() {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
+            bail!("Operação cancelada pelo usuário.");
+        }
+        if let Some(status) = child.try_wait()? { break status; }
+        thread::sleep(Duration::from_millis(250));
+    };
+    let output = std::process::Output {
+        status,
+        stdout: stdout_reader.join().unwrap_or_default(),
+        stderr: stderr_reader.join().unwrap_or_default(),
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let (response, stdout_warning) = parse_worker_response(&stdout).with_context(|| {
+        let stdout_detail = diagnostic_excerpt(&stdout, 6000);
+        let stderr_detail = diagnostic_excerpt(&stderr, 6000);
+        format!(
+            "O executor Qwen3-TTS Base não retornou um objeto JSON válido. Código de saída: {}.\nstdout: {}\nstderr: {}",
+            output.status,
+            if stdout_detail.is_empty() { "<vazio>" } else { &stdout_detail },
+            if stderr_detail.is_empty() { "<vazio>" } else { &stderr_detail },
+        )
+    })?;
+
+    if !stdout_warning.is_empty() {
+        eprintln!("Aviso do executor Qwen3-TTS Base: {}", diagnostic_excerpt(&stdout_warning, 2000));
+    }
+
+    let response_status = response.get("status").and_then(Value::as_str).unwrap_or("desconhecido");
+    if !output.status.success() || response_status != "completed" {
+        let stage = response.get("stage").and_then(Value::as_str).unwrap_or("não informada");
+        let operation = response.get("operation").and_then(Value::as_str).unwrap_or("não informada");
+        let error_type = response.get("error_type").and_then(Value::as_str).unwrap_or("não informado");
+        let error = response.get("error").and_then(Value::as_str).unwrap_or("O worker não informou a causa.");
+        let traceback = response.get("traceback").and_then(Value::as_str).unwrap_or("");
+        let mut detail = format!(
+            "Falha no executor Qwen3-TTS Base. Etapa: {stage}. Operação: {operation}. Tipo: {error_type}. Código de saída: {}.\nCausa: {error}",
+            output.status
+        );
+        if !traceback.trim().is_empty() {
+            detail.push_str("\n\nRastreamento Python:\n");
+            detail.push_str(&diagnostic_excerpt(traceback, 10000));
+        }
+        if !stderr.trim().is_empty() {
+            detail.push_str("\n\nDiagnóstico (stderr):\n");
+            detail.push_str(&diagnostic_excerpt(&stderr, 6000));
+        }
+        bail!("{detail}");
+    }
+    Ok(response)
+}
+
+pub fn list() -> Result<Value> {
+    let root = root()?;
+    // Refresh the installed worker whenever the voice library is opened.
+    let _ = runtime_info(&root);
+    let registry = read_registry(&root)?;
+    Ok(json!({ "default_voice_id": registry.default_voice_id, "voices": registry.voices }))
+}
+
+pub fn create_profile(name: &str, filename: &str, audio_base64: &str, reference_text: &str) -> Result<Value> {
+    let name = name.trim();
+    let reference_text = reference_text.trim();
+    if name.is_empty() { bail!("Informe um nome para a voz."); }
+    if reference_text.is_empty() { bail!("Informe a transcrição exata do áudio de referência."); }
+    let extension = Path::new(filename).extension().and_then(|v| v.to_str()).unwrap_or("").to_ascii_lowercase();
+    if !["mp3", "wav", "m4a", "flac", "ogg", "aac", "wma"].contains(&extension.as_str()) {
+        bail!("Formato de áudio não suportado. Use MP3, WAV, M4A, FLAC, OGG, AAC ou WMA.");
+    }
+    let bytes = STANDARD.decode(audio_base64).context("O áudio enviado não está em Base64 válido")?;
+    if bytes.is_empty() || bytes.len() > 100 * 1024 * 1024 { bail!("O arquivo está vazio ou excede o limite de 100 MB."); }
+
+    if super::dependency_queue::cancel_requested() { bail!("Operação cancelada pelo usuário."); }
+    let root = root()?;
+    let ffmpeg = executable(&root, "ffmpeg")?;
+    let ffprobe = executable(&root, "ffprobe")?;
+    let (python, runner, model) = runtime_info(&root)?;
+    let clock = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let now = clock.as_secs();
+    let unique_stamp = clock.as_millis();
+    let slug: String = name.to_ascii_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
+    let slug = slug.split('-').filter(|part| !part.is_empty()).collect::<Vec<_>>().join("-");
+    let id = format!("{}-{}", if slug.is_empty() { "voice" } else { &slug }, unique_stamp);
+    let profile = root.join("voices").join(&id);
+    fs::create_dir_all(&profile)?;
+    let source = profile.join(format!("reference.{extension}"));
+    fs::write(&source, bytes)?;
+    let duration_output = silent_command(&ffprobe).args([
+        "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1",
+    ]).arg(&source).output().context("Não foi possível analisar a duração do áudio")?;
+    if super::dependency_queue::cancel_requested() { let _ = fs::remove_dir_all(&profile); bail!("Operação cancelada pelo usuário."); }
+    if !duration_output.status.success() { bail!("O arquivo enviado não contém um áudio válido."); }
+    let duration: f64 = String::from_utf8_lossy(&duration_output.stdout).trim().parse()
+        .context("Não foi possível determinar a duração do áudio")?;
+    if !(10.0..=200.0).contains(&duration) {
+        let _ = fs::remove_dir_all(&profile);
+        bail!("O áudio precisa ter entre 10 e 200 segundos. Duração detectada: {:.1}s.", duration);
+    }
+    let normalized = profile.join("reference.wav");
+    let already_normalized = extension == "wav" && {
+        let probe = silent_command(&ffprobe).args(["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=sample_rate,channels", "-of", "csv=p=0"]).arg(&source).output();
+        probe.ok().filter(|output| output.status.success()).map(|output| {
+            let probe_text = String::from_utf8_lossy(&output.stdout);
+            let parts: Vec<&str> = probe_text.trim().split(',').collect();
+            parts.len() >= 2 && parts[0].trim() == "24000" && parts[1].trim() == "1"
+        }).unwrap_or(false)
+    };
+    if already_normalized {
+        fs::copy(&source, &normalized).context("Não foi possível preservar o WAV de referência")?;
+    } else {
+        let normalize = silent_command(&ffmpeg).args(["-y", "-i"]).arg(&source)
+            .args(["-vn", "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le"])
+            .arg(&normalized).output().context("Não foi possível preparar o áudio de referência")?;
+        if !normalize.status.success() {
+            let _ = fs::remove_dir_all(&profile);
+            bail!("Falha ao converter o áudio: {}", String::from_utf8_lossy(&normalize.stderr).trim());
+        }
+    }
+    if super::dependency_queue::cancel_requested() { let _ = fs::remove_dir_all(&profile); bail!("Operação cancelada pelo usuário."); }
+    let prepared = match run_worker(&python, &runner, &model, &profile, json!({
+        "operation": "prepare_voice",
+        "reference_audio": normalized,
+        "reference_text": reference_text
+    })) {
+        Ok(value) => value,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&profile);
+            return Err(error);
+        }
+    };
+    if prepared.get("status").and_then(Value::as_str) != Some("completed") {
+        let _ = fs::remove_dir_all(&profile);
+        bail!("O modelo não conseguiu preparar a voz: {}", prepared.get("error").and_then(Value::as_str).unwrap_or("erro desconhecido"));
+    }
+    let voice = VoiceProfile {
+        id: id.clone(), name: name.to_owned(), profile_path: profile.display().to_string(),
+        source_audio: source.display().to_string(), reference_text: reference_text.to_owned(), instruct: String::new(),
+        duration_seconds: duration, created_at: now, model_id: MODEL_ID.to_owned(),
+        runtime_path: root.join("runtimes/qwen3-tts-clone").display().to_string(),
+        model_path: model.display().to_string(), runner: runner.display().to_string(), python: python.display().to_string(),
+    };
+    let mut registry = read_registry(&root)?;
+    registry.schema_version = "1.0".into();
+    if registry.default_voice_id.is_none() { registry.default_voice_id = Some(id.clone()); }
+    registry.voices.push(voice.clone());
+    write_registry(&root, &registry)?;
+    super::manager::refresh_application_configs(&root)?;
+    Ok(serde_json::to_value(voice)?)
+}
+
+
+pub fn create_voice_design_profile(name: &str, instruct: &str) -> Result<Value> {
+    let name = name.trim();
+    let instruct = instruct.trim();
+    if name.is_empty() { bail!("Informe um nome para a voz."); }
+    if !(10..=800).contains(&instruct.chars().count()) { bail!("A descrição da voz precisa ter entre 10 e 800 caracteres."); }
+    let root = root()?;
+    let runtime = root.join("runtimes/qwen3-tts-clone");
+    let manifest: Value = serde_json::from_slice(&fs::read(runtime.join("runtime.json")).context("Instale primeiro Qwen3-TTS Base · Voice Cloning.")?)?;
+    let python = PathBuf::from(manifest.get("python").and_then(Value::as_str).ok_or_else(|| anyhow!("Runtime sem Python"))?);
+    let runner = runtime.join("voice_runner.py");
+    let source = include_str!("assets/qwen3_tts/voice_runner.py");
+    if !runner.is_file() || fs::read_to_string(&runner).ok().as_deref() != Some(source) { fs::write(&runner, source)?; }
+    let model = root.join("models/qwen3-tts-voice-design/1.7B-VoiceDesign");
+    if !model.join("config.json").is_file() { bail!("O modelo VoiceDesign não está instalado. Instale Qwen3-TTS VoiceDesign na Biblioteca de dependências."); }
+    let clock = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let slug = name.to_ascii_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>();
+    let slug = slug.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
+    let id = format!("{}-{}", if slug.is_empty() { "voice" } else { &slug }, clock.as_millis());
+    let profile = root.join("voices").join(&id);
+    fs::create_dir_all(&profile)?;
+    let prepared = run_worker(&python, &runner, &model, &profile, json!({"operation":"prepare_voice_design","instruct":instruct}))?;
+    if prepared.get("status").and_then(Value::as_str) != Some("completed") {
+        let _ = fs::remove_dir_all(&profile);
+        bail!("O VoiceDesign não conseguiu preparar a voz: {}", prepared.get("error").and_then(Value::as_str).unwrap_or("erro desconhecido"));
+    }
+    let voice = VoiceProfile {
+        id: id.clone(), name: name.to_owned(), profile_path: profile.display().to_string(),
+        source_audio: String::new(), reference_text: String::new(), instruct: instruct.to_owned(),
+        duration_seconds: 0.0, created_at: clock.as_secs(), model_id: VOICE_DESIGN_MODEL_ID.to_owned(),
+        runtime_path: runtime.display().to_string(), model_path: model.display().to_string(),
+        runner: runner.display().to_string(), python: python.display().to_string(),
+    };
+    let mut registry = read_registry(&root)?;
+    registry.schema_version = "1.0".into();
+    if registry.default_voice_id.is_none() { registry.default_voice_id = Some(id); }
+    registry.voices.push(voice.clone());
+    write_registry(&root, &registry)?;
+    super::manager::refresh_application_configs(&root)?;
+    Ok(serde_json::to_value(voice)?)
+}
+
+pub fn set_default(id: &str) -> Result<()> {
+    let root = root()?;
+    let mut registry = read_registry(&root)?;
+    if !registry.voices.iter().any(|voice| voice.id == id) { bail!("A voz selecionada não existe na biblioteca."); }
+    registry.default_voice_id = Some(id.to_owned());
+    write_registry(&root, &registry)?;
+    super::manager::refresh_application_configs(&root)?;
+    Ok(())
+}
+
+pub fn preview(id: &str, text: &str) -> Result<String> {
+    let root = root()?;
+    let registry = read_registry(&root)?;
+    let voice = registry.voices.iter().find(|voice| voice.id == id)
+        .ok_or_else(|| anyhow!("Voz não encontrada: {id}"))?;
+    let output = PathBuf::from(&voice.profile_path).join("preview.wav");
+    let is_design = voice.model_id == VOICE_DESIGN_MODEL_ID;
+    let request = json!({
+        "operation": "synthesize", "text": text, "language": "English", "output_path": output,
+        "voice_mode": if is_design { "voice_design" } else { "voice_clone" },
+        "instruct": voice.instruct, "reference_audio": PathBuf::from(&voice.profile_path).join("reference.wav"),
+        "reference_text": voice.reference_text
+    });
+    let result = run_worker(Path::new(&voice.python), Path::new(&voice.runner), Path::new(&voice.model_path),
+        Path::new(&voice.profile_path), request)?;
+    if result.get("status").and_then(Value::as_str) != Some("completed") {
+        bail!("Falha ao gerar prévia: {}", result.get("error").and_then(Value::as_str).unwrap_or("erro desconhecido"));
+    }
+    Ok(output.display().to_string())
+}
+
+pub(crate) fn config_for_consumers(root: &Path) -> Result<Value> {
+    let registry = read_registry(root)?;
+    let available: Vec<Value> = registry.voices.iter().map(|voice| json!({
+        "id": voice.id, "name": voice.name, "profile_path": voice.profile_path,
+        "runtime_path": voice.runtime_path, "model_path": voice.model_path,
+        "runner": voice.runner, "python": voice.python, "model_id": voice.model_id, "instruct": voice.instruct
+    })).collect();
+    Ok(json!({ "default": registry.default_voice_id, "available": available }))
+}
+
+
+pub(crate) fn ensure_voice_design_runtime(root: &Path) -> Result<PathBuf> {
+    let runtime = ensure_runtime(root)?;
+    let manifest: Value = serde_json::from_slice(&fs::read(runtime.join("runtime.json"))?)?;
+    let python = PathBuf::from(manifest.get("python").and_then(Value::as_str).ok_or_else(|| anyhow!("Runtime sem Python"))?);
+    let model = root.join("models/qwen3-tts-voice-design/1.7B-VoiceDesign");
+    let cache = root.join("cache/huggingface");
+    fs::create_dir_all(&model)?;
+    fs::create_dir_all(&cache)?;
+    if !model.join("config.json").is_file() {
+        super::dependency_queue::report_install_progress(5, "Baixando Qwen3-TTS 1.7B VoiceDesign")?;
+        let script = "import sys; from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign', local_dir=sys.argv[1], cache_dir=sys.argv[2])";
+        let mut child = silent_command(&python).arg("-c").arg(script).arg(&model).arg(&cache)
+            .env("HF_HUB_DISABLE_TELEMETRY", "1").stdout(Stdio::null()).stderr(Stdio::null())
+            .spawn().context("Não foi possível iniciar o download do Qwen3-TTS VoiceDesign")?;
+        loop {
+            if super::dependency_queue::cancel_requested() { let _ = child.kill(); let _ = child.wait(); bail!("Operação cancelada pelo usuário."); }
+            if let Some(status) = child.try_wait()? {
+                if !status.success() { bail!("Falha ao baixar o modelo Qwen3-TTS VoiceDesign (código {status})."); }
+                break;
+            }
+            thread::sleep(Duration::from_secs(1));
+            super::dependency_queue::report_install_activity("Baixando Qwen3-TTS 1.7B VoiceDesign", directory_size(&model), 0)?;
+        }
+    }
+    if !model.join("config.json").is_file() { bail!("O download do VoiceDesign terminou sem config.json."); }
+    super::dependency_queue::report_install_progress(100, "Qwen3-TTS VoiceDesign pronto")?;
+    Ok(model)
+}
+
+pub(crate) fn ensure_runtime(root: &Path) -> Result<PathBuf> {
+    super::dependency_queue::report_install_progress(5, "Preparando o runtime Qwen3-TTS Base para clonagem")?;
+    let runtime = root.join("runtimes/qwen3-tts-clone");
+    let model = root.join("models/qwen3-tts-clone/1.7B-Base");
+    let cache = root.join("cache/huggingface");
+    fs::create_dir_all(&runtime)?; fs::create_dir_all(&model)?; fs::create_dir_all(&cache)?;
+    let venv = runtime.join("venv");
+    let python = if cfg!(windows) { venv.join("Scripts/python.exe") } else { venv.join("bin/python") };
+    if !python.is_file() {
+        let base = if cfg!(windows) { "py" } else { "python3" };
+        let mut command = silent_command(base);
+        if cfg!(windows) { command.arg("-3"); }
+        command.args(["-m", "venv"]).arg(&venv);
+        run_cancellable(&mut command, "criação do ambiente Python do Qwen3-TTS Base")
+            .context("Não foi possível criar o ambiente Python do Qwen3-TTS Base.")?;
+    }
+    let cpu_check = "import torch; assert torch.version.cuda is None and not torch.cuda.is_available()";
+    let check = silent_command(&python).args(["-c", cpu_check]).status().map(|s| s.success()).unwrap_or(false);
+    if !check {
+        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--upgrade", "pip"]), "preparação do pip")
+            .context("Falha ao preparar pip para Qwen3-TTS Base.")?;
+        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--force-reinstall", "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cpu"]), "instalação do PyTorch CPU")
+            .context("Falha ao instalar PyTorch CPU para Qwen3-TTS Base.")?;
+    }
+    let package_check = silent_command(&python).args(["-c", "import qwen_tts, soundfile"]).status().map(|s| s.success()).unwrap_or(false);
+    if !package_check {
+        super::dependency_queue::report_install_progress(42, "Instalando Qwen3-TTS Base e dependências de áudio")?;
+        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "qwen-tts", "soundfile"]), "instalação do Qwen3-TTS e dependências")
+            .context("Falha ao instalar qwen-tts e soundfile.")?;
+    }
+    let cpu_still_valid = silent_command(&python).args(["-c", cpu_check]).status().map(|s| s.success()).unwrap_or(false);
+    if !cpu_still_valid {
+        super::dependency_queue::report_install_progress(58, "Restaurando PyTorch CPU após instalar o Qwen3-TTS")?;
+        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--force-reinstall", "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cpu"]), "restauração do PyTorch CPU")
+            .context("Falha ao restaurar PyTorch CPU.")?;
+    }
+    let model_config = model.join("config.json");
+    let model_weights = model.join("model.safetensors");
+    let model_index = model.join("model.safetensors.index.json");
+    if !model_config.is_file() || !(model_weights.is_file() || model_index.is_file()) {
+        super::dependency_queue::report_install_progress(0, "Baixando o modelo oficial Qwen3-TTS 1.7B Base")?;
+        let script = "import sys; from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-TTS-12Hz-1.7B-Base', local_dir=sys.argv[1], cache_dir=sys.argv[2])";
+        let mut child = silent_command(&python)
+            .arg("-c").arg(script).arg(&model).arg(&cache)
+            .env("HF_HUB_DISABLE_TELEMETRY", "1")
+            .stdout(Stdio::null()).stderr(Stdio::null())
+            .spawn().context("Não foi possível iniciar o download do modelo Qwen3-TTS Base")?;
+        let mut previous_bytes = directory_size(&model);
+        let mut previous_at = Instant::now();
+        loop {
+            if super::dependency_queue::cancel_requested() {
+                let _ = child.kill();
+                let _ = child.wait();
+                bail!("Operação cancelada pelo usuário.");
+            }
+            if let Some(status) = child.try_wait()? {
+                if !status.success() { bail!("Falha ao baixar o modelo Qwen3-TTS 1.7B Base (código {status})."); }
+                break;
+            }
+            thread::sleep(Duration::from_secs(1));
+            let now = Instant::now();
+            let downloaded = directory_size(&model);
+            let elapsed = now.duration_since(previous_at).as_secs_f64().max(0.001);
+            let speed = (downloaded.saturating_sub(previous_bytes) as f64 / elapsed) as u64;
+            super::dependency_queue::report_install_activity(
+                "Baixando o modelo oficial Qwen3-TTS 1.7B Base",
+                downloaded,
+                speed,
+            )?;
+            previous_bytes = downloaded;
+            previous_at = now;
+        }
+    }
+    if !model_config.is_file() || !(model_weights.is_file() || model_index.is_file()) {
+        bail!("O download do Qwen3-TTS Base terminou sem todos os arquivos do modelo.");
+    }
+    super::dependency_queue::report_install_progress(94, "Preparando o executor de clonagem de voz")?;
+    let runner = runtime.join("voice_runner.py");
+    let source = include_str!("assets/qwen3_tts/voice_runner.py");
+    fs::write(&runner, source)?;
+    let manifest = json!({"schemaVersion":"1.0","runtime":"qwen3-tts-clone","python":python,"runner":runner,"device":"cpu","dtype":"float32","modelId":MODEL_ID,"model":model,"supportsVoiceCloning":true});
+    fs::write(runtime.join("runtime.json"), serde_json::to_vec_pretty(&manifest)?)?;
+    super::dependency_queue::report_install_progress(100, "Qwen3-TTS Base pronto para criar perfis de voz")?;
+    Ok(runtime)
+}
