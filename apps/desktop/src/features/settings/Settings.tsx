@@ -13,7 +13,7 @@ type Snapshot = { root: string; dependencies: Dependency[]; providers: Provider[
 type Tab = "dependencies" | "voices" | "providers";
 
 export default function Settings() {
-  const [tab, setTab] = useState<Tab>("dependencies");
+  const [tab, setTab] = useState<Tab>("voices");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
