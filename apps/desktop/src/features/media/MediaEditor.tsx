@@ -391,8 +391,9 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
 
   async function unlockShadowingStage(hasCues = cues.length) {
     if (hasCues <= 0) return;
-    await invoke("update_project_stage", { id: projectId, stage: "Shadowing" });
-    onProjectUpdated?.();
+    await invoke("update_project_stage", { id: projectId, stage: "Shadowing" })
+      .then(() => onProjectUpdated?.())
+      .catch(error => console.warn("Não foi possível atualizar a etapa do projeto para Shadowing:", error));
   }
 
   async function save(): Promise<boolean> {
