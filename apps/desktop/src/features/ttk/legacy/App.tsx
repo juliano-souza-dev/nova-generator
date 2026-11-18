@@ -226,19 +226,22 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
         </div>
         <div className="transcription-footer"><span>{localAsrChecking?"Verificando suporte local...":localAsrInstalled?<><CheckCircle2 size={13}/> Faster-Whisper instalado</>:<><Info size={13}/> Processamento local ainda não instalado</>}</span>{!localAsrInstalled&&<button className="secondary-action" disabled={localAsrChecking||localAsrInstalling} onClick={()=>void installLocalTranscription()}>{localAsrInstalling?<><LoaderCircle className="spin" size={13}/> Instalando...</>:<><Download size={13}/> Instalar suporte local</>}</button>}</div>
         {transcriptionResult&&<div className="transcription-review">
-          <div className="transcription-review-head"><strong>Revisar transcrição</strong><span>{transcriptionResult.cues.length} trechos</span></div>
+          <div className="transcription-review-head"><strong>1. Revisar transcrição</strong><span>{transcriptionResult.cues.length} trechos</span></div>
           {transcriptionResult.cues.map((cue,index)=><div className="transcription-review-cue" key={cue.id}>
             <small>{index+1} · {formatTimecode(cue.startMs)} – {formatTimecode(cue.endMs)}</small>
             <textarea aria-label={"Texto reconhecido "+(index+1)} value={cue.text} onChange={event=>updateTranscriptionCue(cue.id,event.target.value)} />
             {transcriptionTranslations.find(item=>item.id===cue.id)&&<p className="transcription-review-translation">{transcriptionTranslations.find(item=>item.id===cue.id)?.translation}</p>}
           </div>)}
-          <div className="transcription-review-actions">
-            <button className="secondary-action" disabled={translationBusy} onClick={()=>void translateTranscription()}>{translationBusy?<LoaderCircle className="spin" size={14}/>:<Languages size={14}/>} Traduzir para português</button>
-            <button className="secondary-action" disabled={alignmentBusy} onClick={()=>void alignTranscriptionWords()}>{alignmentBusy?<LoaderCircle className="spin" size={14}/>:<Captions size={14}/>} Alinhar palavra por palavra (WhisperX)</button>
-            <button className="secondary-action" disabled={externalPackageBusy} onClick={()=>void downloadExternalPackage()}>{externalPackageBusy?<LoaderCircle className="spin" size={14}/>:<Download size={14}/>} Baixar TXT para IA externa</button>
-            <button className="secondary-action" onClick={()=>transcriptionTranslationInput.current?.click()}><Upload size={14}/> Importar JSON da IA</button>
-            <input ref={transcriptionTranslationInput} type="file" accept=".json,application/json" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value="";void importExternalTranslation(file);}}/>
-            <button className="primary" onClick={insertTranscription}><CheckCircle2 size={14}/> Inserir na timeline</button>
+          <div className="transcription-next-steps">
+            <div className="transcription-next-steps-heading"><strong>2. Processar a transcrição</strong><small>Tradução e alinhamento são etapas independentes. Execute uma ou ambas antes de inserir.</small></div>
+            <div className="transcription-review-actions">
+              <button className="secondary-action" disabled={translationBusy||alignmentBusy} onClick={()=>void translateTranscription()}>{translationBusy?<LoaderCircle className="spin" size={14}/>:<Languages size={14}/>} Traduzir para português</button>
+              <button className="secondary-action" disabled={alignmentBusy||translationBusy} onClick={()=>void alignTranscriptionWords()}>{alignmentBusy?<LoaderCircle className="spin" size={14}/>:<Captions size={14}/>} Alinhar palavra por palavra (WhisperX)</button>
+              <button className="secondary-action" disabled={externalPackageBusy||translationBusy||alignmentBusy} onClick={()=>void downloadExternalPackage()}>{externalPackageBusy?<LoaderCircle className="spin" size={14}/>:<Download size={14}/>} Baixar TXT para IA externa</button>
+              <button className="secondary-action" disabled={!externalSourceHash||translationBusy||alignmentBusy} onClick={()=>transcriptionTranslationInput.current?.click()}><Upload size={14}/> Importar JSON da IA</button>
+              <input ref={transcriptionTranslationInput} type="file" accept=".json,application/json" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value="";void importExternalTranslation(file);}}/>
+            </div>
+            <div className="transcription-review-actions transcription-insert-action"><button className="primary" disabled={translationBusy||alignmentBusy||externalPackageBusy} onClick={insertTranscription}><CheckCircle2 size={14}/> 3. Inserir na timeline</button></div>
           </div>
         </div>}
         {transcriptionBusy&&transcriptionProgress&&<div className="transcription-progress"><div className="progress-heading"><b>{transcriptionProgress.message}</b><span>{Math.round(transcriptionProgress.percent)}%</span></div><div className="progress-track"><i style={{width:Math.max(0,Math.min(100,transcriptionProgress.percent))+"%"}}/></div>{transcriptionProgress.totalChunks>0&&<small>Blocos concluídos: {transcriptionProgress.completedChunks} de {transcriptionProgress.totalChunks}</small>}</div>}
