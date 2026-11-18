@@ -1,4 +1,0 @@
-[submodule "integrations/ttk-creator"]
-	path = integrations/ttk-creator
-	url = https://github.com/juliano-souza-dev/ttk-creator.git
-	branch = main

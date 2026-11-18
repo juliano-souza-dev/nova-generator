@@ -90,9 +90,8 @@ async function main() {
     await access(path.join(root, "package.json"));
     await run("git", ["switch", "main"], "1/4 · Selecionando a branch principal");
     await run("git", ["pull", "--ff-only", "origin", "main"], "2/5 · Atualizando o código do GitHub");
-    await run("git", ["submodule", "update", "--init", "--recursive"], "3/5 · Preparando o código original do TTK-Creator");
-    await run("npm", ["install", "--no-audit", "--no-fund", "--no-package-lock"], "4/5 · Preparando dependências");
-    await run("npm", ["run", "build-web"], "5/5 · Validando TypeScript e compilando a interface");
+    await run("npm", ["install", "--no-audit", "--no-fund", "--no-package-lock"], "3/4 · Preparando dependências");
+    await run("npm", ["run", "build-web"], "4/4 · Validando TypeScript e compilando a interface");
 
     console.log("\nBuild concluído. Abrindo o Nova Generator em modo de desenvolvimento...\n");
     await run(

@@ -1,12 +1,14 @@
 mod media;
 mod alignment;
 mod shared_runtime;
-mod transcription;
-mod translation;
+#[path = "transcription.rs"] mod nova_transcription;
+#[path = "translation.rs"] mod nova_translation;
 mod translation_contract;
 mod prediction_listening;
 mod materials;
-mod process;
+pub(crate) mod process;
+pub mod ttk;
+pub use ttk::{application, commands, domain, infrastructure, logging, state, translation, transcription};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 use tauri::Manager;
@@ -169,21 +171,43 @@ fn save_external_translation_package(path: String, bytes: Vec<u8>) -> Result<(),
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| { ttk::setup(app)?; Ok(()) })
         .invoke_handler(tauri::generate_handler![
             list_projects, create_project, duplicate_project, delete_project, update_project_status, update_project_stage, save_external_translation_package,
-            media::inspect_youtube, media::prepare_youtube_cache, media::authorize_youtube_preview, media::list_project_media,
-            media::import_media_files, media::trim_youtube_cache,
+            media::nova_inspect_youtube, media::nova_prepare_youtube_cache, media::nova_authorize_youtube_preview, media::list_project_media,
+            media::nova_import_media_files, media::nova_trim_youtube_cache,
             media::open_project_media, media::load_project_subtitles, media::save_project_subtitles, media::load_shadowing_selection, media::save_shadowing_selection,
             alignment::align_project_subtitles,
             shared_runtime::get_shared_runtime_status,
-            transcription::transcribe_media, transcription::check_local_asr, transcription::install_local_asr,
-            translation::translate_project_subtitles, translation::load_project_translations, translation::save_project_translations,
-            translation::load_project_editorial_result, translation::save_project_editorial_result, translation::clear_project_editorial_result, translation::approve_project_editorial_result,
+            nova_transcription::nova_transcribe_media, nova_transcription::nova_check_local_asr, nova_transcription::nova_install_local_asr,
+            nova_translation::translate_project_subtitles, nova_translation::load_project_translations, nova_translation::save_project_translations,
+            nova_translation::load_project_editorial_result, nova_translation::save_project_editorial_result, nova_translation::clear_project_editorial_result, nova_translation::approve_project_editorial_result,
             translation_contract::prepare_external_translation_package,
             prediction_listening::prepare_prediction_listening_package, prediction_listening::load_prediction_listening_result,
             prediction_listening::save_prediction_listening_result,
             materials::load_project_materials, materials::save_project_materials,
-            materials::generate_material_audio, materials::extract_material_source_audio, materials::export_project_materials_package
+            materials::generate_material_audio, materials::extract_material_source_audio, materials::export_project_materials_package,
+            ttk::commands::media::projects::open_project,
+            ttk::commands::media::projects::list_project_assets,
+            ttk::commands::media::projects::get_project_asset_path,
+            ttk::commands::media::projects::import_media_files,
+            ttk::commands::media::youtube::inspect_youtube,
+            ttk::commands::media::youtube::download_youtube,
+            ttk::commands::media::youtube::prepare_youtube_cache,
+            ttk::commands::media::youtube::trim_youtube_cache,
+            ttk::commands::export::ffmpeg::check_ffmpeg,
+            ttk::commands::sounds::list_global_sounds,
+            ttk::commands::sounds::import_global_sound,
+            ttk::commands::sounds::get_global_sound_path,
+            ttk::commands::sounds::delete_global_sound,
+            ttk::commands::transcription::transcribe_media,
+            ttk::commands::transcription::check_local_asr,
+            ttk::commands::transcription::install_local_asr,
+            ttk::commands::export::export_timeline,
+            ttk::translation::settings::get_groq_settings,
+            ttk::translation::settings::save_groq_settings,
+            ttk::translation::groq::test_groq_connection,
+            ttk::translation::groq::translate_groq_chunk
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Nova Generator");
