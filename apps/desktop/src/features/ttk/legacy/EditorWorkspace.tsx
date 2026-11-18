@@ -30,6 +30,9 @@ export { supportedLucideIconNames } from "./features/motion-graphics/icon-librar
 import { AudioLines, Film, Plus, Play, Pause, Trash2, Scissors, Copy, SkipBack, SkipForward, Volume2, VolumeX, Music2, Type, WandSparkles, MousePointer2, ChevronLeft, ChevronRight, Download, LoaderCircle, PanelsTopLeft, FileJson, Upload, Eye, Search, Image, ShieldCheck, Captions, Layers } from "lucide-react";
 import { SCENE_TEMPLATES, buildTemplateScene, createSceneSpecFromMotion, validateSceneSpec } from "./shared/scene-spec";
 
+type CaptionGlobalStyle = Pick<MotionGraphic, "fontFamily" | "fontSize" | "fontWeight" | "textAlign" | "x" | "y" | "captionWidth" | "captionBackgroundColor" | "captionBackgroundOpacity" | "captionPaddingEm" | "color" | "accent">;
+const DEFAULT_CAPTION_GLOBAL_STYLE: CaptionGlobalStyle = { fontFamily: "Arial", fontSize: 48, fontWeight: 900, textAlign: "center", x: 50, y: 82, captionWidth: 90, captionBackgroundColor: "#000000", captionBackgroundOpacity: 0.76, captionPaddingEm: 0.32, color: "#ffffff", accent: "#65d6c0" };
+
 type Props = { projectId: string; assets: MediaAsset[]; onAddMedia: () => void; onStartTranscription?: (assetId: string | undefined, context: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number }) => void; transcription: ReturnType<typeof useTranscription> };
 const motionPresets = [{id:"pop",label:"Pop Impact",sound:"pop"},{id:"slide",label:"Slide + Whoosh",sound:"whoosh"},{id:"zoom",label:"Zoom + Impact",sound:"impact"},{id:"typewriter",label:"Typewriter",sound:"click"},{id:"impact",label:"Big Impact",sound:"impact"}] as const;
 
@@ -55,6 +58,11 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
   const motionOrderKey = "ttk-creator:motion-order:" + projectId;
   const [textLayers, setTextLayers] = useState<MotionGraphic[]>([]);
   const [captions, setCaptions] = useState<MotionGraphic[]>([]);
+  const captionGlobalStyleKey = "ttk-creator:caption-global-style:" + projectId;
+  const [captionGlobalStyle, setCaptionGlobalStyle] = useState<CaptionGlobalStyle>(DEFAULT_CAPTION_GLOBAL_STYLE);
+  const [loadedCaptionStyleKey, setLoadedCaptionStyleKey] = useState<string | null>(null);
+  const captionGlobalStyleRef = useRef<CaptionGlobalStyle>(captionGlobalStyle);
+  captionGlobalStyleRef.current = captionGlobalStyle;
   const [motionOrder, setMotionOrder] = useState<string[]>([]);
   const [loadedMotionKey, setLoadedMotionKey] = useState<string | null>(null);
   const motion = useMemo(
@@ -80,8 +88,32 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
   }
   function appendCaptions(items: MotionGraphic[]) {
     if (!items.length) return;
-    setMotion(current => [...current, ...items]);
+    const styledItems = items.map(item => ({ ...item, ...captionGlobalStyleRef.current }));
+    setMotion(current => [...current, ...styledItems]);
   }
+
+  function updateGlobalCaptionStyle(patch: Partial<CaptionGlobalStyle>) {
+    const next = { ...captionGlobalStyleRef.current, ...patch };
+    captionGlobalStyleRef.current = next;
+    setCaptionGlobalStyle(next);
+    setMotion(current => current.map(item => item.isCaption ? { ...item, ...next } : item));
+  }
+
+  useEffect(() => {
+    let style = DEFAULT_CAPTION_GLOBAL_STYLE;
+    try {
+      const raw = window.localStorage.getItem(captionGlobalStyleKey);
+      if (raw) style = { ...DEFAULT_CAPTION_GLOBAL_STYLE, ...JSON.parse(raw) };
+    } catch { /* Keep safe defaults if saved settings are invalid. */ }
+    captionGlobalStyleRef.current = style;
+    setCaptionGlobalStyle(style);
+    setLoadedCaptionStyleKey(captionGlobalStyleKey);
+  }, [captionGlobalStyleKey]);
+
+  useEffect(() => {
+    if (loadedCaptionStyleKey !== captionGlobalStyleKey) return;
+    window.localStorage.setItem(captionGlobalStyleKey, JSON.stringify(captionGlobalStyle));
+  }, [captionGlobalStyleKey, captionGlobalStyle, loadedCaptionStyleKey]);
   const overlayKey = `ttk-creator:image-overlays:${projectId}`;
   const [imageOverlays,setImageOverlays]=useState<ImageOverlay[]>([]);
   const [selectedOverlayId,setSelectedOverlayId]=useState<string|null>(null);
@@ -995,6 +1027,25 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
       </>}
       {activeTool === "captions" && <>
         <div className="editor-panel-head"><div><b>Legendas</b><small>Transcreva, traduza, alinhe e edite as legendas neste painel.</small></div><span className="preview-live">{captions.length} LEGENDA(S)</span></div>
+        <section className="caption-transcription-section caption-global-style">
+          <div className="caption-transcription-title"><b>Estilo global das legendas</b><small>Uma configuração para todos os blocos, incluindo transcrição e tradução. Também será aplicada às próximas legendas criadas.</small></div>
+          <div className="motion-fields two">
+            <label>Fonte<select value={captionGlobalStyle.fontFamily} onChange={event=>updateGlobalCaptionStyle({fontFamily:event.target.value})}><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Impact">Impact</option><option value="Trebuchet MS">Trebuchet MS</option><option value="Verdana">Verdana</option><option value="Courier New">Courier New</option></select></label>
+            <label>Tamanho da fonte<input type="number" min="18" max="180" value={captionGlobalStyle.fontSize} onChange={event=>updateGlobalCaptionStyle({fontSize:Math.max(18,Math.min(180,Number(event.target.value)||18))})}/></label>
+            <label>Peso<select value={captionGlobalStyle.fontWeight} onChange={event=>updateGlobalCaptionStyle({fontWeight:Number(event.target.value)})}><option value={400}>Normal</option><option value={600}>Semibold</option><option value={700}>Negrito</option><option value={900}>Extra negrito</option></select></label>
+            <label>Alinhamento<select value={captionGlobalStyle.textAlign} onChange={event=>updateGlobalCaptionStyle({textAlign:event.target.value as MotionGraphic["textAlign"]})}><option value="left">Esquerda</option><option value="center">Centralizado</option><option value="right">Direita</option></select></label>
+          </div>
+          <div className="caption-style-controls">
+            <label>Posição horizontal <strong>{Math.round(captionGlobalStyle.x)}%</strong><input type="range" min="10" max="90" value={captionGlobalStyle.x} onChange={event=>updateGlobalCaptionStyle({x:Number(event.target.value)})}/></label>
+            <label>Posição vertical <strong>{Math.round(captionGlobalStyle.y)}%</strong><input type="range" min="0" max="100" value={captionGlobalStyle.y} onChange={event=>updateGlobalCaptionStyle({y:Number(event.target.value)})}/></label>
+            <label>Largura do bloco <strong>{captionGlobalStyle.captionWidth}%</strong><input type="range" min="40" max="100" value={captionGlobalStyle.captionWidth} onChange={event=>updateGlobalCaptionStyle({captionWidth:Number(event.target.value)})}/></label>
+            <label>Fundo <input type="color" value={captionGlobalStyle.captionBackgroundColor} onChange={event=>updateGlobalCaptionStyle({captionBackgroundColor:event.target.value})}/></label>
+            <label>Opacidade do fundo <strong>{Math.round(captionGlobalStyle.captionBackgroundOpacity*100)}%</strong><input type="range" min="0" max="100" value={Math.round(captionGlobalStyle.captionBackgroundOpacity*100)} onChange={event=>updateGlobalCaptionStyle({captionBackgroundOpacity:Number(event.target.value)/100})}/></label>
+            <label>Espaçamento interno <strong>{captionGlobalStyle.captionPaddingEm.toFixed(2)} em</strong><input type="range" min="0" max="1" step="0.02" value={captionGlobalStyle.captionPaddingEm} onChange={event=>updateGlobalCaptionStyle({captionPaddingEm:Number(event.target.value)})}/></label>
+          </div>
+          <div className="motion-colors"><label>Cor do texto<input type="color" value={captionGlobalStyle.color} onChange={event=>updateGlobalCaptionStyle({color:event.target.value})}/></label><label>Cor do destaque<input type="color" value={captionGlobalStyle.accent} onChange={event=>updateGlobalCaptionStyle({accent:event.target.value})}/></label></div>
+          <small>As alterações são aplicadas imediatamente a todas as legendas deste projeto e salvas automaticamente.</small>
+        </section>
         <div className="caption-transcription-panel">
           <div className="caption-transcription-section">
             <div className="caption-transcription-title"><b>1. Preparar transcrição</b><small>Selecione um clipe de vídeo ou áudio na timeline para começar.</small></div>
@@ -1094,7 +1145,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
         {activeOverlays.map(item=>{const url=mediaUrls[item.assetId];if(!url)return null;const entrance=imageOverlayEntranceState(item,playheadMs);return <div key={item.id} className={"image-overlay-preview"+(selectedOverlayId===item.id?" selected":"")} style={{left:item.x+"%",top:item.y+"%",width:item.width*previewScale,height:item.height*previewScale,transform:entrance.transform,opacity:entrance.opacity}} onPointerDown={event=>overlayPointerDown(event,item,(event.target as HTMLElement).closest(".image-overlay-handle")?"resize":"move")} onPointerMove={overlayPointerMove} onPointerUp={overlayPointerUp} onPointerCancel={overlayPointerUp} onClick={event=>{event.stopPropagation();setSelectedOverlayId(item.id);setSelectedMotionId(null);setSelectedId(null);}}><img src={url} alt="Imagem sobreposta" draggable={false}/>{selectedOverlayId===item.id&&<span className="image-overlay-handle"/>}</div>;})}
         {previewMotion.map(item => {
           const animation = selectedMotion?.id === item.id && !playing ? motionPreviewState(item, item.endMs) : motionPreviewState(item, playheadMs);
-          return <div key={item.id} className={"motion-overlay motion-" + item.preset + (item.isCaption ? " caption-overlay" : "") + (selectedMotionId === item.id ? " motion-selected" : "")} style={{ "--motion-color": item.color, "--motion-accent": item.accent, "--motion-size": (item.fontSize * previewScale) + "px", "--motion-x": item.isCaption ? ((100 - (item.captionWidth ?? 90)) / 2) + "%" : item.x + "%", "--motion-y": item.y + "%" , width: item.isCaption ? (item.captionWidth ?? 90) + "%" : undefined, transform: item.isCaption ? "translateY(-50%)" : item.textAlign === "left" ? "translate(0,-50%)" : item.textAlign === "right" ? "translate(-100%,-50%)" : "translate(-50%,-50%)" } as CSSProperties}>
+          return <div key={item.id} className={"motion-overlay motion-" + item.preset + (item.isCaption ? " caption-overlay" : "") + (selectedMotionId === item.id ? " motion-selected" : "")} style={{ "--motion-color": item.color, "--motion-accent": item.accent, "--motion-size": (item.fontSize * previewScale) + "px", "--motion-x": item.x + "%", "--motion-y": item.y + "%" , width: item.isCaption ? (item.captionWidth ?? 90) + "%" : undefined, transform: item.isCaption ? "translate(-50%,-50%)" : item.textAlign === "left" ? "translate(0,-50%)" : item.textAlign === "right" ? "translate(-100%,-50%)" : "translate(-50%,-50%)" } as CSSProperties}>
             <span className={"motion-content-group anchor-" + (item.lucideIconAnchor || "left")} style={{ display: item.isCaption ? "block" : "inline-flex", alignItems: "center", justifyContent: "center", gap: Math.max(4, (item.lucideIconSize ?? item.fontSize) * previewScale * 0.22), flexDirection: item.lucideIconAnchor === "top" ? "column" : item.lucideIconAnchor === "bottom" ? "column-reverse" : item.lucideIconAnchor === "right" ? "row-reverse" : "row", transform: animation.transform, transformOrigin: item.textAlign === "left" ? "left center" : item.textAlign === "right" ? "right center" : "center center", opacity: animation.opacity, willChange: "transform,opacity" }} onPointerDown={event => { if(item.locked)return; selectMotionItem(item); event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const rect = event.currentTarget.closest(".preview-media-frame")?.getBoundingClientRect(); if (!rect) return; updateMotion(item.id, item.isCaption ? { y: Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)) } : { x: Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)), y: Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)) }); }} onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onClick={event=>{event.stopPropagation();selectMotionItem(item);}}>
               {item.lucideIconName && lucideIconLibrary[item.lucideIconName as LucideIconName] && (() => { const IconView = lucideIconLibrary[item.lucideIconName as LucideIconName]; return <IconView size={(item.lucideIconSize ?? item.fontSize) * previewScale} color={item.lucideIconColor || item.accent} strokeWidth={2.2} aria-hidden="true"/>; })()}
               <span className="motion-main-text" style={{fontFamily:item.fontFamily || "Arial",fontWeight:(item.fontWeight || 900) >= 700 ? 700 : 400,fontSize:item.fontSize * previewScale,textAlign:item.textAlign || "center",background:item.isCaption ? captionBackgroundRgba(item.captionBackgroundColor,item.captionBackgroundOpacity) : "transparent",padding:item.isCaption ? `${item.captionPaddingEm ?? 0.32}em .55em` : "0",borderRadius:"0",boxDecorationBreak:"clone",WebkitBoxDecorationBreak:"clone",display:item.isCaption ? "block" : "inline",width:item.isCaption ? "100%" : undefined,maxWidth:item.isCaption ? "100%" : "90%",boxSizing:"border-box",whiteSpace:"pre-wrap"}}>{item.captionMode === "karaoke" && item.captionWords?.length ? (() => {
