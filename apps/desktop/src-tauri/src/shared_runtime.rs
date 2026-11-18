@@ -71,18 +71,18 @@ fn config_path(_app: &AppHandle) -> Result<PathBuf, String> {
                 .join("SharedRuntime")
                 .join("applications")
                 .join(APPLICATION_ID)
-                .join("shared.config.json"),
+                .join("libs.json"),
         );
     }
 
     let mut seen = std::collections::HashSet::new();
     for candidate in candidates {
-        let path = if candidate.is_dir() { candidate.join("shared.config.json") } else { candidate };
+        let path = if candidate.is_dir() { candidate.join("libs.json") } else { candidate };
         if seen.insert(path.clone()) && path.is_file() {
             return Ok(path);
         }
     }
-    Err("O shared.config.json não foi encontrado. Registre ou sincronize o Nova Generator pelo Shared Runtime Manager.".into())
+    Err("O libs.json não foi encontrado. Registre ou sincronize o Nova Generator pelo Nova Generator.".into())
 }
 
 fn load_config(app: &AppHandle) -> Result<(PathBuf, Value), String> {
@@ -91,10 +91,10 @@ fn load_config(app: &AppHandle) -> Result<(PathBuf, Value), String> {
         format!("Não foi possível ler o vínculo Shared Runtime em {}: {error}", path.display())
     })?;
     let config: Value = serde_json::from_slice(&bytes)
-        .map_err(|error| format!("shared.config.json inválido: {error}"))?;
+        .map_err(|error| format!("libs.json inválido: {error}"))?;
 
     if config.get("schemaVersion").and_then(Value::as_str) != Some("1.0") {
-        return Err("A versão do shared.config.json não é compatível. Atualize o vínculo pelo Shared Runtime Manager.".into());
+        return Err("A versão do libs.json não é compatível. Atualize o vínculo pelo Nova Generator.".into());
     }
     if config.pointer("/shared/enabled").and_then(Value::as_bool) != Some(true) {
         return Err("O Shared Runtime está desativado para esta aplicação.".into());
@@ -249,7 +249,7 @@ fn voice_profile_runtime(config: &Value, voice_id: &str) -> Result<VoiceProfileR
     let entries = config.pointer("/shared/voices/available").and_then(Value::as_array)
         .ok_or("O catálogo de vozes do Shared está indisponível.")?;
     let entry = entries.iter().find(|entry| entry.get("id").and_then(Value::as_str) == Some(voice_id))
-        .ok_or_else(|| format!("A voz '{voice_id}' não está disponível neste computador. Atualize a Biblioteca de vozes no Shared Runtime Manager."))?;
+        .ok_or_else(|| format!("A voz '{voice_id}' não está disponível neste computador. Atualize a Biblioteca de vozes no Nova Generator."))?;
     let name = available.iter().find(|voice| voice.id == voice_id).map(|voice| voice.name.clone())
         .ok_or("Não foi possível identificar o nome da voz selecionada.")?;
     let required_path = |field: &str| -> Result<PathBuf, String> {
@@ -271,19 +271,19 @@ fn voice_profile_runtime(config: &Value, voice_id: &str) -> Result<VoiceProfileR
             .filter(|value| !value.trim().is_empty())
             .map(str::to_owned)
             .or_else(|| fs::read_to_string(profile.join("voice_design_instruct.txt")).ok())
-            .ok_or_else(|| format!("O perfil VoiceDesign '{name}' não contém a descrição da voz. Abra o Shared Runtime Manager e prepare novamente esse perfil."))?;
+            .ok_or_else(|| format!("O perfil VoiceDesign '{name}' não contém a descrição da voz. Abra o Nova Generator e prepare novamente esse perfil."))?;
         if !profile.join("voice_design_instruct.txt").is_file() {
-            return Err(format!("O perfil VoiceDesign '{name}' está incompleto. Abra o Shared Runtime Manager e prepare novamente essa voz."));
+            return Err(format!("O perfil VoiceDesign '{name}' está incompleto. Abra o Nova Generator e prepare novamente essa voz."));
         }
         ("voice_design".to_owned(), Some(instruction))
     } else {
         if !profile.join("voice_clone_prompt.pt").is_file() {
-            return Err(format!("O perfil Base '{name}' está incompleto. Abra o Shared Runtime Manager e prepare novamente essa voz."));
+            return Err(format!("O perfil Base '{name}' está incompleto. Abra o Nova Generator e prepare novamente essa voz."));
         }
         ("voice_clone".to_owned(), None)
     };
     if !python.is_file() || !runner.is_file() || !model.join("config.json").is_file() {
-        return Err(format!("O perfil '{name}' está incompleto. Abra o Shared Runtime Manager e prepare novamente essa voz."));
+        return Err(format!("O perfil '{name}' está incompleto. Abra o Nova Generator e prepare novamente essa voz."));
     }
     Ok(VoiceProfileRuntime { name, python, runner, model, profile, mode, instruct })
 }
@@ -303,13 +303,13 @@ pub(crate) fn voice_profile_paths(app: &AppHandle, voice_id: &str) -> Result<(Pa
     Ok((voice.python, voice.runner, voice.model, voice.profile, voice.name))
 }
 
-/// Resolve the isolated Qwen3-TTS runtime provisioned and owned by Shared Runtime Manager.
+/// Resolve the isolated Qwen3-TTS runtime provisioned and owned by Nova Generator.
 pub(crate) fn qwen3_tts_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf, PathBuf), String> {
     let (_, config) = load_config(app)?;
     let raw = config.pointer("/shared/resources/qwen3-tts")
         .or_else(|| config.pointer("/shared/resolvedDependencies/qwen3-tts"))
         .and_then(Value::as_str)
-        .ok_or("O Qwen3-TTS não está instalado ou vinculado no Shared Runtime Manager. Sincronize o Nova Generator e instale a dependência 'qwen3-tts'.")?;
+        .ok_or("O Qwen3-TTS não está instalado ou vinculado no Nova Generator. Sincronize o Nova Generator e instale a dependência 'qwen3-tts'.")?;
     let runtime = PathBuf::from(raw);
     if !runtime.is_absolute() { return Err("O caminho do Qwen3-TTS no Shared Runtime precisa ser absoluto.".into()); }
     let python = if cfg!(windows) { runtime.join("venv").join("Scripts").join("python.exe") } else { runtime.join("venv").join("bin").join("python") };
@@ -320,18 +320,18 @@ pub(crate) fn qwen3_tts_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf, Path
     let model = manifest.get("model").and_then(Value::as_str).map(PathBuf::from)
         .ok_or("O manifesto Qwen3-TTS não informa o caminho do modelo.")?;
     if !python.is_file() || !runner.is_file() || !model.join("config.json").is_file() {
-        return Err(format!("O runtime Qwen3-TTS está incompleto em {}. Reinstale ou sincronize a dependência pelo Shared Runtime Manager.", runtime.display()));
+        return Err(format!("O runtime Qwen3-TTS está incompleto em {}. Reinstale ou sincronize a dependência pelo Nova Generator.", runtime.display()));
     }
     Ok((python, runner, model))
 }
 
-/// Resolve the isolated WhisperX runtime provisioned and owned by Shared Runtime Manager.
+/// Resolve the isolated WhisperX runtime provisioned and owned by Nova Generator.
 pub(crate) fn forced_alignment_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
     let (_, config) = load_config(app)?;
     let runtime = config.pointer("/shared/resources/forced-alignment")
         .or_else(|| config.pointer("/shared/resolvedDependencies/forced-alignment"))
         .and_then(Value::as_str)
-        .ok_or("O WhisperX não está instalado ou vinculado no Shared Runtime Manager. Instale o recurso 'forced-alignment' e sincronize o Nova Generator.")?;
+        .ok_or("O WhisperX não está instalado ou vinculado no Nova Generator. Instale o recurso 'forced-alignment' e sincronize o Nova Generator.")?;
     let runtime = PathBuf::from(runtime);
     if !runtime.is_absolute() {
         return Err("O caminho do WhisperX no Shared Runtime precisa ser absoluto.".into());
@@ -344,7 +344,7 @@ pub(crate) fn forced_alignment_paths(app: &AppHandle) -> Result<(PathBuf, PathBu
     let runner = runtime.join("runner.py");
     if !python.is_file() || !runner.is_file() {
         return Err(format!(
-            "O runtime do WhisperX está incompleto em {}. Reinstale ou sincronize o recurso forced-alignment pelo Shared Runtime Manager.",
+            "O runtime do WhisperX está incompleto em {}. Reinstale ou sincronize o recurso forced-alignment pelo Nova Generator.",
             runtime.display()
         ));
     }
