@@ -126,15 +126,6 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     return ()=>{disposed=true;unlisten?.();};
   },[activeProject?.id]);
 
-  useEffect(()=>{
-    let disposed=false;
-    let unlisten:(()=>void)|undefined;
-    void desktopApi.subscribeToTranscriptionProgress(event=>{
-      if(event.projectId===activeProject?.id) setTranscriptionProgress(event);
-    }).then(fn=>{ if(disposed) fn(); else unlisten=fn; });
-    return ()=>{disposed=true;unlisten?.();};
-  },[activeProject?.id]);
-
   async function refreshAssets(project:Project) {
     if(!isDesktopRuntime) return;
     try { setAssets(await desktopApi.listProjectAssets(project.id)); }
