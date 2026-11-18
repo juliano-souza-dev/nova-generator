@@ -71,7 +71,7 @@
 .voice-mode-tabs button.active{background:#3a2d4c;color:#eadfff;box-shadow:inset 0 0 0 1px #604b7c}
 .voice-create-fields{display:flex;flex-direction:column;gap:8px;min-width:0}
 .voice-create-fields label{margin-top:5px;color:#c9c1d2;font-size:11px;font-weight:600}
-.voice-create-fields input:not([type=file]),.voice-create-fields textarea{width:100%;min-width:0;padding:11px 12px;border:1px solid #3b3544;border-radius:8px;outline:0;background:#121116;color:#f0edf4;font:12px/1.5 inherit}
+.voice-create-fields input:not([type=file]),.voice-create-fields textarea{width:100%;min-width:0;padding:11px 12px;border:1px solid #3b3544;border-radius:8px;outline:0;background:#121116;color:#f0edf4;font-family:inherit;font-size:12px;line-height:1.5}
 .voice-create-fields input:focus,.voice-create-fields textarea:focus{border-color:#9d80d1;box-shadow:0 0 0 3px #9d80d11c}
 .voice-create-fields input[type=file]{width:100%;min-width:0;padding:10px;border:1px dashed #51465f;border-radius:8px;background:#15131a;color:#aaa2b2;font-size:11px}
 .voice-create-fields input[type=file]::file-selector-button{margin-right:12px;padding:7px 10px;border:1px solid #51465f;border-radius:6px;background:#292233;color:#dfd1f4;font-size:10px;cursor:pointer}
