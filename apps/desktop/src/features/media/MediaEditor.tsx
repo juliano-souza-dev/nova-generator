@@ -426,7 +426,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
     setTranscribing(true); setError(""); setTranscriptionInfo("");
     try {
       const result = await runTrackedTask("transcription", "Transcrever vídeo", () =>
-        invoke<TranscriptResult>("transcribe_media", {
+        invoke<TranscriptResult>("nova_transcribe_media", {
           projectId, assetId: asset.id, mode: transcriptionMode,
           language: transcriptionLanguage || null, localModel: transcriptionModel
         }));
@@ -763,8 +763,8 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
     setInstallingAsr(true); setError("");
     try {
       const message = await runTrackedTask("installation", "Instalar transcrição local", () =>
-        invoke<string>("install_local_asr"));
-      setLocalAsrReady(await invoke<boolean>("check_local_asr"));
+        invoke<string>("nova_install_local_asr"));
+      setLocalAsrReady(await invoke<boolean>("nova_check_local_asr"));
       setTranscriptionInfo(message);
     } catch (e) { setError(String(e)); }
     finally { setInstallingAsr(false); }
@@ -772,7 +772,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
 
   useEffect(() => {
     let alive = true;
-    invoke<boolean>("check_local_asr").then(value => { if (alive) setLocalAsrReady(value); })
+    invoke<boolean>("nova_check_local_asr").then(value => { if (alive) setLocalAsrReady(value); })
       .catch(() => { if (alive) setLocalAsrReady(false); })
       .finally(() => { if (alive) setLocalAsrChecking(false); });
     return () => { alive = false; };

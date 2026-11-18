@@ -26,13 +26,13 @@ export default function MediaWorkspace({projectId,onProjectUpdated}:{projectId:s
  useEffect(()=>{let stop:(()=>void)|undefined;listen<Progress>("media-task-progress",e=>{if(e.payload.projectId===projectId)setProgress(e.payload);}).then(fn=>stop=fn);return()=>stop?.();},[projectId]);
  async function importLocal(){
   setError(""); const selected=await open({multiple:true,directory:false,title:"Importar mídias",filters:[{name:"Mídias",extensions:["mp4","mov","mkv","webm","mp3","wav","m4a","aac","ogg","flac","jpg","jpeg","png","webp","gif"]}]});
-  if(!selected)return;setBusy(true);try{const paths=Array.isArray(selected)?selected:[selected];const result=await runTrackedTask("import","Importar mídias",()=>invoke<Asset[]>("import_media_files",{projectId,paths}));setAssets(v=>[...result,...v]);setNotice(result.length+" mídia(s) importada(s).");}catch(e){setError(String(e));}finally{setBusy(false);}
+  if(!selected)return;setBusy(true);try{const paths=Array.isArray(selected)?selected:[selected];const result=await runTrackedTask("import","Importar mídias",()=>invoke<Asset[]>("nova_import_media_files",{projectId,paths}));setAssets(v=>[...result,...v]);setNotice(result.length+" mídia(s) importada(s).");}catch(e){setError(String(e));}finally{setBusy(false);}
  }
- async function inspectYoutube(){if(!url.trim()||busy)return;setBusy(true);setError("");setInfo(null);setCache(null);setPreviewUrl("");try{const v=await runTrackedTask("download","Consultar vídeo do YouTube",()=>invoke<Inspection>("inspect_youtube",{url}));setInfo(v);setQuality(v.qualities.find(h=>h<=1080)??v.qualities[0]??0);}catch(e){setError(String(e));}finally{setBusy(false);}}
+ async function inspectYoutube(){if(!url.trim()||busy)return;setBusy(true);setError("");setInfo(null);setCache(null);setPreviewUrl("");try{const v=await runTrackedTask("download","Consultar vídeo do YouTube",()=>invoke<Inspection>("nova_inspect_youtube",{url}));setInfo(v);setQuality(v.qualities.find(h=>h<=1080)??v.qualities[0]??0);}catch(e){setError(String(e));}finally{setBusy(false);}}
  async function download(){
   if(!info||busy)return;setBusy(true);setError("");setProgress({projectId,status:"running",percent:1,message:"Verificando a biblioteca compartilhada..."});
   try{
-   const {cache:c,path}=await runTrackedTask("download","Baixar vídeo original",async()=>{const cache=await invoke<Cache>("prepare_youtube_cache",{projectId,url:info.url,maxHeight:quality});const path=await invoke<string>("authorize_youtube_preview",{videoId:cache.videoId});return {cache,path};});
+   const {cache:c,path}=await runTrackedTask("download","Baixar vídeo original",async()=>{const cache=await invoke<Cache>("nova_prepare_youtube_cache",{projectId,url:info.url,maxHeight:quality});const path=await invoke<string>("nova_authorize_youtube_preview",{videoId:cache.videoId});return {cache,path};});
    setCache(c);setPreviewUrl(convertFileSrc(path));setStart(0);setEnd((c.durationMs??info.durationMs??0)/1000);setTrimOpen(true);
    setNotice(c.reused?"Vídeo original reutilizado da biblioteca compartilhada.":"Download concluído. O original foi preservado.");
   }catch(e){setError(String(e));setProgress({projectId,status:"failed",percent:0,message:String(e)});}finally{setBusy(false);}
@@ -40,7 +40,7 @@ export default function MediaWorkspace({projectId,onProjectUpdated}:{projectId:s
  async function createClip(){
   if(!cache||busy)return;setBusy(true);setError("");
   try{
-   const asset=await runTrackedTask("trim","Recortar vídeo",()=>invoke<Asset>("trim_youtube_cache",{projectId,videoId:cache.videoId,startMs:Math.round(start*1000),endMs:Math.round(end*1000)}));
+   const asset=await runTrackedTask("trim","Recortar vídeo",()=>invoke<Asset>("nova_trim_youtube_cache",{projectId,videoId:cache.videoId,startMs:Math.round(start*1000),endMs:Math.round(end*1000)}));
    setAssets(v=>[asset,...v]);setNotice("Trecho adicionado ao projeto. O original permanece na biblioteca compartilhada.");
    setTrimOpen(false);setCache(null);setPreviewUrl("");setInfo(null);setUrl("");
    setProgress({projectId,status:"completed",percent:100,message:"Importação concluída."});
