@@ -67,8 +67,8 @@ export const desktopApi = {
     runTrackedTask("download", "Download para cache temporário do YouTube", () => invoke<YoutubeCacheEntry>("prepare_youtube_cache", { url, maxHeight })),
   authorizeYoutubePreview: (videoId: string) =>
     invoke<string>("nova_authorize_youtube_preview", { videoId }),
-  trimYoutubeCache: (projectId: string, videoId: string, startMs: number, endMs: number) =>
-    runTrackedTask("export", "Recorte do vídeo do YouTube", () => invoke<MediaAsset>("trim_youtube_cache", { projectId, videoId, startMs: Math.round(startMs), endMs: Math.round(endMs) })),
+  trimYoutubeCache: (projectId: string, videoId: string, startMs: number, endMs: number, aspectRatio: "9:16" | "16:9" | "1:1" | "original", frameMode: "blur" | "contain" | "color", frameColor: string) =>
+    runTrackedTask("export", "Preparando vídeo e enquadramento", () => invoke<MediaAsset>("trim_youtube_cache", { projectId, videoId, startMs: Math.round(startMs), endMs: Math.round(endMs), aspectRatio, frameMode, frameColor })),
 
   checkFfmpeg: () => invoke<string>("check_ffmpeg"),
 
