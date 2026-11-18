@@ -1,9 +1,9 @@
 use reqwest::blocking::{multipart, Client};
 use serde::Deserialize;
 use std::{path::{Path, PathBuf}, time::Duration};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use super::{chunk_audio, emit, ffmpeg, TranscriptCue, TranscriptResult, TranscriptWord};
-use crate::translation::{resolve_api_endpoint, resolve_api_key};
+use crate::ttk_translation::{resolve_api_endpoint, resolve_api_key};
 
 const GROQ_MODEL: &str = "whisper-large-v3-turbo";
 
