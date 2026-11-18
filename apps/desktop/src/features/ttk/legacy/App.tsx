@@ -31,7 +31,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
   const {
     youtubeUrl, setYoutubeUrl, youtubeInfo, setYoutubeInfo, quality, setQuality,
     progress, setProgress, youtubeCache, setYoutubeCache, trimStartMs, setTrimStartMs,
-    trimEndMs, setTrimEndMs, trimBusy, trimVideoRef,
+    trimEndMs, setTrimEndMs, trimBusy, trimVideoRef, outputRatio, setOutputRatio, frameMode, setFrameMode, frameColor, setFrameColor,
     inspectYoutube, downloadYoutube, confirmYoutubeTrim
   } = useYoutubeImport({ project: activeProject, setAssets, setBusy, setError, setNotice, setMediaModal });
   const sceneSpecProjectInput = useRef<HTMLInputElement|null>(null);
@@ -271,6 +271,23 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
         <video ref={trimVideoRef} className="youtube-trim-preview" src={convertFileSrc(youtubeCache.filePath)} controls preload="metadata"
           onTimeUpdate={event=>{const ms=event.currentTarget.currentTime*1000;if(ms<trimStartMs||ms>trimEndMs)event.currentTarget.pause();}}
           onLoadedMetadata={event=>{event.currentTarget.currentTime=trimStartMs/1000;}} />
+        <section className="youtube-format-panel">
+          <div><label className="eyebrow muted">FORMATO DE SAÍDA</label><h3>Prepare para a plataforma</h3><p>Escolha o formato antes de abrir o editor. A cena original será preservada, sem cortes.</p></div>
+          <div className="youtube-format-options">
+            {(["9:16","16:9","1:1","original"] as const).map(value=><button type="button" key={value} className={outputRatio===value?"selected":""} onClick={()=>setOutputRatio(value)}>{value==="original"?"Original":value}</button>)}
+          </div>
+          {outputRatio!=="original"&&<div className="youtube-frame-options">
+            <label>Como preencher o espaço
+              <select value={frameMode} onChange={event=>setFrameMode(event.target.value as "blur"|"contain"|"color")}>
+                <option value="blur">Fundo desfocado (recomendado)</option>
+                <option value="contain">Fundo preto</option>
+                <option value="color">Escolher cor de fundo</option>
+              </select>
+            </label>
+            {frameMode==="color"&&<label className="youtube-color-picker">Cor <input type="color" value={frameColor} onChange={event=>setFrameColor(event.target.value)}/></label>}
+          </div>}
+          <small className="youtube-format-hint">A opção 9:16 gera vídeo vertical em 1080 × 1920. O conteúdo principal permanece inteiro e centralizado.</small>
+        </section>
         <div className="youtube-trim-time"><span>INÍCIO <b>{formatTimecode(trimStartMs)}</b></span><span>FIM <b>{formatTimecode(trimEndMs)}</b></span><span>DURAÇÃO <b>{formatTimecode(Math.max(0,trimEndMs-trimStartMs))}</b></span></div>
         <div className="youtube-trim-range">
           <label>Início do trecho <input type="range" min={0} max={Math.max(300,(youtubeCache.durationMs??trimEndMs))} step={100} value={trimStartMs}
