@@ -186,6 +186,7 @@ pub fn transcribe(app: AppHandle, media: MediaService, storage: MediaStorage, pr
             }
         };
         let mut output = output;
+        output.duration_ms = duration;
         for cue in &mut output.cues {
             cue.start_ms = cue.start_ms.saturating_add(start_ms);
             cue.end_ms = cue.end_ms.saturating_add(start_ms);
