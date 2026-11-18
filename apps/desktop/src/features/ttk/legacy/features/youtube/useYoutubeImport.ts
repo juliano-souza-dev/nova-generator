@@ -22,6 +22,9 @@ export function useYoutubeImport({ project, setAssets, setBusy, setError, setNot
   const [trimStartMs, setTrimStartMs] = useState(0);
   const [trimEndMs, setTrimEndMs] = useState(0);
   const [trimBusy, setTrimBusy] = useState(false);
+  const [outputRatio, setOutputRatio] = useState<"9:16" | "16:9" | "1:1" | "original">("9:16");
+  const [frameMode, setFrameMode] = useState<"blur" | "contain" | "color">("blur");
+  const [frameColor, setFrameColor] = useState("#000000");
   const trimVideoRef = useRef<HTMLVideoElement | null>(null);
 
   async function inspectYoutube() {
@@ -70,7 +73,7 @@ export function useYoutubeImport({ project, setAssets, setBusy, setError, setNot
     setTrimBusy(true);
     setError("");
     try {
-      const asset = await runTrackedTask("trim", "Recortando vídeo", () => desktopApi.trimYoutubeCache(project.id, youtubeCache.videoId, trimStartMs, trimEndMs));
+      const asset = await runTrackedTask("trim", "Recortando vídeo", () => desktopApi.trimYoutubeCache(project.id, youtubeCache.videoId, trimStartMs, trimEndMs, outputRatio, frameMode, frameColor));
       setAssets(current => [asset, ...current]);
       setNotice("Trecho importado para a biblioteca. O vídeo original permanece no cache temporário por até 7 dias.");
       setYoutubeCache(null);
@@ -88,7 +91,7 @@ export function useYoutubeImport({ project, setAssets, setBusy, setError, setNot
     youtubeUrl, setYoutubeUrl, youtubeInfo, setYoutubeInfo,
     quality, setQuality, progress, setProgress,
     youtubeCache, setYoutubeCache, trimStartMs, setTrimStartMs,
-    trimEndMs, setTrimEndMs, trimBusy, trimVideoRef,
+    trimEndMs, setTrimEndMs, trimBusy, trimVideoRef, outputRatio, setOutputRatio, frameMode, setFrameMode, frameColor, setFrameColor,
     inspectYoutube, downloadYoutube, confirmYoutubeTrim
   };
 }
