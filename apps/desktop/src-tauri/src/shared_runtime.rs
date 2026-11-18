@@ -282,6 +282,46 @@ fn load_config(app: &AppHandle) -> Result<(PathBuf, Value), String> {
     Ok((path, config))
 }
 
+/// Resolves the shared media directory and executables from Nova's own libs.json.
+/// Registration is performed lazily so media features work even before Settings is opened.
+pub(crate) fn resolve_media_runtime(
+    app: &AppHandle,
+) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+    ensure_nova_registration(app)?;
+    let (_, config) = load_config(app)?;
+    let media = config.pointer("/shared/directories/mediaShared")
+        .and_then(Value::as_str)
+        .ok_or("A biblioteca compartilhada de mídia não foi configurada. Abra Configurações e sincronize as dependências.")?;
+    let media = PathBuf::from(media);
+    if !media.is_absolute() {
+        return Err("O caminho da biblioteca compartilhada de mídia precisa ser absoluto.".into());
+    }
+
+    fn executable(config: &Value, id: &str) -> Result<PathBuf, String> {
+        let raw = config.pointer(&format!("/shared/resolvedDependencies/{id}"))
+            .or_else(|| config.pointer(&format!("/shared/resources/{id}")))
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("A dependência '{id}' ainda não foi instalada. Acesse Configurações > Biblioteca de dependências e sincronize o ambiente."))?;
+        let path = PathBuf::from(raw);
+        if !path.is_absolute() {
+            return Err(format!("O caminho da dependência '{id}' precisa ser absoluto."));
+        }
+        if path.is_file() {
+            return Ok(path);
+        }
+        let names = if cfg!(windows) {
+            vec![format!("{id}.exe"), format!("{id}.cmd"), format!("{id}.bat")]
+        } else {
+            vec![id.to_owned()]
+        };
+        names.into_iter().map(|name| path.join(name))
+            .find(|candidate| candidate.is_file())
+            .ok_or_else(|| format!("Executável '{id}' não encontrado em {}. Sincronize novamente as dependências.", path.display()))
+    }
+
+    Ok((media, executable(&config, "yt-dlp")?, executable(&config, "ffmpeg")?))
+}
+
 fn provider_settings(
     path: &Path,
     provider_id: &str,
