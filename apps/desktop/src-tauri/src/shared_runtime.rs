@@ -1,9 +1,185 @@
 use serde::Serialize;
 use serde_json::Value;
-use std::{fs, path::{Path, PathBuf}};
-use tauri::AppHandle;
+use std::{fs, path::{Path, PathBuf}, sync::atomic::{AtomicBool, Ordering}};
+use tauri::{AppHandle, Manager};
 
 const APPLICATION_ID: &str = "nova-generator";
+
+static DEPENDENCY_SYNC_RUNNING: AtomicBool = AtomicBool::new(false);
+
+fn ensure_nova_registration(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_root = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&app_root).map_err(|e| e.to_string())?;
+    let example = app_root.join("libs-example.json");
+    if !example.is_file() {
+        fs::write(&example, include_str!("../../../../libs-example.json"))
+            .map_err(|e| format!("Não foi possível preparar libs-example.json: {e}"))?;
+    }
+    shared_runtime_manager::manager::register_app_at_path(
+        APPLICATION_ID,
+        "Nova Generator",
+        &app_root.to_string_lossy(),
+    ).map_err(|e| format!("Não foi possível preparar o ambiente do Nova Generator: {e:#}"))?;
+    Ok(app_root)
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedDependencySummary {
+    pub id: String,
+    pub required: bool,
+    pub version: Option<String>,
+    pub installed: bool,
+    pub path: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_shared_settings(app: AppHandle) -> Result<Value, String> {
+    ensure_nova_registration(&app)?;
+    let example: Value = serde_json::from_str(include_str!("../../../../libs-example.json"))
+        .map_err(|e| format!("libs-example.json inválido: {e}"))?;
+    let installed = shared_runtime_manager::manager::resources()
+        .map_err(|e| format!("Não foi possível listar dependências instaladas: {e:#}"))?;
+    let dependencies: Vec<SharedDependencySummary> = example.pointer("/shared/dependencies")
+        .and_then(Value::as_array).into_iter().flatten().filter_map(|entry| {
+            let id = entry.get("id")?.as_str()?.to_owned();
+            let resource = installed.iter().find(|item| item.id == id);
+            Some(SharedDependencySummary {
+                id,
+                required: entry.get("required").and_then(Value::as_bool).unwrap_or(true),
+                version: entry.get("version").and_then(Value::as_str).map(str::to_owned),
+                installed: resource.is_some(),
+                path: resource.map(|item| item.install_path.clone()),
+            })
+        }).collect();
+    let providers = shared_runtime_manager::api::providers()
+        .map_err(|e| format!("Não foi possível listar provedores de API: {e:#}"))?;
+    let catalog = shared_runtime_manager::api::provider_catalog()
+        .map_err(|e| format!("Não foi possível carregar o catálogo de provedores: {e:#}"))?;
+    let voices = shared_runtime_manager::voices::list()
+        .map_err(|e| format!("Não foi possível carregar a biblioteca de vozes: {e:#}"))?;
+    let queue = shared_runtime_manager::dependency_queue::status()
+        .map_err(|e| format!("Não foi possível consultar a fila de dependências: {e:#}"))?;
+    let root = shared_runtime_manager::manager::root().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "root": root.to_string_lossy(),
+        "dependencies": dependencies,
+        "providers": providers,
+        "providerCatalog": catalog,
+        "voices": voices,
+        "queue": queue
+    }))
+}
+
+#[tauri::command]
+pub fn synchronize_shared_dependencies(app: AppHandle) -> Result<(), String> {
+    let app_root = ensure_nova_registration(&app)?;
+    if DEPENDENCY_SYNC_RUNNING.swap(true, Ordering::SeqCst) {
+        return Err("A sincronização de dependências já está em andamento.".into());
+    }
+    if let Err(error) = shared_runtime_manager::dependency_queue::enqueue_application(
+        APPLICATION_ID,
+        &app_root.to_string_lossy(),
+    ) {
+        DEPENDENCY_SYNC_RUNNING.store(false, Ordering::SeqCst);
+        return Err(format!("Não foi possível preparar a sincronização: {error:#}"));
+    }
+    shared_runtime_manager::dependency_queue::begin_operation();
+    std::thread::spawn(|| {
+        if let Err(error) = shared_runtime_manager::dependency_queue::process_queue() {
+            if shared_runtime_manager::dependency_queue::cancel_requested() {
+                let _ = shared_runtime_manager::dependency_queue::mark_cancelled();
+            } else {
+                let _ = shared_runtime_manager::dependency_queue::set_failure(&format!("{error:#}"));
+            }
+        }
+        DEPENDENCY_SYNC_RUNNING.store(false, Ordering::SeqCst);
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn shared_dependency_queue_status() -> Result<Value, String> {
+    shared_runtime_manager::dependency_queue::status().map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn list_shared_voices() -> Result<Value, String> {
+    shared_runtime_manager::voices::list().map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn set_shared_default_voice(voice_id: String) -> Result<(), String> {
+    shared_runtime_manager::voices::set_default(&voice_id).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn create_shared_voice_profile(name: String, filename: String, audio_base64: String, reference_text: String) -> Result<(), String> {
+    if DEPENDENCY_SYNC_RUNNING.swap(true, Ordering::SeqCst) {
+        return Err("Já existe uma operação do ambiente em andamento.".into());
+    }
+    shared_runtime_manager::dependency_queue::begin_operation();
+    std::thread::spawn(move || {
+        let result = shared_runtime_manager::voices::create_profile(&name, &filename, &audio_base64, &reference_text);
+        if let Err(error) = result {
+            let _ = shared_runtime_manager::dependency_queue::set_failure(&format!("{error:#}"));
+        }
+        DEPENDENCY_SYNC_RUNNING.store(false, Ordering::SeqCst);
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn create_shared_voice_design_profile(name: String, instruct: String) -> Result<(), String> {
+    if DEPENDENCY_SYNC_RUNNING.swap(true, Ordering::SeqCst) {
+        return Err("Já existe uma operação do ambiente em andamento.".into());
+    }
+    shared_runtime_manager::dependency_queue::begin_operation();
+    std::thread::spawn(move || {
+        let result = shared_runtime_manager::voices::create_voice_design_profile(&name, &instruct);
+        if let Err(error) = result {
+            let _ = shared_runtime_manager::dependency_queue::set_failure(&format!("{error:#}"));
+        }
+        DEPENDENCY_SYNC_RUNNING.store(false, Ordering::SeqCst);
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn shared_provider_catalog() -> Result<Value, String> {
+    shared_runtime_manager::api::provider_catalog().map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn shared_api_providers() -> Result<Vec<shared_runtime_manager::api::ProviderInfo>, String> {
+    shared_runtime_manager::api::providers().map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn save_shared_api_provider(provider: String, name: String, endpoint: String, model: String) -> Result<(), String> {
+    shared_runtime_manager::api::add(&provider, &name, &endpoint, &model).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn save_shared_api_key(provider: String, secret: String) -> Result<(), String> {
+    shared_runtime_manager::api::set_key(&provider, &secret).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn authorize_shared_api_provider(provider: String) -> Result<(), String> {
+    shared_runtime_manager::api::authorize(&provider, APPLICATION_ID).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn revoke_shared_api_provider(provider: String) -> Result<(), String> {
+    shared_runtime_manager::api::revoke(&provider, APPLICATION_ID).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn shared_available_api_models(provider: String) -> Result<Vec<String>, String> {
+    shared_runtime_manager::api::available_models(&provider).map_err(|e| format!("{e:#}"))
+}
+
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -131,6 +307,7 @@ pub(crate) fn resolve_provider_credential(app: &AppHandle, provider_id: &str) ->
 
 #[tauri::command]
 pub fn get_shared_runtime_status(app: AppHandle) -> Result<SharedRuntimeStatus, String> {
+    ensure_nova_registration(&app)?;
     let (path, config) = load_config(&app)?;
     let media_shared = config.pointer("/shared/directories/mediaShared")
         .and_then(Value::as_str)
