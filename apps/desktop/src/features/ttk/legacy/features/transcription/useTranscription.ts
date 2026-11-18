@@ -24,7 +24,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   const [localAsrChecking, setLocalAsrChecking] = useState(false);
   const [localAsrInstalling, setLocalAsrInstalling] = useState(false);
   const [transcriptionMessage, setTranscriptionMessage] = useState("");
-  const [transcriptionOpen, setTranscriptionOpen] = useState(false);
   const [transcriptionResult, setTranscriptionResult] = useState<TranscriptResult | null>(null);
   const [transcriptionTranslations, setTranscriptionTranslations] = useState<CueTranslation[]>([]);
   const [translationBusy, setTranslationBusy] = useState(false);
@@ -57,7 +56,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionTranslations([]);
     setExternalSourceHash("");
     setTranscriptionMessage("");
-    setTranscriptionOpen(true);
   }
 
   async function installLocalTranscription() {
@@ -246,7 +244,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
     localAsrInstalled, localAsrChecking, localAsrInstalling,
     transcriptionMessage, setTranscriptionMessage,
-    transcriptionOpen, setTranscriptionOpen,
     installLocalTranscription, transcribeSelectedMedia
   };
 }
