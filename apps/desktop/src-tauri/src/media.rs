@@ -52,49 +52,14 @@ fn append_assets(dir: &Path, added: &[MediaAsset]) -> Result<(), String> {
 }
 
 struct Shared { media: PathBuf, ytdlp: PathBuf, ffmpeg: PathBuf }
-fn shared_manifest_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let mut candidates = Vec::new();
-    if let Some(p) = std::env::var_os("NOVA_GENERATOR_SHARED_CONFIG") { candidates.push(PathBuf::from(p)); }
-    for base in [std::env::current_dir().ok(), std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf)), app.path().resource_dir().ok()] {
-        let mut current = base;
-        while let Some(path) = current { candidates.push(path.join("shared.config.json")); current = path.parent().map(Path::to_path_buf); }
-    }
-    let mut seen = std::collections::HashSet::new();
-    for candidate in candidates {
-        let path = if candidate.is_dir() { candidate.join("shared.config.json") } else { candidate };
-        if seen.insert(path.clone()) && path.is_file() { return Ok(path); }
-    }
-    Err("O Nova Generator não está vinculado ao Shared Runtime Manager. Vincule ou sincronize o projeto para receber os caminhos compartilhados.".into())
-}
-fn shared_resource(config: &Value, id: &str) -> Result<PathBuf, String> {
-    // Dependencies provisioned by Shared are published here. The resources
-    // map remains a supported fallback for manager-owned tools registered there.
-    let raw = config.pointer(&format!("/shared/resolvedDependencies/{id}"))
-        .or_else(|| config.pointer(&format!("/shared/resources/{id}")))
-        .and_then(Value::as_str)
-        .ok_or_else(|| format!("O recurso '{id}' não está resolvido pelo Shared Runtime Manager. Atualize o vínculo desta aplicação."))?;
-    let p = PathBuf::from(raw);
-    if !p.is_absolute() { return Err(format!("O caminho do recurso '{id}' precisa ser absoluto.")); }
-    if p.is_file() { return Ok(p); }
-    let names = if cfg!(windows) { vec![format!("{id}.exe"), format!("{id}.cmd"), format!("{id}.bat")] } else { vec![id.to_string()] };
-    names.into_iter().map(|n| p.join(n)).find(|candidate| candidate.is_file())
-        .ok_or_else(|| format!("Executável compartilhado '{id}' não encontrado em {}.", p.display()))
-}
-pub fn shared_ffmpeg_path(app: &AppHandle) -> Result<PathBuf, String> { Ok(shared(app)?.ffmpeg) }
 
 fn shared(app: &AppHandle) -> Result<Shared, String> {
-    let path = shared_manifest_path(app)?;
-    let raw = fs::read(&path).map_err(|e| e.to_string())?;
-    let config: Value = serde_json::from_slice(&raw).map_err(|e| format!("shared.config.json inválido: {e}"))?;
-    if config.get("schemaVersion").and_then(Value::as_str) != Some("1.0") ||
-       config.pointer("/shared/enabled").and_then(Value::as_bool) != Some(true) {
-        return Err("O vínculo Shared Runtime está ausente, desativado ou incompatível. Sincronize o Nova Generator pelo Shared Runtime Manager.".into());
-    }
-    let media = config.pointer("/shared/directories/mediaShared").and_then(Value::as_str)
-        .ok_or("O Shared Runtime não forneceu shared.directories.mediaShared. Sincronize o vínculo desta aplicação.")?;
-    let media = PathBuf::from(media);
-    if !media.is_absolute() { return Err("shared.directories.mediaShared precisa ser absoluto.".into()); }
-    Ok(Shared { media, ytdlp: shared_resource(&config, "yt-dlp")?, ffmpeg: shared_resource(&config, "ffmpeg")? })
+    let (media, ytdlp, ffmpeg) = crate::shared_runtime::resolve_media_runtime(app)?;
+    Ok(Shared { media, ytdlp, ffmpeg })
+}
+
+pub fn shared_ffmpeg_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(shared(app)?.ffmpeg)
 }
 
 #[tauri::command]
