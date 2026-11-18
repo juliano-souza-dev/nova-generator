@@ -984,8 +984,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
       <button className={activeTool === "captions" ? "active" : ""} onClick={() => { setActiveTool("captions"); if (selectedMotion && !selectedMotion.isCaption) setSelectedMotionId(null); setSelectedOverlayId(null); }}><Captions size={19}/><small>Legendas</small></button>
       <button className={activeTool === "effects" ? "active" : ""} onClick={() => setActiveTool("effects")}><WandSparkles size={19}/><small>Efeitos</small></button>
       <button className={activeTool === "templates" ? "active" : ""} onClick={() => setActiveTool("templates")}><PanelsTopLeft size={19}/><small>Modelos</small></button>
-      <button className="transcription-tool" onClick={() => { setActiveTool("captions"); const clip=clips.find(item=>item.id===selectedId); const asset=clip?assets.find(item=>item.id===clip.assetId):null; onOpenTranscription?.(asset&&(asset.kind==="audio"||asset.kind==="video")?asset.id:undefined,clip&&asset&&(asset.kind==="audio"||asset.kind==="video")?{clipId:clip.id,timelineStartMs:clip.timelineStartMs,sourceStartMs:clip.sourceStartMs,sourceEndMs:clip.sourceEndMs}:undefined); }} title="Gerar legendas automaticamente"><Captions size={19}/><small>Transcrever</small></button>
-    </aside>
+          </aside>
     <aside className="editor-content-panel">
       {activeTool === "media" && <>
         <div className="editor-panel-head"><div><b>Biblioteca</b><small>{assets.length} arquivo(s) disponíveis</small></div><button className="secondary-action" onClick={onAddMedia}><Plus size={14}/> Importar</button></div>
@@ -1004,10 +1003,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
         <div className="motion-presets editor-preset-grid">{motionPresets.map(preset => <button key={preset.id} className="motion-preset" onClick={() => addMotion(preset.id)}><b>{preset.label}</b><small>Som: {preset.sound}</small><span>+ Adicionar</span></button>)}</div>
       </>}
       {activeTool === "captions" && <>
-        <div className="editor-panel-head"><div><b>Transcrição e legendas</b><small>Gerencie texto falado, traduções, sincronização e karaoke.</small></div><span className="preview-live">{captions.length} LEGENDA(S)</span></div>
-        <div className="caption-workspace-actions">
-          <button className="primary" type="button" onClick={() => { const clip=clips.find(item=>item.id===selectedId); const asset=clip?assets.find(item=>item.id===clip.assetId):null; onOpenTranscription?.(asset&&(asset.kind==="audio"||asset.kind==="video")?asset.id:undefined,clip&&asset&&(asset.kind==="audio"||asset.kind==="video")?{clipId:clip.id,timelineStartMs:clip.timelineStartMs,sourceStartMs:clip.sourceStartMs,sourceEndMs:clip.sourceEndMs}:undefined); }}><Captions size={14}/> Transcrever mídia</button>
-        </div>
+        <div className="editor-panel-head"><div><b>Legendas</b><small>Edite os textos e revise as traduções sem alterar a sincronização.</small></div><span className="preview-live">{captions.length} LEGENDA(S)</span></div>
         <section className="translation-panel">
           <div className="translation-panel-heading"><div><b><Languages size={15}/> Tradução de legendas</b><small>Traduza apenas as legendas, preservando a sincronização.</small></div><span className="preview-live">{captions.filter(item=>!(item.captionTranslation||"").trim()).length} PENDENTE(S)</span></div>
           <button className="primary translation-action" type="button" onClick={()=>void translateCaptions()} disabled={translationBusy || !captions.some(item => !(item.captionTranslation||"").trim())}>{translationBusy?<><LoaderCircle className="spin" size={14}/> Traduzindo...</>:<><Languages size={14}/> Traduzir legendas sem tradução</>}</button>
