@@ -64,7 +64,7 @@ const fmt = (ms: number) => {
   return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0") + "." + String(Math.floor(ms % 1000 / 100));
 };
 
-export default function MediaEditor({ projectId, asset, onClose, onProjectUpdated, onApplyCaptions }: { projectId: string; asset: Asset; onClose: () => void; onProjectUpdated?: () => void; onApplyCaptions?: (payload: { cues: MediaEditorCue[]; translations: MediaEditorMediaEditorTranslationCue[] }) => void }) {
+export default function MediaEditor({ projectId, asset, onClose, onProjectUpdated, onApplyCaptions }: { projectId: string; asset: Asset; onClose: () => void; onProjectUpdated?: () => void; onApplyCaptions?: (payload: { cues: MediaEditorCue[]; translations: MediaEditorTranslationCue[] }) => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const onProjectUpdatedRef = useRef(onProjectUpdated);
   useEffect(() => { onProjectUpdatedRef.current = onProjectUpdated; }, [onProjectUpdated]);
