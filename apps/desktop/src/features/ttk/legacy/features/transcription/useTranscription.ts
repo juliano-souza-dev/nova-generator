@@ -230,7 +230,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionContext(null);
     setTranscriptionResult(null);
     setTranscriptionTranslations([]);
-    setTranscriptionOpen(false);
   }
 
   return {
