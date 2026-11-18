@@ -133,8 +133,8 @@ export default function Settings() {
     </header>
 
     <nav className="settings-tabs">
-      <button className={tab === "dependencies" ? "settings-tab active" : "settings-tab"} onClick={() => setTab("dependencies")}><Download size={16}/> Biblioteca de dependências</button>
       <button className={tab === "voices" ? "settings-tab active" : "settings-tab"} onClick={() => setTab("voices")}><AudioLines size={16}/> Biblioteca de vozes</button>
+      <button className={tab === "dependencies" ? "settings-tab active" : "settings-tab"} onClick={() => setTab("dependencies")}><Download size={16}/> Biblioteca de dependências</button>
       <button className={tab === "providers" ? "settings-tab active" : "settings-tab"} onClick={() => setTab("providers")}><Cloud size={16}/> Provedores de API</button>
     </nav>
 
