@@ -1035,7 +1035,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
               <button className="secondary-action" type="button" disabled={!transcription.externalSourceHash||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>transcriptionTranslationInput.current?.click()}><Upload size={14}/> Importar JSON da IA</button>
               <input ref={transcriptionTranslationInput} type="file" accept=".json,application/json" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value="";void transcription.importExternalTranslation(file);}}/>
             </div>
-            <button className="primary caption-insert-transcription" type="button" disabled={transcription.translationBusy||transcription.alignmentBusy||transcription.externalPackageBusy} onClick={()=>transcription.insertTranscription()}><CheckCircle2 size={14}/> 3. Inserir legendas na timeline</button>
+            <button className="primary caption-insert-transcription" type="button" disabled={transcription.translationBusy||transcription.alignmentBusy||transcription.externalPackageBusy} onClick={()=>transcription.insertTranscription()}><Captions size={14}/> 3. Inserir legendas na timeline</button>
           </div>}
           {transcription.transcriptionMessage&&<div className="sound-library-message" role="status">{transcription.transcriptionMessage}</div>}
           <small className="transcription-privacy">Somente o modo local mantém o áudio no computador. Os modos Automático e Groq enviam o áudio à API da Groq. O arquivo original não é modificado.</small>
