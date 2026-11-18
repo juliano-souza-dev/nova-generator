@@ -216,6 +216,87 @@ fn emit_progress(app: &AppHandle, project_id: &str, asset_id: &str, completed: u
     });
 }
 
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineClipCue {
+    pub id: String,
+    pub text: String,
+    pub start_ms: u64,
+    pub end_ms: u64,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineClipWord {
+    pub text: String,
+    pub start_ms: u64,
+    pub end_ms: u64,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineClipAlignedCue {
+    pub id: String,
+    pub text: String,
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub words: Vec<TimelineClipWord>,
+    pub word_alignment: String,
+}
+
+#[tauri::command]
+pub async fn align_timeline_clip_cues(
+    app: AppHandle,
+    project_id: String,
+    asset_id: String,
+    source_start_ms: u64,
+    source_end_ms: u64,
+    language: String,
+    cues: Vec<TimelineClipCue>,
+) -> Result<Vec<TimelineClipAlignedCue>, String> {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        if source_end_ms <= source_start_ms { return Err("O intervalo do clipe é inválido.".into()); }
+        if cues.is_empty() { return Err("Não há legendas para alinhar.".into()); }
+        let lang = language_code(&language)?;
+        let source = project_source(&app, &project_id, &asset_id)?;
+        let (python, runner) = crate::shared_runtime::forced_alignment_paths(&app)?;
+        let runner_bytes = fs::read(&runner).map_err(|e| format!("Não foi possível verificar a versão do alinhador: {e}"))?;
+        let ffmpeg = crate::media::shared_ffmpeg(&app)?;
+        let temp = std::env::temp_dir().join(format!("nova-ttk-clip-alignment-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&temp).map_err(|e| e.to_string())?;
+        let result = (|| {
+            let mut worker: Option<AlignmentWorker> = None;
+            let mut output = Vec::with_capacity(cues.len());
+            for (index, cue) in cues.into_iter().enumerate() {
+                if cue.text.trim().is_empty() { continue; }
+                if cue.start_ms < source_start_ms || cue.end_ms > source_end_ms || cue.end_ms <= cue.start_ms {
+                    return Err(format!("A legenda {} está fora do intervalo do clipe.", index + 1));
+                }
+                let block_start = cue.start_ms.saturating_sub(PADDING_MS).max(source_start_ms);
+                let block_end = cue.end_ms.saturating_add(PADDING_MS).min(source_end_ms);
+                let audio = temp.join(format!("clip-cue-{index:05}.flac"));
+                extract_block(&ffmpeg, &source, &audio, block_start, block_end)?;
+                if worker.is_none() { worker = Some(AlignmentWorker::start(&python, &runner)?); }
+                let words = worker.as_mut().expect("worker inicializado").align(&audio, &cue.text, &lang)?;
+                if words.is_empty() { return Err(format!("O WhisperX não encontrou palavras alinháveis na legenda {}.", index + 1)); }
+                let mapped = words.into_iter().filter_map(|word| {
+                    let start = block_start.saturating_add(word.start_ms).max(cue.start_ms).min(cue.end_ms.saturating_sub(1));
+                    let end = block_start.saturating_add(word.end_ms).min(cue.end_ms).max(start.saturating_add(1));
+                    if end <= start || word.text.trim().is_empty() { return None; }
+                    Some(TimelineClipWord { text: word.text, start_ms: start, end_ms: end })
+                }).collect::<Vec<_>>();
+                if mapped.is_empty() { return Err(format!("O alinhamento da legenda {} não produziu tempos válidos.", index + 1)); }
+                output.push(TimelineClipAlignedCue { id: cue.id, text: cue.text, start_ms: cue.start_ms, end_ms: cue.end_ms, words: mapped, word_alignment: "whisperx".into() });
+                let _ = fs::remove_file(audio);
+                emit_progress(&app, &project_id, &asset_id, index + 1, output.len().max(1), &format!("Legenda {} alinhada com WhisperX", index + 1));
+            }
+            Ok(output)
+        })();
+        let _ = fs::remove_dir_all(temp);
+        result
+    }).await.map_err(|e| format!("O alinhamento foi interrompido: {e}"))?
+}
+
 #[tauri::command]
 pub async fn align_project_subtitles(
     app: AppHandle,
