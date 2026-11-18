@@ -10,7 +10,7 @@ import { useGroqSettings } from "./features/groq/useGroqSettings";
 import { useYoutubeImport } from "./features/youtube/useYoutubeImport";
 import { validateSceneSpec, type SceneSpec } from "./shared/scene-spec";
 import { buildSceneSpecProjectData, getSceneSpecMediaSources } from "./features/scene-spec/project-import";
-import { Clapperboard, LayoutGrid, Film, GraduationCap, Settings2, Plus, Search, FolderOpen, FolderPlus, Clock3, Video, Sparkles, Play, X, ArrowUpRight, Upload, Youtube, CheckCircle2, LoaderCircle, ShieldCheck, Link2, Download, Undo2, Redo2, ArrowLeft, FileJson } from "lucide-react"
+import { Clapperboard, LayoutGrid, Film, GraduationCap, Settings2, Plus, Search, FolderOpen, FolderPlus, Clock3, Video, Sparkles, Play, X, ArrowUpRight, Upload, Youtube, CheckCircle2, LoaderCircle, ShieldCheck, Link2, Download, Undo2, Redo2, ArrowLeft, FileJson, Info } from "lucide-react"
 
 const formatDuration = (n?:number|null) => !n ? "Duração não informada" : Math.floor(n/60000)+":"+String(Math.floor(n/1000)%60).padStart(2,"0");
 const formatTimecode = (n:number) => Math.floor(n/60000)+":"+String(Math.floor(n/1000)%60).padStart(2,"0")+"."+String(Math.floor(n%1000)).padStart(3,"0");
@@ -207,7 +207,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
         </> : activeProject ? <>
         {error&&!mediaModal&&<div className="error editor-error">{error}</div>}
         {notice&&<div className="notice"><CheckCircle2 size={15}/>{notice}</div>}
-        <EditorWorkspace projectId={activeProject.id} assets={assets} onAddMedia={()=>{setMediaTab("local");setMediaModal(true);}} onStartTranscription={openTranscriptionForClip} transcription={{transcriptionAssetId,transcriptionContext,transcriptionMode,setTranscriptionMode,transcriptionLanguage,setTranscriptionLanguage,transcriptionModel,setTranscriptionModel,transcriptionBusy,transcriptionProgress,setTranscriptionProgress,localAsrInstalled,localAsrChecking,localAsrInstalling,transcriptionMessage,installLocalTranscription,transcribeSelectedMedia,transcriptionResult,transcriptionTranslations,translationBusy,alignmentBusy,externalPackageBusy,externalSourceHash,translateTranscription,alignTranscriptionWords,downloadExternalPackage,importExternalTranslation,insertTranscription,updateTranscriptionCue}}/>
+        <EditorWorkspace projectId={activeProject.id} assets={assets} onAddMedia={()=>{setMediaTab("local");setMediaModal(true);}} onStartTranscription={openTranscriptionForClip} transcription={{transcriptionAssetId,setTranscriptionAssetId,transcriptionContext,setTranscriptionContext,transcriptionMessage,setTranscriptionMessage,transcriptionMode,setTranscriptionMode,transcriptionLanguage,setTranscriptionLanguage,transcriptionModel,setTranscriptionModel,transcriptionBusy,transcriptionProgress,setTranscriptionProgress,localAsrInstalled,localAsrChecking,localAsrInstalling,installLocalTranscription,transcribeSelectedMedia,transcriptionResult,transcriptionTranslations,translationBusy,alignmentBusy,externalPackageBusy,externalSourceHash,openTranscriptionForClip,translateTranscription,alignTranscriptionWords,downloadExternalPackage,importExternalTranslation,insertTranscription,updateTranscriptionCue}}/>
         </> : null}
         <footer>FRAME LAB · FEITO PARA IDEIAS EM MOVIMENTO <span>EARLY ACCESS · 0.2.0</span></footer>
       </div>
