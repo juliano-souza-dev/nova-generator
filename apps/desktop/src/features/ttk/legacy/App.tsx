@@ -15,7 +15,7 @@ import { Clapperboard, LayoutGrid, Film, GraduationCap, Settings2, Plus, Search,
 const formatDuration = (n?:number|null) => !n ? "Duração não informada" : Math.floor(n/60000)+":"+String(Math.floor(n/1000)%60).padStart(2,"0");
 const formatTimecode = (n:number) => Math.floor(n/60000)+":"+String(Math.floor(n/1000)%60).padStart(2,"0")+"."+String(Math.floor(n%1000)).padStart(3,"0");
 
-export default function App() {
+export default function App({ embeddedProjectId }: { embeddedProjectId: string }) {
   const [projects,setProjects] = useState<Project[]>([]);
   const [name,setName] = useState("");
   const [search,setSearch] = useState("");
@@ -23,7 +23,7 @@ export default function App() {
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState("");
   const [activeProject,setActiveProject] = useState<Project|null>(null);
-  const [view,setView] = useState<"workspace"|"project">("workspace");
+  const [view,setView] = useState<"workspace"|"project">("project");
   const [assets,setAssets] = useState<MediaAsset[]>([]);
   const [mediaModal,setMediaModal] = useState(false);
   const [mediaTab,setMediaTab] = useState<"local"|"youtube">("local");
@@ -56,25 +56,21 @@ export default function App() {
   }
   useEffect(()=>{
     let cancelled=false;
-    async function restoreLastProject(){
-      if(!isDesktopRuntime){ await refresh(); return; }
+    async function openEmbeddedProject(){
+      if(!isDesktopRuntime) return;
       try {
-        const loaded=await desktopApi.listProjects();
+        const opened=await desktopApi.openProject(embeddedProjectId);
+        const projectAssets=await desktopApi.listProjectAssets(opened.id);
         if(cancelled) return;
-        setProjects(loaded);
-        const lastProjectId=window.localStorage.getItem("ttk-creator:last-open-project");
-        const remembered=loaded.find(project=>project.id===lastProjectId);
-        if(remembered){
-          const opened=await desktopApi.openProject(remembered.id);
-          const projectAssets=await desktopApi.listProjectAssets(opened.id);
-          if(cancelled) return;
-          setActiveProject(opened); setAssets(projectAssets); setView("project");
-        }
+        setProjects([opened]);
+        setActiveProject(opened);
+        setAssets(projectAssets);
+        setView("project");
       } catch(e){ if(!cancelled) setError(String(e)); }
     }
-    void restoreLastProject();
+    void openEmbeddedProject();
     return ()=>{cancelled=true;};
-  },[]);
+  },[embeddedProjectId]);
   useEffect(()=>{
     let disposed=false;
     let unlisten:(()=>void)|undefined;
@@ -109,7 +105,7 @@ export default function App() {
     } catch(e){ setError(String(e)); }
     finally { setBusy(false); }
   }
-  function returnToWorkspace(){ setView("workspace"); setMediaModal(false); setError(""); setNotice(""); }
+  function returnToWorkspace(){ return; }
   async function importLocalFiles() {
     if(!activeProject) return;
     setBusy(true); setError("");

@@ -19,9 +19,15 @@ struct Project {
     name: String,
     status: String,
     stage: String,
+    #[serde(default = "default_project_type")]
+    project_type: String,
+    #[serde(default)]
+    ttk_project_id: Option<String>,
     created_at: String,
     updated_at: String,
 }
+
+fn default_project_type() -> String { "original".into() }
 
 fn projects_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let mut dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -79,14 +85,18 @@ fn list_projects(app: tauri::AppHandle) -> Result<Vec<Project>, String> {
 }
 
 #[tauri::command]
-fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String> {
+fn create_project(app: tauri::AppHandle, name: String, project_type: String) -> Result<Project, String> {
     let name = name.trim();
     if name.is_empty() { return Err("Informe um nome para o projeto.".into()); }
     if name.chars().count() > 80 { return Err("O nome deve ter no máximo 80 caracteres.".into()); }
+    if !["materials", "ttk_media", "original"].contains(&project_type.as_str()) { return Err("Tipo de projeto inválido.".into()); }
+    let ttk_project_id = if project_type == "ttk_media" {
+        Some(app.state::<state::AppState>().projects.create(name)?.id)
+    } else { None };
     let timestamp = now();
     let project = Project {
         id: new_id(), name: name.to_string(), status: "in_progress".into(),
-        stage: "Editorial".into(), created_at: timestamp.clone(), updated_at: timestamp,
+        stage: "Editorial".into(), project_type, ttk_project_id, created_at: timestamp.clone(), updated_at: timestamp,
     };
     let mut projects = read_projects(&app)?;
     projects.push(project.clone());
@@ -99,9 +109,13 @@ fn duplicate_project(app: tauri::AppHandle, id: String) -> Result<Project, Strin
     let mut projects = read_projects(&app)?;
     let original = projects.iter().find(|p| p.id == id).cloned().ok_or("Projeto não encontrado.")?;
     let timestamp = now();
+    let copy_name = format!("{} (cópia)", original.name);
+    let ttk_project_id = if original.project_type == "ttk_media" {
+        Some(app.state::<state::AppState>().projects.create(&copy_name)?.id)
+    } else { None };
     let copy = Project {
-        id: new_id(), name: format!("{} (cópia)", original.name),
-        status: "in_progress".into(), stage: "Editorial".into(),
+        id: new_id(), name: copy_name, status: "in_progress".into(), stage: "Editorial".into(),
+        project_type: original.project_type.clone(), ttk_project_id,
         created_at: timestamp.clone(), updated_at: timestamp,
     };
     projects.push(copy.clone());

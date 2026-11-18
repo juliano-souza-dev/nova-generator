@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import MediaWorkspace from "./features/media/MediaWorkspace";
+import MaterialsWorkspace from "./features/media/MaterialsWorkspace";
+import TtkMediaModule from "./features/ttk/TtkMediaModule";
 import TaskCenter from "./features/tasks/TaskCenter";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -15,6 +17,8 @@ type Project = {
   stage: string;
   created_at: string;
   updated_at: string;
+  project_type: "materials" | "ttk_media" | "original";
+  ttk_project_id?: string | null;
 };
 type View = "home" | "project";
 
@@ -41,6 +45,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
+  const [projectType, setProjectType] = useState<"materials" | "ttk_media" | "original">("original");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -65,9 +70,9 @@ export default function App() {
     if (!name || busy) return;
     setBusy(true); setError("");
     try {
-      const project = await invoke<Project>("create_project", { name });
+      const project = await invoke<Project>("create_project", { name, projectType });
       await refreshProjects();
-      setProjectName(""); setCreateOpen(false);
+      setProjectName(""); setProjectType("original"); setCreateOpen(false);
       setActiveProject(project); setView("project");
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
@@ -120,7 +125,7 @@ export default function App() {
           <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <div className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></div>; })}</div>
           <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {stageLabel(activeProject.stage)}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
         </section>
-        <MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />
+        {activeProject.project_type === "ttk_media" && activeProject.ttk_project_id ? <TtkMediaModule key={activeProject.id} projectId={activeProject.ttk_project_id} /> : activeProject.project_type === "materials" ? <MaterialsWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} /> : <MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />}
       </main>
     </div>;
   }
@@ -160,6 +165,6 @@ export default function App() {
         </article>)}</div> : <div className="empty-projects"><div className="empty-icon"><LayoutGrid size={22}/></div><h3>{search ? "Nenhum projeto encontrado" : filter === "completed" ? "Nenhum projeto concluído" : filter === "in_progress" ? "Nenhum projeto em andamento" : "Seu estúdio está pronto"}</h3><p>{search ? "Tente buscar por outro nome." : "Crie seu primeiro projeto para começar a organizar suas produções."}</p>{!search && filter !== "completed" && <button className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={16}/> Criar projeto</button>}</div>}
       </section>
     </main>
-    {createOpen && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setCreateOpen(false); }}><form className="create-modal" onSubmit={e => { e.preventDefault(); void createProject(); }}><div className="modal-top"><div className="modal-icon"><Plus size={19}/></div><button type="button" className="icon-button" onClick={() => setCreateOpen(false)}><X size={17}/></button></div><h2>Novo projeto</h2><p>Dê um nome para sua próxima criação. Você poderá organizar as etapas dentro do projeto.</p><label htmlFor="project-name">Nome do projeto</label><input id="project-name" autoFocus value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Ex.: Microaula sobre phrasal verbs" maxLength={80}/><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setCreateOpen(false)}>Cancelar</button><button type="submit" className="primary-button" disabled={!projectName.trim() || busy}>{busy ? "Criando..." : "Criar projeto"} <ArrowRight size={16}/></button></div></form></div>}
+    {createOpen && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setCreateOpen(false); }}><form className="create-modal" onSubmit={e => { e.preventDefault(); void createProject(); }}><div className="modal-top"><div className="modal-icon"><Plus size={19}/></div><button type="button" className="icon-button" onClick={() => setCreateOpen(false)}><X size={17}/></button></div><h2>Novo projeto</h2><p>Dê um nome para sua próxima criação. Você poderá organizar as etapas dentro do projeto.</p><label htmlFor="project-name">Nome do projeto</label><input id="project-name" autoFocus value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Ex.: Microaula sobre phrasal verbs" maxLength={80}/><label htmlFor="project-type">Tipo de projeto</label><select id="project-type" value={projectType} onChange={e => setProjectType(e.target.value as "materials" | "ttk_media" | "original")}><option value="materials">Materiais</option><option value="ttk_media">TTK-media</option><option value="original">Produção original</option></select><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setCreateOpen(false)}>Cancelar</button><button type="submit" className="primary-button" disabled={!projectName.trim() || busy}>{busy ? "Criando..." : "Criar projeto"} <ArrowRight size={16}/></button></div></form></div>}
   </div>;
 }
