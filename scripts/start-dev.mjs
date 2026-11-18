@@ -71,7 +71,7 @@ async function run(command, args, label) {
         "COMANDO: " + printable,
         "SAÍDA DE ERRO (stderr):",
         ""
-      ].join("\\n") + "\\n";
+      ].join("\n") + "\n";
       stderrLogStarted = true;
       stderrLogQueue = stderrLogQueue
         .then(() => appendFile(errorLog, header + value, "utf8"))
