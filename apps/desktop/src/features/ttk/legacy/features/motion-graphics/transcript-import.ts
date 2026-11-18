@@ -31,6 +31,7 @@ export function transcriptToCaptions(
     return {
       id: createId(),
       sourceClipId: context?.clipId,
+      captionSourceCueId: cue.id,
       isCaption: true,
       captionMode: words.length ? "karaoke" as const : translated ? "bilingual" as const : "source" as const,
       captionEnglish: cue.text,
