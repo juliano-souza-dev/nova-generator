@@ -870,6 +870,9 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
 
   function removeClip(id: string) {
     setClips(current => current.filter(clip => clip.id !== id));
+    // Captions generated from this exact timeline instance belong to it.
+    // Removing the clip must not leave orphaned subtitles on the timeline.
+    setMotion(current => current.filter(item => item.sourceClipId !== id));
     if (selectedId === id) setSelectedId(null);
     stopPlayback();
   }
@@ -1190,7 +1193,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
           <button className="secondary-action" onClick={splitAtPlayhead} disabled={!clips.some(clip => playheadMs > clip.timelineStartMs + 250 && playheadMs < clipEnd(clip) - 250)} title="Divide o clipe selecionado ou o clipe sob o cursor, seja vídeo ou áudio"><Scissors size={13}/> Dividir no cursor</button>
           <button className="secondary-action" onClick={() => selectedClip && duplicateClip(selectedClip)} disabled={!selectedClip}><Copy size={13}/> Duplicar</button>
           <button className="secondary-action danger-action" onClick={() => selectedClip && removeClip(selectedClip.id)} disabled={!selectedClip}><Trash2 size={13}/> Excluir selecionado</button>
-          <button className="secondary-action" onClick={() => { stopPlayback(); setClips([]); setSelectedId(null); setPlayheadMs(0); }} disabled={!clips.length}><Trash2 size={13}/> Limpar timeline</button>
+          <button className="secondary-action" onClick={() => { stopPlayback(); setClips([]); setMotion(current => current.filter(item => !item.sourceClipId)); setSelectedId(null); setPlayheadMs(0); }} disabled={!clips.length}><Trash2 size={13}/> Limpar timeline</button>
         </div>
         <label className="timeline-zoom">Zoom <input type="range" min="50" max="200" step="10" value={timelineZoom} onChange={event => setTimelineZoom(Number(event.target.value))}/></label>
       </div>
