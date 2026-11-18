@@ -31,7 +31,7 @@ export function transcriptToCaptions(
     return {
       id: createId(),
       isCaption: true,
-      captionMode: translated ? "bilingual" as const : words.length ? "karaoke" as const : "source" as const,
+      captionMode: words.length ? "karaoke" as const : translated ? "bilingual" as const : "source" as const,
       captionEnglish: cue.text,
       captionSourceLanguage: result.language || "auto",
       captionTranslationLanguage: translated ? "pt-BR" : "",
