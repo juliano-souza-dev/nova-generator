@@ -50,6 +50,8 @@ export const desktopApi = {
 
   getAssetPath: (projectId: string, assetId: string) =>
     invoke<string>("get_project_asset_path", { projectId, assetId }),
+  syncProjectAssetsForEditor: (projectId: string) =>
+    invoke<void>("ttk_sync_project_assets_for_editor", { projectId }),
 
   importMediaFiles: (projectId: string, paths: string[]) =>
     invoke<MediaAsset[]>("import_media_files", { projectId, paths }),
