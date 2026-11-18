@@ -43,7 +43,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     groqSettingsMessage, openGroqSettings, saveAndTestGroq
   } = useGroqSettings();
   const {
-    transcriptionAssetId,
+    transcriptionAssetId, transcriptionContext,
     transcriptionMode, setTranscriptionMode, transcriptionLanguage, setTranscriptionLanguage,
     transcriptionModel, setTranscriptionModel, transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
     localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage,
