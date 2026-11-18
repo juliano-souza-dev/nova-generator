@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { AudioLines, Check, ChevronRight, Cloud, Download, KeyRound, RefreshCw, Settings2, ShieldCheck, Volume2, WandSparkles } from "lucide-react";
+import { ArrowLeft, AudioLines, Check, ChevronRight, Cloud, Download, KeyRound, RefreshCw, Settings2, ShieldCheck, Volume2, WandSparkles } from "lucide-react";
 import "./Settings.css";
 
 type Dependency = { id: string; required: boolean; version?: string | null; installed: boolean; path?: string | null };
@@ -12,7 +12,7 @@ type Snapshot = { root: string; dependencies: Dependency[]; providers: Provider[
 
 type Tab = "dependencies" | "voices" | "providers";
 
-export default function Settings() {
+export default function Settings({ onBack }: { onBack: () => void }) {
   const [tab, setTab] = useState<Tab>("voices");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [busy, setBusy] = useState(false);
@@ -128,7 +128,7 @@ export default function Settings() {
 
   return <div className="settings-shell">
     <header className="settings-heading">
-      <div><div className="eyebrow">AMBIENTE DO NOVA</div><h1>Configurações</h1><p>Gerencie os recursos locais, as vozes e os serviços de inteligência artificial.</p></div>
+      <div className="settings-heading-main"><button className="settings-back" onClick={onBack}><ArrowLeft size={16}/> Voltar aos projetos</button><div className="eyebrow">AMBIENTE DO NOVA</div><h1>Configurações</h1><p>Gerencie os recursos locais, as vozes e os serviços de inteligência artificial.</p></div>
       <button className="settings-refresh" onClick={() => void refresh()} title="Atualizar"><RefreshCw size={16}/></button>
     </header>
 
