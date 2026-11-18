@@ -310,13 +310,17 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
   const activeVisualClip = visualClips.find(clip => playheadMs >= clip.timelineStartMs && playheadMs < clipEnd(clip)) ?? null;
   const activeVisualAsset = activeVisualClip ? assets.find(asset => asset.id === activeVisualClip.assetId) ?? null : null;
   const visualProgress = activeVisualClip ? Math.max(0, Math.min(1, (playheadMs - activeVisualClip.timelineStartMs) / Math.max(1, clipDuration(activeVisualClip)))) : 0;
+  // A clip without an explicitly configured transition must be fully visible.
+  // Applying an implicit fade-black here can leave the preview image invisible
+  // while its separate audio lane continues playing.
+  const transitionType = activeVisualClip?.transitionType;
   const transitionDuration = activeVisualClip?.transitionMs ?? 500;
-  const transitionType = activeVisualClip?.transitionType ?? "fade-black";
-  const transitionProgress = activeVisualClip && transitionDuration > 0
-    ? Math.max(0, Math.min(1, (playheadMs - activeVisualClip.timelineStartMs) / transitionDuration))
+  const hasVisualTransition = !!activeVisualClip && !!transitionType;
+  const transitionProgress = hasVisualTransition && transitionDuration > 0
+    ? Math.max(0, Math.min(1, (playheadMs - activeVisualClip!.timelineStartMs) / transitionDuration))
     : 1;
-  const previewOpacity = activeVisualClip && transitionType === "fade-black" ? transitionProgress : 1;
-  const transitionWhiteOpacity = activeVisualClip && (transitionType === "fade-white" || transitionType === "flash") ? 1 - transitionProgress : 0;
+  const previewOpacity = hasVisualTransition && transitionType === "fade-black" ? transitionProgress : 1;
+  const transitionWhiteOpacity = hasVisualTransition && (transitionType === "fade-white" || transitionType === "flash") ? 1 - transitionProgress : 0;
   const cameraMotion = activeVisualClip?.cameraMotion ?? "none";
   const cameraTransform = cameraMotion === "zoom-in" ? `scale(${1 + visualProgress * 0.16})` : cameraMotion === "zoom-out" ? `scale(${1.16 - visualProgress * 0.16})` : cameraMotion === "pan-left" ? `scale(1.12) translateX(${-visualProgress * 7}%)` : cameraMotion === "pan-right" ? `scale(1.12) translateX(${visualProgress * 7}%)` : cameraMotion === "pan-up" ? `scale(1.12) translateY(${-visualProgress * 7}%)` : cameraMotion === "pan-down" ? `scale(1.12) translateY(${visualProgress * 7}%)` : "none";
   const previewClip = activeVisualClip ?? selectedClip;
