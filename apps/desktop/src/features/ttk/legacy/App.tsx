@@ -42,10 +42,11 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     groqSettingsMessage, openGroqSettings, saveAndTestGroq
   } = useGroqSettings();
   const {
-    transcriptionAssetId, transcriptionContext,
+    transcriptionAssetId, setTranscriptionAssetId,
+    transcriptionContext, setTranscriptionContext,
     transcriptionMode, setTranscriptionMode, transcriptionLanguage, setTranscriptionLanguage,
     transcriptionModel, setTranscriptionModel, transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
-    localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage,
+    localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage, setTranscriptionMessage,
     installLocalTranscription, transcribeSelectedMedia,
     transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, openTranscriptionForClip, translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue
   } = useTranscription(activeProject, assets);
