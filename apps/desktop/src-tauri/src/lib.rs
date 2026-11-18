@@ -213,7 +213,7 @@ pub fn run() {
             nova_transcription::nova_transcribe_media, nova_transcription::nova_check_local_asr, nova_transcription::nova_install_local_asr,
             nova_translation::translate_project_subtitles, nova_translation::load_project_translations, nova_translation::save_project_translations,
             nova_translation::load_project_editorial_result, nova_translation::save_project_editorial_result, nova_translation::clear_project_editorial_result, nova_translation::approve_project_editorial_result,
-            translation_contract::prepare_external_translation_package,
+            translation_contract::prepare_external_translation_package, translation_contract::prepare_timeline_clip_external_translation_package,
             prediction_listening::prepare_prediction_listening_package, prediction_listening::load_prediction_listening_result,
             prediction_listening::save_prediction_listening_result,
             materials::load_project_materials, materials::save_project_materials,
