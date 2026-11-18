@@ -523,7 +523,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
 
   function splitSelectedCaption() {
     if (!selectedMotion?.isCaption) return;
-    const result = splitCaption(selectedMotion);
+    const result = splitCaption(selectedMotion, playheadMs);
     if (!result.ok) {
       setSceneSpecMessage(result.reason === "too-few-words"
         ? "Adicione pelo menos duas palavras para dividir a legenda."
