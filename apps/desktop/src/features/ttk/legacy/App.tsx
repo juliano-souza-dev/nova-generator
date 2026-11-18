@@ -47,7 +47,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     transcriptionMode, setTranscriptionMode, transcriptionLanguage, setTranscriptionLanguage,
     transcriptionModel, setTranscriptionModel, transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
     localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage,
-    transcriptionOpen, setTranscriptionOpen, installLocalTranscription, transcribeSelectedMedia,
+    installLocalTranscription, transcribeSelectedMedia,
     transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, openTranscriptionForClip, translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue
   } = useTranscription(activeProject, assets);
 
@@ -208,47 +208,12 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
         </> : activeProject ? <>
         {error&&!mediaModal&&<div className="error editor-error">{error}</div>}
         {notice&&<div className="notice"><CheckCircle2 size={15}/>{notice}</div>}
-        <EditorWorkspace projectId={activeProject.id} assets={assets} onAddMedia={()=>{setMediaTab("local");setMediaModal(true);}} onOpenTranscription={(assetId,context)=>openTranscriptionForClip(assetId,context??null)}/>
+        <EditorWorkspace projectId={activeProject.id} assets={assets} onAddMedia={()=>{setMediaTab("local");setMediaModal(true);}} onStartTranscription={openTranscriptionForClip} transcription={{transcriptionAssetId,transcriptionContext,transcriptionMode,setTranscriptionMode,transcriptionLanguage,setTranscriptionLanguage,transcriptionModel,setTranscriptionModel,transcriptionBusy,transcriptionProgress,setTranscriptionProgress,localAsrInstalled,localAsrChecking,localAsrInstalling,transcriptionMessage,installLocalTranscription,transcribeSelectedMedia,transcriptionResult,transcriptionTranslations,translationBusy,alignmentBusy,externalPackageBusy,externalSourceHash,translateTranscription,alignTranscriptionWords,downloadExternalPackage,importExternalTranslation,insertTranscription,updateTranscriptionCue}}/>
         </> : null}
         <footer>FRAME LAB · FEITO PARA IDEIAS EM MOVIMENTO <span>EARLY ACCESS · 0.2.0</span></footer>
       </div>
     </section>
     {creating&&<div className="backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setCreating(false);}}><form className="modal" onSubmit={createProject}><button type="button" className="close" onClick={()=>setCreating(false)}><X size={18}/></button><div className="modal-icon"><FolderPlus size={21}/></div><label className="eyebrow muted">NOVO PROJETO</label><h2>Vamos dar forma à ideia?</h2><p>Seu projeto será salvo no computador e poderá ser aberto novamente quando quiser.</p><label className="field-label" htmlFor="project-name">Nome do projeto</label><input id="project-name" autoFocus maxLength={80} value={name} onChange={e=>setName(e.target.value)} placeholder="Ex.: Inglês em 1 minuto"/><div className="canvas-info"><span>Canvas vertical</span><b>1080 × 1920 · 30 FPS</b></div><button className="primary submit" disabled={!name.trim()||busy}>{busy?"Criando...":"Criar projeto"} <ArrowUpRight size={16}/></button></form></div>}
-    {transcriptionOpen&&activeProject&&<div className="backdrop transcription-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!transcriptionBusy)setTranscriptionOpen(false);}}>
-      <section className="transcription-dialog" role="dialog" aria-modal="true" aria-labelledby="transcription-title">
-        <div className="transcription-dialog-top"><div className="transcription-heading"><div><label className="eyebrow muted">RECONHECIMENTO DE FALA</label><h3 id="transcription-title">Gerar legendas automaticamente</h3><p>Configure a transcrição e envie as falas para a timeline como legendas editáveis.</p></div><span className="transcription-chip"><Mic size={13}/> WHISPER</span></div><button className="close" type="button" title="Fechar" disabled={transcriptionBusy} onClick={()=>setTranscriptionOpen(false)}><X size={18}/></button></div>
-        <div className="transcription-controls">
-          <div className="transcription-clip-source"><span>MÍDIA DO CLIPE SELECIONADO</span><strong>{assets.find(asset=>asset.id===transcriptionAssetId)?.name ?? "Nenhum clipe selecionado"}</strong>{transcriptionContext&&<small>Trecho: {formatTimecode(transcriptionContext.sourceStartMs)} – {formatTimecode(transcriptionContext.sourceEndMs)}</small>}</div>
-          <label>Processamento<select value={transcriptionMode} onChange={event=>setTranscriptionMode(event.target.value as "auto"|"cloud"|"local")}><option value="auto">Automático (Groq + fallback local)</option><option value="cloud">Somente Groq na nuvem</option><option value="local">Somente local (privado)</option></select></label>
-          <label>Idioma<select value={transcriptionLanguage} onChange={event=>setTranscriptionLanguage(event.target.value)}><option value="">Detectar automaticamente</option><option value="pt">Português</option><option value="en">Inglês</option><option value="es">Espanhol</option><option value="fr">Francês</option></select></label>
-          <label>Modelo local<select value={transcriptionModel} onChange={event=>setTranscriptionModel(event.target.value)}><option value="tiny">Tiny · mais rápido</option><option value="base">Base · leve</option><option value="small">Small · equilibrado</option><option value="medium">Medium · mais preciso</option><option value="large-v3">Large v3 · maior qualidade</option></select></label>
-          <button className="primary transcription-start" disabled={!transcriptionAssetId||!transcriptionContext||transcriptionBusy||Boolean(transcriptionResult)||(!localAsrInstalled&&transcriptionMode==="local")} onClick={()=>void transcribeSelectedMedia()}>{transcriptionBusy?<><LoaderCircle className="spin" size={15}/> Transcrevendo...</>:<><Captions size={15}/> Transcrever clipe</>}</button>
-        </div>
-        <div className="transcription-footer"><span>{localAsrChecking?"Verificando suporte local...":localAsrInstalled?<><CheckCircle2 size={13}/> Faster-Whisper instalado</>:<><Info size={13}/> Processamento local ainda não instalado</>}</span>{!localAsrInstalled&&<button className="secondary-action" disabled={localAsrChecking||localAsrInstalling} onClick={()=>void installLocalTranscription()}>{localAsrInstalling?<><LoaderCircle className="spin" size={13}/> Instalando...</>:<><Download size={13}/> Instalar suporte local</>}</button>}</div>
-        {transcriptionResult&&<div className="transcription-review">
-          <div className="transcription-review-head"><strong>1. Revisar transcrição</strong><span>{transcriptionResult.cues.length} trechos</span></div>
-          {transcriptionResult.cues.map((cue,index)=><div className="transcription-review-cue" key={cue.id}>
-            <small>{index+1} · {formatTimecode(cue.startMs)} – {formatTimecode(cue.endMs)}</small>
-            <textarea aria-label={"Texto reconhecido "+(index+1)} value={cue.text} onChange={event=>updateTranscriptionCue(cue.id,event.target.value)} />
-            {transcriptionTranslations.find(item=>item.id===cue.id)&&<p className="transcription-review-translation">{transcriptionTranslations.find(item=>item.id===cue.id)?.translation}</p>}
-          </div>)}
-          <div className="transcription-next-steps">
-            <div className="transcription-next-steps-heading"><strong>2. Processar a transcrição</strong><small>Tradução e alinhamento são etapas independentes. Execute uma ou ambas antes de inserir.</small></div>
-            <div className="transcription-review-actions">
-              <button className="secondary-action" disabled={translationBusy||alignmentBusy} onClick={()=>void translateTranscription()}>{translationBusy?<LoaderCircle className="spin" size={14}/>:<Languages size={14}/>} Traduzir para português</button>
-              <button className="secondary-action" disabled={alignmentBusy||translationBusy} onClick={()=>void alignTranscriptionWords()}>{alignmentBusy?<LoaderCircle className="spin" size={14}/>:<Captions size={14}/>} Alinhar palavra por palavra (WhisperX)</button>
-              <button className="secondary-action" disabled={externalPackageBusy||translationBusy||alignmentBusy} onClick={()=>void downloadExternalPackage()}>{externalPackageBusy?<LoaderCircle className="spin" size={14}/>:<Download size={14}/>} Baixar TXT para IA externa</button>
-              <button className="secondary-action" disabled={!externalSourceHash||translationBusy||alignmentBusy} onClick={()=>transcriptionTranslationInput.current?.click()}><Upload size={14}/> Importar JSON da IA</button>
-              <input ref={transcriptionTranslationInput} type="file" accept=".json,application/json" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value="";void importExternalTranslation(file);}}/>
-            </div>
-            <div className="transcription-review-actions transcription-insert-action"><button className="primary" disabled={translationBusy||alignmentBusy||externalPackageBusy} onClick={insertTranscription}><CheckCircle2 size={14}/> 3. Inserir na timeline</button></div>
-          </div>
-        </div>}
-        {transcriptionBusy&&transcriptionProgress&&<div className="transcription-progress"><div className="progress-heading"><b>{transcriptionProgress.message}</b><span>{Math.round(transcriptionProgress.percent)}%</span></div><div className="progress-track"><i style={{width:Math.max(0,Math.min(100,transcriptionProgress.percent))+"%"}}/></div>{transcriptionProgress.totalChunks>0&&<small>Blocos concluídos: {transcriptionProgress.completedChunks} de {transcriptionProgress.totalChunks}</small>}</div>}
-        {transcriptionMessage&&<div className="transcription-message" role="status">{transcriptionMessage}</div>}
-        <small className="transcription-privacy">Somente o modo local mantém o áudio no computador. Os modos Automático e Groq enviam o áudio à API da Groq; no Automático, o processamento local é usado como fallback. O modelo local é baixado na primeira utilização. O arquivo original não é modificado.</small>
-      </section>
-    </div>}
     {mediaModal&&activeProject&&<div className="backdrop media-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setMediaModal(false);}}><section className="media-modal">
       <button type="button" className="close" onClick={()=>!busy&&setMediaModal(false)}><X size={18}/></button><label className="eyebrow muted">ADICIONAR À BIBLIOTECA</label><h2>Importar mídia</h2><p className="media-modal-subtitle">Destino: <strong>{activeProject.name}</strong></p>
       <div className="media-tabs"><button className={mediaTab==="local"?"active":""} onClick={()=>{setMediaTab("local");setError("");}}><FolderOpen size={15}/> Arquivos locais</button><button className={mediaTab==="youtube"?"active":""} onClick={()=>{setMediaTab("youtube");setError("");}}><Youtube size={15}/> YouTube</button></div>
