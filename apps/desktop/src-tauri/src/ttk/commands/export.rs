@@ -304,7 +304,6 @@ pub async fn export_timeline(
         }
 
         for (position,(input_index,overlay)) in overlay_inputs.iter().enumerate() {
-            let label=format!("image_overlay{position}");
             let start=overlay.start_ms as f64/1000.0;
             let end=overlay.end_ms as f64/1000.0;
             let width=overlay.width.clamp(1,1080);
