@@ -525,18 +525,16 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
     if (!selectedMotion?.isCaption) return;
     const result = splitCaption(selectedMotion);
     if (!result.ok) {
-      setTranslationMessage(result.reason === "too-few-words"
+      setSceneSpecMessage(result.reason === "too-few-words"
         ? "Adicione pelo menos duas palavras para dividir a legenda."
         : "O trecho é curto demais para ser dividido com segurança.");
-      setTranslationPhase("Falha identificada");
       return;
     }
     setCaptions(current => [...current.map(item => item.id === selectedMotion.id ? result.first : item), result.second]);
     setMotionOrder(current => [...current.filter(id => id !== result.second.id), result.second.id]);
     setSelectedMotionId(result.second.id);
     setPlayheadMs(result.splitAtMs);
-    setTranslationMessage("Legenda dividida em dois blocos.");
-    setTranslationPhase("Concluído");
+    setSceneSpecMessage("Legenda dividida em dois blocos.");
   }
 
   function mergeSelectedCaption(direction: "previous" | "next") {
@@ -553,8 +551,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
       .map(item => item.id === selectedMotion.id ? merged : item));
     setSelectedMotionId(selectedMotion.id);
     setPlayheadMs(merged.startMs);
-    setTranslationMessage("Legendas mescladas em um único bloco.");
-    setTranslationPhase("Concluído");
+    setSceneSpecMessage("Legendas mescladas em um único bloco.");
   }
 
   function duplicateSelectedCaption() {
@@ -573,16 +570,14 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
     if (!selectedIds.size) return;
     const style = captionStyleFrom(selectedMotion);
     setCaptions(current => current.map(item => selectedIds.has(item.id) ? { ...item, ...style } : item));
-    setTranslationMessage("Estilo aplicado às " + selectedIds.size + " legendas selecionadas.");
-    setTranslationPhase("Concluído");
+    setSceneSpecMessage("Estilo aplicado às " + selectedIds.size + " legendas selecionadas.");
   }
 
   function applySelectedCaptionStyleToAll() {
     if (!selectedMotion?.isCaption) return;
     const style = captionStyleFrom(selectedMotion);
     setCaptions(current => current.map(item => ({ ...item, ...style })));
-    setTranslationMessage("Estilo aplicado a todas as legendas.");
-    setTranslationPhase("Concluído");
+    setSceneSpecMessage("Estilo aplicado a todas as legendas.");
   }
 
   function applySceneTemplate(templateId: string) {
