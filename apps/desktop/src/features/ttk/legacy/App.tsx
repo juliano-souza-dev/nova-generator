@@ -35,7 +35,6 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     inspectYoutube, downloadYoutube, confirmYoutubeTrim
   } = useYoutubeImport({ project: activeProject, setAssets, setBusy, setError, setNotice, setMediaModal });
   const sceneSpecProjectInput = useRef<HTMLInputElement|null>(null);
-  const transcriptionTranslationInput = useRef<HTMLInputElement|null>(null);
   const {
     groqSettingsOpen, setGroqSettingsOpen,
     groqModel, groqMaxChars, setGroqMaxChars, groqMaxCues, setGroqMaxCues,
