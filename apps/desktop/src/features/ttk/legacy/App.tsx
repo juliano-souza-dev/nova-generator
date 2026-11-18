@@ -47,7 +47,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     transcriptionModel, setTranscriptionModel, transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
     localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage,
     transcriptionOpen, setTranscriptionOpen, installLocalTranscription, transcribeSelectedMedia,
-    transcriptionResult, transcriptionTranslations, translationBusy, translateTranscription, insertTranscription
+    transcriptionResult, transcriptionTranslations, translationBusy, translateTranscription, insertTranscription, updateTranscriptionCue
   } = useTranscription(activeProject, assets);
 
   async function refresh() {
@@ -228,7 +228,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
           <div className="transcription-review-head"><strong>Revisar transcrição</strong><span>{transcriptionResult.cues.length} trechos</span></div>
           {transcriptionResult.cues.map((cue,index)=><div className="transcription-review-cue" key={cue.id}>
             <small>{index+1} · {formatTimecode(cue.startMs)} – {formatTimecode(cue.endMs)}</small>
-            <textarea aria-label={"Texto reconhecido "+(index+1)} value={cue.text} onChange={event=>{const value=event.target.value;/* cue edits are committed through the hook state below */}} readOnly />
+            <textarea aria-label={"Texto reconhecido "+(index+1)} value={cue.text} onChange={event=>updateTranscriptionCue(cue.id,event.target.value)} />
             {transcriptionTranslations.find(item=>item.id===cue.id)&&<p className="transcription-review-translation">{transcriptionTranslations.find(item=>item.id===cue.id)?.translation}</p>}
           </div>)}
           <div className="transcription-review-actions">
