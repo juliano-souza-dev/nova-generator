@@ -20,12 +20,15 @@ export type CueTranslation = { id: string; translation: string; wordGroups?: Tra
 export type TranscriptWord = { text: string; startMs: number; endMs: number };
 export type TranscriptCue = { id: string; text: string; startMs: number; endMs: number; words: TranscriptWord[] };
 export type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: TranscriptCue[] };
+export type AlignedClipCue = { id: string; text: string; startMs: number; endMs: number; words: TranscriptWord[]; wordAlignment: string };
 export type TranscriptionProgress = { projectId: string; stage: string; percent: number; completedChunks: number; totalChunks: number; message: string };
 
 export const desktopApi = {
   getGroqSettings: () => invoke<GroqSettings>("get_groq_settings"),
   transcribeMedia: (projectId: string, assetId: string, mode: "auto" | "cloud" | "local", language: string, localModel: string) =>
     runTrackedTask("transcription", "Transcrição de mídia", () => invoke<TranscriptResult>("transcribe_media", { projectId, assetId, mode, language: language || null, localModel })),
+  alignTimelineClip: (projectId: string, assetId: string, sourceStartMs: number, sourceEndMs: number, language: string, cues: Array<{id:string;text:string;startMs:number;endMs:number}>) =>
+    runTrackedTask("transcription", "Alinhamento do clipe com WhisperX", () => invoke<AlignedClipCue[]>("align_timeline_clip_cues", { projectId, assetId, sourceStartMs, sourceEndMs, language, cues })),
   checkLocalAsr: () => invoke<boolean>("check_local_asr"),
   installLocalAsr: () => runTrackedTask("installation", "Instalação do suporte de transcrição local", () => invoke<string>("install_local_asr")),
   saveGroqSettings: (settings: { maxChunkChars: number; maxCuesPerChunk: number; delayMs: number; targetLanguage: string }) =>
