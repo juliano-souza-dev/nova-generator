@@ -67,37 +67,6 @@ fn migrate_legacy_webview_data(app: &tauri::App) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-fn resolve_media_shared_directory(app: &tauri::App) -> Result<Option<PathBuf>, String> {
-    let mut candidates = Vec::<PathBuf>::new();
-    if let Some(path) = std::env::var_os("SHARED_RUNTIME_CONFIG")
-        .or_else(|| std::env::var_os("NOVA_GENERATOR_SHARED_CONFIG")) {
-        candidates.push(PathBuf::from(path));
-    }
-    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
-        candidates.push(PathBuf::from(local_app_data)
-            .join("JulianoDev").join("SharedRuntime").join("applications")
-            .join("ttk-media").join("shared.config.json"));
-    }
-    let mut seen = std::collections::HashSet::new();
-    for candidate in candidates {
-        let path = if candidate.is_dir() { candidate.join("shared.config.json") } else { candidate };
-        if !seen.insert(path.clone()) || !path.is_file() { continue; }
-        let raw = fs::read(&path).map_err(|error| format!("Não foi possível ler o vínculo Shared Runtime em {}: {error}", path.display()))?;
-        let manifest: serde_json::Value = serde_json::from_slice(&raw)
-            .map_err(|error| format!("Manifesto Shared Runtime inválido em {}: {error}", path.display()))?;
-        if manifest.get("schemaVersion").and_then(|value| value.as_str()) != Some("1.0") {
-            return Err("A versão do shared.config.json não é compatível. Atualize o vínculo pelo Shared Runtime Manager.".into());
-        }
-        if manifest.pointer("/shared/enabled").and_then(|value| value.as_bool()) != Some(true) { return Ok(None); }
-        let Some(directory) = manifest.pointer("/shared/directories/mediaShared").and_then(|value| value.as_str()) else { return Ok(None); };
-        let directory = PathBuf::from(directory);
-        if !directory.is_absolute() { return Err("O caminho mediaShared precisa ser absoluto.".into()); }
-        fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-        return Ok(Some(directory));
-    }
-    let _ = app;
-    Ok(None)
-}
 
 pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_data_directory = app.path().app_data_dir()?.join("ttk");
@@ -107,9 +76,9 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let log_guard = logging::initialize(&app_data_directory.join("logs")).map_err(std::io::Error::other)?;
     let projects_directory = app_data_directory.join("projects");
     fs::create_dir_all(&projects_directory)?;
-    let media_shared_directory = match resolve_media_shared_directory(app) {
-        Ok(directory) => directory,
-        Err(error) => { tracing::error!("Não foi possível resolver mediaShared: {error}"); None }
+    let media_shared_directory = match crate::shared_runtime::resolve_media_shared_directory(app.handle()) {
+        Ok(directory) => Some(directory),
+        Err(error) => { tracing::error!("Não foi possível resolver mediaShared pelo Shared Runtime integrado do Nova: {error}"); None }
     };
     let youtube_cache = YoutubeCache::new(media_shared_directory);
     let sound_library_directory = app_data_directory.join("sound-library");
