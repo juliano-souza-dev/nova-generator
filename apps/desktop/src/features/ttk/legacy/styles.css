@@ -700,3 +700,12 @@
 .ttk-module{width:100vw;height:100vh;min-width:0;min-height:0;overflow:hidden;background:#101114}
 .ttk-module .shell.project-shell{width:100%;height:100%;min-height:0}
 .ttk-module .ttk-home-back{width:34px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+
+
+/* Etapas de tradução e alinhamento dentro do popup de transcrição */
+.transcription-next-steps{display:grid;gap:9px;margin-top:13px;padding:11px;border:1px solid #484052;border-radius:8px;background:#211d29}
+.transcription-next-steps-heading{display:grid;gap:4px}
+.transcription-next-steps-heading strong{color:#eee8f5;font:600 11px 'Space Grotesk',sans-serif}
+.transcription-next-steps-heading small{color:#a49cac;font-size:9px;line-height:1.5}
+.transcription-next-steps .transcription-review-actions{padding-top:8px}
+.transcription-next-steps .transcription-insert-action{justify-content:flex-end;padding-top:0;border-top:0}
