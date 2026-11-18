@@ -30,7 +30,7 @@ pub struct EncryptedCredential {
     pub value: String,
 }
 
-/// Provider data copied into an application's local shared.config.json.
+/// Provider data copied into an application's local libs.json.
 /// The credential remains encrypted until the consuming backend asks to use it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -365,7 +365,7 @@ pub fn providers_for_app(app: &str) -> Result<Vec<ProviderRuntimeConfig>> {
         .collect())
 }
 
-/// Reads a provider configuration from the application's own shared.config.json.
+/// Reads a provider configuration from the application's own libs.json.
 /// The application ID is checked to prevent accidentally loading another project's credentials.
 pub fn get_provider_settings_from_config(
     config_path: impl AsRef<Path>,
