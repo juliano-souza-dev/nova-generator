@@ -8,11 +8,11 @@ import ShadowingEditor from "./ShadowingEditor";
 import PredictionListening from "./PredictionListening";
 import MaterialsWorkspace from "./MaterialsWorkspace";
 
-export type MediaEditorCue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; wordAlignment?: string | null; wordAlignmentHash?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
+type Cue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; wordAlignment?: string | null; wordAlignmentHash?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
 type AlignmentProgress = { projectId: string; assetId: string; completed: number; total: number; message: string };
 type AlignmentResult = { aligned: number; skipped: number; total: number; language?: string | null };
-type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: MediaEditorCue[] };
-export type MediaEditorTranslationCue = { id: string; startMs: number; endMs: number; text: string };
+type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: Cue[] };
+type TranslationCue = { id: string; startMs: number; endMs: number; text: string };
 type SharedRuntimeStatus = { providers: { id: string; name: string; model: string }[] };
 type Asset = { id: string; name: string; durationMs?: number | null; sourceStartMs?: number | null; sourceEndMs?: number | null };
 function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: number) {
@@ -64,15 +64,15 @@ const fmt = (ms: number) => {
   return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0") + "." + String(Math.floor(ms % 1000 / 100));
 };
 
-export default function MediaEditor({ projectId, asset, onClose, onProjectUpdated, onApplyCaptions }: { projectId: string; asset: Asset; onClose: () => void; onProjectUpdated?: () => void; onApplyCaptions?: (payload: { cues: MediaEditorCue[]; translations: MediaEditorTranslationCue[] }) => void }) {
+export default function MediaEditor({ projectId, asset, onClose, onProjectUpdated }: { projectId: string; asset: Asset; onClose: () => void; onProjectUpdated?: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const onProjectUpdatedRef = useRef(onProjectUpdated);
   useEffect(() => { onProjectUpdatedRef.current = onProjectUpdated; }, [onProjectUpdated]);
   const translationFileInput = useRef<HTMLInputElement>(null);
   const timelineDragMoved = useRef(false);
   const [src, setSrc] = useState("");
-  const [cues, setCues] = useState<MediaEditorCue[]>([]);
-  const [translations, setTranslations] = useState<MediaEditorTranslationCue[]>([]);
+  const [cues, setCues] = useState<Cue[]>([]);
+  const [translations, setTranslations] = useState<TranslationCue[]>([]);
   const [editorialResult, setEditorialResult] = useState<Record<string, any> | null>(null);
   const [translationDirty, setTranslationDirty] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -127,8 +127,8 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
       try {
         const [path, stored, storedTranslations] = await Promise.all([
           invoke<string>("open_project_media", { projectId, assetId: asset.id }),
-          invoke<MediaEditorCue[]>("load_project_subtitles", { projectId, assetId: asset.id }),
-          invoke<MediaEditorTranslationCue[]>("load_project_translations", { projectId, assetId: asset.id }).catch(() => [] as MediaEditorTranslationCue[])
+          invoke<Cue[]>("load_project_subtitles", { projectId, assetId: asset.id }),
+          invoke<TranslationCue[]>("load_project_translations", { projectId, assetId: asset.id }).catch(() => [] as TranslationCue[])
         ]);
         const storedEditorial = await invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id, cues: stored }).catch(() => null);
         if (!alive) return;
@@ -214,14 +214,14 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
   function addCue() {
     const startMs = Math.max(0, Math.floor(current / 100) * 100);
     const endMs = Math.min(duration || startMs + 2500, startMs + 2500);
-    const cue: MediaEditorCue = { id: `cue-${Date.now()}-${cues.length}`, startMs, endMs: Math.max(startMs + 100, endMs), text: "" };
+    const cue: Cue = { id: `cue-${Date.now()}-${cues.length}`, startMs, endMs: Math.max(startMs + 100, endMs), text: "" };
     setCues(items => [...items, cue].sort((a, b) => a.startMs - b.startMs));
     setEditorialResult(null);
     setSelected(cue.id);
     setSaved(false);
     setDirty(true);
   }
-  function updateCue(id: string, patch: Partial<MediaEditorCue>) {
+  function updateCue(id: string, patch: Partial<Cue>) {
     const invalidatesAlignment = "text" in patch || "startMs" in patch || "endMs" in patch;
     setCues(items => items.map(c => c.id === id ? { ...c, ...patch, ...(invalidatesAlignment ? { words: [], wordAlignment: null, wordAlignmentHash: null } : {}) } : c).sort((a, b) => a.startMs - b.startMs));
     setEditorialResult(null);
@@ -280,7 +280,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
     setTranslationDirty(true);
   }
 
-  function beginCueDrag(event: ReactPointerEvent<HTMLButtonElement>, cue: MediaEditorCue, mode: "move" | "start" | "end") {
+  function beginCueDrag(event: ReactPointerEvent<HTMLButtonElement>, cue: Cue, mode: "move" | "start" | "end") {
     if (saving || aligning || !duration) return;
     event.preventDefault();
     event.stopPropagation();
@@ -357,14 +357,14 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
       return;
     }
 
-    const secondCue: MediaEditorCue = {
+    const secondCue: Cue = {
       ...chosen,
       id: `cue-${Date.now()}-${cues.length}-split`,
       startMs: splitMs,
       text: secondText,
       words: secondWords
     };
-    const firstCue: MediaEditorCue = {
+    const firstCue: Cue = {
       ...chosen,
       endMs: splitMs,
       text: firstText,
@@ -391,9 +391,8 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
 
   async function unlockShadowingStage(hasCues = cues.length) {
     if (hasCues <= 0) return;
-    await invoke("update_project_stage", { id: projectId, stage: "Shadowing" })
-      .then(() => onProjectUpdated?.())
-      .catch(error => console.warn("Não foi possível atualizar a etapa do projeto para Shadowing:", error));
+    await invoke("update_project_stage", { id: projectId, stage: "Shadowing" });
+    onProjectUpdated?.();
   }
 
   async function save(): Promise<boolean> {
@@ -478,7 +477,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         invoke<AlignmentResult>("align_project_subtitles", {
           projectId, assetId: asset.id, language: transcriptionLanguage || null
         }));
-      const stored = await invoke<MediaEditorCue[]>("load_project_subtitles", { projectId, assetId: asset.id });
+      const stored = await invoke<Cue[]>("load_project_subtitles", { projectId, assetId: asset.id });
       setCues(stored);
       setSaved(true); setDirty(false);
       setAlignmentInfo(result.aligned
@@ -488,7 +487,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
       setError(String(e));
       setAlignmentInfo("O alinhamento foi interrompido. Os blocos concluídos anteriormente continuam salvos.");
       try {
-        const stored = await invoke<MediaEditorCue[]>("load_project_subtitles", { projectId, assetId: asset.id });
+        const stored = await invoke<Cue[]>("load_project_subtitles", { projectId, assetId: asset.id });
         setCues(stored);
         setSaved(true); setDirty(false);
       } catch { /* Preserve the current editor state if reload fails. */ }
@@ -504,7 +503,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
     setTranslating(true); setError(""); setTranslationInfo(""); setTranslationStream(null);
     try {
       const result = await runTrackedTask("translation", "Traduzir transcrição para PT-BR", () =>
-        invoke<MediaEditorTranslationCue[]>("translate_project_subtitles", { projectId, assetId: asset.id, cues, includeWordTranslations, includeSemanticUnits }));
+        invoke<TranslationCue[]>("translate_project_subtitles", { projectId, assetId: asset.id, cues, includeWordTranslations, includeSemanticUnits }));
       setTranslations(result);
       setEditorialResult(await invoke<Record<string, any> | null>("load_project_editorial_result", { projectId, assetId: asset.id, cues }));
       setTranslationDirty(true); setDirty(true); setSaved(false);
@@ -874,7 +873,6 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         <div className="media-editor-title"><span className="eyebrow">EDITOR DE MÍDIA</span><strong>{asset.name}</strong></div>
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
-          {onApplyCaptions && <button className="secondary-button" onClick={async () => { if (await save()) onApplyCaptions({ cues, translations }); }} disabled={!saved || saving || loading || cues.length === 0} title="Adicionar as legendas e traduções desta mídia à timeline do TTK Creator"><Captions size={15}/> Enviar para timeline</button>}
           <button className="secondary-button" onClick={() => setShadowingOpen(true)} disabled={!saved || cues.length === 0} title={!saved ? "Salve a Editorial para liberar o Shadowing" : "Preparar blocos para Shadowing"}><AudioLines size={15}/> Shadowing</button>
           <button className="secondary-button" onClick={() => setPredictionListeningOpen(true)} disabled={!predictionListeningReady || dirty || translationDirty || loading} title={!shadowingComplete ? "Conclua e salve o Shadowing para liberar este módulo" : !predictionListeningReady ? "Alinhe com WhisperX todos os blocos selecionados no Shadowing" : "Gerar desafios a partir dos blocos selecionados no Shadowing"}><Languages size={15}/> Prediction Listening</button>
           <button className="secondary-button" onClick={() => { video.current?.pause(); setMaterialsOpen(true); }} disabled={!predictionListeningReady || dirty || translationDirty || loading} title="Prepare os cards Anki, gere a entrada para IA externa e os áudios"><Layers3 size={15}/> Materiais</button>
