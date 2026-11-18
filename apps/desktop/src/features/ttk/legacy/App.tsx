@@ -93,6 +93,8 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
         context: transcriptionContext
       }
     }));
+    setTranscriptionEditorAsset(null);
+    setTranscriptionContext(null);
   }
 
   async function refresh() {
