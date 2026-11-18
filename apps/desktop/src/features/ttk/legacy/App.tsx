@@ -268,14 +268,14 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
           <div><label className="eyebrow muted">EDIÇÃO DO TRECHO</label><h2 id="youtube-trim-title">Escolha o trecho do vídeo</h2><p>{youtubeCache.title}</p></div>
           <button className="close" type="button" disabled={trimBusy} onClick={()=>setYoutubeCache(null)}><X size={18}/></button>
         </header>
-        <video ref={trimVideoRef} className="youtube-trim-preview" src={convertFileSrc(youtubeCache.filePath)} controls preload="metadata"
-          onTimeUpdate={event=>{const ms=event.currentTarget.currentTime*1000;if(ms<trimStartMs||ms>trimEndMs)event.currentTarget.pause();}}
-          onLoadedMetadata={event=>{event.currentTarget.currentTime=trimStartMs/1000;}} />
+        <div className="youtube-format-preview" style={{aspectRatio:outputRatio==="9:16"?"9 / 16":outputRatio==="16:9"?"16 / 9":outputRatio==="1:1"?"1 / 1":"auto"}}>
+          <video ref={trimVideoRef} className="youtube-trim-preview" src={convertFileSrc(youtubeCache.filePath)} controls preload="metadata"
+            onTimeUpdate={event=>{const ms=event.currentTarget.currentTime*1000;if(ms<trimStartMs||ms>trimEndMs)event.currentTarget.pause();}}
+            onLoadedMetadata={event=>{event.currentTarget.currentTime=trimStartMs/1000;}} />
+        </div>
         <section className="youtube-format-panel">
           <div><label className="eyebrow muted">FORMATO DE SAÍDA</label><h3>Prepare para a plataforma</h3><p>Escolha o formato antes de abrir o editor. A cena original será preservada, sem cortes.</p></div>
-          <div className="youtube-format-options">
-            {(["9:16","16:9","1:1","original"] as const).map(value=><button type="button" key={value} className={outputRatio===value?"selected":""} onClick={()=>setOutputRatio(value)}>{value==="original"?"Original":value}</button>)}
-          </div>
+          <div className="youtube-format-options"><button type="button" className="selected" aria-pressed="true">9:16 · Vertical</button></div>
           {outputRatio!=="original"&&<div className="youtube-frame-options">
             <label>Como preencher o espaço
               <select value={frameMode} onChange={event=>setFrameMode(event.target.value as "blur"|"contain"|"color")}>
@@ -286,7 +286,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
             </label>
             {frameMode==="color"&&<label className="youtube-color-picker">Cor <input type="color" value={frameColor} onChange={event=>setFrameColor(event.target.value)}/></label>}
           </div>}
-          <small className="youtube-format-hint">A opção 9:16 gera vídeo vertical em 1080 × 1920. O conteúdo principal permanece inteiro e centralizado.</small>
+          <small className="youtube-format-hint">O editor do TTK trabalha em 9:16 (1080 × 1920). Outros formatos exigem a adaptação do canvas e da exportação completa, por isso não são oferecidos aqui para evitar cortes inesperados.</small>
         </section>
         <div className="youtube-trim-time"><span>INÍCIO <b>{formatTimecode(trimStartMs)}</b></span><span>FIM <b>{formatTimecode(trimEndMs)}</b></span><span>DURAÇÃO <b>{formatTimecode(Math.max(0,trimEndMs-trimStartMs))}</b></span></div>
         <div className="youtube-trim-range">
@@ -298,7 +298,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
         <div className="youtube-trim-timeline"><div className="youtube-trim-track"><i style={{left:((trimStartMs/Math.max(1,youtubeCache.durationMs??trimEndMs))*100)+"%",width:((Math.max(0,trimEndMs-trimStartMs)/Math.max(1,youtubeCache.durationMs??trimEndMs))*100)+"%"}}/></div><small>Arraste os controles para definir o início e o fim. O original não será alterado.</small></div>
         <div className="youtube-cache-note"><Info size={14}/> Original guardado temporariamente. O prazo de 7 dias é renovado quando você tentar baixar este mesmo vídeo novamente.</div>
         {error&&<div className="error modal-error">{error}</div>}
-        <div className="modal-footer"><button className="cancel-button" disabled={trimBusy} onClick={()=>setYoutubeCache(null)}>Deixar para depois</button><button className="primary" disabled={trimBusy||trimEndMs-trimStartMs<300} onClick={()=>void confirmYoutubeTrim()}>{trimBusy?<><LoaderCircle className="spin" size={15}/> Gerando trecho...</>:<><CheckCircle2 size={15}/> Confirmar e importar trecho</>}</button></div>
+        <div className="modal-footer"><button className="cancel-button" disabled={trimBusy} onClick={()=>setYoutubeCache(null)}>Deixar para depois</button><button className="primary" disabled={trimBusy||trimEndMs-trimStartMs<300} onClick={()=>void confirmYoutubeTrim()}>{trimBusy?<><LoaderCircle className="spin" size={15}/> Preparando vídeo...</>:<><CheckCircle2 size={15}/> Confirmar e preparar vídeo</>}</button></div>
       </section>
     </div>}
     {groqSettingsOpen&&<div className="backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!groqSettingsBusy)setGroqSettingsOpen(false);}}><section className="groq-settings-modal">
