@@ -1,4 +1,4 @@
-use crate::shared_runtime_manager;
+use crate::{shared_runtime, shared_runtime_manager};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -113,31 +113,10 @@ fn shared_manifest(app: &AppHandle) -> Result<Option<(PathBuf, serde_json::Value
 /// The Shared Runtime Manager does not need to be open.
 fn shared_provider_settings(
     app: &AppHandle,
-) -> Result<(PathBuf, String, shared_runtime_manager::api::ProviderRuntimeConfig), String> {
-    let (config_path, manifest) = shared_manifest(app)?.ok_or_else(|| {
-        "O shared.config.json não foi encontrado. Registre o TTK Creator no Shared Runtime Manager."
-            .to_string()
-    })?;
-
-    let app_id = manifest
-        .pointer("/application/id")
-        .and_then(|value| value.as_str())
-        .ok_or("O manifesto Shared Runtime não identifica esta aplicação.")?
-        .to_owned();
-
-    let provider = shared_runtime_manager::api::get_provider_settings_from_config(
-        &config_path,
-        &app_id,
-        "groq",
-    )
-    .map_err(|error| {
-        format!(
-            "Não foi possível carregar a configuração autorizada da Groq pelo Shared Runtime: {error}"
-        )
-    })?;
-
-    Ok((config_path, app_id, provider))
+) -> Result<shared_runtime_manager::api::ProviderRuntimeConfig, String> {
+    shared_runtime::resolve_provider_settings(app, "groq")
 }
+
 
 fn read_settings(app: &AppHandle) -> Result<GroqSettings, String> {
     let path = settings_path(app)?;
@@ -155,7 +134,7 @@ fn read_settings(app: &AppHandle) -> Result<GroqSettings, String> {
 
 /// Returns the provider's configured base endpoint to the native backend.
 pub(crate) fn resolve_api_endpoint(app: &AppHandle) -> Result<String, String> {
-    let (_, _, provider) = shared_provider_settings(app)?;
+    let provider = shared_provider_settings(app)?;
     Ok(provider.endpoint)
 }
 
@@ -167,17 +146,7 @@ pub(crate) fn resolve_api_model(app: &AppHandle) -> Result<String, String> {
 
 /// Returns the Groq key only to the native backend that needs to call the provider.
 pub(crate) fn resolve_api_key(app: &AppHandle) -> Result<String, String> {
-    let (config_path, app_id, _) = shared_provider_settings(app)?;
-    shared_runtime_manager::api::get_provider_credential_from_config(
-        &config_path,
-        &app_id,
-        "groq",
-    )
-    .map_err(|error| {
-        format!(
-            "Não foi possível descriptografar a credencial da Groq provisionada pelo Shared Runtime: {error}"
-        )
-    })
+    shared_runtime::resolve_provider_credential(app, "groq")
 }
 
 #[tauri::command]
@@ -195,7 +164,7 @@ pub fn save_groq_settings(
 ) -> Result<GroqSettings, String> {
     // This also verifies that the application is authorized and that a Groq
     // provider entry is present in its own shared.config.json.
-    let (_, _, provider) = shared_provider_settings(&app)?;
+    let provider = shared_provider_settings(&app)?;
 
     let settings = GroqSettings {
         configured: true,
