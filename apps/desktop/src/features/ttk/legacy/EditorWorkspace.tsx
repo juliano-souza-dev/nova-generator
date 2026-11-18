@@ -1031,15 +1031,18 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
                 {transcription.transcriptionTranslations.find(item=>item.id===cue.id)&&<p className="transcription-review-translation">{transcription.transcriptionTranslations.find(item=>item.id===cue.id)?.translation}</p>}
               </div>)}
             </div>
-            <div className="caption-transcription-actions">
-              <button className="secondary-action" type="button" disabled={transcription.translationBusy||transcription.alignmentBusy} onClick={()=>void transcription.translateTranscription()}>{transcription.translationBusy?<LoaderCircle className="spin" size={14}/>:null} Traduzir para português</button>
-              <button className="secondary-action" type="button" disabled={transcription.alignmentBusy||transcription.translationBusy} onClick={()=>void transcription.alignTranscriptionWords()}>{transcription.alignmentBusy?<LoaderCircle className="spin" size={14}/>:null} Alinhar palavra por palavra (WhisperX)</button>
-              <button className="secondary-action" type="button" disabled={transcription.externalPackageBusy||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>void transcription.downloadExternalPackage()}>{transcription.externalPackageBusy?<LoaderCircle className="spin" size={14}/>:<Download size={14}/>} Baixar TXT para IA externa</button>
-              <button className="secondary-action" type="button" disabled={!transcription.externalSourceHash||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>transcriptionTranslationInput.current?.click()}><Upload size={14}/> Importar JSON da IA</button>
-              <input ref={transcriptionTranslationInput} type="file" accept=".json,application/json" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value="";void transcription.importExternalTranslation(file);}}/>
-            </div>
             <button className="primary caption-insert-transcription" type="button" disabled={transcription.translationBusy||transcription.alignmentBusy||transcription.externalPackageBusy} onClick={()=>transcription.insertTranscription()}><Captions size={14}/> 3. Inserir legendas na timeline</button>
           </div>}
+          <div className="caption-transcription-section">
+            <div className="caption-transcription-title"><b>3. Tradução e alinhamento</b><small>Exporte o TXT para tradução externa, importe o JSON correspondente ou alinhe cada palavra com WhisperX antes de inserir.</small></div>
+            <div className="caption-transcription-actions">
+              <button className="secondary-action" type="button" disabled={!transcription.transcriptionResult||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>void transcription.translateTranscription()}>{transcription.translationBusy?<LoaderCircle className="spin" size={14}/>:null} Traduzir para português</button>
+              <button className="secondary-action" type="button" disabled={!transcription.transcriptionResult||!transcription.transcriptionContext||transcription.alignmentBusy||transcription.translationBusy} onClick={()=>void transcription.alignTranscriptionWords()}>{transcription.alignmentBusy?<LoaderCircle className="spin" size={14}/>:null} Word by word · WhisperX</button>
+              <button className="secondary-action" type="button" disabled={!transcription.transcriptionResult||!transcription.transcriptionContext||transcription.externalPackageBusy||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>void transcription.downloadExternalPackage()}>{transcription.externalPackageBusy?<LoaderCircle className="spin" size={14}/>:<Download size={14}/>} Gerar TXT para IA externa</button>
+              <button className="secondary-action" type="button" disabled={!transcription.externalSourceHash||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>transcriptionTranslationInput.current?.click()}><Upload size={14}/> Importar JSON</button>
+              <input ref={transcriptionTranslationInput} type="file" accept=".json,application/json" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value="";void transcription.importExternalTranslation(file);}}/>
+            </div>
+          </div>
           {transcription.transcriptionMessage&&<div className="sound-library-message" role="status">{transcription.transcriptionMessage}</div>}
           <small className="transcription-privacy">Somente o modo local mantém o áudio no computador. Os modos Automático e Groq enviam o áudio à API da Groq. O arquivo original não é modificado.</small>
         </div>
