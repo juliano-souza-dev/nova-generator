@@ -72,7 +72,9 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
         transcriptionAssetId,
         transcriptionMode,
         transcriptionLanguage,
-        transcriptionModel
+        transcriptionModel,
+        transcriptionContext?.sourceStartMs,
+        transcriptionContext?.sourceEndMs
       ));
       const scopedCues = transcriptionContext
         ? result.cues.filter(cue => cue.endMs > transcriptionContext.sourceStartMs && cue.startMs < transcriptionContext.sourceEndMs)
