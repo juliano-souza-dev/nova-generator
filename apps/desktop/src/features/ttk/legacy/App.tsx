@@ -35,6 +35,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     inspectYoutube, downloadYoutube, confirmYoutubeTrim
   } = useYoutubeImport({ project: activeProject, setAssets, setBusy, setError, setNotice, setMediaModal });
   const sceneSpecProjectInput = useRef<HTMLInputElement|null>(null);
+  const transcriptionTranslationInput = useRef<HTMLInputElement|null>(null);
   const {
     groqSettingsOpen, setGroqSettingsOpen,
     groqModel, groqMaxChars, setGroqMaxChars, groqMaxCues, setGroqMaxCues,
@@ -47,7 +48,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     transcriptionModel, setTranscriptionModel, transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
     localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage,
     transcriptionOpen, setTranscriptionOpen, installLocalTranscription, transcribeSelectedMedia,
-    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, openTranscriptionForClip, translateTranscription, alignTranscriptionWords, insertTranscription, updateTranscriptionCue
+    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, openTranscriptionForClip, translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue
   } = useTranscription(activeProject, assets);
 
   async function refresh() {
@@ -234,6 +235,9 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
           <div className="transcription-review-actions">
             <button className="secondary-action" disabled={translationBusy} onClick={()=>void translateTranscription()}>{translationBusy?<LoaderCircle className="spin" size={14}/>:<Languages size={14}/>} Traduzir para português</button>
             <button className="secondary-action" disabled={alignmentBusy} onClick={()=>void alignTranscriptionWords()}>{alignmentBusy?<LoaderCircle className="spin" size={14}/>:<Captions size={14}/>} Alinhar palavra por palavra (WhisperX)</button>
+            <button className="secondary-action" disabled={externalPackageBusy} onClick={()=>void downloadExternalPackage()}>{externalPackageBusy?<LoaderCircle className="spin" size={14}/>:<Download size={14}/>} Baixar TXT para IA externa</button>
+            <button className="secondary-action" onClick={()=>transcriptionTranslationInput.current?.click()}><Upload size={14}/> Importar JSON da IA</button>
+            <input ref={transcriptionTranslationInput} type="file" accept=".json,application/json" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value="";void importExternalTranslation(file);}}/>
             <button className="primary" onClick={insertTranscription}><CheckCircle2 size={14}/> Inserir na timeline</button>
           </div>
         </div>}
