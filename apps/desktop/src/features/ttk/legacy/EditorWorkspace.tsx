@@ -90,9 +90,9 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
 
   useEffect(() => {
     const onTranscript = (event: Event) => {
-      const detail = (event as CustomEvent<{ projectId: string; result: TranscriptResult; context?: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number } }>).detail;
+      const detail = (event as CustomEvent<{ projectId: string; result: TranscriptResult; translations?: Array<{ id: string; text: string }>; context?: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number } }>).detail;
       if (!detail || detail.projectId !== projectId) return;
-      const created = transcriptToCaptions(detail.result, detail.context); 
+      const created = transcriptToCaptions(detail.result, detail.context, undefined, detail.translations ?? []); 
       appendCaptions(created);
       setSelectedMotionId(created[0]?.id ?? null);
       if (created.length) setPlayheadMs(created[0].startMs);
