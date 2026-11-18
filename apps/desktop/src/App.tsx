@@ -120,11 +120,11 @@ export default function App() {
           <div><div className="eyebrow">ESPAÇO DO PROJETO</div><h1>{activeProject.name}</h1><p>Criado em {dateLabel(activeProject.created_at)} · Última alteração {timeLabel(activeProject.updated_at)}</p></div>
           <button className="complete-button" onClick={() => void toggleStatus(activeProject)}>{activeProject.status === "completed" ? <Clock3 size={16}/> : <Check size={16}/>} {activeProject.status === "completed" ? "Reabrir projeto" : "Marcar como concluído"}</button>
         </div>
-        <section className="stage-panel">
+        {activeProject.project_type === "original" && <section className="stage-panel">
           <div className="panel-heading"><div><span className="eyebrow">ACOMPANHAMENTO</span><h2>Etapas do projeto</h2></div><span className="stage-count">{currentStage + 1} de {stages.length}</span></div>
           <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <div className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></div>; })}</div>
           <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {stageLabel(activeProject.stage)}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
-        </section>
+        </section>}
         {activeProject.project_type === "ttk_media" && activeProject.ttk_project_id ? <TtkMediaModule key={activeProject.id} projectId={activeProject.ttk_project_id} /> : activeProject.project_type === "materials" ? <MaterialsWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} /> : <MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />}
       </main>
     </div>;
