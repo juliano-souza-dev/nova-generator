@@ -54,6 +54,19 @@ fn migrate_legacy_data(destination: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+fn migrate_legacy_webview_data(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
+        let legacy_profile = PathBuf::from(local_app_data)
+            .join("com.julianosouza.ttkcreator")
+            .join("EBWebView");
+        let current_profile = app.path().app_local_data_dir()?.join("EBWebView");
+        if legacy_profile.is_dir() && legacy_profile != current_profile {
+            copy_missing_tree(&legacy_profile, &current_profile)?;
+        }
+    }
+    Ok(())
+}
+
 fn resolve_media_shared_directory(app: &tauri::App) -> Result<Option<PathBuf>, String> {
     let mut candidates = Vec::<PathBuf>::new();
     if let Some(path) = std::env::var_os("SHARED_RUNTIME_CONFIG")
@@ -90,6 +103,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_data_directory = app.path().app_data_dir()?.join("ttk");
     fs::create_dir_all(&app_data_directory)?;
     migrate_legacy_data(&app_data_directory)?;
+    migrate_legacy_webview_data(app)?;
     let log_guard = logging::initialize(&app_data_directory.join("logs")).map_err(std::io::Error::other)?;
     let projects_directory = app_data_directory.join("projects");
     fs::create_dir_all(&projects_directory)?;
