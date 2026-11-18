@@ -73,7 +73,7 @@ export function useYoutubeImport({ project, setAssets, setBusy, setError, setNot
     setTrimBusy(true);
     setError("");
     try {
-      const asset = await runTrackedTask("trim", "Recortando vídeo", () => desktopApi.trimYoutubeCache(project.id, youtubeCache.videoId, trimStartMs, trimEndMs, outputRatio, frameMode, frameColor));
+      const asset = await runTrackedTask("trim", "Preparando vídeo em 9:16", () => desktopApi.trimYoutubeCache(project.id, youtubeCache.videoId, trimStartMs, trimEndMs, outputRatio, frameMode, frameColor));
       setAssets(current => [asset, ...current]);
       setNotice("Trecho preparado em 9:16 e importado para a biblioteca. A imagem original foi preservada, com preenchimento de fundo. O download original permanece no cache temporário por até 7 dias.");
       setYoutubeCache(null);
