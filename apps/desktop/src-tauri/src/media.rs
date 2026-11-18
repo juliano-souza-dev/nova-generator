@@ -30,12 +30,7 @@ fn now_ms() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_defa
 fn valid_id(v: &str) -> bool { !v.is_empty() && v.len() <= 64 && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') }
 fn project_dir(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     if !valid_id(id) { return Err("Identificador de projeto inválido.".into()); }
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    // TTK Creator stores its projects under app_data/ttk/projects. Prefer that
-    // location when the ID belongs to a TTK project; Nova projects keep the
-    // original app_data/projects location.
-    let ttk_dir = data_dir.join("ttk").join("projects").join(id);
-    let dir = if ttk_dir.is_dir() { ttk_dir } else { data_dir.join("projects").join(id) };
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("projects").join(id);
     fs::create_dir_all(dir.join("media")).map_err(|e| e.to_string())?; Ok(dir)
 }
 fn read_assets(dir: &Path) -> Result<Vec<MediaAsset>, String> {
@@ -54,36 +49,6 @@ fn append_assets(dir: &Path, added: &[MediaAsset]) -> Result<(), String> {
     let mut all = read_assets(dir)?;
     for item in added { if !all.iter().any(|old| old.id == item.id) { all.insert(0, item.clone()); } }
     save_assets(dir, &all)
-}
-
-/// Mirrors TTK's SQLite media catalog into the metadata file consumed by the
-/// shared Nova media editor. The media files themselves are not copied.
-pub fn sync_ttk_project_assets(
-    app: &AppHandle,
-    project_id: &str,
-    assets: &[crate::ttk::domain::models::MediaAsset],
-) -> Result<(), String> {
-    if !valid_id(project_id) { return Err("Identificador de projeto inválido.".into()); }
-    let root = app.path().app_data_dir().map_err(|e| e.to_string())?
-        .join("ttk").join("projects").join(project_id);
-    if !root.is_dir() { return Err("Projeto do TTK Creator não encontrado.".into()); }
-    let mirrored: Vec<MediaAsset> = assets.iter().map(|asset| MediaAsset {
-        id: asset.id.clone(),
-        name: asset.name.clone(),
-        original_name: asset.original_name.clone(),
-        kind: asset.kind.clone(),
-        mime_type: asset.mime_type.clone(),
-        size_bytes: asset.size_bytes,
-        relative_path: asset.relative_path.clone(),
-        source: asset.source.clone(),
-        source_url: asset.source_url.clone(),
-        source_video_id: None,
-        source_start_ms: None,
-        source_end_ms: None,
-        duration_ms: asset.duration_ms,
-        created_at: asset.created_at.parse().unwrap_or_default(),
-    }).collect();
-    save_assets(&root, &mirrored)
 }
 
 struct Shared { media: PathBuf, ytdlp: PathBuf, ffmpeg: PathBuf }
@@ -280,7 +245,7 @@ pub fn open_project_media(app: AppHandle, project_id: String, asset_id: String) 
     let root = project_dir(&app, &project_id)?;
     let assets = read_assets(&root)?;
     let asset = assets.iter().find(|item| item.id == asset_id).ok_or("Mídia não encontrada neste projeto.")?;
-    if asset.kind != "video" && asset.kind != "audio" { return Err("Selecione um vídeo ou arquivo de áudio.".into()); }
+    if asset.kind != "video" { return Err("O editor visual está disponível para vídeos.".into()); }
     let relative = Path::new(&asset.relative_path);
     if relative.is_absolute() || relative.components().any(|part| matches!(part, std::path::Component::ParentDir)) {
         return Err("Caminho da mídia inválido.".into());
