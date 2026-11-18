@@ -55,6 +55,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionContext(context);
     setTranscriptionResult(null);
     setTranscriptionTranslations([]);
+    setExternalSourceHash("");
     setTranscriptionMessage("");
     setTranscriptionOpen(true);
   }
@@ -78,6 +79,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionBusy(true);
     setTranscriptionResult(null);
     setTranscriptionTranslations([]);
+    setExternalSourceHash("");
     setTranscriptionMessage("");
     setTranscriptionProgress(null);
     try {
@@ -120,6 +122,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
       cues: current.cues.map(cue => cue.id === cueId ? { ...cue, text, words: [] } : cue)
     } : current);
     setTranscriptionTranslations(current => current.filter(item => item.id !== cueId));
+    setExternalSourceHash("");
   }
 
   async function translateTranscription() {
@@ -163,6 +166,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
       const parsed = JSON.parse(await file.text());
       if (parsed?.contract !== "nova-generator-external-editorial-output/1.0") throw new Error("O JSON não corresponde ao contrato editorial esperado.");
       if (!externalSourceHash || parsed.source_hash !== externalSourceHash) throw new Error("Este JSON não corresponde ao TXT exportado para esta transcrição.");
+      if (parsed.predictions?.word_translations !== false || parsed.predictions?.semantic_units !== false) throw new Error("As predições do JSON não correspondem ao TXT exportado.");
       if (!Array.isArray(parsed.cues) || parsed.cues.length !== transcriptionResult.cues.length) throw new Error("O JSON precisa conter exatamente uma tradução para cada trecho.");
       const byNumber = new Map<number, any>();
       for (const item of parsed.cues) {
@@ -172,7 +176,8 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
       }
       const translated = transcriptionResult.cues.map((cue, index) => {
         const item = byNumber.get(index + 1);
-        const text = String(item?.pt ?? "").trim();
+        if (!item || String(item.en ?? "").trim() !== cue.text.trim()) throw new Error("O texto original do trecho " + (index + 1) + " foi alterado ou não corresponde à transcrição.");
+        const text = String(item.pt ?? "").trim();
         if (!text) throw new Error("A tradução do trecho " + (index + 1) + " está vazia.");
         return { id: cue.id, translation: text };
       });
