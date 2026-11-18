@@ -117,12 +117,28 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
 
 
 
+
+  function publishTranscriptionUpdate(result: TranscriptResult, translations: CueTranslation[]) {
+    if (!transcriptionInserted || !transcriptionContext) return;
+    window.dispatchEvent(new CustomEvent("framelab:transcription-update", {
+      detail: {
+        projectId: project?.id,
+        result,
+        context: transcriptionContext,
+        translations: translations.map(item => ({ id: item.id, text: item.translation })),
+      },
+    }));
+  }
+
   function updateTranscriptionCue(cueId: string, text: string) {
-    setTranscriptionResult(current => current ? {
-      ...current,
-      cues: current.cues.map(cue => cue.id === cueId ? { ...cue, text, words: [] } : cue)
-    } : current);
-    setTranscriptionTranslations(current => current.filter(item => item.id !== cueId));
+    const nextResult = transcriptionResult ? {
+      ...transcriptionResult,
+      cues: transcriptionResult.cues.map(cue => cue.id === cueId ? { ...cue, text, words: [] } : cue),
+    } : null;
+    const nextTranslations = transcriptionTranslations.filter(item => item.id !== cueId);
+    setTranscriptionResult(nextResult);
+    setTranscriptionTranslations(nextTranslations);
+    if (nextResult) publishTranscriptionUpdate(nextResult, nextTranslations);
     setExternalSourceHash("");
     setTranscriptionInserted(false);
   }
@@ -136,7 +152,8 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
         id: cue.id, text: cue.text, words: cue.words.map(word => word.text)
       })));
       setTranscriptionTranslations(translated);
-      setTranscriptionMessage(translated.length + " trechos traduzidos. Revise o resultado antes de inserir.");
+      publishTranscriptionUpdate(transcriptionResult, translated);
+      setTranscriptionMessage(translated.length + " trechos traduzidos. " + (transcriptionInserted ? "As legendas da timeline também foram atualizadas." : "Revise o resultado antes de inserir."));
     } catch (error) {
       setTranscriptionMessage("Falha na tradução: " + (error instanceof Error ? error.message : String(error)));
     } finally { setTranslationBusy(false); }
@@ -207,14 +224,16 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
         transcriptionResult.cues.map(cue => ({ id: cue.id, text: cue.text, startMs: cue.startMs, endMs: cue.endMs }))
       );
       const byId = new Map(aligned.map(cue => [cue.id, cue]));
-      setTranscriptionResult(current => current ? {
-        ...current,
-        cues: current.cues.map(cue => {
+      const nextResult = {
+        ...transcriptionResult,
+        cues: transcriptionResult.cues.map(cue => {
           const match = byId.get(cue.id);
           return match ? { ...cue, words: match.words } : cue;
-        })
-      } : current);
-      setTranscriptionMessage(aligned.length + " trechos alinhados pelo WhisperX.");
+        }),
+      };
+      setTranscriptionResult(nextResult);
+      publishTranscriptionUpdate(nextResult, transcriptionTranslations);
+      setTranscriptionMessage(aligned.length + " trechos alinhados pelo WhisperX. " + (transcriptionInserted ? "Os tempos das palavras na timeline também foram atualizados." : ""));
     } catch (error) {
       setTranscriptionMessage("Falha no alinhamento WhisperX: " + (error instanceof Error ? error.message : String(error)));
     } finally { setAlignmentBusy(false); }
