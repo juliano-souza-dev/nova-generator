@@ -106,7 +106,7 @@ export default function App() {
   }
 
   if (view === "settings") {
-    return <div className="home-shell"><TaskCenter /><header className="home-topbar"><div className="brand"><div className="brand-mark"><Sparkles size={18}/></div><div><strong>NOVA<span>GENERATOR</span></strong><small>ESTÚDIO DE CRIAÇÃO</small></div></div><div className="home-top-actions"><button className="secondary-button" onClick={() => setView("home")}><ArrowLeft size={15}/> Projetos</button></div></header><Settings /></div>;
+    return <div className="home-shell"><TaskCenter /><header className="home-topbar"><div className="brand"><div className="brand-mark"><Sparkles size={18}/></div><div><strong>NOVA<span>GENERATOR</span></strong><small>ESTÚDIO DE CRIAÇÃO</small></div></div></header><Settings onBack={() => setView("home")} /></div>;
   }
 
   if (view === "project" && activeProject?.project_type === "ttk_media" && activeProject.ttk_project_id) {
