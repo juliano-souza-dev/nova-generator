@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { desktopApi, isDesktopRuntime } from "./services/desktop-api";
 import type { TranscriptResult } from "./services/desktop-api";
+import type { useTranscription } from "./features/transcription/useTranscription";
 import type { MediaAsset } from "./shared/types";
 import { defaultDuration, clipDuration, clipEnd, timeLabel } from "./features/timeline/model";
 import type { TimelineClip, TimelineGroup, TrimDrag, ClipMoveDrag, MotionTrimDrag } from "./features/timeline/model";
@@ -29,7 +30,7 @@ export { supportedLucideIconNames } from "./features/motion-graphics/icon-librar
 import { AudioLines, Film, Plus, Play, Pause, Trash2, Scissors, Copy, SkipBack, SkipForward, Volume2, VolumeX, Music2, Type, WandSparkles, MousePointer2, ChevronLeft, ChevronRight, Download, LoaderCircle, PanelsTopLeft, FileJson, Upload, Eye, Search, Image, ShieldCheck, Captions, Layers } from "lucide-react";
 import { SCENE_TEMPLATES, buildTemplateScene, createSceneSpecFromMotion, validateSceneSpec } from "./shared/scene-spec";
 
-type Props = { projectId: string; assets: MediaAsset[]; onAddMedia: () => void; onOpenTranscription?: (assetId?: string, context?: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number }) => void };
+type Props = { projectId: string; assets: MediaAsset[]; onAddMedia: () => void; onStartTranscription?: (assetId?: string, context?: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number }) => void; transcription: ReturnType<typeof useTranscription> };
 const motionPresets = [{id:"pop",label:"Pop Impact",sound:"pop"},{id:"slide",label:"Slide + Whoosh",sound:"whoosh"},{id:"zoom",label:"Zoom + Impact",sound:"impact"},{id:"typewriter",label:"Typewriter",sound:"click"},{id:"impact",label:"Big Impact",sound:"impact"}] as const;
 
 
@@ -38,7 +39,8 @@ const motionPresets = [{id:"pop",label:"Pop Impact",sound:"pop"},{id:"slide",lab
 
 
 
-export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenTranscription }: Props) {
+export default function EditorWorkspace({ projectId, assets, onAddMedia, onStartTranscription, transcription }: Props) {
+  const transcriptionTranslationInput = useRef<HTMLInputElement | null>(null);
   const storageKey = `ttk-creator:timeline:${projectId}`;
   const sessionKey = `ttk-creator:session:${projectId}`;
   const [clips, setClips] = useState<TimelineClip[]>([]);
@@ -992,7 +994,50 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
         <div className="motion-presets editor-preset-grid">{motionPresets.map(preset => <button key={preset.id} className="motion-preset" onClick={() => addMotion(preset.id)}><b>{preset.label}</b><small>Som: {preset.sound}</small><span>+ Adicionar</span></button>)}</div>
       </>}
       {activeTool === "captions" && <>
-        <div className="editor-panel-head"><div><b>Legendas</b><small>Edite os textos e revise as traduções sem alterar a sincronização.</small></div><span className="preview-live">{captions.length} LEGENDA(S)</span></div>
+        <div className="editor-panel-head"><div><b>Legendas</b><small>Transcreva, traduza, alinhe e edite as legendas neste painel.</small></div><span className="preview-live">{captions.length} LEGENDA(S)</span></div>
+        <div className="caption-transcription-panel">
+          <div className="caption-transcription-section">
+            <div className="caption-transcription-title"><b>1. Preparar transcrição</b><small>Selecione um clipe de vídeo ou áudio na timeline para começar.</small></div>
+            <div className="caption-transcription-source">
+              <span>CLIPE SELECIONADO</span>
+              <strong>{selectedAsset && (selectedAsset.kind === "video" || selectedAsset.kind === "audio") ? selectedAsset.name : "Nenhum clipe de áudio ou vídeo selecionado"}</strong>
+              {transcription.transcriptionContext && <small>Trecho: {timeLabel(transcription.transcriptionContext.sourceStartMs)} – {timeLabel(transcription.transcriptionContext.sourceEndMs)}</small>}
+            </div>
+            <div className="caption-transcription-config">
+              <label>Processamento<select value={transcription.transcriptionMode} onChange={event=>transcription.setTranscriptionMode(event.target.value as "auto"|"cloud"|"local")}><option value="auto">Automático (Groq + fallback local)</option><option value="cloud">Somente Groq na nuvem</option><option value="local">Somente local (privado)</option></select></label>
+              <label>Idioma<select value={transcription.transcriptionLanguage} onChange={event=>transcription.setTranscriptionLanguage(event.target.value)}><option value="">Detectar automaticamente</option><option value="pt">Português</option><option value="en">Inglês</option><option value="es">Espanhol</option><option value="fr">Francês</option></select></label>
+              <label>Modelo local<select value={transcription.transcriptionModel} onChange={event=>transcription.setTranscriptionModel(event.target.value)}><option value="tiny">Tiny · mais rápido</option><option value="base">Base · leve</option><option value="small">Small · equilibrado</option><option value="medium">Medium · mais preciso</option><option value="large-v3">Large v3 · maior qualidade</option></select></label>
+            </div>
+            <div className="caption-transcription-actions">
+              <button className="primary" type="button" disabled={!selectedClip||!selectedAsset||(selectedAsset.kind!=="video"&&selectedAsset.kind!=="audio")||transcription.transcriptionBusy||Boolean(transcription.transcriptionResult)||(!transcription.localAsrInstalled&&transcription.transcriptionMode==="local")} onClick={()=>{if(selectedClip&&selectedAsset)onStartTranscription?.(selectedAsset.id,{clipId:selectedClip.id,timelineStartMs:selectedClip.timelineStartMs,sourceStartMs:selectedClip.sourceStartMs,sourceEndMs:selectedClip.sourceEndMs});void transcription.transcribeSelectedMedia();}}>
+                {transcription.transcriptionBusy?<><LoaderCircle className="spin" size={14}/> Transcrevendo...</>:<><Captions size={14}/> Transcrever clipe selecionado</>}
+              </button>
+              {!transcription.transcriptionResult&&<small>{transcription.localAsrChecking?"Verificando suporte local...":transcription.localAsrInstalled?"Faster-Whisper instalado":"Processamento local ainda não instalado"}</small>}
+              {!transcription.localAsrInstalled&&<button className="secondary-action" type="button" disabled={transcription.localAsrChecking||transcription.localAsrInstalling} onClick={()=>void transcription.installLocalTranscription()}>{transcription.localAsrInstalling?<LoaderCircle className="spin" size={13}/>:<Download size={13}/>} Instalar suporte local</button>}
+            </div>
+          </div>
+          {transcription.transcriptionBusy&&transcription.transcriptionProgress&&<div className="transcription-progress"><div className="progress-heading"><b>{transcription.transcriptionProgress.message}</b><span>{Math.round(transcription.transcriptionProgress.percent)}%</span></div><div className="progress-track"><i style={{width:Math.max(0,Math.min(100,transcription.transcriptionProgress.percent))+"%"}}/></div><small>Blocos concluídos: {transcription.transcriptionProgress.completedChunks} de {transcription.transcriptionProgress.totalChunks}</small></div>}
+          {transcription.transcriptionResult&&<div className="caption-transcription-section">
+            <div className="caption-transcription-title"><b>2. Revisar e processar</b><small>{transcription.transcriptionResult.cues.length} trechos reconhecidos. Revise o texto antes de inserir.</small></div>
+            <div className="transcription-review">
+              {transcription.transcriptionResult.cues.map((cue,index)=><div className="transcription-review-cue" key={cue.id}>
+                <small>{index+1} · {timeLabel(cue.startMs)} – {timeLabel(cue.endMs)}</small>
+                <textarea aria-label={"Texto reconhecido "+(index+1)} value={cue.text} onChange={event=>transcription.updateTranscriptionCue(cue.id,event.target.value)}/>
+                {transcription.transcriptionTranslations.find(item=>item.id===cue.id)&&<p className="transcription-review-translation">{transcription.transcriptionTranslations.find(item=>item.id===cue.id)?.translation}</p>}
+              </div>)}
+            </div>
+            <div className="caption-transcription-actions">
+              <button className="secondary-action" type="button" disabled={transcription.translationBusy||transcription.alignmentBusy} onClick={()=>void transcription.translateTranscription()}>{transcription.translationBusy?<LoaderCircle className="spin" size={14}/>:null} Traduzir para português</button>
+              <button className="secondary-action" type="button" disabled={transcription.alignmentBusy||transcription.translationBusy} onClick={()=>void transcription.alignTranscriptionWords()}>{transcription.alignmentBusy?<LoaderCircle className="spin" size={14}/>:null} Alinhar palavra por palavra (WhisperX)</button>
+              <button className="secondary-action" type="button" disabled={transcription.externalPackageBusy||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>void transcription.downloadExternalPackage()}>{transcription.externalPackageBusy?<LoaderCircle className="spin" size={14}/>:<Download size={14}/>} Baixar TXT para IA externa</button>
+              <button className="secondary-action" type="button" disabled={!transcription.externalSourceHash||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>transcriptionTranslationInput.current?.click()}><Upload size={14}/> Importar JSON da IA</button>
+              <input ref={transcriptionTranslationInput} type="file" accept=".json,application/json" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value="";void transcription.importExternalTranslation(file);}}/>
+            </div>
+            <button className="primary caption-insert-transcription" type="button" disabled={transcription.translationBusy||transcription.alignmentBusy||transcription.externalPackageBusy} onClick={()=>transcription.insertTranscription()}><CheckCircle2 size={14}/> 3. Inserir legendas na timeline</button>
+          </div>}
+          {transcription.transcriptionMessage&&<div className="sound-library-message" role="status">{transcription.transcriptionMessage}</div>}
+          <small className="transcription-privacy">Somente o modo local mantém o áudio no computador. Os modos Automático e Groq enviam o áudio à API da Groq. O arquivo original não é modificado.</small>
+        </div>
       </>}
       {activeTool === "templates" && <>
         <div className="editor-panel-head"><div><b>Presets de cena</b><small>Layouts prontos com tipografia e posicionamento definidos.</small></div><span className="preview-live">{SCENE_TEMPLATES.length} MODELOS</span></div>
@@ -1145,7 +1190,6 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onOpenT
         <div className="properties-scroll">
           {selectedClip && selectedAsset ? <>
             <div className="trim-heading"><b><Scissors size={14}/> Ajustes do clipe</b><span>{timeLabel(selectedDuration)}</span></div>
-             {(selectedAsset.kind === "audio" || selectedAsset.kind === "video") && <button className="primary transcription-clip-action" type="button" onClick={() => onOpenTranscription?.(selectedAsset.id, { clipId: selectedClip.id, timelineStartMs: selectedClip.timelineStartMs, sourceStartMs: selectedClip.sourceStartMs, sourceEndMs: selectedClip.sourceEndMs })}><Captions size={14}/> Abrir Transcrição</button>}
             <label className="property-control">Início do arquivo <strong>{timeLabel(selectedClip.sourceStartMs)}</strong><input type="range" min={0} max={Math.max(1000, selectedSourceDuration - 250)} step={100} value={selectedClip.sourceStartMs} onChange={event => updateClip(selectedClip.id, { sourceStartMs: Math.min(Number(event.target.value), selectedClip.sourceEndMs - 250) })}/><input className="numeric-time-input" type="number" min="0" max={Math.max(0, selectedClip.sourceEndMs-250)} step="0.1" value={(selectedClip.sourceStartMs/1000).toFixed(1)} aria-label="Início do arquivo em segundos" onChange={event=>{const value=Number(event.target.value);if(event.target.value!==""&&Number.isFinite(value))updateClip(selectedClip.id,{sourceStartMs:Math.max(0,Math.min(value*1000,selectedClip.sourceEndMs-250))});}}/></label>
             <label className="property-control">Fim do arquivo <strong>{timeLabel(selectedClip.sourceEndMs)}</strong><input type="range" min={250} max={Math.max(250, selectedSourceDuration)} step={100} value={Math.min(selectedClip.sourceEndMs, selectedSourceDuration)} onChange={event => updateClip(selectedClip.id, { sourceEndMs: Math.max(Number(event.target.value), selectedClip.sourceStartMs + 250) })}/><input className="numeric-time-input" type="number" min={(selectedClip.sourceStartMs+250)/1000} max={selectedSourceDuration/1000} step="0.1" value={(selectedClip.sourceEndMs/1000).toFixed(1)} aria-label="Fim do arquivo em segundos" onChange={event=>{const value=Number(event.target.value);if(event.target.value!==""&&Number.isFinite(value))updateClip(selectedClip.id,{sourceEndMs:Math.max(selectedClip.sourceStartMs+250,Math.min(value*1000,selectedSourceDuration))});}}/></label>
             <div className="clip-order-controls"><span>Ordem de exibição</span><div><button className="secondary-action" onClick={() => moveVisualClip(selectedClip.id, -1)} disabled={visualClips.slice().sort((a,b)=>a.timelineStartMs-b.timelineStartMs)[0]?.id === selectedClip.id}><ChevronLeft size={14}/> Antes</button><button className="secondary-action" onClick={() => moveVisualClip(selectedClip.id, 1)} disabled={visualClips.slice().sort((a,b)=>a.timelineStartMs-b.timelineStartMs)[visualClips.length - 1]?.id === selectedClip.id}>Depois <ChevronRight size={14}/></button></div></div>
