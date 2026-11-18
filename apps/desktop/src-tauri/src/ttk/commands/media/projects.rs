@@ -2,7 +2,7 @@ use tauri::State;
 use crate::{domain::models::{MediaAsset, ProjectSummary}, state::AppState};
 
 #[tauri::command]
-pub fn list_projects(state: State<'_, AppState>) -> Result<Vec<ProjectSummary>, String> {
+pub fn ttk_list_projects(state: State<'_, AppState>) -> Result<Vec<ProjectSummary>, String> {
     state.projects.list()
 }
 
@@ -12,7 +12,7 @@ pub fn open_project(state: State<'_, AppState>, project_id: String) -> Result<Pr
 }
 
 #[tauri::command]
-pub fn create_project(state: State<'_, AppState>, name: String) -> Result<ProjectSummary, String> {
+pub fn ttk_create_project(state: State<'_, AppState>, name: String) -> Result<ProjectSummary, String> {
     state.projects.create(&name)
 }
 
