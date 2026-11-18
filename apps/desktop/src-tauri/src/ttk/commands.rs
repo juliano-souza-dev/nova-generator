@@ -6,8 +6,8 @@ pub mod transcription;
 
 pub use export::{check_ffmpeg, export_timeline};
 pub use media::{
-    create_project, download_youtube, get_project_asset_path, import_media_files,
-    inspect_youtube, list_project_assets, list_projects, open_project,
+    download_youtube, get_project_asset_path, import_media_files,
+    inspect_youtube, list_project_assets, open_project, ttk_create_project, ttk_list_projects,
     prepare_youtube_cache, trim_youtube_cache,
 };
 pub use sounds::{
