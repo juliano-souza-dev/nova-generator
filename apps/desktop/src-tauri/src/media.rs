@@ -98,7 +98,7 @@ fn shared(app: &AppHandle) -> Result<Shared, String> {
 }
 
 #[tauri::command]
-pub fn authorize_youtube_preview(app: AppHandle, video_id: String) -> Result<String, String> {
+pub fn nova_authorize_youtube_preview(app: AppHandle, video_id: String) -> Result<String, String> {
     if video_id.len() != 11 || !video_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
         return Err("ID do vídeo inválido.".into());
     }
@@ -148,11 +148,11 @@ fn inspect(s: &Shared, raw: &str) -> Result<YoutubeInspection, String> {
 struct Progress { project_id: String, status: String, percent: f32, message: String }
 
 #[tauri::command]
-pub async fn inspect_youtube(app: AppHandle, url: String) -> Result<YoutubeInspection, String> {
+pub async fn nova_inspect_youtube(app: AppHandle, url: String) -> Result<YoutubeInspection, String> {
     tauri::async_runtime::spawn_blocking(move || inspect(&shared(&app)?, &url)).await.map_err(|e| e.to_string())?
 }
 #[tauri::command]
-pub async fn prepare_youtube_cache(app: AppHandle, project_id: String, url: String, max_height: Option<u32>) -> Result<YoutubeCacheEntry, String> {
+pub async fn nova_prepare_youtube_cache(app: AppHandle, project_id: String, url: String, max_height: Option<u32>) -> Result<YoutubeCacheEntry, String> {
     let emitter = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let send = |status: &str, percent: f32, message: &str| {
@@ -198,7 +198,7 @@ pub async fn prepare_youtube_cache(app: AppHandle, project_id: String, url: Stri
 pub fn list_project_media(app: AppHandle, project_id: String) -> Result<Vec<MediaAsset>, String> { read_assets(&project_dir(&app, &project_id)?) }
 
 #[tauri::command]
-pub fn import_media_files(app: AppHandle, project_id: String, paths: Vec<String>) -> Result<Vec<MediaAsset>, String> {
+pub fn nova_import_media_files(app: AppHandle, project_id: String, paths: Vec<String>) -> Result<Vec<MediaAsset>, String> {
     if paths.len() > 100 { return Err("Importe até 100 arquivos por vez.".into()); }
     let root = project_dir(&app, &project_id)?; let mut created = Vec::new(); let mut assets = Vec::new();
     for raw in paths {
@@ -224,7 +224,7 @@ pub fn import_media_files(app: AppHandle, project_id: String, paths: Vec<String>
 }
 
 #[tauri::command]
-pub async fn trim_youtube_cache(app: AppHandle, project_id: String, video_id: String, start_ms: u64, end_ms: u64) -> Result<MediaAsset, String> {
+pub async fn nova_trim_youtube_cache(app: AppHandle, project_id: String, video_id: String, start_ms: u64, end_ms: u64) -> Result<MediaAsset, String> {
     tauri::async_runtime::spawn_blocking(move || {
         if end_ms <= start_ms || end_ms - start_ms < 300 { return Err("Selecione um trecho de pelo menos 0,3 segundo.".into()); }
         let s = shared(&app)?;

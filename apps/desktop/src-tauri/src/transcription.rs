@@ -130,11 +130,11 @@ sys.stdout.buffer.write(b'NOVA_ASR_JSON\n'+json.dumps({'language':clean(info.lan
  Ok(TranscriptResult{engine:"faster-whisper".into(),model:model.into(),language:data.language,duration_ms:0,cues:data.cues})
 }
 #[tauri::command]
-pub fn check_local_asr()->Result<bool,String>{Ok(run_python(&["-c","import faster_whisper; print('ready')"]).map(|o|String::from_utf8_lossy(&o.stdout).contains("ready")).unwrap_or(false))}
+pub fn nova_check_local_asr()->Result<bool,String>{Ok(run_python(&["-c","import faster_whisper; print('ready')"]).map(|o|String::from_utf8_lossy(&o.stdout).contains("ready")).unwrap_or(false))}
 #[tauri::command]
-pub async fn install_local_asr()->Result<String,String>{tauri::async_runtime::spawn_blocking(||run_python(&["-m","pip","install","faster-whisper>=1.1,<2","av>=11,<19"]).map(|_|"Faster-Whisper instalado. O modelo será baixado na primeira transcrição local.".to_string())).await.map_err(|e|e.to_string())?}
+pub async fn nova_install_local_asr()->Result<String,String>{tauri::async_runtime::spawn_blocking(||run_python(&["-m","pip","install","faster-whisper>=1.1,<2","av>=11,<19"]).map(|_|"Faster-Whisper instalado. O modelo será baixado na primeira transcrição local.".to_string())).await.map_err(|e|e.to_string())?}
 #[tauri::command]
-pub async fn transcribe_media(app:AppHandle,project_id:String,asset_id:String,mode:String,language:Option<String>,local_model:Option<String>)->Result<TranscriptResult,String>{
+pub async fn nova_transcribe_media(app:AppHandle,project_id:String,asset_id:String,mode:String,language:Option<String>,local_model:Option<String>)->Result<TranscriptResult,String>{
  if !["auto","cloud","local"].contains(&mode.as_str()){return Err("Modo de transcrição inválido.".into())}
  let model=local_model.unwrap_or_else(||"small".into());if !["tiny","base","small","medium","large-v3"].contains(&model.as_str()){return Err("Modelo local inválido.".into())}
  let app2=app.clone();
