@@ -46,7 +46,8 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     transcriptionMode, setTranscriptionMode, transcriptionLanguage, setTranscriptionLanguage,
     transcriptionModel, setTranscriptionModel, transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
     localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage,
-    transcriptionOpen, setTranscriptionOpen, installLocalTranscription, transcribeSelectedMedia
+    transcriptionOpen, setTranscriptionOpen, installLocalTranscription, transcribeSelectedMedia,
+    transcriptionResult, transcriptionTranslations, translationBusy, translateTranscription, insertTranscription
   } = useTranscription(activeProject, assets);
 
   async function refresh() {
@@ -216,13 +217,25 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
       <section className="transcription-dialog" role="dialog" aria-modal="true" aria-labelledby="transcription-title">
         <div className="transcription-dialog-top"><div className="transcription-heading"><div><label className="eyebrow muted">RECONHECIMENTO DE FALA</label><h3 id="transcription-title">Gerar legendas automaticamente</h3><p>Configure a transcrição e envie as falas para a timeline como legendas editáveis.</p></div><span className="transcription-chip"><Mic size={13}/> WHISPER</span></div><button className="close" type="button" title="Fechar" disabled={transcriptionBusy} onClick={()=>setTranscriptionOpen(false)}><X size={18}/></button></div>
         <div className="transcription-controls">
-          <label>Arquivo de mídia<select value={transcriptionAssetId} onChange={event=>{setTranscriptionAssetId(event.target.value);setTranscriptionContext(null);}}><option value="">Selecione um vídeo ou áudio</option>{assets.filter(asset=>asset.kind==="video"||asset.kind==="audio").map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
+          <div className="transcription-clip-source"><span>MÍDIA DO CLIPE SELECIONADO</span><strong>{assets.find(asset=>asset.id===transcriptionAssetId)?.name ?? "Nenhum clipe selecionado"}</strong>{transcriptionContext&&<small>Trecho: {formatTimecode(transcriptionContext.sourceStartMs)} – {formatTimecode(transcriptionContext.sourceEndMs)}</small>}</div>
           <label>Processamento<select value={transcriptionMode} onChange={event=>setTranscriptionMode(event.target.value as "auto"|"cloud"|"local")}><option value="auto">Automático (Groq + fallback local)</option><option value="cloud">Somente Groq na nuvem</option><option value="local">Somente local (privado)</option></select></label>
           <label>Idioma<select value={transcriptionLanguage} onChange={event=>setTranscriptionLanguage(event.target.value)}><option value="">Detectar automaticamente</option><option value="pt">Português</option><option value="en">Inglês</option><option value="es">Espanhol</option><option value="fr">Francês</option></select></label>
           <label>Modelo local<select value={transcriptionModel} onChange={event=>setTranscriptionModel(event.target.value)}><option value="tiny">Tiny · mais rápido</option><option value="base">Base · leve</option><option value="small">Small · equilibrado</option><option value="medium">Medium · mais preciso</option><option value="large-v3">Large v3 · maior qualidade</option></select></label>
-          <button className="primary transcription-start" disabled={!transcriptionAssetId||transcriptionBusy||(!localAsrInstalled&&transcriptionMode==="local")} onClick={()=>void transcribeSelectedMedia()}>{transcriptionBusy?<><LoaderCircle className="spin" size={15}/> Transcrevendo...</>:<><Captions size={15}/> Transcrever</>}</button>
+          <button className="primary transcription-start" disabled={!transcriptionAssetId||!transcriptionContext||transcriptionBusy||Boolean(transcriptionResult)||(!localAsrInstalled&&transcriptionMode==="local")} onClick={()=>void transcribeSelectedMedia()}>{transcriptionBusy?<><LoaderCircle className="spin" size={15}/> Transcrevendo...</>:<><Captions size={15}/> Transcrever clipe</>}</button>
         </div>
         <div className="transcription-footer"><span>{localAsrChecking?"Verificando suporte local...":localAsrInstalled?<><CheckCircle2 size={13}/> Faster-Whisper instalado</>:<><Info size={13}/> Processamento local ainda não instalado</>}</span>{!localAsrInstalled&&<button className="secondary-action" disabled={localAsrChecking||localAsrInstalling} onClick={()=>void installLocalTranscription()}>{localAsrInstalling?<><LoaderCircle className="spin" size={13}/> Instalando...</>:<><Download size={13}/> Instalar suporte local</>}</button>}</div>
+        {transcriptionResult&&<div className="transcription-review">
+          <div className="transcription-review-head"><strong>Revisar transcrição</strong><span>{transcriptionResult.cues.length} trechos</span></div>
+          {transcriptionResult.cues.map((cue,index)=><div className="transcription-review-cue" key={cue.id}>
+            <small>{index+1} · {formatTimecode(cue.startMs)} – {formatTimecode(cue.endMs)}</small>
+            <textarea aria-label={"Texto reconhecido "+(index+1)} value={cue.text} onChange={event=>{const value=event.target.value;/* cue edits are committed through the hook state below */}} readOnly />
+            {transcriptionTranslations.find(item=>item.id===cue.id)&&<p className="transcription-review-translation">{transcriptionTranslations.find(item=>item.id===cue.id)?.translation}</p>}
+          </div>)}
+          <div className="transcription-review-actions">
+            <button className="secondary-action" disabled={translationBusy} onClick={()=>void translateTranscription()}>{translationBusy?<LoaderCircle className="spin" size={14}/>:<Languages size={14}/>} Traduzir para português</button>
+            <button className="primary" onClick={insertTranscription}><CheckCircle2 size={14}/> Inserir na timeline</button>
+          </div>
+        </div>}
         {transcriptionBusy&&transcriptionProgress&&<div className="transcription-progress"><div className="progress-heading"><b>{transcriptionProgress.message}</b><span>{Math.round(transcriptionProgress.percent)}%</span></div><div className="progress-track"><i style={{width:Math.max(0,Math.min(100,transcriptionProgress.percent))+"%"}}/></div>{transcriptionProgress.totalChunks>0&&<small>Blocos concluídos: {transcriptionProgress.completedChunks} de {transcriptionProgress.totalChunks}</small>}</div>}
         {transcriptionMessage&&<div className="transcription-message" role="status">{transcriptionMessage}</div>}
         <small className="transcription-privacy">Somente o modo local mantém o áudio no computador. Os modos Automático e Groq enviam o áudio à API da Groq; no Automático, o processamento local é usado como fallback. O modelo local é baixado na primeira utilização. O arquivo original não é modificado.</small>
