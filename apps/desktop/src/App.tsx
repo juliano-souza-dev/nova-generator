@@ -104,6 +104,14 @@ export default function App() {
     setActiveProject(project); setView("project");
   }
 
+  if (view === "project" && activeProject?.project_type === "ttk_media" && activeProject.ttk_project_id) {
+    return <TtkMediaModule
+      key={activeProject.id}
+      projectId={activeProject.ttk_project_id}
+      onBack={() => { setActiveProject(null); setView("home"); void refreshProjects(); }}
+    />;
+  }
+
   if (view === "project" && activeProject) {
     const currentStage = Math.max(0, stages.indexOf(stageLabel(activeProject.stage)));
     return <div className="workspace-shell">\n      <TaskCenter />
@@ -125,7 +133,7 @@ export default function App() {
           <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <div className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></div>; })}</div>
           <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {stageLabel(activeProject.stage)}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
         </section>}
-        {activeProject.project_type === "ttk_media" && activeProject.ttk_project_id ? <TtkMediaModule key={activeProject.id} projectId={activeProject.ttk_project_id} /> : activeProject.project_type === "materials" ? <MaterialsWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} /> : <MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />}
+        {activeProject.project_type === "materials" ? <MaterialsWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} /> : <MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} />}
       </main>
     </div>;
   }
