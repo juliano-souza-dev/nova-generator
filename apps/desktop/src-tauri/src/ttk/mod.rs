@@ -43,8 +43,8 @@ fn migrate_legacy_data(destination: &Path) -> std::io::Result<()> {
         candidates.push(PathBuf::from(path).join("com.julianosouza.ttkcreator"));
     }
     if let Some(home) = std::env::var_os("HOME") {
-        candidates.push(PathBuf::from(home).join("Library/Application Support/com.julianosouza.ttkcreator"));
-        candidates.push(PathBuf::from(home).join(".local/share/com.julianosouza.ttkcreator"));
+        candidates.push(PathBuf::from(&home).join("Library/Application Support/com.julianosouza.ttkcreator"));
+        candidates.push(PathBuf::from(&home).join(".local/share/com.julianosouza.ttkcreator"));
     }
     for source in candidates {
         if source.is_dir() && source != destination {
