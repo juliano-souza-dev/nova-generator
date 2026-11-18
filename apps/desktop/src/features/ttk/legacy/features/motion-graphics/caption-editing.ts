@@ -10,7 +10,7 @@ export function splitCaption(
   createId: () => string = () => crypto.randomUUID(),
 ): CaptionSplitResult {
   const sourceText = (item.captionEnglish || item.text || "").trim();
-  const parts = sourceText.split(/\\s+/).filter(Boolean);
+  const parts = sourceText.split(/\s+/).filter(Boolean);
   if (parts.length < 2) return { ok: false, reason: "too-few-words" };
 
   const words = item.captionWords || [];
@@ -61,7 +61,7 @@ export function splitCaption(
   const firstWords = words.slice(0, wordSplitIndex);
   const secondWords = words.slice(wordSplitIndex);
 
-  const translatedParts = (item.captionTranslation || "").trim().split(/\\s+/).filter(Boolean);
+  const translatedParts = (item.captionTranslation || "").trim().split(/\s+/).filter(Boolean);
   const translatedSplit = translatedParts.length > 1
     ? Math.max(1, Math.min(translatedParts.length - 1, Math.round(translatedParts.length * splitIndex / parts.length)))
     : 0;
