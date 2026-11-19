@@ -396,8 +396,8 @@ export default function SubtitleTimingAdjuster({
           <div className="subtitle-timing-cue-list">{sorted.map((cue, index) => <button key={cue.id} type="button" className={cue.id === activeId ? "active" : ""} onClick={() => setActiveId(cue.id)}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{cue.text || "Cue sem texto"}</strong><small>{formatTime(cue.startMs)} → {formatTime(cue.endMs)}</small></span></button>)}</div>
         </aside>
         <main className="subtitle-timing-main">
-          <div className="subtitle-timing-video-wrap">
-            <video ref={videoRef} src={videoUrl} controls playsInline preload="metadata" onLoadedMetadata={() => seek(active?.startMs ?? 0)} onTimeUpdate={event => handleVideoTimeUpdate(event.currentTarget)} onPause={() => setPlaybackMode(null)}/>
+          <div className="subtitle-timing-video-wrap" style={{ isolation: "isolate" }}>
+            <video className="subtitle-timing-video" ref={videoRef} src={videoUrl} controls playsInline preload="auto" style={{ display: "block", position: "relative", zIndex: 1, width: "100%", maxWidth: "100%", maxHeight: 300, objectFit: "contain", background: "#05090e", transform: "translate3d(0,0,0)", backfaceVisibility: "hidden", willChange: "transform" }} onLoadedMetadata={() => seek(active?.startMs ?? 0)} onTimeUpdate={event => handleVideoTimeUpdate(event.currentTarget)} onPause={() => setPlaybackMode(null)}/>
             {active && playhead >= active.startMs && playhead < active.endMs && <div className="subtitle-timing-overlay"><strong>{active.text}</strong>{active.translation && <span>{active.translation}</span>}</div>}
           </div>
           {active && <div className="subtitle-timing-cue-text"><strong>{active.text}</strong>{active.translation && <span>{active.translation}</span>}</div>}
