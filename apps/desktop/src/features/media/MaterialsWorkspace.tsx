@@ -353,6 +353,10 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
 
   function exportLearningJourney() {
     if (!learningJourney) return;
+    if (learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards)) {
+      setError("Os cards aprovados foram alterados. Regenere a jornada antes de exportar.");
+      return;
+    }
     const errors = validateLearningJourney(learningJourney);
     if (errors.length) { setError(errors.join("\n")); return; }
     const blob = new Blob([JSON.stringify(learningJourney, null, 2)], { type: "application/json;charset=utf-8" });
