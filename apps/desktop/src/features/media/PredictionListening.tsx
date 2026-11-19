@@ -451,7 +451,7 @@ export default function PredictionListening({
   }, []);
 
   return <div className={"prediction-listening-backdrop" + (embedded ? " embedded" : "") + (demoState !== "idle" ? " demo-active" : "")}>
-    <section className="prediction-listening-modal" role="dialog" aria-modal="true" aria-label="Prediction Listening">
+    <section className="prediction-listening-modal" role="dialog" aria-modal={!embedded} aria-label="Prediction Listening">
       <header className="prediction-listening-header">
         <div>
           <span className="eyebrow">NOVA GENERATOR · MÓDULO EDITORIAL</span>
@@ -469,7 +469,7 @@ export default function PredictionListening({
         <button className="secondary-button" onClick={() => fileInput.current?.click()} disabled={busy || loading || !sourceHash}>
           <FileJson size={15}/> Importar JSON
         </button>
-        <button className="primary-button" onClick={() => void saveForMaterials()} disabled={!review || busy || loading || Boolean(review?.saved_at)} title={review?.saved_at ? "Este resultado já foi salvo para Materiais" : "Salvar o resultado do Prediction Listening"}>
+        <button className="primary-button" onClick={() => void saveForMaterials()} disabled={!review || busy || loading || Boolean(review?.saved_at)} title={review?.saved_at ? "Este resultado já foi salvo" : "Salvar o resultado do Prediction Listening"}>
           <Save size={15}/>{review?.saved_at ? "Salvo" : "Salvar"}
         </button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={event => void importResult(event.target.files?.[0])}/>
