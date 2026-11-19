@@ -38,7 +38,7 @@ type AnkiCard = {
 };
 type PedagogicalLayer = { context: string; usage: string; example_en: string; example_pt: string; nuance?: string };
 type PedagogicalItem = { id: string; cue_order: number; start_ms: number; end_ms: number; type: string; expression: string; meaning_pt: string; explanation_pt: string; source_en: string; source_pt: string; layers: PedagogicalLayer[] };
-type PedagogicalContentPackage = { contract: "ihub-pedagogical-content/1.0"; title: string; language: string; source_hash: string; minimum_items: number; items: PedagogicalItem[] };
+type PedagogicalContentPackage = { contract: "ihub-pedagogical-content/1.0"; title: string; language: string; source_hash: string; minimum_items: number; items: PedagogicalItem[]; editorial_signature?: string };
 type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string; learningJourney?: LearningJourneyPackage; pedagogicalContent?: PedagogicalContentPackage };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 type SharedVoice = { id: string; name: string; mode?: "voice_clone" | "voice_design" };
@@ -210,6 +210,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       setCards([]);
       setPredictionSaved(false);
       setLearningJourney(null);
+      setPedagogicalContent(null);
       setSourceInfo({ cues: 0, translations: 0, editorial: 0, shadowing: 0, predictions: 0 });
       return;
     }
@@ -253,7 +254,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       setPredictionSaved(isPredictionSaved);
       const savedJourney = stored?.learningJourney;
       const savedPedagogicalContent = stored?.pedagogicalContent;
-      setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-content/1.0" ? savedPedagogicalContent : null);
+setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-content/1.0" && savedPedagogicalContent.editorial_signature === materialSignature ? savedPedagogicalContent : null);
       const storedJourneySignature = learningJourneySourceSignature(materialSignature, Array.isArray(stored?.cards) ? stored.cards : []);
       setLearningJourney(savedJourney && savedJourney.source?.sourceSignature === storedJourneySignature && validateLearningJourney(savedJourney).length === 0 ? savedJourney : null);
       setSourceSignature(materialSignature);
@@ -641,7 +642,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
         if (!text(item.meaning_pt).trim() || !text(item.explanation_pt).trim() || !text(item.source_en).trim() || !Array.isArray(item.layers) || item.layers.length < 3) throw new Error("Cada item precisa de significado, explicação, fala de origem e ao menos três camadas de uso.");
         if (item.layers.some(layer => !text(layer.context).trim() || !text(layer.usage).trim() || !text(layer.example_en).trim() || !text(layer.example_pt).trim())) throw new Error("Cada camada precisa de contexto, orientação de uso e exemplos EN/PT.");
       }
-      setPedagogicalContent(parsed);
+      setPedagogicalContent({ ...parsed, editorial_signature: sourceSignature });
       setNotice("Conteúdo pedagógico importado. Salve os materiais para manter o conteúdo no projeto.");
     } catch (e) { setError(String(e)); }
     finally { if (pedagogicalInput.current) pedagogicalInput.current.value = ""; }
@@ -649,6 +650,11 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
 
   async function exportPedagogicalForHub() {
     if (!pedagogicalContent || !assetId) return;
+    const { sourceHash } = await buildPedagogicalInput();
+    if (pedagogicalContent.source_hash !== sourceHash || pedagogicalContent.editorial_signature !== sourceSignature) {
+      setError("Este conteúdo pedagógico está desatualizado em relação à transcrição. Gere novamente as instruções e importe um novo resultado da IA.");
+      return;
+    }
     const payload = {
       schema: "ihub-generator-pedagogical-import/1.0",
       cues: sourceCues.map((cue, index) => ({
