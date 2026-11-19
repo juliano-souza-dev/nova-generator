@@ -131,10 +131,11 @@ export function buildSmartLearningSource(projectId: string, assetId: string, sou
     cues: cues.map((cue, index) => ({
       cue_order: index + 1,
       cue_id: cue.id,
-      start_ms: Math.round(cue.startMs),
-      end_ms: Math.round(cue.endMs),
+      start_ms: cue.startMs,
+      end_ms: cue.endMs,
       text_en: cue.text,
-      text_pt: translations.find(item => item.id === cue.id)?.text ?? "",\n      words: (cue.words ?? []).map(word => ({ text: word.text, start_ms: word.startMs, end_ms: word.endMs }))
+      text_pt: translations.find(item => item.id === cue.id)?.text ?? "",
+      words: (cue.words ?? []).map(word => ({ text: word.text, start_ms: word.startMs, end_ms: word.endMs }))
     }))
   };
 }
