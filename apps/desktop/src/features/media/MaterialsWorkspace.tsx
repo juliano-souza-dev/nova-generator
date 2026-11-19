@@ -624,17 +624,17 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         "SPEAKER: " + (cue.speaker || "NOT_AVAILABLE"), "EN: " + cue.text_en,
         "PT: " + (cue.text_pt || "NOT_AVAILABLE")
       ));
-      const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = "conteudo-pedagogico-" + assetId + "-instrucoes.txt";
-      anchor.style.display = "none";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-      setNotice("TXT gerado com as instruções completas e " + source.cues.length + " trechos da transcrição revisada. Envie o arquivo à IA e importe o JSON de resposta.");
+      const path = await saveFile({
+        title: "Salvar instruções do conteúdo pedagógico",
+        defaultPath: "conteudo-pedagogico-" + assetId + "-instrucoes.txt",
+        filters: [{ name: "Instruções para IA externa", extensions: ["txt"] }]
+      });
+      if (!path) return;
+      const bytes = Array.from(new TextEncoder().encode("\uFEFF" + lines.join("\r\n")));
+      await runTrackedTask("materials", "Salvar instruções do conteúdo pedagógico", () =>
+        invoke("save_external_translation_package", { path, bytes })
+      );
+      setNotice("Arquivo TXT salvo com as instruções completas e " + source.cues.length + " trechos da transcrição revisada. Envie-o à IA e importe o JSON de resposta.");
     } catch (e) { setError(String(e)); }
   }
 
@@ -735,7 +735,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
 
     {!assets.length ? <div className="materials-empty"><div><Layers3 size={25}/></div><h3>Adicione uma mídia para começar</h3><p>A área Materiais usa transcrições, traduções e conteúdos aprovados vinculados aos vídeos do projeto.</p></div> : <>
       <div className="materials-source">
-        <div><span className="eyebrow">CONTEÚDO DE ORIGEM</span><strong>{selectedAsset?.name ?? "Selecione um vídeo"}</strong><small>Os materiais são organizados por vídeo e permanecem vinculados ao projeto.</small></div>
+        <div><span className="eyebrow">FONTE SELECIONADA</span><strong>{selectedAsset?.name ?? "Selecione uma fonte do projeto"}</strong></div>
         <select value={assetId} onChange={event => setAssetId(event.target.value)} aria-label="Vídeo de origem">{assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>
       </div>
 
