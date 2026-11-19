@@ -18,7 +18,7 @@ type SharedRuntimeStatus = { providers: { id: string; name: string; model: strin
 type Asset = { id: string; name: string; durationMs?: number | null; sourceStartMs?: number | null; sourceEndMs?: number | null };
 function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: number, cue?: Cue) {
   const text = String(suggestion?.approved_en || fallback || "");
-  const wordMatches = [...text.matchAll(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*/gu)];
+  const wordMatches = [...text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)];
   if (!wordMatches.length) return text;
 
   // Prefer the editorial word timings. If their tokenization differs from the
@@ -48,7 +48,7 @@ function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: nu
 
   const activeIndex = timings.findIndex(word => currentMs >= word.start && currentMs < word.end);
   const completedIndex = timings.reduce((last, word, index) => word.end <= currentMs ? index : last, -1);
-  const tokens = [...text.matchAll(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*|[^\\s\\p{L}\\p{N}]+/gu)];
+  const tokens = [...text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]+/gu)];
   const parts: ReactNode[] = [];
   let cursor = 0;
   let wordIndex = 0;
@@ -57,7 +57,7 @@ function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: nu
   tokens.forEach((token, tokenPosition) => {
     const tokenStart = token.index ?? cursor;
     if (tokenStart > cursor) parts.push(text.slice(cursor, tokenStart));
-    const isWord = /^[\\p{L}\\p{N}]/u.test(token[0]);
+    const isWord = /^[\p{L}\p{N}]/u.test(token[0]);
     const index = isWord ? wordIndex++ : previousWordIndex;
     if (isWord) previousWordIndex = index;
     const state = index === activeIndex ? "active" : index <= completedIndex ? "complete" : "upcoming";
