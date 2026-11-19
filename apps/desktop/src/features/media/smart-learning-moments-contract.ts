@@ -76,8 +76,8 @@ export function validateSmartLearningMoments(
   const ids = new Set<string>();
   const alignedRange = (cue: SmartLearningCue | undefined, expression: string) => {
     if (!cue?.words?.length) return null;
-    const normalize = (value: string) => value.toLocaleLowerCase("en-US").replace(/[^\\p{L}\\p{N}']/gu, "");
-    const target = expression.trim().split(/\\s+/).map(normalize);
+    const normalize = (value: string) => value.toLocaleLowerCase("en-US").replace(/[^\p{L}\p{N}']/gu, "");
+    const target = expression.trim().split(/\s+/).map(normalize);
     for (let start = 0; start <= cue.words.length - target.length; start++) {
       const candidate = cue.words.slice(start, start + target.length);
       if (candidate.every((word, index) => normalize(word.text) === target[index])) return {
