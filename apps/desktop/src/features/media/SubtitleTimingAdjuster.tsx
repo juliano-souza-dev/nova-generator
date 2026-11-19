@@ -218,7 +218,7 @@ export default function SubtitleTimingAdjuster({
   }, [peaks, durationMs, viewStart, viewEnd, rangeStart, rangeEnd, playhead, canvasWidth]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || playbackMode === "preview") return;
     if (zoom > 1) centerCue();
     seek(active.startMs);
   // Initial positioning follows cue selection, not every drag update.
