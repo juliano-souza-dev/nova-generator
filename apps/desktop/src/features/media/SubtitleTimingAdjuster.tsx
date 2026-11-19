@@ -146,41 +146,57 @@ export default function SubtitleTimingAdjuster({
   }, [videoOffsetMs, durationMs, speed]);
 
   useEffect(() => {
-    let cancelled = false;
+    const video = videoRef.current;
+    if (!video) return;
     let context: AudioContext | null = null;
-    (async () => {
+    let source: MediaElementAudioSourceNode | null = null;
+    let analyser: AnalyserNode | null = null;
+    let frame = 0;
+    let stopped = false;
+    const connectAudio = async () => {
       try {
-        const response = await fetch(videoUrl);
-        const size = Number(response.headers.get("content-length") || 0);
-        if (size > 120 * 1024 * 1024) {
-          setWaveMessage("Arquivo grande demais para gerar a forma de onda no navegador. Os controles de tempo continuam disponíveis.");
-          return;
+        if (!context) {
+          context = new AudioContext();
+          source = context.createMediaElementSource(video);
+          analyser = context.createAnalyser();
+          analyser.fftSize = 1024;
+          source.connect(analyser);
+          analyser.connect(context.destination);
         }
-        const bytes = await response.arrayBuffer();
-        if (cancelled) return;
-        context = new AudioContext();
-        const audio = await context.decodeAudioData(bytes.slice(0));
-        if (cancelled) return;
-        const channel = audio.getChannelData(0);
-        const bins = 1800;
-        const samplesPerBin = Math.max(1, Math.floor(channel.length / bins));
-        const next: number[] = [];
-        for (let i = 0; i < bins; i++) {
-          let peak = 0;
-          const end = Math.min(channel.length, (i + 1) * samplesPerBin);
-          for (let j = i * samplesPerBin; j < end; j += 4) peak = Math.max(peak, Math.abs(channel[j] || 0));
-          next.push(peak);
-        }
-        setPeaks(next);
-        setWaveMessage("Forma de onda carregada");
+        await context.resume();
+        const samples = new Uint8Array(analyser!.fftSize);
+        const sample = () => {
+          if (stopped || !analyser) return;
+          if (!video.paused && !video.ended) {
+            analyser.getByteTimeDomainData(samples);
+            let peak = 0;
+            for (let i = 0; i < samples.length; i += 4) peak = Math.max(peak, Math.abs(samples[i] - 128) / 128);
+            const localMs = video.currentTime * 1000 - videoOffsetMs;
+            const index = clamp(Math.floor(localMs / Math.max(1, durationMs) * 1800), 0, 1799);
+            setPeaks(current => {
+              const next = current.length === 1800 ? [...current] : Array(1800).fill(0);
+              next[index] = Math.max(next[index], peak);
+              return next;
+            });
+          }
+          frame = requestAnimationFrame(sample);
+        };
+        if (!frame) frame = requestAnimationFrame(sample);
+        setWaveMessage("Waveform real: reproduza o vídeo para preencher os níveis de áudio.");
       } catch {
-        if (!cancelled) setWaveMessage("Forma de onda indisponível neste formato. Ajuste pelos controles de tempo e pelo vídeo.");
-      } finally {
-        await context?.close().catch(() => undefined);
+        setWaveMessage("Waveform indisponível neste formato. Os controles de tempo continuam disponíveis.");
       }
-    })();
-    return () => { cancelled = true; void context?.close().catch(() => undefined); };
-  }, [videoUrl]);
+    };
+    const onPlay = () => { void connectAudio(); };
+    video.addEventListener("play", onPlay);
+    return () => {
+      stopped = true;
+      video.removeEventListener("play", onPlay);
+      if (frame) cancelAnimationFrame(frame);
+      try { source?.disconnect(); analyser?.disconnect(); } catch { /* áudio já desconectado */ }
+      void context?.close().catch(() => undefined);
+    };
+  }, [videoUrl, durationMs, videoOffsetMs]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
