@@ -716,19 +716,44 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         {activeMaterialTab === "pedagogical" ? <>
           <nav className="materials-subtabs" aria-label="Módulos de conteúdo pedagógico">
             <button type="button" className={activePedagogicalTab === "vocabulary" ? "active" : ""} onClick={() => setActivePedagogicalTab("vocabulary")}>Reconhecimento contextual do vocabulário</button>
-            <button type="button" className={activePedagogicalTab === "journey" && <section className="materials-journey-panel">
-          <div className="materials-journey-heading">
-            <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Jornada de aprendizagem · 7 dias</h3>
-              <p>Prepare atividades progressivas a partir da transcrição revisada e dos cards aprovados. O Dia 1 reaproveita as etapas atuais do iHubEnglish.</p></div>
-            <div className="materials-journey-actions">
-              <button className="secondary-button" type="button" onClick={createLearningJourney} disabled={loading || !sourceCues.length}><Sparkles size={14}/>{learningJourney ? "Regenerar rascunho" : "Gerar jornada"}</button>
-              <button className="secondary-button" type="button" onClick={exportLearningJourney} disabled={!learningJourney}><Download size={14}/> Exportar JSON</button>
+            <button type="button" className={activePedagogicalTab === "journey" ? "active" : ""} onClick={() => setActivePedagogicalTab("journey")}>Jornada de aprendizagem · 7 dias</button>
+          </nav>
+          {activePedagogicalTab === "vocabulary" && <>
+            <section className="materials-journey-panel">
+              <div className="materials-journey-heading">
+                <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Reconhecimento contextual do vocabulário</h3>
+                  <p>Extraia itens relevantes da transcrição revisada e gere mapas de uso em diferentes contextos. Cada item deve conter ao menos três camadas de aplicação.</p></div>
+                <div className="materials-journey-actions">
+                  <button className="secondary-button" type="button" onClick={() => void generatePedagogicalInput()} disabled={loading || !sourceCues.length}><FileText size={14}/> Baixar instruções TXT</button>
+                  <button className="secondary-button" type="button" onClick={() => pedagogicalInput.current?.click()} disabled={loading || !sourceCues.length}><Download size={14}/> Importar JSON da IA</button>
+                  <input ref={pedagogicalInput} type="file" accept=".json,application/json" hidden onChange={event => void importPedagogicalContent(event.target.files?.[0])}/>
+                  <button className="primary-button" type="button" onClick={() => void persistMaterials().then(() => setNotice("Conteúdo pedagógico salvo no projeto.")).catch(e => setError(String(e)))} disabled={!pedagogicalContent || saving}><Save size={14}/> Salvar conteúdo</button>
+                  <button className="secondary-button" type="button" onClick={() => void exportPedagogicalForHub()} disabled={!pedagogicalContent}><Download size={14}/> Exportar para iHub</button>
+                </div>
+              </div>
+              {pedagogicalContent && <div className="materials-stats"><div><BookOpen size={17}/><strong>{pedagogicalContent.items.length}</strong><span>itens pedagógicos</span></div><div><Layers3 size={17}/><strong>{pedagogicalContent.items.reduce((sum, item) => sum + item.layers.length, 0)}</strong><span>camadas de uso</span></div><div><CheckCircle2 size={17}/><strong>Validado</strong><span>vinculado à transcrição</span></div></div>}
+            </section>
+            <div className="materials-stats">
+              <div><BookOpen size={17}/><strong>{sourceInfo.cues}</strong><span>trechos</span></div>
+              <div><Volume2 size={17}/><strong>{sourceInfo.translations}</strong><span>traduções</span></div>
+              <div><Sparkles size={17}/><strong>{sourceInfo.editorial}</strong><span>sugestões editoriais</span></div>
+              <div><AudioLines size={17}/><strong>{sourceInfo.shadowing}</strong><span>trechos Shadowing</span></div>
+              <div><CheckCircle2 size={17}/><strong>{sourceInfo.predictions}</strong><span>desafios aprovados</span></div>
             </div>
-          </div>
-          {learningJourney && learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards) && <p className="materials-journey-stale">Os cards aprovados mudaram. Regenere a jornada antes de exportar ou publicar.</p>}
-          {learningJourney ? <div className="materials-journey-days">{learningJourney.days.map(day => <article key={day.day} className="materials-journey-day"><span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.mode === "existing-stages" ? "Etapas atuais" : day.mode === "listening-recall" ? day.activities.length + " exercícios de listening" : day.mode === "micro-lessons" ? day.lessons.length + " microaulas" : day.mode === "deep-listening" ? day.tasks.length + " tarefas" : day.mode === "speaking" ? day.prompts.length + " propostas de speaking" : "Desafio integrado"}</small></article>)}</div> : <p className="materials-journey-empty">O rascunho será montado com exercícios de identificação, lacunas e compreensão auditiva; microaulas derivadas dos cards aprovados; tarefas de escuta profunda; e propostas de gravação e comparação.</p>}
-          {learningJourney && <p className="materials-journey-note">Rascunho editável · {learningJourney.days[1].activities.length} atividades no Dia 2 · {learningJourney.days[2].lessons.length} microaulas no Dia 3. Salve os Materiais para manter o pacote neste projeto.</p>}
-        </section>}
+          </>}
+          {activePedagogicalTab === "journey" && <section className="materials-journey-panel">
+            <div className="materials-journey-heading">
+              <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Jornada de aprendizagem · 7 dias</h3>
+                <p>Prepare atividades progressivas a partir da transcrição revisada e dos cards aprovados. O Dia 1 reaproveita as etapas atuais do iHubEnglish.</p></div>
+              <div className="materials-journey-actions">
+                <button className="secondary-button" type="button" onClick={createLearningJourney} disabled={loading || !sourceCues.length}><Sparkles size={14}/>{learningJourney ? "Regenerar rascunho" : "Gerar jornada"}</button>
+                <button className="secondary-button" type="button" onClick={exportLearningJourney} disabled={!learningJourney}><Download size={14}/> Exportar JSON</button>
+              </div>
+            </div>
+            {learningJourney && learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards) && <p className="materials-journey-stale">Os cards aprovados mudaram. Regenere a jornada antes de exportar ou publicar.</p>}
+            {learningJourney ? <div className="materials-journey-days">{learningJourney.days.map(day => <article key={day.day} className="materials-journey-day"><span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.mode === "existing-stages" ? "Etapas atuais" : day.mode === "listening-recall" ? day.activities.length + " exercícios de listening" : day.mode === "micro-lessons" ? day.lessons.length + " microaulas" : day.mode === "deep-listening" ? day.tasks.length + " tarefas" : day.mode === "speaking" ? day.prompts.length + " propostas de speaking" : "Desafio integrado"}</small></article>)}</div> : <p className="materials-journey-empty">O rascunho será montado com exercícios de identificação, lacunas e compreensão auditiva; microaulas derivadas dos cards aprovados; tarefas de escuta profunda; e propostas de gravação e comparação.</p>}
+            {learningJourney && <p className="materials-journey-note">Rascunho editável · {learningJourney.days[1].activities.length} atividades no Dia 2 · {learningJourney.days[2].lessons.length} microaulas no Dia 3. Salve os Materiais para manter o pacote neste projeto.</p>}
+          </section>}
         </> : <div className="materials-anki-content">
         <div className="materials-runtime">
           <div className="materials-runtime-icon"><AudioLines size={18}/></div>
@@ -800,7 +825,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           <div><strong>Pacote de estudo</strong><p>O ZIP final reúne o pacote Anki (.apkg), o JSON editável e os áudios dos cards aprovados.</p></div>
           <span>{approvedCount > 0 && pendingAudioCount === 0 ? <CheckCircle2 size={15}/> : <RefreshCw size={15}/>} {approvedCount > 0 && pendingAudioCount === 0 ? "Pronto para exportar" : "Aguardando revisão e áudios"}</span>
         </div>
-        </div>}
+        </div>}}
+
       </>}
     </>}
   </section>;
