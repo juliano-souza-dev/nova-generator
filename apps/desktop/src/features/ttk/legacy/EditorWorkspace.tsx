@@ -422,11 +422,15 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
   const transcriptionTargetAsset = transcriptionTargetClip
     ? assets.find(asset => asset.id === transcriptionTargetClip.assetId) ?? null
     : null;
-  const timingTargetClip = selectedMotion?.isCaption ? selectedCaptionClip : null;
+  const timingTargetClip = selectedMotion?.isCaption
+    ? (selectedMotion.sourceClipId ? selectedCaptionClip : activeVisualClip)
+    : null;
   const timingTargetAsset = timingTargetClip ? assets.find(asset => asset.id === timingTargetClip.assetId) ?? null : null;
   const timingTargetUrl = timingTargetAsset ? mediaUrls[timingTargetAsset.id] : undefined;
   const timingTargetCues = timingTargetClip
-    ? captions.filter(item => item.isCaption && item.sourceClipId === timingTargetClip.id).sort((a, b) => a.startMs - b.startMs)
+    ? (selectedMotion?.sourceClipId
+      ? captions.filter(item => item.isCaption && item.sourceClipId === timingTargetClip.id)
+      : [selectedMotion]).sort((a, b) => a.startMs - b.startMs)
     : [];
 
   useEffect(() => {
