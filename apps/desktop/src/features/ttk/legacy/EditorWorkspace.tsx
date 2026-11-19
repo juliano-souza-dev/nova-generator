@@ -1537,5 +1537,43 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
       </div>
       {audioClips.map(clip=>{const asset=assets.find(item=>item.id===clip.assetId);const url=mediaUrls[clip.assetId];return asset&&url?<audio key={clip.id} ref={node=>{audioRefs.current[clip.id]=node;}} src={url} preload="metadata" onLoadedMetadata={event=>{const durationMs=event.currentTarget.duration*1000;if(!Number.isFinite(durationMs)||durationMs<=0)return;const measuredDurationMs=Math.round(durationMs);setMediaDurations(current=>({...current,[asset.id]:measuredDurationMs}));setClips(current=>current.map(item=>{if(item.assetId!==asset.id)return item;const shouldExpandDefault=item.sourceDurationMs==null&&item.sourceEndMs===30000;const shouldClamp=item.sourceEndMs>durationMs;return {...item,sourceDurationMs:measuredDurationMs,sourceEndMs:shouldExpandDefault||shouldClamp?measuredDurationMs:item.sourceEndMs};}));}}/>:null;})}
     </section>
+    {timingAdjusterOpen && timingTargetClip && timingTargetAsset?.kind === "video" && timingTargetUrl && timingTargetCues.length > 0 && <SubtitleTimingAdjuster
+      title="Ajustar sincronização das legendas"
+      videoUrl={timingTargetUrl}
+      durationMs={Math.max(1, timingTargetClip.sourceEndMs - timingTargetClip.sourceStartMs)}
+      videoOffsetMs={timingTargetClip.sourceStartMs}
+      selectedCueId={selectedMotion?.id}
+      cues={timingTargetCues.map(item => ({
+        id: item.id,
+        text: item.captionEnglish || item.text,
+        translation: item.captionTranslation || "",
+        startMs: Math.max(0, item.startMs - timingTargetClip.timelineStartMs),
+        endMs: Math.max(1, item.endMs - timingTargetClip.timelineStartMs),
+        words: (item.captionWords ?? []).map(word => ({
+          text: word.text,
+          startMs: Math.max(0, word.startMs - timingTargetClip.timelineStartMs),
+          endMs: Math.max(1, word.endMs - timingTargetClip.timelineStartMs),
+        })),
+      }))}
+      onCancel={() => setTimingAdjusterOpen(false)}
+      onSave={async adjusted => {
+        const byId = new Map(adjusted.map(item => [item.id, item]));
+        setMotion(current => current.map(item => {
+          const timing = byId.get(item.id);
+          if (!timing || !item.isCaption) return item;
+          const startMs = timingTargetClip.timelineStartMs + timing.startMs;
+          const endMs = timingTargetClip.timelineStartMs + timing.endMs;
+          const captionWords = timing.words?.map((word, index) => ({
+            ...(item.captionWords?.[index] ?? {}),
+            text: word.text,
+            startMs: timingTargetClip.timelineStartMs + word.startMs,
+            endMs: timingTargetClip.timelineStartMs + word.endMs,
+          }));
+          return { ...item, startMs, endMs, durationMs: endMs - startMs, captionWords: captionWords ?? item.captionWords };
+        }));
+        setTimingAdjusterOpen(false);
+        setSceneSpecMessage("Sincronização das legendas ajustada e salva automaticamente.");
+      }}
+    />}
   </section>;
 }
