@@ -157,60 +157,11 @@ export default function SubtitleTimingAdjuster({
   }, [videoOffsetMs, durationMs, speed]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    let context: AudioContext | null = null;
-    let source: MediaElementAudioSourceNode | null = null;
-    let analyser: AnalyserNode | null = null;
-    let frame = 0;
-    let lastSampleAt = 0;
-    let stopped = false;
-    const connectAudio = async () => {
-      try {
-        if (!context) {
-          context = new AudioContext();
-          source = context.createMediaElementSource(video);
-          analyser = context.createAnalyser();
-          analyser.fftSize = 1024;
-          source.connect(analyser);
-          analyser.connect(context.destination);
-        }
-        await context.resume();
-        const samples = new Uint8Array(analyser!.fftSize);
-        const sample = () => {
-          if (stopped || !analyser) return;
-          const now = performance.now();
-          if (!video.paused && !video.ended && now - lastSampleAt >= 80) {
-            lastSampleAt = now;
-            analyser.getByteTimeDomainData(samples);
-            let peak = 0;
-            for (let i = 0; i < samples.length; i += 4) peak = Math.max(peak, Math.abs(samples[i] - 128) / 128);
-            const localMs = video.currentTime * 1000 - videoOffsetMs;
-            const index = clamp(Math.floor(localMs / Math.max(1, durationMs) * 1800), 0, 1799);
-            setPeaks(current => {
-              const next = current.length === 1800 ? [...current] : Array(1800).fill(0);
-              next[index] = Math.max(next[index], peak);
-              return next;
-            });
-          }
-          frame = requestAnimationFrame(sample);
-        };
-        if (!frame) frame = requestAnimationFrame(sample);
-        setWaveMessage("Waveform real: reproduza o vídeo para preencher os níveis de áudio.");
-      } catch {
-        setWaveMessage("Waveform indisponível neste formato. Os controles de tempo continuam disponíveis.");
-      }
-    };
-    const onPlay = () => { void connectAudio(); };
-    video.addEventListener("play", onPlay);
-    return () => {
-      stopped = true;
-      video.removeEventListener("play", onPlay);
-      if (frame) cancelAnimationFrame(frame);
-      try { source?.disconnect(); analyser?.disconnect(); } catch { /* áudio já desconectado */ }
-      void context?.close().catch(() => undefined);
-    };
-  }, [videoUrl, durationMs, videoOffsetMs]);
+    // Keep the media element's native audio path untouched. Creating a
+    // MediaElementAudioSourceNode can silence media served by desktop asset
+    // protocols or URLs without the required CORS headers.
+    setWaveMessage("Áudio original preservado. A waveform detalhada ficará indisponível neste modo.");
+  }, [videoUrl]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
