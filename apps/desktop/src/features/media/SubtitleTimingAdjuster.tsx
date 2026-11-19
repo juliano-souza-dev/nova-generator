@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Crosshair, Pause, Play, Save, X, ZoomIn, ZoomOut } from "lucide-react";
 import "./SubtitleTimingAdjuster.css";
 
-export type SubtitleTimingWord = { text: string; startMs: number; endMs: number; [key: string]: unknown };
+export type SubtitleTimingWord = { text: string; startMs: number; endMs: number };
 export type SubtitleTimingCue = {
   id: string;
   text: string;
@@ -10,7 +10,6 @@ export type SubtitleTimingCue = {
   startMs: number;
   endMs: number;
   words?: SubtitleTimingWord[];
-  [key: string]: unknown;
 };
 
 type Props = {
