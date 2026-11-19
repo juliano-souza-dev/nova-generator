@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateLearningJourney, LEARNING_JOURNEY_CONTRACT } from "../src/features/media/learning-journey-contract";
+import { validateLearningJourney, LEARNING_JOURNEY_CONTRACT } from "../learning-journey-contract";
 
 const base = {
   contract: LEARNING_JOURNEY_CONTRACT,
