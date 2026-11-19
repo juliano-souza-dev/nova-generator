@@ -77,6 +77,7 @@ type Props = {
   onDemoResume: (timeMs: number) => void;
   getCurrentTime: () => number;
   onProjectUpdated?: () => void;
+  embedded?: boolean;
 };
 
 const OUTPUT_CONTRACT = "nova-generator-prediction-listening-output/1.0";
@@ -105,7 +106,7 @@ const buildMaterials = (review: Review, assetName: string): Materials => ({
 
 export default function PredictionListening({
   projectId, assetId, assetName, cues, selectedCueIds, sourceSignature, onClose, onPreview,
-  onDemoSeekAndPlay, onDemoPause, onDemoResume, getCurrentTime, onProjectUpdated
+  onDemoSeekAndPlay, onDemoPause, onDemoResume, getCurrentTime, onProjectUpdated, embedded = false
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [sourceHash, setSourceHash] = useState("");
@@ -177,8 +178,8 @@ export default function PredictionListening({
       onProjectUpdated?.();
       setReview(persisted);
       setNotice(approved.length
-        ? `Prediction Listening salvo. ${approved.length} desafio(s) aprovado(s) liberados na área Materiais.`
-        : "Prediction Listening salvo. A área Materiais foi liberada; aprove desafios para incluí-los nos cards Anki.");
+        ? `Prediction Listening salvo. ${approved.length} desafio(s) aprovado(s) disponíveis para aproveitamento nos cards Anki.`
+        : "Prediction Listening salvo. Aprove desafios para incluí-los nos cards Anki.");
     } catch (e) {
       setError("Não foi possível salvar o Prediction Listening: " + String(e));
     } finally {
@@ -449,7 +450,7 @@ export default function PredictionListening({
     demoCallbacks.current.onDemoPause();
   }, []);
 
-  return <div className={"prediction-listening-backdrop" + (demoState !== "idle" ? " demo-active" : "")}>
+  return <div className={"prediction-listening-backdrop" + (embedded ? " embedded" : "") + (demoState !== "idle" ? " demo-active" : "")}>
     <section className="prediction-listening-modal" role="dialog" aria-modal="true" aria-label="Prediction Listening">
       <header className="prediction-listening-header">
         <div>
@@ -468,8 +469,8 @@ export default function PredictionListening({
         <button className="secondary-button" onClick={() => fileInput.current?.click()} disabled={busy || loading || !sourceHash}>
           <FileJson size={15}/> Importar JSON
         </button>
-        <button className="primary-button" onClick={() => void saveForMaterials()} disabled={!review || busy || loading || Boolean(review?.saved_at)} title={review?.saved_at ? "Este resultado já foi salvo para Materiais" : "Salvar explicitamente e liberar a área Materiais"}>
-          <Save size={15}/>{review?.saved_at ? "Salvo para Materiais" : "Salvar"}
+        <button className="primary-button" onClick={() => void saveForMaterials()} disabled={!review || busy || loading || Boolean(review?.saved_at)} title={review?.saved_at ? "Este resultado já foi salvo para Materiais" : "Salvar o resultado do Prediction Listening"}>
+          <Save size={15}/>{review?.saved_at ? "Salvo" : "Salvar"}
         </button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={event => void importResult(event.target.files?.[0])}/>
       </div>
