@@ -37,6 +37,7 @@ export type DeepListeningTask = {
   mode: "no-subtitles" | "gap-fill" | "connected-speech" | "rhythm";
   prompt: string;
   expectedText?: string;
+  sentence?: string;
   acceptedAnswers?: string[];
   explanationPt?: string;
 };
@@ -210,9 +211,10 @@ export function buildLearningJourneyPackage(input: {
     id: "deep-" + cue.id,
     cueOrders: [cueOrder(cue)],
     mode: index % 3 === 0 ? "no-subtitles" : index % 3 === 1 ? "gap-fill" : "connected-speech",
-    prompt: index % 3 === 0 ? "Ouça sem legendas e identifique a ideia principal." : index % 3 === 1 ? "Ouça novamente e complete a frase." : "Observe como as palavras se conectam na fala.",
+    prompt: index % 3 === 0 ? "Ouça sem legendas e identifique a ideia principal." : index % 3 === 1 ? "Ouça novamente e complete a palavra que falta." : "Observe como as palavras se conectam na fala.",
     expectedText: cue.text,
-    acceptedAnswers: [cue.text]
+    sentence: index % 3 === 1 ? (() => { const tokens = wordsOf(cue.text); const target = tokens[Math.min(tokens.length - 1, Math.max(0, Math.floor(tokens.length / 2)))]; const at = cue.text.toLowerCase().indexOf(target.toLowerCase()); return at < 0 ? cue.text : cue.text.slice(0, at) + "_____" + cue.text.slice(at + target.length); })() : undefined,
+    acceptedAnswers: index % 3 === 1 ? [wordsOf(cue.text)[Math.min(wordsOf(cue.text).length - 1, Math.max(0, Math.floor(wordsOf(cue.text).length / 2)))] || ""] : [cue.text]
   }));
   const speaking: SpeakingPrompt[] = selected.slice(0, 8).map((cue, index) => ({
     id: "speak-" + cue.id,
