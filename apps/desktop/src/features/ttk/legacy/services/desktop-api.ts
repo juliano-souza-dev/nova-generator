@@ -24,6 +24,17 @@ export type ExternalClipTranslationPackage = { packageVersion: string; contractI
 export type AlignedClipCue = { id: string; text: string; startMs: number; endMs: number; words: TranscriptWord[]; wordAlignment: string };
 export type TranscriptionProgress = { projectId: string; stage: string; percent: number; completedChunks: number; totalChunks: number; message: string };
 
+function toU64Milliseconds(value: number, field: string): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`Valor inválido para ${field}: informe um tempo não negativo.`);
+  }
+  const normalized = Math.round(value);
+  if (!Number.isSafeInteger(normalized)) {
+    throw new Error(`Valor fora do intervalo seguro para ${field}.`);
+  }
+  return normalized;
+}
+
 export const desktopApi = {
   getGroqSettings: () => invoke<GroqSettings>("get_groq_settings"),
   transcribeMedia: (projectId: string, assetId: string, mode: "auto" | "cloud" | "local", language: string, localModel: string, sourceStartMs?: number, sourceEndMs?: number) =>
@@ -31,7 +42,32 @@ export const desktopApi = {
   prepareClipExternalTranslationPackage: (projectId: string, clipId: string, cues: TranscriptCue[]) =>
     invoke<ExternalClipTranslationPackage>("prepare_timeline_clip_external_translation_package", { projectId, clipId, cues: cues.map(cue => ({ ...cue, words: cue.words ?? [], wordAlignment: null, wordAlignmentHash: null })) }),
   alignTimelineClip: (projectId: string, assetId: string, sourceStartMs: number, sourceEndMs: number, language: string, cues: Array<{id:string;text:string;startMs:number;endMs:number}>) =>
-    runTrackedTask("transcription", "Alinhamento do clipe com WhisperX", () => invoke<AlignedClipCue[]>("align_timeline_clip_cues", { projectId, assetId, sourceStartMs, sourceEndMs, language, cues })),
+    runTrackedTask("transcription", "Alinhamento do clipe com WhisperX", () => {
+      // Tauri/Rust expects u64 for every timestamp. Timeline values may be
+      // fractional milliseconds after drag/trim operations, so normalize all
+      // numeric fields at this IPC boundary without changing the UI timeline.
+      const normalizedSourceStartMs = toU64Milliseconds(sourceStartMs, "início do clipe");
+      const normalizedSourceEndMs = toU64Milliseconds(sourceEndMs, "fim do clipe");
+      if (normalizedSourceEndMs <= normalizedSourceStartMs) {
+        throw new Error("O intervalo do clipe ficou inválido após normalizar os tempos.");
+      }
+      const normalizedCues = cues.map((cue, index) => {
+        const startMs = toU64Milliseconds(cue.startMs, `início da legenda ${index + 1}`);
+        const endMs = toU64Milliseconds(cue.endMs, `fim da legenda ${index + 1}`);
+        if (endMs <= startMs) {
+          throw new Error(`A legenda ${index + 1} possui duração menor que 1 ms após normalizar os tempos.`);
+        }
+        return { ...cue, startMs, endMs };
+      });
+      return invoke<AlignedClipCue[]>("align_timeline_clip_cues", {
+        projectId,
+        assetId,
+        sourceStartMs: normalizedSourceStartMs,
+        sourceEndMs: normalizedSourceEndMs,
+        language,
+        cues: normalizedCues,
+      });
+    }),
   checkLocalAsr: () => invoke<boolean>("check_local_asr"),
   installLocalAsr: () => runTrackedTask("installation", "Instalação do suporte de transcrição local", () => invoke<string>("install_local_asr")),
   saveGroqSettings: (settings: { maxChunkChars: number; maxCuesPerChunk: number; delayMs: number; targetLanguage: string }) =>
