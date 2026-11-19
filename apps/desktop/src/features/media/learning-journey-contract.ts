@@ -206,7 +206,7 @@ export function buildLearningJourneyPackage(input: {
   const lessons: MicroLesson[] = approvedCards.slice(0, 12).map(card => ({
     id: "micro-" + card.id,
     title: card.highlightEn || card.focus,
-    focus: /\b(?:am|is|are|was|were|do|does|did|have|has|had)\b/i.test(card.focus) ? "grammar" : "expression",
+    focus: /connected[ -]speech|linking|reduction/i.test(card.type + " " + card.focus) ? "connected-speech" : /pronunciation|stress|intonation/i.test(card.type + " " + card.focus) ? "pronunciation" : /grammar|structure|tense/i.test(card.type + " " + card.focus) ? "grammar" : "expression",
     sourceCueOrders: (() => { const source = cues.find(cue => cue.id === card.sourceCueId); return source ? [cueOrder(source)] : []; })(),
     targetEn: card.highlightEn || card.focus,
     targetPt: card.meaning,
