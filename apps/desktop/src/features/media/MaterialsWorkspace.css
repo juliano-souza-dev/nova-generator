@@ -121,3 +121,9 @@
 .materials-anki-content{display:grid;gap:18px}
 .materials-anki-content .materials-runtime{margin:0}
 @media(max-width:600px){.materials-main-tabs button,.materials-subtabs button{flex:1;justify-content:center}.materials-subtabs button{flex-basis:100%}}
+
+.materials-prediction-panel{min-width:0}
+.materials-prediction-prerequisite{display:grid;justify-items:center;gap:10px;padding:42px 20px;border:1px dashed var(--border,#dfe4ea);border-radius:12px;text-align:center;color:var(--muted,#64748b)}
+.materials-prediction-prerequisite>div{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:rgba(128,100,180,.12);color:#b89be7}
+.materials-prediction-prerequisite h3{margin:0;color:var(--text,#e5e7eb);font-size:15px}
+.materials-prediction-prerequisite p{max-width:620px;margin:0;font-size:12px;line-height:1.65}
