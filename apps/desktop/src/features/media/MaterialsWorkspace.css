@@ -139,7 +139,7 @@
 .materials-pedagogical-source span{font-size:8px;font-weight:800;letter-spacing:.1em;color:#9d8bb9}
 .materials-pedagogical-source strong{font:650 17px 'Space Grotesk';color:#eee7fb}
 .materials-pedagogical-source small{font-size:9px;color:#8f8999}
-.materials-pedagogical-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.materials-pedagogical-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .materials-pedagogical-step{display:flex;align-items:flex-start;gap:12px;min-width:0;padding:16px;border:1px solid #393541;border-radius:12px;background:#201e27}
 .materials-pedagogical-step>span{display:grid;place-items:center;flex:none;width:27px;height:27px;border-radius:8px;background:#342a45;color:#d2bafa;font:700 10px 'DM Mono'}
 .materials-pedagogical-step>div{display:grid;justify-items:start;gap:8px;min-width:0}
@@ -171,3 +171,14 @@
 .materials-pedagogical-empty strong{color:#e8e1f0;font-size:12px}.materials-pedagogical-empty p{max-width:450px;margin:0;color:#9992a2;font-size:10px;line-height:1.6}
 @media(max-width:900px){.materials-pedagogical-intro{align-items:flex-start;flex-wrap:wrap}.materials-pedagogical-source{margin-left:63px}.materials-pedagogical-steps{grid-template-columns:1fr}.materials-pedagogical-step p{min-height:0}.materials-pedagogical-item-list{grid-template-columns:1fr}}
 @media(max-width:560px){.materials-pedagogical-workbench{padding:14px}.materials-pedagogical-source{margin-left:0;width:100%}.materials-pedagogical-layer-preview{grid-template-columns:1fr}.materials-pedagogical-results-head{align-items:flex-start}}
+
+
+/* Curadoria dos itens pedagógicos destinados ao pacote final */
+.materials-pedagogical-curation{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;border:1px solid #393342;border-radius:9px;background:#19171f;color:#c8bfd2;font-size:10px}
+.materials-pedagogical-curation>div{display:flex;gap:7px;flex-wrap:wrap}
+.materials-pedagogical-curation button{padding:6px 9px;border:1px solid #494052;border-radius:6px;background:#25212d;color:#d8c9ef;font-size:9px;cursor:pointer}
+.materials-pedagogical-curation button:hover{border-color:#9d80d1;color:#fff}
+.materials-pedagogical-include{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:6px 9px;border:1px solid #385844;border-radius:6px;background:#203328;color:#9bd5ac;font-size:9px;cursor:pointer}
+.materials-pedagogical-include.excluded{border-color:#51465f;background:#292431;color:#aaa1b4}
+.materials-pedagogical-include:hover{filter:brightness(1.15)}
+@media(max-width:650px){.materials-pedagogical-curation{align-items:flex-start;flex-direction:column}.materials-pedagogical-steps{grid-template-columns:1fr}}
