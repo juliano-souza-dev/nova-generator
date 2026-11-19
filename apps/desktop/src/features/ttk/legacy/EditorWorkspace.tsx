@@ -1563,7 +1563,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
       onCancel={() => setTimingAdjusterOpen(false)}
       onSave={async adjusted => {
         const byId = new Map(adjusted.map(item => [item.id, item]));
-        setMotion(current => current.map(item => {
+        const nextMotion = motionRef.current.map(item => {
           const timing = byId.get(item.id);
           if (!timing || !item.isCaption) return item;
           const startMs = timingTargetClip.timelineStartMs + timing.startMs;
@@ -1575,7 +1575,10 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
             endMs: timingTargetClip.timelineStartMs + word.endMs,
           }));
           return { ...item, startMs, endMs, durationMs: endMs - startMs, captionWords: captionWords ?? item.captionWords };
-        }));
+        });
+        const nextCaptions = splitMotionLayers(nextMotion).captions;
+        window.localStorage.setItem(captionsKey, JSON.stringify(nextCaptions));
+        setMotion(nextMotion);
         setTimingAdjusterOpen(false);
         setSceneSpecMessage("Sincronização das legendas ajustada e salva automaticamente.");
       }}
