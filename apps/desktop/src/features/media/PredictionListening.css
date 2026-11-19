@@ -56,3 +56,12 @@
 @media(max-width:760px){.prediction-listening-backdrop.demo-active{padding:8px}.prediction-listening-backdrop.demo-active .prediction-listening-modal{width:min(430px,92vw);height:calc(100vh - 16px)}.prediction-demo-panel{padding:14px}.prediction-demo-panel h2{font-size:19px}}
 
 .prediction-materials-saved{color:#8fd5ad;font-weight:700;letter-spacing:.06em}
+
+/* Embedded inside Materials > Pedagogical Content. */
+.prediction-listening-backdrop.embedded{position:relative;inset:auto;z-index:auto;background:transparent;display:block;padding:0;min-height:0}
+.prediction-listening-backdrop.embedded .prediction-listening-modal{width:100%;height:auto;max-height:none;border-radius:13px;box-shadow:none}
+.prediction-listening-backdrop.embedded .prediction-listening-content{max-height:68vh}
+.prediction-listening-backdrop.embedded.demo-active{position:relative;inset:auto;background:transparent;display:block;padding:0;pointer-events:auto}
+.prediction-listening-backdrop.embedded.demo-active .prediction-listening-modal{width:100%;height:auto;max-height:none;box-shadow:none}
+.prediction-listening-backdrop.embedded.demo-active .prediction-listening-header{padding:18px 20px}
+.prediction-listening-backdrop.embedded.demo-active .prediction-listening-header p{display:block}
