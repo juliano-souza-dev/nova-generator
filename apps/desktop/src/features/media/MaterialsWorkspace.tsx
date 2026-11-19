@@ -299,7 +299,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       setCards(mergeSourceCards(savedCards, generated));
       if (savedCards.length && stored?.sourceSignature !== materialSignature) setNotice("As fontes mudaram. Novos cards foram incorporados; suas edições e cards anteriores foram preservados para revisão.");
     } catch (e) {
-      setError(String(e)); setCards([]); setPredictionSaved(false);
+      setError(String(e)); setCards([]);
     } finally { setLoading(false); }
   }, [projectId]);
 
