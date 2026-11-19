@@ -64,7 +64,9 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     result: TranscriptResult,
     context: TranscriptionContext,
     translations: CueTranslation[],
+    assetId?: string,
   ) {
+    if (assetId) setTranscriptionAssetId(assetId);
     setTranscriptionContext(context);
     setTranscriptionResult(result);
     setTranscriptionTranslations(translations);
@@ -153,7 +155,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionTranslations(nextTranslations);
     if (nextResult) publishTranscriptionUpdate(nextResult, nextTranslations);
     setExternalSourceHash("");
-    setTranscriptionInserted(false);
   }
 
   async function translateTranscription() {
@@ -214,6 +215,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
         return { id: cue.id, translation: text };
       });
       setTranscriptionTranslations(translated);
+      publishTranscriptionUpdate(transcriptionResult, translated);
       setTranscriptionMessage(translated.length + " traduções importadas e associadas a esta transcrição.");
     } catch (error) {
       setTranscriptionMessage("Falha ao importar JSON: " + (error instanceof Error ? error.message : String(error)));
