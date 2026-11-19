@@ -9,10 +9,10 @@ export const IHUB_JOURNEY_CONTRACT = "ihub-learning-journey/1.0" as const;
 
 export type ListeningQuestion =
   | { id: string; type: "identify"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string }
-  | { id: string; type: "gap"; prompt: string; audioCueIds: string[]; sentence: string; acceptedAnswers: string[]; hint?: string }
-  | { id: string; type: "detail"; prompt: string; audioCueIds: string[]; options: { id: string; text: string }[]; answerId: string }
-  | { id: string; type: "word-recognition"; prompt: string; audioCueIds: string[]; options: { id: string; text: string }[]; answerId: string }
-  | { id: string; type: "reconstruct"; prompt: string; audioCueIds: string[]; words: string[]; answer: string[] };
+  | { id: string; type: "gap"; prompt: string; audioCueOrders: string[]; sentence: string; acceptedAnswers: string[]; hint?: string }
+  | { id: string; type: "detail"; prompt: string; audioCueOrders: string[]; options: { id: string; text: string }[]; answerId: string }
+  | { id: string; type: "word-recognition"; prompt: string; audioCueOrders: string[]; options: { id: string; text: string }[]; answerId: string }
+  | { id: string; type: "reconstruct"; prompt: string; audioCueOrders: string[]; words: string[]; answer: string[] };
 
 export type MicroLesson = {
   id: string;
@@ -43,7 +43,7 @@ export type DeepListeningTask = {
 
 export type SpeakingPrompt = {
   id: string;
-  cueIds: string[];
+  cueOrders: string[];
   sourceText: string;
   translationPt?: string;
   focus: "rhythm" | "pauses" | "connected-speech" | "intonation" | "fluency";
@@ -153,7 +153,7 @@ export function buildLearningJourneyPackage(input: {
         id: "recall-gap-" + cue.id,
         type: "gap",
         prompt: "Listen and complete the missing word.",
-        audioCueIds: [cue.id],
+        audioCueOrders: [cue.id],
         sentence: (() => { const at = cue.text.toLowerCase().indexOf(target.toLowerCase()); return at < 0 ? cue.text : cue.text.slice(0, at) + "_____" + cue.text.slice(at + target.length); })(),
         acceptedAnswers: [target]
       });
@@ -166,7 +166,7 @@ export function buildLearningJourneyPackage(input: {
       listening.push({
         id: "recall-detail-" + cue.id, type: "detail",
         prompt: "Which sentence matches the detail you heard?",
-        audioCueIds: [cue.id],
+        audioCueOrders: [cue.id],
         options: [{ id: "correct", text: cue.text }, ...alternatives.map((text, i) => ({ id: "detail-" + i, text }))],
         answerId: "correct"
       });
@@ -177,14 +177,14 @@ export function buildLearningJourneyPackage(input: {
       listening.push({
         id: "recall-word-" + cue.id, type: "word-recognition",
         prompt: "Which word did you hear at the end of the phrase?",
-        audioCueIds: [cue.id],
+        audioCueOrders: [cue.id],
         options: [{ id: "correct", text: target }, ...otherWords.map((text, i) => ({ id: "word-" + i, text }))],
         answerId: "correct"
       });
       listening.push({
         id: "recall-reconstruct-" + cue.id, type: "reconstruct",
         prompt: "Listen and rebuild the sentence in the correct order.",
-        audioCueIds: [cue.id],
+        audioCueOrders: [cue.id],
         words: tokens.length > 1 ? [...tokens.slice(1), tokens[0]] : tokens,
         answer: tokens
       });
@@ -216,7 +216,7 @@ export function buildLearningJourneyPackage(input: {
   }));
   const speaking: SpeakingPrompt[] = selected.slice(0, 8).map((cue, index) => ({
     id: "speak-" + cue.id,
-    cueIds: [cue.id],
+    cueOrders: [cue.id],
     sourceText: cue.text,
     focus: (["rhythm", "pauses", "connected-speech", "intonation"] as const)[index % 4]
   }));
