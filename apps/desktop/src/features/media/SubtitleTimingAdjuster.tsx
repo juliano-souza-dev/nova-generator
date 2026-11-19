@@ -364,11 +364,13 @@ export default function SubtitleTimingAdjuster({
     }
   };
 
-  const changeInput = (edge: "start" | "end", value: string) => {
+  const commitInput = (edge: "start" | "end", value: string) => {
     try {
       const time = parseTime(value);
+      setActiveEdge(edge);
       if (edge === "start") setRange(Math.min(time, rangeEnd - 1), rangeEnd);
       else setRange(rangeStart, Math.max(rangeStart + 1, time));
+      setError("");
     } catch (e) { setError(String(e)); }
   };
 
@@ -398,9 +400,9 @@ export default function SubtitleTimingAdjuster({
           <canvas ref={canvasRef} className="subtitle-timing-wave" onPointerDown={onWavePointerDown} onPointerMove={onWavePointerMove} onPointerUp={onWavePointerUp} onPointerCancel={onWavePointerUp}/>
           <div className="subtitle-timing-wave-status">{waveMessage}</div>
           <div className="subtitle-timing-time-fields">
-            <label><span>IN</span><input value={formatTime(rangeStart)} onChange={event => changeInput("start", event.target.value)} onBlur={event => { try { event.target.value = formatTime(parseTime(event.target.value)); } catch { /* keep invalid text visible */ } }}/></label>
+            <label><span>IN</span><input value={startText} onChange={event => setStartText(event.target.value)} onBlur={() => commitInput("start", startText)} onKeyDown={event => { if (event.key === "Enter") commitInput("start", startText); }}/></label>
             <span className="subtitle-timing-arrow">→</span>
-            <label><span>OUT</span><input value={formatTime(rangeEnd)} onChange={event => changeInput("end", event.target.value)}/></label>
+            <label><span>OUT</span><input value={endText} onChange={event => setEndText(event.target.value)} onBlur={() => commitInput("end", endText)} onKeyDown={event => { if (event.key === "Enter") commitInput("end", endText); }}/></label>
             <strong>{((rangeEnd - rangeStart) / 1000).toFixed(3)}s</strong>
           </div>
           <div className="subtitle-timing-actions">
