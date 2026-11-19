@@ -522,7 +522,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
   const timingTargetCues = timingTargetClip
     ? (selectedMotion?.sourceClipId
       ? captions.filter(item => item.isCaption && item.sourceClipId === timingTargetClip.id)
-      : [selectedMotion]).sort((a, b) => a.startMs - b.startMs)
+      : (selectedMotion ? [selectedMotion] : [])).sort((a, b) => a.startMs - b.startMs)
     : [];
 
   const visualProgress = activeVisualClip ? Math.max(0, Math.min(1, (playheadMs - activeVisualClip.timelineStartMs) / Math.max(1, clipDuration(activeVisualClip)))) : 0;
