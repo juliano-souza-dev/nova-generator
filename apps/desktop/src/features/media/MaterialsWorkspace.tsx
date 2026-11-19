@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import "./MaterialsWorkspace.css";
 import { runTrackedTask } from "../tasks/TaskCenter";
+import { buildLearningJourneyPackage, validateLearningJourney, type LearningJourneyPackage } from "./learning-journey-contract";
 
 type Asset = { id: string; name: string; kind: string; durationMs?: number | null; sourceVideoId?: string | null };
 type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string };
@@ -35,7 +36,7 @@ type AnkiCard = {
   sourceEndMs?: number;
   status: "draft" | "approved";
 };
-type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string };
+type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string; learningJourney?: LearningJourneyPackage };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 type SharedVoice = { id: string; name: string; mode?: "voice_clone" | "voice_design" };
 
@@ -168,6 +169,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [predictionSaved, setPredictionSaved] = useState(false);
+  const [learningJourney, setLearningJourney] = useState<LearningJourneyPackage | null>(null);
   const [voices, setVoices] = useState<SharedVoice[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [voiceCloningReady, setVoiceCloningReady] = useState(false);
@@ -192,6 +194,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     if (!selectedId) {
       setCards([]);
       setPredictionSaved(false);
+      setLearningJourney(null);
       setSourceInfo({ cues: 0, translations: 0, editorial: 0, shadowing: 0, predictions: 0 });
       return;
     }
@@ -233,6 +236,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
           : []
       ]);
       setPredictionSaved(isPredictionSaved);
+      const savedJourney = stored?.learningJourney;
+      setLearningJourney(savedJourney && validateLearningJourney(savedJourney).length === 0 ? savedJourney : null);
       setSourceSignature(materialSignature);
       setSourceInfo({
         cues: cues.length,
@@ -307,11 +312,45 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
 
   async function persistMaterials() {
     if (!assetId) throw new Error("Selecione uma mídia de origem.");
-    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, updatedAt: new Date().toISOString(), sourceSignature };
+    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, learningJourney: learningJourney ?? undefined, updatedAt: new Date().toISOString(), sourceSignature };
     await invoke("save_project_materials", { projectId, assetId, materials: document });
     await invoke("update_project_stage", { id: projectId, stage: "Materiais" });
     onProjectUpdated?.();
     return document;
+  }
+
+  function createLearningJourney() {
+    if (!assetId) return;
+    try {
+      const journey = buildLearningJourneyPackage({
+        projectId, assetId, sourceSignature, cues: sourceCues,
+        cards: cards.map(card => ({
+          id: card.id, sourceCueId: card.sourceCueId, focus: card.focus,
+          meaning: card.meaning, highlightEn: card.highlightEn,
+          explanation: card.explanation, exampleEn: card.exampleEn,
+          examplePt: card.examplePt, status: card.status
+        }))
+      });
+      const errors = validateLearningJourney(journey);
+      if (errors.length) throw new Error(errors.join("\n"));
+      setLearningJourney(journey);
+      setNotice("Rascunho da jornada criado. Revise as atividades antes de publicar no iHubEnglish.");
+      setError("");
+    } catch (e) { setError(String(e)); }
+  }
+
+  function exportLearningJourney() {
+    if (!learningJourney) return;
+    const errors = validateLearningJourney(learningJourney);
+    if (errors.length) { setError(errors.join("\n")); return; }
+    const blob = new Blob([JSON.stringify(learningJourney, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "learning-journey-" + assetId + ".json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setNotice("Pacote JSON da jornada exportado.");
   }
 
   async function saveMaterials() {
@@ -543,6 +582,28 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
           </div>
           <span className={voiceCloningReady ? "ready" : "missing"}>{voiceCloningReady ? voices.length + (voices.length === 1 ? " voz" : " vozes") : "Indisponível"}</span>
         </div>
+
+        <section className="materials-journey-panel">
+          <div className="materials-journey-heading">
+            <div><span className="eyebrow">GERADOR 02</span><h3>Jornada de aprendizagem · 7 dias</h3>
+              <p>Prepare atividades progressivas a partir da transcrição revisada e dos cards aprovados. O Dia 1 reaproveita as etapas atuais do iHubEnglish.</p></div>
+            <div className="materials-journey-actions">
+              <button className="secondary-button" type="button" onClick={createLearningJourney} disabled={loading || !sourceCues.length}>
+                <Sparkles size={14}/>{learningJourney ? "Regenerar rascunho" : "Gerar jornada"}
+              </button>
+              <button className="secondary-button" type="button" onClick={exportLearningJourney} disabled={!learningJourney}>
+                <Download size={14}/> Exportar JSON
+              </button>
+            </div>
+          </div>
+          {learningJourney ? <div className="materials-journey-days">
+            {learningJourney.days.map(day => <article key={day.day} className="materials-journey-day">
+              <span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong>
+              <small>{day.mode === "existing-stages" ? "Etapas atuais" : day.mode === "listening-recall" ? day.activities.length + " exercícios de listening" : day.mode === "micro-lessons" ? day.lessons.length + " microaulas" : day.mode === "deep-listening" ? day.tasks.length + " tarefas" : day.mode === "speaking" ? day.prompts.length + " propostas de speaking" : "Desafio integrado"}</small>
+            </article>)}
+          </div> : <p className="materials-journey-empty">O rascunho será montado com exercícios de identificação, lacunas e compreensão auditiva; microaulas derivadas dos cards aprovados; tarefas de escuta profunda; e propostas de gravação e comparação.</p>}
+          {learningJourney && <p className="materials-journey-note">Rascunho editável · {learningJourney.days[1].activities.length} atividades no Dia 2 · {learningJourney.days[2].lessons.length} microaulas no Dia 3. Salve os Materiais para manter o pacote neste projeto.</p>}
+        </section>
 
         <div className="materials-section-title">
           <div><span className="eyebrow">GERADOR 01</span><h3>Cards Anki</h3><p>Conteúdo editorial, Shadowing e Prediction Listening. Revise cada card antes de incluí-lo no pacote.</p></div>
