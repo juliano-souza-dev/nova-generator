@@ -36,7 +36,7 @@ test("builds a varied listening, micro-lesson, deep-listening and speaking journ
     { id: "cue-3", text: "We should have talked about it earlier.", startMs: 4300, endMs: 6500 }
   ];
   const cards = [{
-    id: "card-1", sourceCueId: "cue-1", focus: "I thought we could",
+    id: "card-1", sourceCueId: "cue-1", type: "expression", focus: "I thought we could",
     meaning: "Uma forma de sugerir algo.", highlightEn: "I thought we could",
     explanation: "A expressão introduz uma sugestão de forma indireta.",
     exampleEn: "I thought we could try again.", examplePt: "Pensei que poderíamos tentar novamente.",
