@@ -624,7 +624,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         "SPEAKER: " + (cue.speaker || "NOT_AVAILABLE"), "EN: " + cue.text_en,
         "PT: " + (cue.text_pt || "NOT_AVAILABLE")
       ));
-      const blob = new Blob(["\\uFEFF", lines.join("\\r\\n")], { type: "text/plain;charset=utf-8" });
+      const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
