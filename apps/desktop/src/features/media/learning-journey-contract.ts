@@ -225,7 +225,8 @@ export function buildLearningJourneyPackage(input: {
   const day2Activities = (["identify", "gap", "detail", "word-recognition", "reconstruct"] as const)
     .map(type => listening.find(item => item.type === type))
     .filter((item): item is ListeningQuestion => Boolean(item));
-  const mixedListening = listening.slice(0, 4);
+  const mixedListening = day2Activities.slice(0, 4);
+  const finalListening = day2Activities;
   const mixedSpeaking = speaking.slice(0, 3);
   return {
     contract: LEARNING_JOURNEY_CONTRACT,
@@ -239,7 +240,7 @@ export function buildLearningJourneyPackage(input: {
       { day: 4, title: "Deep Listening", mode: "deep-listening", tasks: deepTasks },
       { day: 5, title: "Speak & Compare", mode: "speaking", prompts: speaking },
       { day: 6, title: "Listening & Speaking Challenge", mode: "mixed-challenge", listening: mixedListening, speaking: mixedSpeaking },
-      { day: 7, title: "Final Challenge", mode: "final-challenge", listening: listening.slice(0, 5), speaking: speaking.slice(0, 4), successCriteria: ["Compreender as falas sem depender das legendas.", "Reconhecer expressões estudadas em contexto.", "Reproduzir trechos com ritmo e entonação compreensíveis."] }
+      { day: 7, title: "Final Challenge", mode: "final-challenge", listening: finalListening, speaking: speaking.slice(0, 4), successCriteria: ["Compreender as falas sem depender das legendas.", "Reconhecer expressões estudadas em contexto.", "Reproduzir trechos com ritmo e entonação compreensíveis."] }
     ]
   };
 }
