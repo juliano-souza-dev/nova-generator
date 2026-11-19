@@ -39,6 +39,16 @@ type AnkiCard = {
 type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string; learningJourney?: LearningJourneyPackage };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 type SharedVoice = { id: string; name: string; mode?: "voice_clone" | "voice_design" };
+function learningJourneySourceSignature(sourceSignature: string, cards: AnkiCard[]) {
+  return JSON.stringify([
+    sourceSignature,
+    cards.filter(card => card.status === "approved").map(card => [
+      card.id, card.sourceCueId, card.focus, card.meaning, card.highlightEn,
+      card.explanation, card.exampleEn, card.examplePt
+    ])
+  ]);
+}
+
 
 const MATERIAL_TTS_LANGUAGE = "English" as const;
 const createCardId = () => crypto.randomUUID();
@@ -237,7 +247,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       ]);
       setPredictionSaved(isPredictionSaved);
       const savedJourney = stored?.learningJourney;
-      setLearningJourney(savedJourney && validateLearningJourney(savedJourney).length === 0 ? savedJourney : null);
+      const storedJourneySignature = learningJourneySourceSignature(materialSignature, Array.isArray(stored?.cards) ? stored.cards : []);
+      setLearningJourney(savedJourney && savedJourney.source?.sourceSignature === storedJourneySignature && validateLearningJourney(savedJourney).length === 0 ? savedJourney : null);
       setSourceSignature(materialSignature);
       setSourceInfo({
         cues: cues.length,
@@ -312,7 +323,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
 
   async function persistMaterials() {
     if (!assetId) throw new Error("Selecione uma mídia de origem.");
-    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, learningJourney: learningJourney ?? undefined, updatedAt: new Date().toISOString(), sourceSignature };
+    const journeyIsCurrent = learningJourney?.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards);
+    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, learningJourney: journeyIsCurrent ? learningJourney ?? undefined : undefined, updatedAt: new Date().toISOString(), sourceSignature };
     await invoke("save_project_materials", { projectId, assetId, materials: document });
     await invoke("update_project_stage", { id: projectId, stage: "Materiais" });
     onProjectUpdated?.();
@@ -323,7 +335,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     if (!assetId) return;
     try {
       const journey = buildLearningJourneyPackage({
-        projectId, assetId, sourceSignature, cues: sourceCues,
+        projectId, assetId, sourceSignature: learningJourneySourceSignature(sourceSignature, cards), cues: sourceCues,
         cards: cards.map(card => ({
           id: card.id, sourceCueId: card.sourceCueId, focus: card.focus,
           meaning: card.meaning, highlightEn: card.highlightEn,
