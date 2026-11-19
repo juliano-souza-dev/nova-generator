@@ -243,16 +243,22 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
     if (!voiceReady || !voiceId || audioBusy) return;
     setAudioBusy(true); setAudioCandidateId(candidate.id); setError(""); setNotice("");
     try {
-      const requests = candidate.lesson.narration.segments.map(segment => ({
-        cardId: candidate.id + ":" + segment.id,
+      const requests = candidate.lesson.narration.segments.map((segment, index) => ({
+        // O backend aceita apenas IDs com letras, números, hífen e sublinhado.
+        // Como esta operação gera os segmentos de uma única candidata, IDs curtos
+        // e sequenciais evitam caracteres inválidos e colisões entre segmentos.
+        cardId: "slm-" + String(index + 1).padStart(2, "0"),
         text: segment.text,
         language: segment.language === "pt" ? "Portuguese" : "English"
       }));
+      const segmentByCardId = new Map(
+        requests.map((request, index) => [request.cardId, candidate.lesson.narration.segments[index].id])
+      );
       const results = await runTrackedTask("materials", "Gerar áudio da mini aula", () =>
         invoke<AudioResult[]>("generate_material_audio", { projectId, assetId, voiceId, requests })
       );
       const audioAssets = results.map(result => ({
-        segment_id: result.cardId.slice(candidate.id.length + 1),
+        segment_id: segmentByCardId.get(result.cardId) ?? result.cardId,
         language: result.language,
         audio_path: result.audioPath,
         provider: "internal" as const
