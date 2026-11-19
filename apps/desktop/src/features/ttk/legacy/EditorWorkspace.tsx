@@ -182,8 +182,10 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
       }));
     };
     window.addEventListener("framelab:transcription-update", onTranscriptUpdate);
-    return () => window.removeEventListener("framelab:transcription-update", onTranscriptUpdate);
-    return () => window.removeEventListener("framelab:transcription-ready", onTranscript);
+    return () => {
+      window.removeEventListener("framelab:transcription-update", onTranscriptUpdate);
+      window.removeEventListener("framelab:transcription-ready", onTranscript);
+    };
   }, [projectId]);
 
   const [selectedMotionId, setSelectedMotionId] = useState<string | null>(null);
@@ -1132,10 +1134,10 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
               {!transcription.transcriptionContext ? <button className="primary" type="button" disabled={!selectedClip||!selectedAsset||(selectedAsset.kind!=="video"&&selectedAsset.kind!=="audio")||transcription.transcriptionBusy} onClick={()=>{if(selectedClip&&selectedAsset)onStartTranscription?.(selectedAsset.id,{clipId:selectedClip.id,timelineStartMs:selectedClip.timelineStartMs,sourceStartMs:selectedClip.sourceStartMs,sourceEndMs:selectedClip.sourceEndMs});}}>
                 <Captions size={14}/> Usar clipe selecionado
               </button> : <>
-                <button className="primary" type="button" disabled={transcription.transcriptionBusy||Boolean(transcription.transcriptionResult)||(!transcription.localAsrInstalled&&transcription.transcriptionMode==="local")} onClick={()=>void transcription.transcribeSelectedMedia()}>
-                  {transcription.transcriptionBusy?<><LoaderCircle className="spin" size={14}/> Transcrevendo...</>:<><Captions size={14}/> Transcrever clipe</>}
+                <button className="primary" type="button" disabled={transcription.transcriptionBusy||(!transcription.localAsrInstalled&&transcription.transcriptionMode==="local")} onClick={()=>void transcription.transcribeSelectedMedia()}>
+                  {transcription.transcriptionBusy?<><LoaderCircle className="spin" size={14}/> Transcrevendo...</>:<><Captions size={14}/> {transcription.transcriptionResult?"Reprocessar transcrição":"Transcrever clipe"}</>}
                 </button>
-                <button className="secondary-action" type="button" disabled={!selectedClip||!selectedAsset||(selectedAsset.kind!=="video"&&selectedAsset.kind!=="audio")||transcription.transcriptionBusy||Boolean(transcription.transcriptionResult)} onClick={()=>{if(selectedClip&&selectedAsset)onStartTranscription?.(selectedAsset.id,{clipId:selectedClip.id,timelineStartMs:selectedClip.timelineStartMs,sourceStartMs:selectedClip.sourceStartMs,sourceEndMs:selectedClip.sourceEndMs});}}>Trocar clipe</button>
+                <button className="secondary-action" type="button" disabled={!selectedClip||!selectedAsset||(selectedAsset.kind!=="video"&&selectedAsset.kind!=="audio")||transcription.transcriptionBusy} onClick={()=>{if(selectedClip&&selectedAsset)onStartTranscription?.(selectedAsset.id,{clipId:selectedClip.id,timelineStartMs:selectedClip.timelineStartMs,sourceStartMs:selectedClip.sourceStartMs,sourceEndMs:selectedClip.sourceEndMs});}}>Trocar clipe</button>
               </>}
               {!transcription.transcriptionResult&&<small>{transcription.localAsrChecking?"Verificando suporte local...":transcription.localAsrInstalled?"Faster-Whisper instalado":"Processamento local ainda não instalado"}</small>}
               {!transcription.localAsrInstalled&&<button className="secondary-action" type="button" disabled={transcription.localAsrChecking||transcription.localAsrInstalling} onClick={()=>void transcription.installLocalTranscription()}>{transcription.localAsrInstalling?<LoaderCircle className="spin" size={13}/>:<Download size={13}/>} Instalar suporte local</button>}
