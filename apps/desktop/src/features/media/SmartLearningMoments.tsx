@@ -64,7 +64,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
       const source = buildSmartLearningSource(projectId, assetId, sourceSignature, cues, translations);
       const sourceHash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(source)));
       const hash = Array.from(new Uint8Array(sourceHash)).map(byte => byte.toString(16).padStart(2, "0")).join("");
-      const weights = Object.entries(SMART_LEARNING_SCORE_WEIGHTS).map(([key, weight]) => key + ": " + weight + " points").join("\\r\\n");
+      const weights = Object.entries(SMART_LEARNING_SCORE_WEIGHTS).map(([key, weight]) => key + ": " + weight + " points").join("\r\n");
       const template = {
         contract: SMART_LEARNING_MOMENTS_CONTRACT,
         source_hash: hash,
@@ -155,7 +155,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
       const path = await saveFile({ title: "Salvar instruções Smart Learning Moments", defaultPath: "smart-learning-moments-" + assetId + ".txt", filters: [{ name: "Instruções para IA externa", extensions: ["txt"] }] });
       if (!path) return;
       await runTrackedTask("materials", "Salvar instruções Smart Learning Moments", () =>
-        invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode("\\uFEFF" + lines.join("\\r\\n"))) })
+        invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode("\uFEFF" + lines.join("\r\n"))) })
       );
       setNotice("Instruções TXT salvas. A IA deverá classificar as melhores oportunidades e preparar mini aulas com roteiro de narração.");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -173,7 +173,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(source)));
         const hash = Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
         const errors = validateSmartLearningMoments(parsed, hash, cues);
-        if (errors.length) throw new Error(errors.join("\\n"));
+        if (errors.length) throw new Error(errors.join("\n"));
         onChange({ ...parsed, source_signature: sourceSignature, candidates: parsed.candidates.map(candidate => ({ ...candidate, selected: false })), final_selection: null });
       });
       setNotice(parsedNotice(file.name));
@@ -201,10 +201,10 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
       "INSTRUCTIONS: Generate each segment separately. Preserve the language of each segment. Use a natural conversational teacher delivery. Do not read segment IDs, language labels, or purpose labels.",
       "",
       ...segments.flatMap((segment, index) => ["[SEGMENT " + String(index + 1).padStart(2, "0") + "]", "ID: " + segment.id, "LANGUAGE: " + segment.language, "PURPOSE: " + segment.purpose, segment.text, ""])
-    ].join("\\r\\n");
+    ].join("\r\n");
     const path = await saveFile({ title: "Salvar roteiro de narração para ElevenLabs", defaultPath: "elevenlabs-" + candidate.id + "-roteiro.txt", filters: [{ name: "Roteiro de narração", extensions: ["txt"] }] });
     if (!path) return;
-    await invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode("\\uFEFF" + content)) });
+    await invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode("\uFEFF" + content)) });
     setNotice("Roteiro segmentado salvo para geração no ElevenLabs. Gere cada segmento separadamente para preservar idioma e sincronização.");
   }
 
