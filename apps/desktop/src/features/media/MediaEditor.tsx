@@ -7,6 +7,7 @@ import { downloadExternalTranslationPackage, type ExternalTranslationPackage } f
 import ShadowingEditor from "./ShadowingEditor";
 import PredictionListening from "./PredictionListening";
 import MaterialsWorkspace from "./MaterialsWorkspace";
+import SubtitleTimingAdjuster from "./SubtitleTimingAdjuster";
 
 type Cue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; wordAlignment?: string | null; wordAlignmentHash?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
 type AlignmentProgress = { projectId: string; assetId: string; completed: number; total: number; message: string };
@@ -94,6 +95,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
   const [shadowingOpen, setShadowingOpen] = useState(false);
   const [predictionListeningOpen, setPredictionListeningOpen] = useState(false);
   const [materialsOpen, setMaterialsOpen] = useState(false);
+  const [timingAdjusterOpen, setTimingAdjusterOpen] = useState(false);
   const [shadowingComplete, setShadowingComplete] = useState(false);
   const [shadowingSelectedCueIds, setShadowingSelectedCueIds] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
