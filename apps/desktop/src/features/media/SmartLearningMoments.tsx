@@ -214,10 +214,10 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
     try {
       const segments = candidate.lesson.narration.segments;
       const imported = await Promise.all(Array.from(files).map(async file => {
-        const segmentId = file.name.replace(/\\.[^.]+$/, "");
+        const segmentId = file.name.replace(/\.[^.]+$/, "");
         const segment = segments.find(item => item.id.toLocaleLowerCase() === segmentId.toLocaleLowerCase());
         if (!segment) throw new Error("O arquivo " + file.name + " não corresponde a um ID de segmento. Use nomes como opening.mp3 ou explanation.mp3.");
-        if (!file.type.startsWith("audio/") && !/\\.(mp3|wav|m4a|ogg|aac)$/i.test(file.name)) throw new Error("Formato de áudio não reconhecido: " + file.name);
+        if (!file.type.startsWith("audio/") && !/\.(mp3|wav|m4a|ogg|aac)$/i.test(file.name)) throw new Error("Formato de áudio não reconhecido: " + file.name);
         const bytes = new Uint8Array(await file.arrayBuffer());
         let binary = "";
         for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
