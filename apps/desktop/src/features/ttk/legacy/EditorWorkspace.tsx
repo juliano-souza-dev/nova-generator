@@ -178,7 +178,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
       setSelectedMotionId(existingFirstId ?? created[0]?.id ?? null);
       if (created.length) setPlayheadMs(created[0].startMs);
       setActiveTool("captions");
-      setSceneSpecMessage("Transcrição adicionada à faixa exclusiva: " + created.length + " legendas. Revise o texto e os tempos antes de exportar.");
+      setSceneSpecMessage((existingForClip.length ? "Transcrição atualizada" : "Transcrição adicionada") + " na faixa exclusiva: " + created.length + " legendas. Revise o texto e os tempos antes de exportar.");
     };
     window.addEventListener("framelab:transcription-ready", onTranscript);
     const onTranscriptUpdate = (event: Event) => {
