@@ -153,8 +153,39 @@ export function buildLearningJourneyPackage(input: {
         type: "gap",
         prompt: "Listen and complete the missing word.",
         audioCueIds: [cue.id],
-        sentence: cue.text.replace(new RegExp("\\b" + target.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&") + "\\b", "i"), "_____"),
+        sentence: (() => { const at = cue.text.toLowerCase().indexOf(target.toLowerCase()); return at < 0 ? cue.text : cue.text.slice(0, at) + "_____" + cue.text.slice(at + target.length); })(),
         acceptedAnswers: [target]
+      });
+    }
+  });
+  selected.slice(0, 5).forEach(cue => {
+    const tokens = wordsOf(cue.text);
+    const alternatives = distractors(cue);
+    if (alternatives.length) {
+      listening.push({
+        id: "recall-detail-" + cue.id, type: "detail",
+        prompt: "Which sentence matches the detail you heard?",
+        audioCueIds: [cue.id],
+        options: [{ id: "correct", text: cue.text }, ...alternatives.map((text, i) => ({ id: "detail-" + i, text }))],
+        answerId: "correct"
+      });
+    }
+    if (tokens.length >= 2) {
+      const target = tokens[tokens.length - 1];
+      const otherWords = unique(cues.flatMap(item => wordsOf(item.text)).filter(word => word.toLowerCase() !== target.toLowerCase())).slice(0, 2);
+      listening.push({
+        id: "recall-word-" + cue.id, type: "word-recognition",
+        prompt: "Which word did you hear at the end of the phrase?",
+        audioCueIds: [cue.id],
+        options: [{ id: "correct", text: target }, ...otherWords.map((text, i) => ({ id: "word-" + i, text }))],
+        answerId: "correct"
+      });
+      listening.push({
+        id: "recall-reconstruct-" + cue.id, type: "reconstruct",
+        prompt: "Listen and rebuild the sentence in the correct order.",
+        audioCueIds: [cue.id],
+        words: [...tokens].sort(() => 0.5 - 0.5),
+        answer: tokens
       });
     }
   });
