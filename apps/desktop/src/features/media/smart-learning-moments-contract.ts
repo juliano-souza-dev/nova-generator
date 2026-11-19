@@ -34,7 +34,7 @@ export type SmartLearningCandidate = {
   recommendation_reason: string;
   category: string;
   level: string;
-  source: { cue_id: string; cue_order: number; start_ms: number; end_ms: number; expression: string; excerpt_en: string; excerpt_pt: string };
+  source: { cue_id: string; cue_order: number; start_ms: number; end_ms: number; trigger_start_ms: number; trigger_end_ms: number; expression: string; excerpt_en: string; excerpt_pt: string };
   lesson: {
     title: string;
     meaning_pt: string;
