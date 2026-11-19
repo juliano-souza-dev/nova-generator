@@ -750,7 +750,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               onClose={() => setActivePedagogicalTab("vocabulary")} onPreview={prediction.onPreview}
               onDemoSeekAndPlay={prediction.onDemoSeekAndPlay} onDemoPause={prediction.onDemoPause}
               onDemoResume={prediction.onDemoResume} getCurrentTime={prediction.getCurrentTime}
-              onProjectUpdated={onProjectUpdated}
+              onProjectUpdated={onProjectUpdated} embedded
             /> : <div className="materials-prediction-prerequisite">
               <div><AudioLines size={20}/></div><h3>Prepare o Shadowing para gerar desafios</h3>
               <p>O Prediction Listening usa os trechos selecionados no Shadowing e o alinhamento palavra por palavra do WhisperX. Salve a transcrição, prepare o Shadowing e alinhe os trechos selecionados. Depois, volte a esta aba.</p>
