@@ -16,22 +16,39 @@ type TranscriptResult = { engine: string; model: string; language?: string | nul
 type TranslationCue = { id: string; startMs: number; endMs: number; text: string };
 type SharedRuntimeStatus = { providers: { id: string; name: string; model: string }[] };
 type Asset = { id: string; name: string; durationMs?: number | null; sourceStartMs?: number | null; sourceEndMs?: number | null };
-function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: number) {
+function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: number, cue?: Cue) {
   const text = String(suggestion?.approved_en || fallback || "");
-  const words = Array.isArray(suggestion?.word_translations) ? suggestion.word_translations : [];
-  const wordMatches = [...text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)];
-  if (!words.length || wordMatches.length !== words.length) return text;
+  const wordMatches = [...text.matchAll(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*/gu)];
+  if (!wordMatches.length) return text;
 
-  const activeIndex = words.findIndex((word: any) => {
-    const start = Number(word.start_ms ?? word.startMs);
-    const end = Number(word.end_ms ?? word.endMs);
-    return Number.isFinite(start) && Number.isFinite(end)
-      && currentMs >= start && currentMs < end;
-  });
+  // Prefer the editorial word timings. If their tokenization differs from the
+  // displayed English text, fall back to WhisperX's aligned source words.
+  const editorialWords = Array.isArray(suggestion?.word_translations) ? suggestion.word_translations : [];
+  const alignedWords = Array.isArray(cue?.words) ? cue!.words! : [];
+  const toTiming = (items: any[]) => items.map((word: any) => ({
+    start: Number(word.start_ms ?? word.startMs),
+    end: Number(word.end_ms ?? word.endMs)
+  })).filter(word => Number.isFinite(word.start) && Number.isFinite(word.end) && word.end > word.start);
+  let timings = toTiming(editorialWords);
+  if (timings.length !== wordMatches.length) timings = toTiming(alignedWords);
 
-  // Match iHub's subtitle-word DOM contract, including punctuation tied to
-  // the preceding timed word. The audio timestamp remains the source of truth.
-  const tokens = [...text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]+/gu)];
+  // Last-resort timing keeps the word-by-word effect working even when an
+  // editorial response has a different token count from WhisperX.
+  if (timings.length !== wordMatches.length) {
+    const start = Number(cue?.startMs ?? 0);
+    const end = Number(cue?.endMs ?? start);
+    if (end > start) {
+      timings = wordMatches.map((_, index) => ({
+        start: start + (end - start) * index / wordMatches.length,
+        end: start + (end - start) * (index + 1) / wordMatches.length
+      }));
+    }
+  }
+  if (!timings.length) return text;
+
+  const activeIndex = timings.findIndex(word => currentMs >= word.start && currentMs < word.end);
+  const completedIndex = timings.reduce((last, word, index) => word.end <= currentMs ? index : last, -1);
+  const tokens = [...text.matchAll(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*|[^\\s\\p{L}\\p{N}]+/gu)];
   const parts: ReactNode[] = [];
   let cursor = 0;
   let wordIndex = 0;
@@ -40,10 +57,10 @@ function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: nu
   tokens.forEach((token, tokenPosition) => {
     const tokenStart = token.index ?? cursor;
     if (tokenStart > cursor) parts.push(text.slice(cursor, tokenStart));
-    const isWord = /^[\p{L}\p{N}]/u.test(token[0]);
+    const isWord = /^[\\p{L}\\p{N}]/u.test(token[0]);
     const index = isWord ? wordIndex++ : previousWordIndex;
     if (isWord) previousWordIndex = index;
-    const state = index === activeIndex ? "active" : activeIndex >= 0 && index < activeIndex ? "complete" : "upcoming";
+    const state = index === activeIndex ? "active" : index <= completedIndex ? "complete" : "upcoming";
     const classes = ["subtitle-word"];
     if (!isWord) classes.push("subtitle-punctuation");
     if (state === "active") classes.push("is-active");
@@ -966,7 +983,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
                   onEnded={() => setIsPlaying(false)}
                   onTimeUpdate={e => setCurrent(e.currentTarget.currentTime * 1000)} />
                 {activeCue?.text && <div className="media-editor-caption">
-                  <div className="video-subtitle-en">{renderEditorialEnglish(activeEditorialSuggestion, activeCue.text, current)}</div>
+                  <div className="video-subtitle-en">{renderEditorialEnglish(activeEditorialSuggestion, activeCue.text, current, activeCue)}</div>
                   {(activeEditorialSuggestion?.approved_pt || translations.find(t => t.id === activeCue.id)?.text) && <div className="video-subtitle-pt">
                     {activeEditorialSuggestion?.approved_pt || translations.find(t => t.id === activeCue.id)?.text}
                   </div>}
