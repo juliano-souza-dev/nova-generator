@@ -36,7 +36,10 @@ type AnkiCard = {
   sourceEndMs?: number;
   status: "draft" | "approved";
 };
-type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string; learningJourney?: LearningJourneyPackage };
+type PedagogicalLayer = { context: string; usage: string; example_en: string; example_pt: string; nuance?: string };
+type PedagogicalItem = { id: string; cue_order: number; start_ms: number; end_ms: number; type: string; expression: string; meaning_pt: string; explanation_pt: string; source_en: string; source_pt: string; layers: PedagogicalLayer[] };
+type PedagogicalContentPackage = { contract: "ihub-pedagogical-content/1.0"; title: string; language: string; source_hash: string; minimum_items: number; items: PedagogicalItem[] };
+type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string; learningJourney?: LearningJourneyPackage; pedagogicalContent?: PedagogicalContentPackage };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 type SharedVoice = { id: string; name: string; mode?: "voice_clone" | "voice_design" };
 function learningJourneySourceSignature(sourceSignature: string, cards: AnkiCard[]) {
@@ -180,6 +183,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const [notice, setNotice] = useState("");
   const [predictionSaved, setPredictionSaved] = useState(false);
   const [learningJourney, setLearningJourney] = useState<LearningJourneyPackage | null>(null);
+  const [pedagogicalContent, setPedagogicalContent] = useState<PedagogicalContentPackage | null>(null);
   const [voices, setVoices] = useState<SharedVoice[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [voiceCloningReady, setVoiceCloningReady] = useState(false);
@@ -188,6 +192,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const [sourceCues, setSourceCues] = useState<Cue[]>([]);
   const [sourceTranslations, setSourceTranslations] = useState<Translation[]>([]);
   const importInput = useRef<HTMLInputElement>(null);
+  const pedagogicalInput = useRef<HTMLInputElement>(null);
 
   const selectedAsset = useMemo(() => assets.find(item => item.id === assetId), [assets, assetId]);
   const approvedCards = useMemo(() => cards.filter(card => card.status === "approved"), [cards]);
@@ -247,6 +252,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       ]);
       setPredictionSaved(isPredictionSaved);
       const savedJourney = stored?.learningJourney;
+      const savedPedagogicalContent = stored?.pedagogicalContent;
+      setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-content/1.0" ? savedPedagogicalContent : null);
       const storedJourneySignature = learningJourneySourceSignature(materialSignature, Array.isArray(stored?.cards) ? stored.cards : []);
       setLearningJourney(savedJourney && savedJourney.source?.sourceSignature === storedJourneySignature && validateLearningJourney(savedJourney).length === 0 ? savedJourney : null);
       setSourceSignature(materialSignature);
@@ -324,7 +331,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   async function persistMaterials() {
     if (!assetId) throw new Error("Selecione uma mídia de origem.");
     const journeyIsCurrent = learningJourney?.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards);
-    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, learningJourney: journeyIsCurrent ? learningJourney ?? undefined : undefined, updatedAt: new Date().toISOString(), sourceSignature };
+    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, learningJourney: journeyIsCurrent ? learningJourney ?? undefined : undefined, pedagogicalContent: pedagogicalContent ?? undefined, updatedAt: new Date().toISOString(), sourceSignature };
     await invoke("save_project_materials", { projectId, assetId, materials: document });
     await invoke("update_project_stage", { id: projectId, stage: "Materiais" });
     onProjectUpdated?.();
@@ -534,8 +541,132 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     finally { if (importInput.current) importInput.current.value = ""; }
   }
 
+
+  function buildPedagogicalInput() {
+    if (!assetId || sourceCues.length < 1) throw new Error("A transcrição revisada é necessária.");
+    const source = {
+      project_id: projectId, asset_id: assetId, source_signature: sourceSignature,
+      cues: sourceCues.map((cue, index) => ({
+        cue_order: index + 1, cue_id: cue.id, start_ms: Math.round(cue.startMs), end_ms: Math.round(cue.endMs),
+        speaker: cue.speaker ?? "", text_en: cue.text,
+        text_pt: sourceTranslations.find(item => item.id === cue.id)?.text ?? ""
+      }))
+    };
+    return hashPayload(source).then(sourceHash => ({ source, sourceHash }));
+  }
+
+  async function generatePedagogicalInput() {
+    if (!assetId || !sourceCues.length || loading) return;
+    setError(""); setNotice("");
+    try {
+      const { source, sourceHash } = await buildPedagogicalInput();
+      const lines = [
+        "NOVA GENERATOR | CONTEÚDO PEDAGÓGICO",
+        "EXTERNAL AI PROCESSING INSTRUCTIONS | INPUT 1.0",
+        "REQUIRED_OUTPUT_CONTRACT: ihub-pedagogical-content/1.0",
+        "SOURCE_HASH: " + sourceHash,
+        "PROJECT_ID: " + projectId,
+        "ASSET_ID: " + assetId,
+        "VIDEO_ID: " + (selectedAsset?.sourceVideoId ?? "NOT_AVAILABLE"),
+        "TIMING_UNIT: milliseconds, relative to the selected media asset",
+        "",
+        "1. OBJECTIVE",
+        "Analyze the complete, human-reviewed transcript below. Extract the most valuable teachable English items: vocabulary, phrasal verbs, idioms, collocations, grammatical structures, discourse markers, fixed expressions, and useful sentence patterns.",
+        "Select AT LEAST 5 distinct items. Prefer items that are genuinely useful, reusable, meaningful in this scene, and appropriate to the language level. Do not select trivial words merely to reach the minimum.",
+        "",
+        "2. SOURCE INTEGRITY",
+        "The transcript is already edited and its cue timings are final. Do not rewrite, reorder, merge, split, estimate, or modify cue text or timestamps. Every selected item must cite the exact cue_order and copy start_ms/end_ms from that cue. Never invent a source quote.",
+        "Use the Portuguese translation only as context. Write natural Brazilian Portuguese explanations.",
+        "",
+        "3. USAGE MAP WITH LAYERS",
+        "For EACH selected item, create at least 3 usage layers, each representing a meaningfully different context or communicative situation. Do not merely change names while repeating the same sentence.",
+        "Each layer must contain: context (short situation label), usage (explain when/why a speaker would use it), example_en (a natural original sentence), example_pt (natural Brazilian Portuguese translation), and optional nuance (register, tone, grammar, or contrast).",
+        "Across the layers, demonstrate different subjects, situations, tenses or pragmatic functions when appropriate. Preserve the core meaning and explain any genuine change of meaning.",
+        "",
+        "4. PEDAGOGICAL QUALITY",
+        "Classify each item with one of: vocabulary, phrasal_verb, idiom, collocation, grammatical_structure, discourse_marker, expression, sentence_pattern.",
+        "Prioritize multiword units and reusable patterns over isolated words. Avoid duplicate or overlapping selections. Avoid misleading literal translations. Examples must not copy the source sentence.",
+        "",
+        "5. REQUIRED JSON OUTPUT",
+        "Return ONLY valid JSON, no Markdown and no commentary. Keep the exact source_hash below. The output must follow this shape:",
+        JSON.stringify({
+          contract: "ihub-pedagogical-content/1.0", title: "Contextual Vocabulary Recognition", language: "en",
+          source_hash: sourceHash, minimum_items: 5,
+          items: [{
+            id: "stable-item-id", cue_order: 1, start_ms: 0, end_ms: 1000,
+            type: "phrasal_verb", expression: "figure out", meaning_pt: "descobrir; entender",
+            explanation_pt: "Explicação clara do significado e do uso.",
+            source_en: "Exact excerpt from the cited cue.", source_pt: "Tradução da fala de origem.",
+            layers: [
+              { context: "Solving a problem", usage: "When someone needs to find an answer.", example_en: "I need to figure out how this works.", example_pt: "Preciso descobrir como isso funciona.", nuance: "Informal and common in conversation." },
+              { context: "Understanding a situation", usage: "When someone is trying to understand what happened.", example_en: "She finally figured out the reason.", example_pt: "Ela finalmente entendeu o motivo." },
+              { context: "Making a decision", usage: "When someone needs time to decide a practical next step.", example_en: "We will figure out what to do tomorrow.", example_pt: "Vamos descobrir o que fazer amanhã." }
+            ]
+          }]
+        }, null, 2),
+        "",
+        "6. TRANSCRIPT SOURCE"
+      ];
+      source.cues.forEach(cue => lines.push(
+        "", "[CUE " + String(cue.cue_order).padStart(4, "0") + "]",
+        "CUE_ID: " + cue.cue_id, "START_MS: " + cue.start_ms, "END_MS: " + cue.end_ms,
+        "SPEAKER: " + (cue.speaker || "NOT_AVAILABLE"), "EN: " + cue.text_en,
+        "PT: " + (cue.text_pt || "NOT_AVAILABLE")
+      ));
+      const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = "conteudo-pedagogico-entrada-" + assetId + ".txt"; anchor.click();
+      URL.revokeObjectURL(url);
+      setNotice("Instruções e transcrição revisada exportadas. Envie o TXT à IA externa e importe o JSON de retorno.");
+    } catch (e) { setError(String(e)); }
+  }
+
+  async function importPedagogicalContent(file?: File) {
+    if (!file) return;
+    setError(""); setNotice("");
+    try {
+      const parsed = JSON.parse(await file.text()) as PedagogicalContentPackage;
+      if (parsed?.contract !== "ihub-pedagogical-content/1.0") throw new Error("Contrato inválido. O JSON deve seguir ihub-pedagogical-content/1.0.");
+      const { sourceHash } = await buildPedagogicalInput();
+      if (parsed.source_hash !== sourceHash) throw new Error("A transcrição ou os tempos mudaram. Gere novamente o TXT antes de importar.");
+      if (!Array.isArray(parsed.items) || parsed.items.length < 5) throw new Error("O conteúdo pedagógico precisa conter pelo menos cinco itens.");
+      const seen = new Set<string>();
+      for (const item of parsed.items) {
+        const expression = text(item.expression).trim().toLocaleLowerCase("en-US");
+        const cue = sourceCues[item.cue_order - 1];
+        if (!expression || seen.has(expression)) throw new Error("Há expressão vazia ou duplicada no conteúdo pedagógico.");
+        seen.add(expression);
+        if (!cue || Number(item.start_ms) !== Math.round(cue.startMs) || Number(item.end_ms) !== Math.round(cue.endMs)) throw new Error("Um item aponta para um trecho ou timestamp que não corresponde à transcrição atual.");
+        if (!text(item.meaning_pt).trim() || !text(item.explanation_pt).trim() || !text(item.source_en).trim() || !Array.isArray(item.layers) || item.layers.length < 3) throw new Error("Cada item precisa de significado, explicação, fala de origem e ao menos três camadas de uso.");
+        if (item.layers.some(layer => !text(layer.context).trim() || !text(layer.usage).trim() || !text(layer.example_en).trim() || !text(layer.example_pt).trim())) throw new Error("Cada camada precisa de contexto, orientação de uso e exemplos EN/PT.");
+      }
+      setPedagogicalContent(parsed);
+      setNotice("Conteúdo pedagógico importado. Salve os materiais para manter o conteúdo no projeto.");
+    } catch (e) { setError(String(e)); }
+    finally { if (pedagogicalInput.current) pedagogicalInput.current.value = ""; }
+  }
+
+  async function exportPedagogicalForHub() {
+    if (!pedagogicalContent || !assetId) return;
+    const payload = {
+      schema: "ihub-generator-pedagogical-import/1.0",
+      cues: sourceCues.map((cue, index) => ({
+        order: index + 1, start_ms: Math.round(cue.startMs), end_ms: Math.round(cue.endMs),
+        speaker: cue.speaker ?? "", final_en: cue.text,
+        pt: sourceTranslations.find(item => item.id === cue.id)?.text ?? ""
+      })),
+      pedagogical_content: pedagogicalContent
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = "ihub-conteudo-pedagogico-" + assetId + ".json"; anchor.click();
+    URL.revokeObjectURL(url);
+    setNotice("Pacote de conteúdo pedagógico exportado para importação no iHub Admin.");
+  }
+
   function exportJson() {
-    const payload = JSON.stringify({ schema: "nova-generator-materials/2.0", projectId, assetId, assetName: selectedAsset?.name, cards }, null, 2);
+    const payload = JSON.stringify({ schema: "nova-generator-materials/2.0", projectId, assetId, assetName: selectedAsset?.name, cards, pedagogical_content: pedagogicalContent ?? undefined }, null, 2);
     const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
     const anchor = document.createElement("a");
     anchor.href = url; anchor.download = "materiais-" + assetId + ".json"; anchor.click();
@@ -570,6 +701,21 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
         <h3>Materiais ainda não liberados</h3>
         <p>Para liberar esta área, abra o editor da mídia, entre em Prediction Listening e clique em <strong>Salvar</strong>. Importar o JSON ou aprovar desafios, isoladamente, não libera a etapa.</p>
       </div> : <>
+        <section className="materials-journey-panel">
+          <div className="materials-journey-heading">
+            <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Reconhecimento contextual do vocabulário</h3>
+              <p>Extraia itens relevantes da transcrição revisada e gere mapas de uso em diferentes contextos. Cada item deve conter ao menos três camadas de aplicação.</p></div>
+            <div className="materials-journey-actions">
+              <button className="secondary-button" type="button" onClick={() => void generatePedagogicalInput()} disabled={loading || !sourceCues.length}><FileText size={14}/> Baixar instruções TXT</button>
+              <button className="secondary-button" type="button" onClick={() => pedagogicalInput.current?.click()} disabled={loading || !sourceCues.length}><Download size={14}/> Importar JSON da IA</button>
+              <input ref={pedagogicalInput} type="file" accept=".json,application/json" hidden onChange={event => void importPedagogicalContent(event.target.files?.[0])}/>
+              <button className="primary-button" type="button" onClick={() => void persistMaterials().then(() => setNotice("Conteúdo pedagógico salvo no projeto.")).catch(e => setError(String(e)))} disabled={!pedagogicalContent || saving}><Save size={14}/> Salvar conteúdo</button>
+              <button className="secondary-button" type="button" onClick={() => void exportPedagogicalForHub()} disabled={!pedagogicalContent}><Download size={14}/> Exportar para iHub</button>
+            </div>
+          </div>
+          {pedagogicalContent && <div className="materials-stats"><div><BookOpen size={17}/><strong>{pedagogicalContent.items.length}</strong><span>itens pedagógicos</span></div><div><Layers3 size={17}/><strong>{pedagogicalContent.items.reduce((sum, item) => sum + item.layers.length, 0)}</strong><span>camadas de uso</span></div><div><CheckCircle2 size={17}/><strong>Validado</strong><span>vinculado à transcrição</span></div></div>}
+        </section>
+
         <div className="materials-stats">
           <div><BookOpen size={17}/><strong>{sourceInfo.cues}</strong><span>trechos</span></div>
           <div><Volume2 size={17}/><strong>{sourceInfo.translations}</strong><span>traduções</span></div>
