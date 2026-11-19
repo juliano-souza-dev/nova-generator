@@ -8,7 +8,7 @@ export const LEARNING_JOURNEY_CONTRACT = "nova-generator-learning-journey/1.0" a
 export const IHUB_JOURNEY_CONTRACT = "ihub-learning-journey/1.0" as const;
 
 export type ListeningQuestion =
-  | { id: string; type: "identify"; prompt: string; audioCueIds: string[]; options: { id: string; text: string }[]; answerId: string }
+  | { id: string; type: "identify"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string }
   | { id: string; type: "gap"; prompt: string; audioCueIds: string[]; sentence: string; acceptedAnswers: string[]; hint?: string }
   | { id: string; type: "detail"; prompt: string; audioCueIds: string[]; options: { id: string; text: string }[]; answerId: string }
   | { id: string; type: "word-recognition"; prompt: string; audioCueIds: string[]; options: { id: string; text: string }[]; answerId: string }
@@ -18,7 +18,7 @@ export type MicroLesson = {
   id: string;
   title: string;
   focus: "expression" | "grammar" | "connected-speech" | "pronunciation" | "pragmatics";
-  sourceCueIds: string[];
+  sourceCueOrders: number[];
   targetEn: string;
   targetPt: string;
   explanationPt: string;
@@ -33,7 +33,7 @@ export type MicroLesson = {
 
 export type DeepListeningTask = {
   id: string;
-  cueIds: string[];
+  cueOrders: number[];
   mode: "no-subtitles" | "gap-fill" | "connected-speech" | "rhythm";
   prompt: string;
   expectedText?: string;
@@ -108,7 +108,7 @@ export function validateLearningJourney(value: unknown): string[] {
 }
 
 
-export type JourneySourceCue = { id: string; text: string; startMs: number; endMs: number };
+export type JourneySourceCue = { id: string; text: string; startMs: number; endMs: number; order?: number };
 export type JourneySourceCard = {
   id: string; sourceCueId: string; focus: string; meaning: string;
   highlightEn: string; explanation: string; exampleEn: string; examplePt: string;
@@ -130,6 +130,7 @@ export function buildLearningJourneyPackage(input: {
   if (cues.length < 3) throw new Error("A jornada precisa de pelo menos três trechos válidos de transcrição.");
   const approvedCards = input.cards.filter(card => card.status === "approved" && card.focus.trim() && card.meaning.trim());
   const selected = cues.slice(0, 12);
+  const cueOrder = (cue: JourneySourceCue) => Number(cue.order) > 0 ? Number(cue.order) : cues.indexOf(cue) + 1;
   const distractors = (cue: JourneySourceCue) => unique(
     cues.filter(item => item.id !== cue.id).map(item => item.text.trim())
   ).slice(0, 2);
@@ -139,7 +140,7 @@ export function buildLearningJourneyPackage(input: {
       id: "recall-identify-" + cue.id,
       type: "identify",
       prompt: "Which sentence did you hear?",
-      audioCueIds: [cue.id],
+      audioCueOrders: [cueOrder(cue)],
       options: [{ id: "correct", text: cue.text }, ...alternatives.map((text, i) => ({ id: "distractor-" + i, text }))],
       answerId: "correct"
     };
@@ -193,7 +194,7 @@ export function buildLearningJourneyPackage(input: {
     id: "micro-" + card.id,
     title: card.highlightEn || card.focus,
     focus: /\b(?:am|is|are|was|were|do|does|did|have|has|had)\b/i.test(card.focus) ? "grammar" : "expression",
-    sourceCueIds: card.sourceCueId ? [card.sourceCueId] : [],
+    sourceCueOrders: (() => { const source = cues.find(cue => cue.id === card.sourceCueId); return source ? [cueOrder(source)] : []; })(),
     targetEn: card.highlightEn || card.focus,
     targetPt: card.meaning,
     explanationPt: card.explanation || "Observe como esta expressão funciona no contexto original.",
@@ -207,7 +208,7 @@ export function buildLearningJourneyPackage(input: {
   }));
   const deepTasks: DeepListeningTask[] = selected.slice(0, 8).map((cue, index) => ({
     id: "deep-" + cue.id,
-    cueIds: [cue.id],
+    cueOrders: [cueOrder(cue)],
     mode: index % 3 === 0 ? "no-subtitles" : index % 3 === 1 ? "gap-fill" : "connected-speech",
     prompt: index % 3 === 0 ? "Ouça sem legendas e identifique a ideia principal." : index % 3 === 1 ? "Ouça novamente e complete a frase." : "Observe como as palavras se conectam na fala.",
     expectedText: cue.text,
