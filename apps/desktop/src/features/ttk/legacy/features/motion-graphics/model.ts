@@ -14,6 +14,41 @@ export function captionWordsForTimeline(words: CaptionWord[], captionStartMs: nu
   return words.map(word => ({ ...word, startMs: word.startMs + captionStartMs, endMs: word.endMs + captionStartMs }));
 }
 
+/**
+ * Produces timeline-aligned words for karaoke rendering.
+ * When word-level timestamps are unavailable, estimate them proportionally
+ * across the caption duration so the karaoke mode still has a usable fallback.
+ */
+export function captionWordsForKaraoke(
+  words: CaptionWord[] | undefined,
+  text: string,
+  captionStartMs: number,
+  captionEndMs: number,
+): CaptionWord[] {
+  const validWords = (words || []).filter(word =>
+    word.text?.trim()
+    && Number.isFinite(word.startMs)
+    && Number.isFinite(word.endMs)
+    && word.endMs > word.startMs
+  );
+  if (validWords.length) {
+    return captionWordsForTimeline(validWords, captionStartMs, captionEndMs);
+  }
+
+  const tokens = text.trim().match(/\\S+/g) || [];
+  const duration = Math.max(0, captionEndMs - captionStartMs);
+  if (!tokens.length || duration <= 0) return [];
+
+  const totalWeight = tokens.reduce((sum, token) => sum + Math.max(1, token.length), 0);
+  let elapsedWeight = 0;
+  return tokens.map(token => {
+    const startMs = captionStartMs + duration * elapsedWeight / totalWeight;
+    elapsedWeight += Math.max(1, token.length);
+    const endMs = captionStartMs + duration * elapsedWeight / totalWeight;
+    return { text: token, startMs, endMs, alignmentSource: "estimated" };
+  });
+}
+
 export type CaptionSemanticGroup = { id: string; text: string; startMs: number; endMs: number; firstWordIndex: number; lastWordIndex: number };
 export function captionSemanticGroups(words: CaptionWord[]): CaptionSemanticGroup[] {
   const completeMapping = words.every(word => !!word.ptGroup?.trim() || !!word.pt?.trim() || !!word.translation?.trim());
