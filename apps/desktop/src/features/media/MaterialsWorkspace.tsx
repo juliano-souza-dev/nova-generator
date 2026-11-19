@@ -709,7 +709,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       setError("Selecione pelo menos um item pedagógico para incluir no pacote final.");
       return;
     }
-    setError(""); setNotice("");
+    setError(""); setNotice(""); setExporting(true);
     try {
       const { sourceHash } = await buildPedagogicalInput();
       if (pedagogicalContent.source_hash !== sourceHash || pedagogicalContent.editorial_signature !== sourceSignature) {
@@ -756,6 +756,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         (journeyIsCurrent ? " e Jornada de aprendizagem" : "") + ".");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExporting(false);
     }
   }
 
