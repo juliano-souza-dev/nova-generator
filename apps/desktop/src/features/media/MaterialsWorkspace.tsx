@@ -191,6 +191,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const [notice, setNotice] = useState("");
   const [learningJourney, setLearningJourney] = useState<LearningJourneyPackage | null>(null);
   const [pedagogicalContent, setPedagogicalContent] = useState<PedagogicalContentPackage | null>(null);
+  const [pedagogicalProcessing, setPedagogicalProcessing] = useState(false);
+  const [pedagogicalFileName, setPedagogicalFileName] = useState("");
   const [activeMaterialTab, setActiveMaterialTab] = useState<"pedagogical" | "anki">("pedagogical");
   const [activePedagogicalTab, setActivePedagogicalTab] = useState<"vocabulary" | "prediction" | "journey">("vocabulary");
   const [voices, setVoices] = useState<SharedVoice[]>([]);
@@ -564,13 +566,13 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   }
 
   async function generatePedagogicalInput() {
-    if (!assetId || !sourceCues.length || loading) return;
+    if (!assetId || !sourceCues.length || loading || pedagogicalProcessing) return;
     setError(""); setNotice("");
     try {
       const { source, sourceHash } = await buildPedagogicalInput();
       const lines = [
         "NOVA GENERATOR | CONTEÚDO PEDAGÓGICO",
-        "EXTERNAL AI PROCESSING INSTRUCTIONS | INPUT 1.0",
+        "INSTRUÇÕES PARA IA EXTERNA | RECONHECIMENTO CONTEXTUAL DO VOCABULÁRIO",
         "REQUIRED_OUTPUT_CONTRACT: ihub-pedagogical-content/1.0",
         "SOURCE_HASH: " + sourceHash,
         "PROJECT_ID: " + projectId,
@@ -578,25 +580,25 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         "VIDEO_ID: " + (selectedAsset?.sourceVideoId ?? "NOT_AVAILABLE"),
         "TIMING_UNIT: milliseconds, relative to the selected media asset",
         "",
-        "1. OBJECTIVE",
-        "Analyze the complete, human-reviewed transcript below. Extract the most valuable teachable English items: vocabulary, phrasal verbs, idioms, collocations, grammatical structures, discourse markers, fixed expressions, and useful sentence patterns.",
-        "Select AT LEAST 5 distinct items. Prefer items that are genuinely useful, reusable, meaningful in this scene, and appropriate to the language level. Do not select trivial words merely to reach the minimum.",
+        "OBJETIVO",
+        "Analise integralmente a transcrição revisada abaixo. Extraia expressões e estruturas que realmente ajudem um estudante de inglês a compreender e reutilizar o idioma: vocabulário, phrasal verbs, idioms, collocations, estruturas gramaticais, discourse markers, expressões fixas e padrões de frase.",
+        "Selecione PELO MENOS 5 itens distintos. Priorize unidades úteis, naturais, reutilizáveis e relevantes para a cena. Não escolha palavras triviais apenas para atingir o mínimo.",
         "",
-        "2. SOURCE INTEGRITY",
-        "The transcript is already edited and its cue timings are final. Do not rewrite, reorder, merge, split, estimate, or modify cue text or timestamps. Every selected item must cite the exact cue_order and copy start_ms/end_ms from that cue. Never invent a source quote.",
-        "Use the Portuguese translation only as context. Write natural Brazilian Portuguese explanations.",
+        "INTEGRIDADE DA FONTE",
+        "A transcrição já foi revisada e seus tempos são definitivos. Não reescreva, reordene, una, divida ou altere nenhuma cue. Cada item deve apontar para cue_order e copiar start_ms/end_ms exatamente da cue correspondente. Não invente citações. Use a tradução em português apenas como apoio contextual.",
         "",
-        "3. USAGE MAP WITH LAYERS",
-        "For EACH selected item, create at least 3 usage layers, each representing a meaningfully different context or communicative situation. Do not merely change names while repeating the same sentence.",
-        "Each layer must contain: context (short situation label), usage (explain when/why a speaker would use it), example_en (a natural original sentence), example_pt (natural Brazilian Portuguese translation), and optional nuance (register, tone, grammar, or contrast).",
-        "Across the layers, demonstrate different subjects, situations, tenses or pragmatic functions when appropriate. Preserve the core meaning and explain any genuine change of meaning.",
+        "MAPA DE USO EM CAMADAS",
+        "Para CADA item, crie pelo menos 3 camadas que representem situações comunicativas realmente diferentes. Não repita a mesma ideia trocando apenas nomes.",
+        "Cada camada deve conter: context (situação curta), usage (quando e por que alguém usaria a expressão), example_en (frase original e natural) e example_pt (tradução natural em português brasileiro). Inclua nuance quando houver diferença de registro, tom, gramática ou sentido.",
+        "Demonstre variedade de interlocutores, situações, tempos verbais ou funções pragmáticas quando fizer sentido. Preserve o significado central e explique mudanças reais de sentido.",
         "",
-        "4. PEDAGOGICAL QUALITY",
-        "Classify each item with one of: vocabulary, phrasal_verb, idiom, collocation, grammatical_structure, discourse_marker, expression, sentence_pattern.",
-        "Prioritize multiword units and reusable patterns over isolated words. Avoid duplicate or overlapping selections. Avoid misleading literal translations. Examples must not copy the source sentence.",
+        "QUALIDADE PEDAGÓGICA",
+        "Classifique cada item usando exatamente uma categoria: vocabulary, phrasal_verb, idiom, collocation, grammatical_structure, discourse_marker, expression ou sentence_pattern.",
+        "Priorize expressões com várias palavras e padrões reutilizáveis em vez de palavras isoladas. Evite duplicatas, sobreposição e traduções literais enganosas. Os exemplos não podem copiar a frase da cena.",
+        "Escreva explicações claras em português brasileiro, adequadas a estudantes iniciantes, sem reduzir a explicação a uma tradução.",
         "",
-        "5. REQUIRED JSON OUTPUT",
-        "Return ONLY valid JSON, no Markdown and no commentary. Keep the exact source_hash below. The output must follow this shape:",
+        "FORMATO DE SAÍDA OBRIGATÓRIO",
+        "Retorne SOMENTE JSON válido, sem Markdown ou comentários. Preserve o SOURCE_HASH exatamente. Siga este contrato:",
         JSON.stringify({
           contract: "ihub-pedagogical-content/1.0", title: "Contextual Vocabulary Recognition", language: "en",
           source_hash: sourceHash, minimum_items: 5,
@@ -613,46 +615,74 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           }]
         }, null, 2),
         "",
-        "6. TRANSCRIPT SOURCE"
+        "TRANSCRIÇÃO REVISADA"
       ];
       source.cues.forEach(cue => lines.push(
         "", "[CUE " + String(cue.cue_order).padStart(4, "0") + "]",
-        "CUE_ID: " + cue.cue_id, "START_MS: " + cue.start_ms, "END_MS: " + cue.end_ms,
+        "CUE_ORDER: " + cue.cue_order, "CUE_ID: " + cue.cue_id,
+        "START_MS: " + cue.start_ms, "END_MS: " + cue.end_ms,
         "SPEAKER: " + (cue.speaker || "NOT_AVAILABLE"), "EN: " + cue.text_en,
         "PT: " + (cue.text_pt || "NOT_AVAILABLE")
       ));
-      const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+      const blob = new Blob(["\\uFEFF", lines.join("\\r\\n")], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = "conteudo-pedagogico-entrada-" + assetId + ".txt"; anchor.click();
-      URL.revokeObjectURL(url);
-      setNotice("Instruções e transcrição revisada exportadas. Envie o TXT à IA externa e importe o JSON de retorno.");
+      anchor.href = url;
+      anchor.download = "conteudo-pedagogico-" + assetId + "-instrucoes.txt";
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+      setNotice("TXT gerado com as instruções completas e " + source.cues.length + " trechos da transcrição revisada. Envie o arquivo à IA e importe o JSON de resposta.");
     } catch (e) { setError(String(e)); }
   }
 
   async function importPedagogicalContent(file?: File) {
-    if (!file) return;
-    setError(""); setNotice("");
+    if (!file || !assetId || pedagogicalProcessing) return;
+    setError(""); setNotice(""); setPedagogicalProcessing(true);
+    setPedagogicalFileName(file.name);
     try {
-      const parsed = JSON.parse(await file.text()) as PedagogicalContentPackage;
-      if (parsed?.contract !== "ihub-pedagogical-content/1.0") throw new Error("Contrato inválido. O JSON deve seguir ihub-pedagogical-content/1.0.");
-      const { sourceHash } = await buildPedagogicalInput();
-      if (parsed.source_hash !== sourceHash) throw new Error("A transcrição ou os tempos mudaram. Gere novamente o TXT antes de importar.");
-      if (!Array.isArray(parsed.items) || parsed.items.length < 5) throw new Error("O conteúdo pedagógico precisa conter pelo menos cinco itens.");
-      const seen = new Set<string>();
-      for (const item of parsed.items) {
-        const expression = text(item.expression).trim().toLocaleLowerCase("en-US");
-        const cue = sourceCues[item.cue_order - 1];
-        if (!expression || seen.has(expression)) throw new Error("Há expressão vazia ou duplicada no conteúdo pedagógico.");
-        seen.add(expression);
-        if (!cue || Number(item.start_ms) !== Math.round(cue.startMs) || Number(item.end_ms) !== Math.round(cue.endMs)) throw new Error("Um item aponta para um trecho ou timestamp que não corresponde à transcrição atual.");
-        if (!text(item.meaning_pt).trim() || !text(item.explanation_pt).trim() || !text(item.source_en).trim() || !Array.isArray(item.layers) || item.layers.length < 3) throw new Error("Cada item precisa de significado, explicação, fala de origem e ao menos três camadas de uso.");
-        if (item.layers.some(layer => !text(layer.context).trim() || !text(layer.usage).trim() || !text(layer.example_en).trim() || !text(layer.example_pt).trim())) throw new Error("Cada camada precisa de contexto, orientação de uso e exemplos EN/PT.");
-      }
-      setPedagogicalContent({ ...parsed, editorial_signature: sourceSignature });
-      setNotice("Conteúdo pedagógico importado. Salve os materiais para manter o conteúdo no projeto.");
-    } catch (e) { setError(String(e)); }
-    finally { if (pedagogicalInput.current) pedagogicalInput.current.value = ""; }
+      await runTrackedTask("materials", "Validar e processar conteúdo pedagógico", async () => {
+        if (file.size > 8 * 1024 * 1024) throw new Error("O JSON excede o limite de 8 MB.");
+        const parsed = JSON.parse(await file.text()) as PedagogicalContentPackage;
+        if (parsed?.contract !== "ihub-pedagogical-content/1.0") throw new Error("Contrato inválido. Use o JSON gerado a partir do TXT desta transcrição.");
+        const { sourceHash } = await buildPedagogicalInput();
+        if (parsed.source_hash !== sourceHash) throw new Error("A transcrição ou os tempos mudaram. Baixe um novo TXT e gere novamente o JSON.");
+        if (!Array.isArray(parsed.items) || parsed.items.length < 5) throw new Error("O conteúdo precisa conter pelo menos cinco itens pedagógicos.");
+        const allowedTypes = new Set(["vocabulary", "phrasal_verb", "idiom", "collocation", "grammatical_structure", "discourse_marker", "expression", "sentence_pattern"]);
+        const seen = new Set<string>();
+        for (const item of parsed.items) {
+          const expression = text(item.expression).trim().toLocaleLowerCase("en-US");
+          const cueOrder = Number(item.cue_order);
+          const cue = Number.isInteger(cueOrder) ? sourceCues[cueOrder - 1] : undefined;
+          if (!expression || seen.has(expression)) throw new Error("Há expressão vazia ou duplicada no conteúdo.");
+          seen.add(expression);
+          if (!allowedTypes.has(item.type)) throw new Error("Categoria inválida para o item: " + expression);
+          if (!cue || Number(item.start_ms) !== Math.round(cue.startMs) || Number(item.end_ms) !== Math.round(cue.endMs)) throw new Error("O item \"" + expression + "\" aponta para uma cue ou timestamp diferente da transcrição.");
+          if (!text(item.meaning_pt).trim() || !text(item.explanation_pt).trim() || !text(item.source_en).trim() || !cue.text.includes(item.source_en.trim()) || !Array.isArray(item.layers) || item.layers.length < 3) throw new Error("O item \"" + expression + "\" precisa conter significado, explicação, trecho exato da fonte e ao menos três camadas.");
+          if (item.layers.some(layer => !text(layer.context).trim() || !text(layer.usage).trim() || !text(layer.example_en).trim() || !text(layer.example_pt).trim())) throw new Error("Uma camada do item \"" + expression + "\" está incompleta.");
+        }
+        const content: PedagogicalContentPackage = { ...parsed, editorial_signature: sourceSignature };
+        const journeyIsCurrent = learningJourney?.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards);
+        const document: MaterialDocument = {
+          version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials",
+          sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards,
+          learningJourney: journeyIsCurrent ? learningJourney ?? undefined : undefined,
+          pedagogicalContent: content, updatedAt: new Date().toISOString(), sourceSignature
+        };
+        await invoke("save_project_materials", { projectId, assetId, materials: document });
+        await invoke("update_project_stage", { id: projectId, stage: "Materiais" });
+        setPedagogicalContent(content);
+        onProjectUpdated?.();
+      });
+      setNotice("Conteúdo processado, validado e salvo no projeto. " + file.name + " contém " + file.size.toLocaleString("pt-BR") + " bytes.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPedagogicalProcessing(false);
+      if (pedagogicalInput.current) pedagogicalInput.current.value = "";
+    }
   }
 
   async function exportPedagogicalForHub() {
@@ -721,19 +751,26 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
             <button type="button" className={activePedagogicalTab === "journey" ? "active" : ""} onClick={() => setActivePedagogicalTab("journey")}>Jornada de aprendizagem · 7 dias</button>
           </nav>
           {activePedagogicalTab === "vocabulary" && <>
-            <section className="materials-journey-panel">
-              <div className="materials-journey-heading">
-                <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Reconhecimento contextual do vocabulário</h3>
-                  <p>Extraia itens relevantes da transcrição revisada e gere mapas de uso em diferentes contextos. Cada item deve conter ao menos três camadas de aplicação.</p></div>
-                <div className="materials-journey-actions">
-                  <button className="secondary-button" type="button" onClick={() => void generatePedagogicalInput()} disabled={loading || !sourceCues.length}><FileText size={14}/> Baixar instruções TXT</button>
-                  <button className="secondary-button" type="button" onClick={() => pedagogicalInput.current?.click()} disabled={loading || !sourceCues.length}><Download size={14}/> Importar JSON da IA</button>
-                  <input ref={pedagogicalInput} type="file" accept=".json,application/json" hidden onChange={event => void importPedagogicalContent(event.target.files?.[0])}/>
-                  <button className="primary-button" type="button" onClick={() => void persistMaterials().then(() => setNotice("Conteúdo pedagógico salvo no projeto.")).catch(e => setError(String(e)))} disabled={!pedagogicalContent || saving}><Save size={14}/> Salvar conteúdo</button>
-                  <button className="secondary-button" type="button" onClick={() => void exportPedagogicalForHub()} disabled={!pedagogicalContent}><Download size={14}/> Exportar para iHub</button>
+            <section className="materials-pedagogical-workbench">
+              <div className="materials-pedagogical-intro">
+                <div className="materials-pedagogical-icon"><BookOpen size={22}/></div>
+                <div className="materials-pedagogical-copy">
+                  <span className="eyebrow">MÓDULO 01 · CONTEÚDO PEDAGÓGICO</span>
+                  <h3>Reconhecimento contextual do vocabulário</h3>
+                  <p>Transforme a transcrição revisada em um mapa de expressões reutilizáveis. A IA identifica os itens, explica seus usos e cria exemplos em contextos diferentes.</p>
                 </div>
+                <div className="materials-pedagogical-source"><span>FONTE ATUAL</span><strong>{sourceCues.length} trechos</strong><small>{sourceTranslations.length} traduções disponíveis</small></div>
               </div>
-              {pedagogicalContent && <div className="materials-stats"><div><BookOpen size={17}/><strong>{pedagogicalContent.items.length}</strong><span>itens pedagógicos</span></div><div><Layers3 size={17}/><strong>{pedagogicalContent.items.reduce((sum, item) => sum + item.layers.length, 0)}</strong><span>camadas de uso</span></div><div><CheckCircle2 size={17}/><strong>Validado</strong><span>vinculado à transcrição</span></div></div>}
+              <div className="materials-pedagogical-steps">
+                <article className="materials-pedagogical-step"><span>01</span><div><strong>Preparar instruções</strong><p>Baixe um TXT com o roteiro pedagógico, contrato JSON e transcrição revisada.</p><button className="primary-button" type="button" onClick={() => void generatePedagogicalInput()} disabled={loading || !sourceCues.length || pedagogicalProcessing}><FileText size={15}/> Baixar instruções TXT</button></div></article>
+                <article className="materials-pedagogical-step"><span>02</span><div><strong>Enviar o resultado da IA</strong><p>Selecione o JSON retornado pela IA. O Nova valida os itens, as camadas e os tempos antes de salvar.</p><button className="secondary-button" type="button" onClick={() => pedagogicalInput.current?.click()} disabled={loading || !sourceCues.length || pedagogicalProcessing}><Download size={15}/> {pedagogicalProcessing ? "Processando JSON..." : "Selecionar JSON para importar"}</button><input ref={pedagogicalInput} type="file" accept=".json,application/json" hidden onChange={event => void importPedagogicalContent(event.target.files?.[0])}/></div></article>
+                <article className="materials-pedagogical-step"><span>03</span><div><strong>Revisar e enviar ao iHub</strong><p>Confira o conteúdo processado e exporte o pacote preparado para a importação no iHub Admin.</p><button className="secondary-button" type="button" onClick={() => void exportPedagogicalForHub()} disabled={!pedagogicalContent || pedagogicalProcessing}><Download size={15}/> Exportar pacote iHub</button></div></article>
+              </div>
+              {pedagogicalProcessing && <div className="materials-pedagogical-processing"><LoaderCircle className="spin" size={18}/><div><strong>Validando e salvando o conteúdo pedagógico</strong><span>{pedagogicalFileName || "Arquivo JSON selecionado"}</span></div></div>}
+              {pedagogicalContent ? <div className="materials-pedagogical-results">
+                <div className="materials-pedagogical-results-head"><div><span className="eyebrow">RESULTADO IMPORTADO</span><h4>{pedagogicalContent.title || "Mapa de vocabulário contextual"}</h4><p>Conteúdo validado e salvo no projeto atual.</p></div><div className="materials-pedagogical-result-count"><strong>{pedagogicalContent.items.length}</strong><span>itens</span></div></div>
+                <div className="materials-pedagogical-item-list">{pedagogicalContent.items.map((item,index) => <article className="materials-pedagogical-item" key={item.id || item.expression}><div className="materials-pedagogical-item-top"><span>{String(index+1).padStart(2,"0")}</span><strong>{item.expression}</strong><small>{item.type.replaceAll("_"," ")}</small></div><p>{item.meaning_pt}</p><div className="materials-pedagogical-item-meta"><span>Cue {item.cue_order}</span><span>{item.layers.length} camadas de uso</span></div><div className="materials-pedagogical-layer-preview">{item.layers.slice(0,3).map((layer,layerIndex)=><div key={layerIndex}><strong>{layer.context}</strong><p>{layer.example_en}</p><small>{layer.example_pt}</small></div>)}</div></article>)}</div>
+              </div> : <div className="materials-pedagogical-empty"><Sparkles size={22}/><strong>Nenhum conteúdo importado ainda</strong><p>Comece baixando o TXT. Depois, envie o JSON produzido pela IA para validar e salvar o primeiro mapa de uso.</p></div>}
             </section>
             <div className="materials-stats">
               <div><BookOpen size={17}/><strong>{sourceInfo.cues}</strong><span>trechos</span></div>
