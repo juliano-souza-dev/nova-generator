@@ -422,16 +422,6 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
   const transcriptionTargetAsset = transcriptionTargetClip
     ? assets.find(asset => asset.id === transcriptionTargetClip.assetId) ?? null
     : null;
-  const timingTargetClip = selectedMotion?.isCaption
-    ? (selectedMotion.sourceClipId ? selectedCaptionClip : activeVisualClip)
-    : null;
-  const timingTargetAsset = timingTargetClip ? assets.find(asset => asset.id === timingTargetClip.assetId) ?? null : null;
-  const timingTargetUrl = timingTargetAsset ? mediaUrls[timingTargetAsset.id] : undefined;
-  const timingTargetCues = timingTargetClip
-    ? (selectedMotion?.sourceClipId
-      ? captions.filter(item => item.isCaption && item.sourceClipId === timingTargetClip.id)
-      : [selectedMotion]).sort((a, b) => a.startMs - b.startMs)
-    : [];
 
   useEffect(() => {
     if (activeTool !== "captions") return;
@@ -524,6 +514,17 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
   const audioClips = useMemo(() => clips.filter(clip => assets.find(asset => asset.id === clip.assetId)?.kind === "audio"), [clips, assets]);
   const activeVisualClip = visualClips.find(clip => playheadMs >= clip.timelineStartMs && playheadMs < clipEnd(clip)) ?? null;
   const activeVisualAsset = activeVisualClip ? assets.find(asset => asset.id === activeVisualClip.assetId) ?? null : null;
+  const timingTargetClip = selectedMotion?.isCaption
+    ? (selectedMotion.sourceClipId ? selectedCaptionClip : activeVisualClip)
+    : null;
+  const timingTargetAsset = timingTargetClip ? assets.find(asset => asset.id === timingTargetClip.assetId) ?? null : null;
+  const timingTargetUrl = timingTargetAsset ? mediaUrls[timingTargetAsset.id] : undefined;
+  const timingTargetCues = timingTargetClip
+    ? (selectedMotion?.sourceClipId
+      ? captions.filter(item => item.isCaption && item.sourceClipId === timingTargetClip.id)
+      : [selectedMotion]).sort((a, b) => a.startMs - b.startMs)
+    : [];
+
   const visualProgress = activeVisualClip ? Math.max(0, Math.min(1, (playheadMs - activeVisualClip.timelineStartMs) / Math.max(1, clipDuration(activeVisualClip)))) : 0;
   // A clip without an explicitly configured transition must be fully visible.
   // Applying an implicit fade-black here can leave the preview image invisible
