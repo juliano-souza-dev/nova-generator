@@ -9,10 +9,10 @@ export const IHUB_JOURNEY_CONTRACT = "ihub-learning-journey/1.0" as const;
 
 export type ListeningQuestion =
   | { id: string; type: "identify"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string }
-  | { id: string; type: "gap"; prompt: string; audioCueOrders: string[]; sentence: string; acceptedAnswers: string[]; hint?: string }
-  | { id: string; type: "detail"; prompt: string; audioCueOrders: string[]; options: { id: string; text: string }[]; answerId: string }
-  | { id: string; type: "word-recognition"; prompt: string; audioCueOrders: string[]; options: { id: string; text: string }[]; answerId: string }
-  | { id: string; type: "reconstruct"; prompt: string; audioCueOrders: string[]; words: string[]; answer: string[] };
+  | { id: string; type: "gap"; prompt: string; audioCueOrders: number[]; sentence: string; acceptedAnswers: string[]; hint?: string }
+  | { id: string; type: "detail"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string }
+  | { id: string; type: "word-recognition"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string }
+  | { id: string; type: "reconstruct"; prompt: string; audioCueOrders: number[]; words: string[]; answer: string[] };
 
 export type MicroLesson = {
   id: string;
@@ -43,7 +43,7 @@ export type DeepListeningTask = {
 
 export type SpeakingPrompt = {
   id: string;
-  cueOrders: string[];
+  cueOrders: number[];
   sourceText: string;
   translationPt?: string;
   focus: "rhythm" | "pauses" | "connected-speech" | "intonation" | "fluency";
