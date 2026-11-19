@@ -25,9 +25,10 @@ import { captionBackgroundRgba } from "./features/motion-graphics/caption-style"
 import { buildExportTimelinePayload } from "./features/export/payload";
 import { transcriptToCaptions } from "./features/motion-graphics/transcript-import";
 import { useGlobalSounds } from "./features/sounds/useGlobalSounds";
+import SubtitleTimingAdjuster, { type SubtitleTimingCue } from "../../media/SubtitleTimingAdjuster";
 export { supportedLucideIconNames } from "./features/motion-graphics/icon-library";
 
-import { AudioLines, Film, Plus, Play, Pause, Trash2, Scissors, Copy, SkipBack, SkipForward, Volume2, VolumeX, Music2, Type, WandSparkles, MousePointer2, ChevronLeft, ChevronRight, Download, LoaderCircle, PanelsTopLeft, FileJson, Upload, Eye, Search, Image, ShieldCheck, Captions, Layers } from "lucide-react";
+import { AudioLines, Film, Plus, Play, Pause, Trash2, Scissors, Copy, SkipBack, SkipForward, Volume2, VolumeX, Music2, Type, WandSparkles, MousePointer2, ChevronLeft, ChevronRight, Download, LoaderCircle, PanelsTopLeft, FileJson, Upload, Eye, Search, Image, ShieldCheck, Captions, Layers, Clock3 } from "lucide-react";
 import { SCENE_TEMPLATES, buildTemplateScene, createSceneSpecFromMotion, validateSceneSpec } from "./shared/scene-spec";
 
 type CaptionGlobalStyle = Required<Pick<MotionGraphic, "fontFamily" | "fontSize" | "fontWeight" | "textAlign" | "x" | "y" | "captionWidth" | "captionBackgroundColor" | "captionBackgroundOpacity" | "captionPaddingEm" | "color" | "accent" | "captionMode">>;
@@ -214,6 +215,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
   const [selectedMotionId, setSelectedMotionId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<"media" | "audio" | "text" | "captions" | "effects" | "templates">("media");
   const [sceneSpecMessage, setSceneSpecMessage] = useState("");
+  const [timingAdjusterOpen, setTimingAdjusterOpen] = useState(false);
   const [iconSearch, setIconSearch] = useState("");
   const [selectedTransition, setSelectedTransition] = useState<TimelineClip["transitionType"] | null>(null);
   const [timelineZoom, setTimelineZoom] = useState(100);
