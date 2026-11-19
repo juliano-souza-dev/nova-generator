@@ -19,44 +19,42 @@ type Asset = { id: string; name: string; durationMs?: number | null; sourceStart
 function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: number) {
   const text = String(suggestion?.approved_en || fallback || "");
   const words = Array.isArray(suggestion?.word_translations) ? suggestion.word_translations : [];
-  const matches = [...text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)];
-  if (!words.length || matches.length !== words.length) return text;
+  const wordMatches = [...text.matchAll(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*/gu)];
+  if (!words.length || wordMatches.length !== words.length) return text;
 
-  const getWordBounds = (word: any) => ({
-    start: Number(word.start_ms ?? word.startMs),
-    end: Number(word.end_ms ?? word.endMs)
+  const activeIndex = words.findIndex((word: any) => {
+    const start = Number(word.start_ms ?? word.startMs);
+    const end = Number(word.end_ms ?? word.endMs);
+    return Number.isFinite(start) && Number.isFinite(end)
+      && currentMs >= start && currentMs < end;
   });
-  let activeIndex = words.findIndex((word: any) => {
-    const { start, end } = getWordBounds(word);
-    return Number.isFinite(start) && Number.isFinite(end) && currentMs >= start && currentMs <= end;
-  });
-  // WhisperX may leave tiny gaps between adjacent word intervals. Bridge only
-  // a narrow boundary window so those words do not disappear between frames.
-  if (activeIndex < 0) {
-    let nearestDistance = 36;
-    words.forEach((word: any, index: number) => {
-      const { start, end } = getWordBounds(word);
-      if (!Number.isFinite(start) || !Number.isFinite(end)) return;
-      const distance = currentMs < start ? start - currentMs : currentMs - end;
-      if (distance >= 0 && distance < nearestDistance) {
-        nearestDistance = distance;
-        activeIndex = index;
-      }
-    });
-  }
+
+  // Match iHub's subtitle-word DOM contract, including punctuation tied to
+  // the preceding timed word. The audio timestamp remains the source of truth.
+  const tokens = [...text.matchAll(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*|[^\\s\\p{L}\\p{N}]+/gu)];
   const parts: ReactNode[] = [];
   let cursor = 0;
-  matches.forEach((match, index) => {
-    const start = match.index ?? cursor;
-    if (start > cursor) parts.push(text.slice(cursor, start));
-    const state = index === activeIndex ? "active" : index < activeIndex ? "complete" : "upcoming";
+  let wordIndex = 0;
+  let previousWordIndex = 0;
+
+  tokens.forEach((token, tokenPosition) => {
+    const tokenStart = token.index ?? cursor;
+    if (tokenStart > cursor) parts.push(text.slice(cursor, tokenStart));
+    const isWord = /^[\\p{L}\\p{N}]/u.test(token[0]);
+    const index = isWord ? wordIndex++ : previousWordIndex;
+    if (isWord) previousWordIndex = index;
+    const state = index === activeIndex ? "active" : activeIndex >= 0 && index < activeIndex ? "complete" : "upcoming";
+    const classes = ["subtitle-word"];
+    if (!isWord) classes.push("subtitle-punctuation");
+    if (state === "active") classes.push("is-active");
+    if (state === "complete") classes.push("is-complete");
     parts.push(<span
-      key={String(words[index]?.word_id ?? index)}
-      className={`media-editor-karaoke-word is-${state}`}
-      data-word-state={state}
+      key={`karaoke-${tokenPosition}`}
+      className={classes.join(" ")}
+      data-word-index={index}
       aria-current={state === "active" ? "true" : undefined}
-    >{match[0]}</span>);
-    cursor = start + match[0].length;
+    >{token[0]}</span>);
+    cursor = tokenStart + token[0].length;
   });
   if (cursor < text.length) parts.push(text.slice(cursor));
   return <>{parts}</>;
@@ -111,6 +109,20 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
   const [localAsrChecking, setLocalAsrChecking] = useState(true);
   const [installingAsr, setInstallingAsr] = useState(false);
   const [transcriptionInfo, setTranscriptionInfo] = useState("");
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    let frame = 0;
+    const syncPreviewClock = () => {
+      const element = video.current;
+      if (!element) return;
+      setCurrent(element.currentTime * 1000);
+      if (!element.paused && !element.ended) frame = requestAnimationFrame(syncPreviewClock);
+    };
+    frame = requestAnimationFrame(syncPreviewClock);
+    return () => cancelAnimationFrame(frame);
+  }, [isPlaying]);
+
   const activeCue = useMemo(() => cues.find(c => current >= c.startMs && current <= c.endMs), [cues, current]);
   const shadowingSourceSignature = useMemo(() => JSON.stringify([
     cues.map(c => [c.id,c.startMs,c.endMs,c.text]),
@@ -954,8 +966,8 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
                   onEnded={() => setIsPlaying(false)}
                   onTimeUpdate={e => setCurrent(e.currentTarget.currentTime * 1000)} />
                 {activeCue?.text && <div className="media-editor-caption">
-                  <div>{renderEditorialEnglish(activeEditorialSuggestion, activeCue.text, current)}</div>
-                  {(activeEditorialSuggestion?.approved_pt || translations.find(t => t.id === activeCue.id)?.text) && <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,.28)", fontWeight: 600 }}>
+                  <div className="video-subtitle-en">{renderEditorialEnglish(activeEditorialSuggestion, activeCue.text, current)}</div>
+                  {(activeEditorialSuggestion?.approved_pt || translations.find(t => t.id === activeCue.id)?.text) && <div className="video-subtitle-pt">
                     {activeEditorialSuggestion?.approved_pt || translations.find(t => t.id === activeCue.id)?.text}
                   </div>}
                 </div>}
