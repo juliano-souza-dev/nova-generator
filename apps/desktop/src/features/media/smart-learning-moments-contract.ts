@@ -57,7 +57,7 @@ export type SmartLearningMomentsPackage = {
   final_selection: string | null;
 };
 
-export type SmartLearningCue = { id: string; startMs: number; endMs: number; text: string };
+export type SmartLearningCue = { id: string; startMs: number; endMs: number; text: string; words?: { text: string; startMs: number; endMs: number }[] };
 const scoreKeys = Object.keys(SMART_LEARNING_SCORE_WEIGHTS) as SmartLearningScore[];
 export function validateSmartLearningMoments(
   value: unknown,
@@ -74,6 +74,18 @@ export function validateSmartLearningMoments(
   if (pkg.recommendation_status === "no_recommendation" && pkg.candidates.length) errors.push("Uma resposta sem recomendação não pode conter candidatas.");
   if (pkg.recommendation_status === "recommended" && !pkg.candidates.length) errors.push("Inclua candidatas ou marque no_recommendation.");
   const ids = new Set<string>();
+  const alignedRange = (cue: SmartLearningCue | undefined, expression: string) => {
+    if (!cue?.words?.length) return null;
+    const normalize = (value: string) => value.toLocaleLowerCase("en-US").replace(/[^\\p{L}\\p{N}']/gu, "");
+    const target = expression.trim().split(/\\s+/).map(normalize);
+    for (let start = 0; start <= cue.words.length - target.length; start++) {
+      const candidate = cue.words.slice(start, start + target.length);
+      if (candidate.every((word, index) => normalize(word.text) === target[index])) return {
+        start_ms: Math.round(candidate[0].startMs), end_ms: Math.round(candidate[candidate.length - 1].endMs)
+      };
+    }
+    return null;
+  };
   const sorted = [...pkg.candidates].sort((a, b) => b.pedagogical_score - a.pedagogical_score);
   pkg.candidates.forEach((candidate, index) => {
     if (!candidate?.id || ids.has(candidate.id)) errors.push("Há ID de candidata ausente ou duplicado.");
@@ -92,7 +104,10 @@ export function validateSmartLearningMoments(
     if (candidate.pedagogical_score < 70) errors.push("Candidatas abaixo de 70 pontos devem ser descartadas pela IA.");
     const cue = cues.find(item => item.id === candidate.source?.cue_id);
     if (!cue || candidate.source.cue_order < 1 || candidate.source.start_ms !== Math.round(cue.startMs) || candidate.source.end_ms !== Math.round(cue.endMs)) errors.push("A candidata " + candidate.id + " não corresponde à cue e aos tempos originais.");
+    const wordRange = alignedRange(cue, candidate.source?.expression ?? "");
     if (!candidate.source?.expression?.trim() || !candidate.source?.excerpt_en?.trim() || !cue?.text.includes(candidate.source.excerpt_en.trim()) || !candidate.source.excerpt_en.toLocaleLowerCase().includes(candidate.source.expression.toLocaleLowerCase())) errors.push("A expressão e o trecho de origem da candidata " + candidate.id + " não foram encontrados na transcrição.");
+    if (!wordRange || candidate.source.trigger_start_ms !== wordRange.start_ms || candidate.source.trigger_end_ms !== wordRange.end_ms) errors.push("A candidata " + candidate.id + " precisa usar o timing exato das palavras alinhadas para disparar a pausa.");
+
     const lesson = candidate.lesson;
     if (![candidate.category, candidate.level, candidate.recommendation_reason, lesson?.title, lesson?.meaning_pt, lesson?.communicative_intent_pt, lesson?.explanation_pt].every(item => typeof item === "string" && item.trim())) errors.push("A mini aula " + candidate.id + " está incompleta.");
     if (!Array.isArray(lesson?.examples) || lesson.examples.length < 2 || lesson.examples.some(item => !item.context?.trim() || !item.en?.trim() || !item.pt?.trim())) errors.push("A mini aula " + candidate.id + " precisa de pelo menos dois exemplos contextualizados.");
@@ -119,7 +134,7 @@ export function buildSmartLearningSource(projectId: string, assetId: string, sou
       start_ms: Math.round(cue.startMs),
       end_ms: Math.round(cue.endMs),
       text_en: cue.text,
-      text_pt: translations.find(item => item.id === cue.id)?.text ?? ""
+      text_pt: translations.find(item => item.id === cue.id)?.text ?? "",\n      words: (cue.words ?? []).map(word => ({ text: word.text, start_ms: Math.round(word.startMs), end_ms: Math.round(word.endMs) }))
     }))
   };
 }
