@@ -735,8 +735,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
 
     {!assets.length ? <div className="materials-empty"><div><Layers3 size={25}/></div><h3>Adicione uma mídia para começar</h3><p>A área Materiais usa transcrições, traduções e conteúdos aprovados vinculados aos vídeos do projeto.</p></div> : <>
       <div className="materials-source">
-        <div><span className="eyebrow">FONTE SELECIONADA</span><strong>{selectedAsset?.name ?? "Selecione uma fonte do projeto"}</strong></div>
-        <select value={assetId} onChange={event => setAssetId(event.target.value)} aria-label="Vídeo de origem">{assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>
+        <label className="sr-only" htmlFor="materials-source-select">Selecionar fonte do projeto</label>
+        <select id="materials-source-select" value={assetId} onChange={event => setAssetId(event.target.value)} aria-label="Selecionar fonte do projeto">{assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>
       </div>
 
       {loading ? <div className="materials-loading"><LoaderCircle className="spin" size={20}/> Carregando fontes do projeto...</div> : <>
