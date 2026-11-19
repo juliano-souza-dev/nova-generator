@@ -126,10 +126,20 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
       const detail = (event as CustomEvent<{ projectId: string; result: TranscriptResult; translations?: Array<{ id: string; text: string }>; context?: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number } }>).detail;
       if (!detail || detail.projectId !== projectId) return;
       const created = transcriptToCaptions(detail.result, detail.context, undefined, detail.translations ?? []);
+      if (!created.length) {
+        setSceneSpecMessage("A transcrição não retornou trechos válidos. As legendas existentes foram preservadas.");
+        return;
+      }
       const clipId = detail.context?.clipId;
-      const existingForClip = clipId
-        ? motionRef.current.filter(item => item.isCaption && item.sourceClipId === clipId && item.captionSourceCueId)
-        : [];
+      if (!clipId) {
+        appendCaptions(created);
+        setSelectedMotionId(created[0]?.id ?? null);
+        setPlayheadMs(created[0].startMs);
+        setActiveTool("captions");
+        setSceneSpecMessage("Transcrição adicionada à faixa exclusiva: " + created.length + " legendas.");
+        return;
+      }
+      const existingForClip = motionRef.current.filter(item => item.isCaption && item.sourceClipId === clipId && item.captionSourceCueId);
       const firstCueId = created[0]?.captionSourceCueId;
       const existingFirstId = (firstCueId
         ? existingForClip.find(item => item.captionSourceCueId === firstCueId)?.id
