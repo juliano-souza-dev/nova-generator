@@ -126,6 +126,10 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
       const detail = (event as CustomEvent<{ projectId: string; result: TranscriptResult; translations?: Array<{ id: string; text: string }>; context?: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number } }>).detail;
       if (!detail || detail.projectId !== projectId) return;
       const created = transcriptToCaptions(detail.result, detail.context, undefined, detail.translations ?? []);
+      const firstCueId = created[0]?.captionSourceCueId;
+      const existingFirstId = firstCueId
+        ? motionRef.current.find(item => item.isCaption && item.sourceClipId === detail.context?.clipId && item.captionSourceCueId === firstCueId)?.id
+        : undefined;
       setMotion(current => {
         const incoming = new Map(created.map(item => [item.captionSourceCueId!, item]));
         const seen = new Set<string>();
@@ -152,7 +156,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
         });
         return [...next, ...incoming.values()];
       });
-      setSelectedMotionId(created[0]?.id ?? null);
+      setSelectedMotionId(existingFirstId ?? created[0]?.id ?? null);
       if (created.length) setPlayheadMs(created[0].startMs);
       setActiveTool("captions");
       setSceneSpecMessage("Transcrição adicionada à faixa exclusiva: " + created.length + " legendas. Revise o texto e os tempos antes de exportar.");
