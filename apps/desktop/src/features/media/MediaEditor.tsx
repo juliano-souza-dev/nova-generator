@@ -110,7 +110,6 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [shadowingOpen, setShadowingOpen] = useState(false);
-  const [predictionListeningOpen, setPredictionListeningOpen] = useState(false);
   const [materialsOpen, setMaterialsOpen] = useState(false);
   const [timingAdjusterOpen, setTimingAdjusterOpen] = useState(false);
   const [shadowingComplete, setShadowingComplete] = useState(false);
@@ -964,8 +963,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         <div className="media-editor-actions">
           {saved && <span className="media-editor-saved"><Check size={13}/> Salvo</span>}
           <button className="secondary-button" onClick={() => setShadowingOpen(true)} disabled={!saved || cues.length === 0} title={!saved ? "Salve a Editorial para liberar o Shadowing" : "Preparar blocos para Shadowing"}><AudioLines size={15}/> Shadowing</button>
-          <button className="secondary-button" onClick={() => setPredictionListeningOpen(true)} disabled={!predictionListeningReady || dirty || translationDirty || loading} title={!shadowingComplete ? "Conclua e salve o Shadowing para liberar este módulo" : !predictionListeningReady ? "Alinhe com WhisperX todos os blocos selecionados no Shadowing" : "Gerar desafios a partir dos blocos selecionados no Shadowing"}><Languages size={15}/> Prediction Listening</button>
-          <button className="secondary-button" onClick={() => { video.current?.pause(); setMaterialsOpen(true); }} disabled={!predictionListeningReady || dirty || translationDirty || loading} title="Prepare os cards Anki, gere a entrada para IA externa e os áudios"><Layers3 size={15}/> Materiais</button>
+          <button className="secondary-button" onClick={() => { video.current?.pause(); setMaterialsOpen(true); }} disabled={!saved || dirty || translationDirty || loading} title="Acesse o conteúdo pedagógico e os materiais Anki"><Layers3 size={15}/> Materiais</button>
           <button className="primary-button" onClick={() => void save()} disabled={saving || loading}><Save size={15}/> {saving ? "Salvando..." : "Salvar"}</button>
           <button className="icon-button" title="Fechar editor" onClick={() => { if (!aligning && (!dirty || window.confirm("Há alterações na transcrição ou tradução não salvas. Fechar mesmo assim?"))) onClose(); }} disabled={aligning}><X size={18}/></button>
         </div>
@@ -1141,6 +1139,14 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
         </aside>
       </div>
     </section>
-  </div>{timingAdjusterOpen && src && <SubtitleTimingAdjuster title="Ajustar sincronização das legendas" videoUrl={src} durationMs={Math.max(duration, asset.durationMs ?? 0, ...cues.map(cue => cue.endMs), 1)} cues={cues.map(cue => ({id:cue.id,text:cue.text,translation:translations.find(item=>item.id===cue.id)?.text ?? "",startMs:cue.startMs,endMs:cue.endMs,words:cue.words ?? []}))} selectedCueId={selected} onCancel={() => setTimingAdjusterOpen(false)} onSave={persistAdjustedTimings}/>}{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onSaved={ids => { setShadowingComplete(true); setShadowingSelectedCueIds(ids); }} onClose={() => setShadowingOpen(false)}/>}{predictionListeningOpen && predictionListeningReady && <PredictionListening projectId={projectId} assetId={asset.id} assetName={asset.name} cues={cues} selectedCueIds={shadowingSelectedCueIds} sourceSignature={shadowingSourceSignature} onClose={() => setPredictionListeningOpen(false)} onPreview={timeMs => { setPredictionListeningOpen(false); video.current?.pause(); seek(timeMs); }} onDemoSeekAndPlay={timeMs => { seek(timeMs); void video.current?.play(); }} onDemoPause={() => video.current?.pause()} onDemoResume={timeMs => { seek(timeMs); void video.current?.play(); }} getCurrentTime={() => (video.current?.currentTime ?? 0) * 1000} onProjectUpdated={onProjectUpdated}/>}
-    {materialsOpen && <div className="materials-flow-backdrop"><section className="materials-flow-panel" role="dialog" aria-modal="true" aria-label="Materiais"><header className="materials-flow-toolbar"><strong>ETAPA 04 · MATERIAIS</strong><button className="secondary-button" onClick={() => setMaterialsOpen(false)}><ArrowLeft size={15}/> Voltar ao fluxo</button></header><MaterialsWorkspace projectId={projectId} initialAssetId={asset.id} onProjectUpdated={onProjectUpdated} /></section></div>}</>;
+  </div>{timingAdjusterOpen && src && <SubtitleTimingAdjuster title="Ajustar sincronização das legendas" videoUrl={src} durationMs={Math.max(duration, asset.durationMs ?? 0, ...cues.map(cue => cue.endMs), 1)} cues={cues.map(cue => ({id:cue.id,text:cue.text,translation:translations.find(item=>item.id===cue.id)?.text ?? "",startMs:cue.startMs,endMs:cue.endMs,words:cue.words ?? []}))} selectedCueId={selected} onCancel={() => setTimingAdjusterOpen(false)} onSave={persistAdjustedTimings}/>}{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onSaved={ids => { setShadowingComplete(true); setShadowingSelectedCueIds(ids); }} onClose={() => setShadowingOpen(false)}/>}
+    {materialsOpen && <div className="materials-flow-backdrop"><section className="materials-flow-panel" role="dialog" aria-modal="true" aria-label="Materiais"><header className="materials-flow-toolbar"><strong>ETAPA 04 · MATERIAIS</strong><button className="secondary-button" onClick={() => setMaterialsOpen(false)}><ArrowLeft size={15}/> Voltar ao fluxo</button></header><MaterialsWorkspace projectId={projectId} initialAssetId={asset.id} onProjectUpdated={onProjectUpdated} prediction={{
+      assetName: asset.name, cues, selectedCueIds: shadowingSelectedCueIds, sourceSignature: shadowingSourceSignature,
+      ready: predictionListeningReady && !dirty && !translationDirty,
+      onPreview: timeMs => { video.current?.pause(); seek(timeMs); },
+      onDemoSeekAndPlay: timeMs => { seek(timeMs); void video.current?.play(); },
+      onDemoPause: () => video.current?.pause(),
+      onDemoResume: timeMs => { seek(timeMs); void video.current?.play(); },
+      getCurrentTime: () => (video.current?.currentTime ?? 0) * 1000
+    }} /></section></div>}</>;
 }
