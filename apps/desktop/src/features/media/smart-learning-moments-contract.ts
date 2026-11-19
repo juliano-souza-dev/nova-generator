@@ -45,7 +45,7 @@ export type SmartLearningCandidate = {
     narration: { segments: SmartLearningNarrationSegment[]; estimated_duration_seconds: number; voice_direction: string };
   };
   selected?: boolean;
-  audio_assets?: Array<{ segment_id: string; language: string; audio_path: string; provider: "internal" | "elevenlabs" }>;
+  audio_assets?: Array<{ segment_id: string; language: string; audio_path?: string; audio_base64?: string; mime_type?: string; file_name?: string; provider: "internal" | "elevenlabs" }>;
 };
 export type SmartLearningMomentsPackage = {
   contract: typeof SMART_LEARNING_MOMENTS_CONTRACT;
