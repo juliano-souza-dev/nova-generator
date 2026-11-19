@@ -73,6 +73,10 @@ export default function SubtitleTimingAdjuster({
   const [draft, setDraft] = useState<SubtitleTimingCue[]>(() => cues.map(cue => ({ ...cue, words: cue.words?.map(word => ({ ...word })) })));
   const [activeId, setActiveId] = useState<string | null>(selectedCueId ?? cues[0]?.id ?? null);
   const [playhead, setPlayhead] = useState(0);
+  const [activeEdge, setActiveEdge] = useState<"start" | "end">("start");
+  const [startText, setStartText] = useState("");
+  const [endText, setEndText] = useState("");
+  const [canvasWidth, setCanvasWidth] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [viewStart, setViewStart] = useState(0);
   const [speed, setSpeed] = useState(1);
