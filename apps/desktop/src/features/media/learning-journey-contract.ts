@@ -174,13 +174,23 @@ export function buildLearningJourneyPackage(input: {
   });
   selected.slice(0, 5).forEach(cue => {
     const tokens = wordsOf(cue.text);
-    const alternatives = distractors(cue);
-    if (alternatives.length) {
+    const alternatives = cues.filter(item => item.id !== cue.id && wordsOf(item.text).length >= 4).slice(0, 2);
+    if (tokens.length >= 4 && alternatives.length) {
+      const splitAt = Math.max(2, Math.floor(tokens.length / 2));
+      const prefix = tokens.slice(0, splitAt).join(" ");
+      const correctDetail = tokens.slice(splitAt).join(" ");
+      const detailOptions = [
+        { id: "correct", text: correctDetail },
+        ...alternatives.map((item, i) => {
+          const otherWords = wordsOf(item.text);
+          return { id: "detail-" + i, text: otherWords.slice(Math.max(2, Math.floor(otherWords.length / 2))).join(" ") };
+        })
+      ];
       listening.push({
         id: "recall-detail-" + cue.id, type: "detail",
-        prompt: "Which sentence matches the detail you heard?",
+        prompt: `After "${prefix}…", what did the speaker say?`,
         audioCueOrders: [cueOrder(cue)],
-        options: [{ id: "correct", text: cue.text }, ...alternatives.map((text, i) => ({ id: "detail-" + i, text }))],
+        options: detailOptions,
         answerId: "correct"
       });
     }
