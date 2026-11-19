@@ -125,8 +125,33 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
     const onTranscript = (event: Event) => {
       const detail = (event as CustomEvent<{ projectId: string; result: TranscriptResult; translations?: Array<{ id: string; text: string }>; context?: { clipId: string; timelineStartMs: number; sourceStartMs: number; sourceEndMs: number } }>).detail;
       if (!detail || detail.projectId !== projectId) return;
-      const created = transcriptToCaptions(detail.result, detail.context, undefined, detail.translations ?? []); 
-      appendCaptions(created);
+      const created = transcriptToCaptions(detail.result, detail.context, undefined, detail.translations ?? []);
+      setMotion(current => {
+        const incoming = new Map(created.map(item => [item.captionSourceCueId!, item]));
+        const seen = new Set<string>();
+        const next = current.flatMap(item => {
+          if (!item.isCaption || item.sourceClipId !== detail.context?.clipId || !item.captionSourceCueId) return [item];
+          const cueId = item.captionSourceCueId;
+          if (seen.has(cueId)) return [];
+          seen.add(cueId);
+          const update = incoming.get(cueId);
+          if (!update) return [item];
+          incoming.delete(cueId);
+          return [{
+            ...item,
+            captionEnglish: update.captionEnglish,
+            captionTranslation: update.captionTranslation,
+            captionTranslationLanguage: update.captionTranslationLanguage,
+            captionMode: update.captionMode,
+            captionWords: update.captionWords,
+            text: update.text,
+            startMs: update.startMs,
+            endMs: update.endMs,
+            durationMs: update.durationMs,
+          }];
+        });
+        return [...next, ...incoming.values()];
+      });
       setSelectedMotionId(created[0]?.id ?? null);
       if (created.length) setPlayheadMs(created[0].startMs);
       setActiveTool("captions");
@@ -358,6 +383,43 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
   // visible after the user clears the selection or selects a different layer type.
   const selectedClip = selectedId ? clips.find(clip => clip.id === selectedId) ?? null : null;
   const selectedAsset = selectedClip ? assets.find(asset => asset.id === selectedClip.assetId) ?? null : null;
+  useEffect(() => {
+    if (activeTool !== "captions" || !selectedClip || transcription.transcriptionContext?.clipId !== selectedClip.id || transcription.transcriptionResult) return;
+    const existing = captions
+      .filter(item => item.isCaption && item.sourceClipId === selectedClip.id && item.captionSourceCueId)
+      .sort((a, b) => a.startMs - b.startMs);
+    if (!existing.length) return;
+    const context = {
+      clipId: selectedClip.id,
+      timelineStartMs: selectedClip.timelineStartMs,
+      sourceStartMs: selectedClip.sourceStartMs,
+      sourceEndMs: selectedClip.sourceEndMs,
+    };
+    const cues = existing.map(item => ({
+      id: item.captionSourceCueId!,
+      text: (item.captionEnglish || item.text || "").trim(),
+      startMs: Math.max(context.sourceStartMs, context.sourceStartMs + item.startMs - context.timelineStartMs),
+      endMs: Math.min(context.sourceEndMs, context.sourceStartMs + item.endMs - context.timelineStartMs),
+      words: (item.captionWords ?? []).map(word => ({
+        text: word.text,
+        startMs: context.sourceStartMs + word.startMs - context.timelineStartMs,
+        endMs: context.sourceStartMs + word.endMs - context.timelineStartMs,
+      })),
+    })).filter(cue => cue.text && cue.endMs > cue.startMs);
+    if (!cues.length) return;
+    const result: TranscriptResult = {
+      engine: "timeline",
+      model: "existing-captions",
+      language: existing[0].captionSourceLanguage || "auto",
+      durationMs: Math.max(0, context.sourceEndMs - context.sourceStartMs),
+      cues,
+    };
+    const translations = existing
+      .filter(item => (item.captionTranslation || "").trim())
+      .map(item => ({ id: item.captionSourceCueId!, translation: item.captionTranslation! }));
+    transcription.loadExistingTranscript(result, context, translations);
+  }, [activeTool, selectedClip?.id, captions, transcription.transcriptionContext?.clipId, transcription.transcriptionResult]);
+
   const visualClips = useMemo(() => clips.filter(clip => assets.find(asset => asset.id === clip.assetId)?.kind !== "audio"), [clips, assets]);
   const audioClips = useMemo(() => clips.filter(clip => assets.find(asset => asset.id === clip.assetId)?.kind === "audio"), [clips, assets]);
   const activeVisualClip = visualClips.find(clip => playheadMs >= clip.timelineStartMs && playheadMs < clipEnd(clip)) ?? null;
