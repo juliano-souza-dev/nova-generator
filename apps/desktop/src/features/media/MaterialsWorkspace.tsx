@@ -8,6 +8,8 @@ import {
 import "./MaterialsWorkspace.css";
 import { runTrackedTask } from "../tasks/TaskCenter";
 import PredictionListening from "./PredictionListening";
+import SmartLearningMoments from "./SmartLearningMoments";
+import { buildSmartLearningSource, validateSmartLearningMoments, type SmartLearningMomentsPackage } from "./smart-learning-moments-contract";
 import { buildLearningJourneyPackage, validateLearningJourney, type LearningJourneyPackage } from "./learning-journey-contract";
 
 type Asset = { id: string; name: string; kind: string; durationMs?: number | null; sourceVideoId?: string | null };
@@ -40,7 +42,7 @@ type AnkiCard = {
 type PedagogicalLayer = { context: string; usage: string; example_en: string; example_pt: string; nuance?: string };
 type PedagogicalItem = { id: string; cue_order: number; start_ms: number; end_ms: number; type: string; expression: string; meaning_pt: string; explanation_pt: string; source_en: string; source_pt: string; layers: PedagogicalLayer[]; include_in_hub?: boolean };
 type PedagogicalContentPackage = { contract: "ihub-pedagogical-content/1.0"; title: string; language: string; source_hash: string; minimum_items: number; items: PedagogicalItem[]; editorial_signature?: string };
-type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string; learningJourney?: LearningJourneyPackage; pedagogicalContent?: PedagogicalContentPackage };
+type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string; learningJourney?: LearningJourneyPackage; pedagogicalContent?: PedagogicalContentPackage; smartLearningMoments?: SmartLearningMomentsPackage };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 type SharedVoice = { id: string; name: string; mode?: "voice_clone" | "voice_design" };
 function learningJourneySourceSignature(sourceSignature: string, cards: AnkiCard[]) {
@@ -191,10 +193,11 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const [notice, setNotice] = useState("");
   const [learningJourney, setLearningJourney] = useState<LearningJourneyPackage | null>(null);
   const [pedagogicalContent, setPedagogicalContent] = useState<PedagogicalContentPackage | null>(null);
+  const [smartLearningMoments, setSmartLearningMoments] = useState<SmartLearningMomentsPackage | null>(null);
   const [pedagogicalProcessing, setPedagogicalProcessing] = useState(false);
   const [pedagogicalFileName, setPedagogicalFileName] = useState("");
   const [activeMaterialTab, setActiveMaterialTab] = useState<"pedagogical" | "anki">("pedagogical");
-  const [activePedagogicalTab, setActivePedagogicalTab] = useState<"vocabulary" | "prediction" | "journey">("vocabulary");
+  const [activePedagogicalTab, setActivePedagogicalTab] = useState<"smart" | "vocabulary" | "prediction" | "journey">("smart");
   const [voices, setVoices] = useState<SharedVoice[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [voiceCloningReady, setVoiceCloningReady] = useState(false);
@@ -265,6 +268,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       const savedJourney = stored?.learningJourney;
       const savedPedagogicalContent = stored?.pedagogicalContent;
 setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-content/1.0" && savedPedagogicalContent.editorial_signature === materialSignature ? savedPedagogicalContent : null);
+      setSmartLearningMoments(stored?.smartLearningMoments?.source_signature === materialSignature ? stored.smartLearningMoments : null);
       const storedJourneySignature = learningJourneySourceSignature(materialSignature, Array.isArray(stored?.cards) ? stored.cards : []);
       setLearningJourney(savedJourney && savedJourney.source?.sourceSignature === storedJourneySignature && validateLearningJourney(savedJourney).length === 0 ? savedJourney : null);
       setSourceSignature(materialSignature);
@@ -342,7 +346,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   async function persistMaterials() {
     if (!assetId) throw new Error("Selecione uma mídia de origem.");
     const journeyIsCurrent = learningJourney?.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards);
-    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, learningJourney: journeyIsCurrent ? learningJourney ?? undefined : undefined, pedagogicalContent: pedagogicalContent ?? undefined, updatedAt: new Date().toISOString(), sourceSignature };
+    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, learningJourney: journeyIsCurrent ? learningJourney ?? undefined : undefined, pedagogicalContent: pedagogicalContent ?? undefined, smartLearningMoments: smartLearningMoments ?? undefined, updatedAt: new Date().toISOString(), sourceSignature };
     await invoke("save_project_materials", { projectId, assetId, materials: document });
     await invoke("update_project_stage", { id: projectId, stage: "Materiais" });
     onProjectUpdated?.();
@@ -702,6 +706,24 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     } : current);
   }
 
+  async function buildSelectedSmartLearningMoment() {
+    if (!smartLearningMoments) return null;
+    const source = buildSmartLearningSource(projectId, assetId, sourceSignature, sourceCues, sourceTranslations);
+    const expectedHash = await hashPayload(source);
+    const errors = validateSmartLearningMoments(smartLearningMoments, expectedHash, sourceCues);
+    if (smartLearningMoments.source_signature !== sourceSignature || errors.length) {
+      throw new Error("Smart Learning Moments está desatualizado ou inválido: " + errors.join(" "));
+    }
+    const selected = smartLearningMoments.candidates.find(item => item.id === smartLearningMoments.final_selection);
+    if (!selected) return null;
+    return {
+      contract: smartLearningMoments.contract,
+      selection_limit: 1,
+      selected_at: new Date().toISOString(),
+      moment: selected
+    };
+  }
+
   async function exportFinalPedagogicalPackage() {
     if (!pedagogicalContent || !assetId || exporting) return;
     const selectedItems = pedagogicalContent.items.filter(item => item.include_in_hub !== false);
@@ -744,6 +766,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           pt: sourceTranslations.find(item => item.id === cue.id)?.text ?? ""
         })),
         pedagogical_content: { ...pedagogicalContent, minimum_items: selectedItems.length, items: selectedItems },
+        smart_learning_moment: await buildSelectedSmartLearningMoment(),
         prediction_listening: predictionIsCurrent ? predictionReview.materials ?? null : null,
         learning_journey: journeyIsCurrent ? learningJourney : null
       };
@@ -772,7 +795,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   return <section className="materials-workspace">
     <header className="materials-heading">
       <div><span className="eyebrow">ESTÚDIO DIDÁTICO</span><h2>Materiais</h2><p>Reúna conteúdos aprovados, prepare cards Anki e gere os áudios usados no estudo.</p></div>
-      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={!pedagogicalContent || !includedPedagogicalCount || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
+      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="secondary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar no projeto"}</button><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={!pedagogicalContent || !includedPedagogicalCount || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
       {activeMaterialTab === "anki" && <div className="materials-heading-actions">
         <button className="secondary-button" onClick={() => void createExternalInput()} disabled={!cards.length || loading}><FileText size={15}/> Gerar TXT para IA</button>
         <button className="secondary-button" onClick={() => importInput.current?.click()}><Download size={15}/> Importar JSON da IA</button>
@@ -800,10 +823,16 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         </nav>
         {activeMaterialTab === "pedagogical" ? <>
           <nav className="materials-subtabs" aria-label="Módulos de conteúdo pedagógico">
+            <button type="button" className={activePedagogicalTab === "smart" ? "active" : ""} onClick={() => setActivePedagogicalTab("smart")}>Smart Learning Moments</button>
             <button type="button" className={activePedagogicalTab === "vocabulary" ? "active" : ""} onClick={() => setActivePedagogicalTab("vocabulary")}>Reconhecimento contextual do vocabulário</button>
             <button type="button" className={activePedagogicalTab === "prediction" ? "active" : ""} onClick={() => setActivePedagogicalTab("prediction")}>Prediction Listening</button>
             <button type="button" className={activePedagogicalTab === "journey" ? "active" : ""} onClick={() => setActivePedagogicalTab("journey")}>Jornada de aprendizagem · 7 dias</button>
           </nav>
+          {activePedagogicalTab === "smart" && <SmartLearningMoments
+            projectId={projectId} assetId={assetId} sourceSignature={sourceSignature}
+            cues={sourceCues} translations={sourceTranslations} value={smartLearningMoments}
+            onChange={setSmartLearningMoments}
+          />}
           {activePedagogicalTab === "vocabulary" && <>
             <section className="materials-pedagogical-workbench">
               <div className="materials-pedagogical-intro">
