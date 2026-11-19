@@ -35,7 +35,7 @@ export function captionWordsForKaraoke(
     return captionWordsForTimeline(validWords, captionStartMs, captionEndMs);
   }
 
-  const tokens = text.trim().match(/\\S+/g) || [];
+  const tokens = text.trim().match(/\S+/g) || [];
   const duration = Math.max(0, captionEndMs - captionStartMs);
   if (!tokens.length || duration <= 0) return [];
 
