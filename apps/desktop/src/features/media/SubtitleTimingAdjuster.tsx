@@ -397,7 +397,8 @@ export default function SubtitleTimingAdjuster({
           else video?.pause();
         } else if (videoRef.current?.paused) void playCue();
         else videoRef.current?.pause();
-      } else if (event.code === "KeyA") { event.preventDefault(); markIn(); }
+      } else if (event.code === "KeyR" && event.ctrlKey) { event.preventDefault(); realignFollowing(); }
+      else if (event.code === "KeyA") { event.preventDefault(); markIn(); }
       else if (event.code === "KeyS") { event.preventDefault(); markOut(); }
       else if (event.code === "KeyG") { event.preventDefault(); void save(); }
       else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
