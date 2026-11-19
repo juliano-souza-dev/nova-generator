@@ -184,6 +184,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const [predictionSaved, setPredictionSaved] = useState(false);
   const [learningJourney, setLearningJourney] = useState<LearningJourneyPackage | null>(null);
   const [pedagogicalContent, setPedagogicalContent] = useState<PedagogicalContentPackage | null>(null);
+  const [activeMaterialTab, setActiveMaterialTab] = useState<"pedagogical" | "anki">("pedagogical");
+  const [activePedagogicalTab, setActivePedagogicalTab] = useState<"vocabulary" | "journey">("vocabulary");
   const [voices, setVoices] = useState<SharedVoice[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [voiceCloningReady, setVoiceCloningReady] = useState(false);
@@ -682,7 +684,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   return <section className="materials-workspace">
     <header className="materials-heading">
       <div><span className="eyebrow">ESTÚDIO DIDÁTICO</span><h2>Materiais</h2><p>Reúna conteúdos aprovados, prepare cards Anki e gere os áudios usados no estudo.</p></div>
-      <div className="materials-heading-actions">
+      {activeMaterialTab === "anki" && <div className="materials-heading-actions">
         <button className="secondary-button" onClick={() => void createExternalInput()} disabled={!cards.length || loading}><FileText size={15}/> Gerar TXT para IA</button>
         <button className="secondary-button" onClick={() => importInput.current?.click()}><Download size={15}/> Importar JSON da IA</button>
         <input ref={importInput} type="file" accept=".json,application/json" hidden onChange={event => void importExternalResult(event.target.files?.[0])}/>
@@ -690,7 +692,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         <button className="secondary-button" onClick={() => void generatePendingAudio()} disabled={!voiceCloningReady || !pendingAudioCount || !approvedCount || Boolean(audioBusy.length)}><AudioLines size={15}/>{audioBusy.length ? "Gerando áudios..." : "Gerar áudios pendentes"}</button>
         <button className="primary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar materiais"}</button>
         <button className="primary-button" onClick={() => void exportPackage()} disabled={!assetId || exporting || !approvedCount || pendingAudioCount > 0}><Download size={15}/>{exporting ? "Exportando..." : "Exportar pacote Anki"}</button>
-      </div>
+      </div>}
     </header>
 
     {error && <div className="materials-alert error">{error}</div>}
@@ -707,6 +709,16 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         <h3>Materiais ainda não liberados</h3>
         <p>Para liberar esta área, abra o editor da mídia, entre em Prediction Listening e clique em <strong>Salvar</strong>. Importar o JSON ou aprovar desafios, isoladamente, não libera a etapa.</p>
       </div> : <>
+        <nav className="materials-main-tabs" aria-label="Categorias de materiais">
+          <button type="button" className={activeMaterialTab === "pedagogical" ? "active" : ""} onClick={() => setActiveMaterialTab("pedagogical")}><BookOpen size={15}/> Conteúdo pedagógico</button>
+          <button type="button" className={activeMaterialTab === "anki" ? "active" : ""} onClick={() => setActiveMaterialTab("anki")}><Layers3 size={15}/> ANKI</button>
+        </nav>
+        {activeMaterialTab === "pedagogical" ? <>
+          <nav className="materials-subtabs" aria-label="Módulos de conteúdo pedagógico">
+            <button type="button" className={activePedagogicalTab === "vocabulary" ? "active" : ""} onClick={() => setActivePedagogicalTab("vocabulary")}>Reconhecimento contextual do vocabulário</button>
+            <button type="button" className={activePedagogicalTab === "journey" ? "active" : ""} onClick={() => setActivePedagogicalTab("journey")}>Jornada de aprendizagem · 7 dias</button>
+          </nav>
+          {activePedagogicalTab === "vocabulary" ? <>
         <section className="materials-journey-panel">
           <div className="materials-journey-heading">
             <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Reconhecimento contextual do vocabulário</h3>
@@ -729,8 +741,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           <div><AudioLines size={17}/><strong>{sourceInfo.shadowing}</strong><span>trechos Shadowing</span></div>
           <div><CheckCircle2 size={17}/><strong>{sourceInfo.predictions}</strong><span>desafios aprovados</span></div>
         </div>
-
-        <div className="materials-runtime">
+          </> : null}
+          {activePedagogicalTab === "journey" && <section className="materials-journey-panel">
           <div className="materials-runtime-icon"><AudioLines size={18}/></div>
           <div className="materials-runtime-copy">
             <strong>Vozes compartilhadas</strong>
@@ -772,9 +784,9 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
             </article>)}
           </div> : <p className="materials-journey-empty">O rascunho será montado com exercícios de identificação, lacunas e compreensão auditiva; microaulas derivadas dos cards aprovados; tarefas de escuta profunda; e propostas de gravação e comparação.</p>}
           {learningJourney && <p className="materials-journey-note">Rascunho editável · {learningJourney.days[1].activities.length} atividades no Dia 2 · {learningJourney.days[2].lessons.length} microaulas no Dia 3. Salve os Materiais para manter o pacote neste projeto.</p>}
-        </section>
-
-        <div className="materials-section-title">
+        </section>}
+        </> : <div className="materials-anki-content">
+        <div className="materials-runtime">
           <div><span className="eyebrow">GERADOR 01</span><h3>Cards Anki</h3><p>Conteúdo editorial, Shadowing e Prediction Listening. Revise cada card antes de incluí-lo no pacote.</p></div>
           <div className="materials-card-count">{approvedCount} de {cards.length} aprovados · {pendingAudioCount} áudio(s) pendente(s)</div>
         </div>
@@ -836,6 +848,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           <div><strong>Pacote de estudo</strong><p>O ZIP final reúne o pacote Anki (.apkg), o JSON editável e os áudios dos cards aprovados.</p></div>
           <span>{approvedCount > 0 && pendingAudioCount === 0 ? <CheckCircle2 size={15}/> : <RefreshCw size={15}/>} {approvedCount > 0 && pendingAudioCount === 0 ? "Pronto para exportar" : "Aguardando revisão e áudios"}</span>
         </div>
+        </div>}
       </>}
     </>}
   </section>;
