@@ -101,9 +101,21 @@ export function validateLearningJourney(value: unknown): string[] {
   if (isRecord(day3) && (!Array.isArray(day3.lessons) || day3.lessons.length === 0)) {
     errors.push("O Dia 3 precisa de ao menos uma microaula criada no Nova Generator.");
   }
+  const day4 = value.days[3];
+  if (isRecord(day4) && (!Array.isArray(day4.tasks) || day4.tasks.length === 0)) {
+    errors.push("O Dia 4 precisa de ao menos uma tarefa de listening profundo.");
+  }
   const day5 = value.days[4];
   if (isRecord(day5) && (!Array.isArray(day5.prompts) || day5.prompts.length === 0)) {
     errors.push("O Dia 5 precisa de ao menos uma atividade de speaking.");
+  }
+  const day6 = value.days[5];
+  if (isRecord(day6) && (!Array.isArray(day6.listening) || !day6.listening.length || !Array.isArray(day6.speaking) || !day6.speaking.length)) {
+    errors.push("O Dia 6 precisa combinar listening e speaking.");
+  }
+  const day7 = value.days[6];
+  if (isRecord(day7) && (!Array.isArray(day7.listening) || !day7.listening.length || !Array.isArray(day7.speaking) || !day7.speaking.length)) {
+    errors.push("O Dia 7 precisa combinar listening e speaking.");
   }
   return errors;
 }
