@@ -70,6 +70,7 @@
 .media-editor-transport button:hover{border-color:#9275c2;color:#e7d9fb}
 .media-editor-transport span{margin-left:auto;color:#c6bdd1;font:11px 'DM Mono'}
 .media-editor-transport span i{padding:0 5px;color:#77717f;font-style:normal}
+.media-editor-transport .media-editor-timing-trigger{width:auto;min-width:126px;height:30px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 10px;white-space:nowrap;font-size:10px}
 .media-editor-timeline{padding:12px;border:1px solid #35303d;border-radius:8px;background:#1b1921}
 .media-editor-ruler{display:flex;justify-content:space-between;color:#888291;font:9px 'DM Mono'}
 .media-editor-timeline>input{width:100%;margin:9px 0;accent-color:#a98bed}
