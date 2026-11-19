@@ -19,7 +19,7 @@ type Asset = { id: string; name: string; durationMs?: number | null; sourceStart
 function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: number) {
   const text = String(suggestion?.approved_en || fallback || "");
   const words = Array.isArray(suggestion?.word_translations) ? suggestion.word_translations : [];
-  const wordMatches = [...text.matchAll(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*/gu)];
+  const wordMatches = [...text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)];
   if (!words.length || wordMatches.length !== words.length) return text;
 
   const activeIndex = words.findIndex((word: any) => {
@@ -31,7 +31,7 @@ function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: nu
 
   // Match iHub's subtitle-word DOM contract, including punctuation tied to
   // the preceding timed word. The audio timestamp remains the source of truth.
-  const tokens = [...text.matchAll(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*|[^\\s\\p{L}\\p{N}]+/gu)];
+  const tokens = [...text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]+/gu)];
   const parts: ReactNode[] = [];
   let cursor = 0;
   let wordIndex = 0;
@@ -40,7 +40,7 @@ function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: nu
   tokens.forEach((token, tokenPosition) => {
     const tokenStart = token.index ?? cursor;
     if (tokenStart > cursor) parts.push(text.slice(cursor, tokenStart));
-    const isWord = /^[\\p{L}\\p{N}]/u.test(token[0]);
+    const isWord = /^[\p{L}\p{N}]/u.test(token[0]);
     const index = isWord ? wordIndex++ : previousWordIndex;
     if (isWord) previousWordIndex = index;
     const state = index === activeIndex ? "active" : activeIndex >= 0 && index < activeIndex ? "complete" : "upcoming";
@@ -753,7 +753,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
             const selectedWords: (typeof expectedWords)[number][] = numbers.map((number: number) => expectedWords[positions.get(number)!]);
             const expectedExpression = selectedWords.map((word: (typeof expectedWords)[number], index: number) => (index === 0 ? word.leading : (word.leading || " ")) + word.surface).join("").trim();
             const normalizeSemanticExpression = (value: string) =>
-              (value.match(/[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*/gu) ?? []).join(" ").toLowerCase();
+              (value.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) ?? []).join(" ").toLowerCase();
             if (normalizeSemanticExpression(en) !== normalizeSemanticExpression(expectedExpression)) {
               throw new Error(`A expressão EN do grupo "${en}" não corresponde às palavras numeradas do TXT. Esperado: "${expectedExpression}". Confira as palavras e a ordem, desconsiderando apenas pontuação e espaços.`);
             }
