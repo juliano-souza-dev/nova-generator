@@ -97,7 +97,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
               estimated_duration_seconds: 45,
               voice_direction: "Natural, conversational teacher. Warm but restrained. Short phrases, clear articulation, no exaggerated enthusiasm.",
               segments: [
-                { id: "opening", language: "pt", purpose: "opening", text: "Você acabou de ouvir uma expressão muito interessante." },
+                { id: "opening", language: "pt", purpose: "opening", text: "Repare na expressão que ele usa...\\r\\nBem na hora de pedir mais um favor." },
                 { id: "explanation", language: "pt", purpose: "explanation", text: "Ela é usada para chamar a atenção da outra pessoa antes de apresentar uma ideia ou sugestão. Não é uma pergunta literal sobre o que alguém sabe. É uma forma natural de preparar o que vem a seguir." },
                 { id: "example-1", language: "en", purpose: "example", text: "You know what we could try?" },
                 { id: "example-1-pt", language: "pt", purpose: "example", text: "Sabe o que poderíamos tentar?" },
@@ -144,7 +144,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         "Create a self-contained mini lesson designed to appear inside the video while the original video is paused. Teach what the speaker means, the communicative intention, why this construction is used, and how the learner can reuse it. Do not merely translate. Keep the visible lesson concise. Provide at least two natural examples with Brazilian Portuguese translations and at least two genuinely different context-tree branches. Each branch must explain a different communicative situation, not just swap nouns.",
         "",
         "NARRATION FOR NATURAL TTS",
-        "Write narration as a human teacher speaking naturally, not as an article. Use short spoken sentences, clear transitions, and a conversational rhythm. Avoid generic openings such as 'Today we are going to learn'. No stage directions, bracketed pauses, markdown, bullet symbols, pronunciation respellings, or production notes inside spoken text. Put voice direction in voice_direction only. Split narration into short segments, each tagged pt or en. English example segments must remain in English; Portuguese explanation segments must remain in Brazilian Portuguese. Aim for 30–60 seconds, hard range 20–90 seconds. Do not duplicate all on-screen text word for word.",
+        "Write narration as a human teacher speaking naturally, not as an article. Prepare the spoken text for natural TTS delivery using punctuation and layout as performance cues: commas for light pauses, periods for clear sentence endings, ellipses sparingly for anticipation or a reflective pause, and dashes for a brief spoken aside or emphasis. Use real line breaks to separate thought groups and create breathing space. Prefer short, speakable sentences and vary sentence length to avoid a flat rhythm. Example of voice-ready formatting: \"Repare na expressão que ele usa...\\nBem na hora de pedir mais um favor.\" Keep punctuation natural in Brazilian Portuguese and English. Do not insert literal directions such as [pause], [emphasize], (slowly), stage directions, markdown headings, bullet symbols, pronunciation respellings, or production notes inside spoken text, because they may be read aloud. Put general voice direction in voice_direction only. Split narration into short segments, each tagged pt or en. English example segments must remain in English; Portuguese explanation segments must remain in Brazilian Portuguese. Aim for 30–60 seconds, hard range 20–90 seconds. Do not duplicate all on-screen text word for word.",
         "",
         "OUTPUT",
         "Return ONLY valid JSON. No markdown, no commentary. Use the exact field names and shape below. score_breakdown values must add up exactly to pedagogical_score. score_evidence must contain all eight keys. Candidate array must be sorted from best to worst. Set selected=false or omit selected. final_selection must be null; the human curator selects later.",
@@ -199,9 +199,9 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
       "TITLE: " + candidate.lesson.title,
       "VOICE DIRECTION: " + candidate.lesson.narration.voice_direction,
       "ESTIMATED DURATION: " + candidate.lesson.narration.estimated_duration_seconds + " seconds",
-      "INSTRUCTIONS: Generate each segment separately. Preserve the language of each segment. Use a natural conversational teacher delivery. Do not read segment IDs, language labels, or purpose labels.",
+      "INSTRUCTIONS: Generate each segment separately. Preserve the language of each segment. Use a natural conversational teacher delivery. Segment metadata is for organization only and must never be spoken. Copy only the text between the BEGIN SPOKEN TEXT and END SPOKEN TEXT markers into the ElevenLabs text field. Keep its punctuation and line breaks exactly as written; they are intentional delivery cues.",
       "",
-      ...segments.flatMap((segment, index) => ["[SEGMENT " + String(index + 1).padStart(2, "0") + "]", "ID: " + segment.id, "LANGUAGE: " + segment.language, "PURPOSE: " + segment.purpose, segment.text, ""])
+      ...segments.flatMap((segment, index) => ["[SEGMENT " + String(index + 1).padStart(2, "0") + "]", "ID: " + segment.id, "LANGUAGE: " + segment.language, "PURPOSE: " + segment.purpose, "BEGIN SPOKEN TEXT", segment.text, "END SPOKEN TEXT", ""])
     ].join("\r\n");
     const path = await saveFile({ title: "Salvar roteiro de narração para ElevenLabs", defaultPath: "elevenlabs-" + candidate.id + "-roteiro.txt", filters: [{ name: "Roteiro de narração", extensions: ["txt"] }] });
     if (!path) return;
