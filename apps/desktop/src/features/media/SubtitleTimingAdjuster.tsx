@@ -286,11 +286,11 @@ export default function SubtitleTimingAdjuster({
     frameRef.current = requestAnimationFrame(tick);
   };
 
-  const markIn = () => setRange(Math.min(playhead, rangeEnd - 1), rangeEnd);
-  const markOut = () => setRange(rangeStart, Math.max(rangeStart + 1, playhead));
+  const markIn = () => { setActiveEdge("start"); setRange(Math.min(playhead, rangeEnd - 1), rangeEnd); };
+  const markOut = () => { setActiveEdge("end"); setRange(rangeStart, Math.max(rangeStart + 1, playhead)); };
   const nudge = (direction: number, amount: number) => {
     if (!active) return;
-    if (dragRef.current === "end") setRange(rangeStart, rangeEnd + direction * amount);
+    if (activeEdge === "end") setRange(rangeStart, rangeEnd + direction * amount);
     else setRange(rangeStart + direction * amount, rangeEnd);
   };
   const onWavePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -305,6 +305,7 @@ export default function SubtitleTimingAdjuster({
     const edge = nearStart ? "start" : nearEnd ? "end" : null;
     if (edge) {
       dragRef.current = edge;
+      setActiveEdge(edge);
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
     }
