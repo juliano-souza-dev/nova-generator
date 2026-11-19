@@ -208,6 +208,36 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
     setNotice("Roteiro segmentado salvo para geração no ElevenLabs. Gere cada segmento separadamente para preservar idioma e sincronização.");
   }
 
+  async function importElevenLabsAudio(candidate: SmartLearningCandidate, files: FileList | null) {
+    if (!files?.length || !value) return;
+    setError(""); setNotice("");
+    try {
+      const segments = candidate.lesson.narration.segments;
+      const imported = await Promise.all(Array.from(files).map(async file => {
+        const segmentId = file.name.replace(/\\.[^.]+$/, "");
+        const segment = segments.find(item => item.id.toLocaleLowerCase() === segmentId.toLocaleLowerCase());
+        if (!segment) throw new Error("O arquivo " + file.name + " não corresponde a um ID de segmento. Use nomes como opening.mp3 ou explanation.mp3.");
+        if (!file.type.startsWith("audio/") && !/\\.(mp3|wav|m4a|ogg|aac)$/i.test(file.name)) throw new Error("Formato de áudio não reconhecido: " + file.name);
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let binary = "";
+        for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+        return {
+          segment_id: segment.id,
+          language: segment.language,
+          audio_base64: btoa(binary),
+          mime_type: file.type || "audio/mpeg",
+          file_name: file.name,
+          provider: "elevenlabs" as const
+        };
+      }));
+      const existing = candidate.audio_assets ?? [];
+      const byId = new Map(existing.map(asset => [asset.segment_id, asset]));
+      imported.forEach(asset => byId.set(asset.segment_id, asset));
+      onChange({ ...value, candidates: value.candidates.map(item => item.id === candidate.id ? { ...item, audio_assets: [...byId.values()] } : item) });
+      setNotice(imported.length + " áudio(s) do ElevenLabs importado(s) e incorporado(s) ao pacote.");
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+
   async function generateInternalAudio(candidate: SmartLearningCandidate) {
     if (!voiceReady || !voiceId || audioBusy) return;
     setAudioBusy(true); setAudioCandidateId(candidate.id); setError(""); setNotice("");
@@ -270,7 +300,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
           </div>}
         </article>;
       })}</div>
-      {selected && <div className="slm-audio-panel"><div><h4><Volume2 size={16}/> Áudio da mini aula selecionada</h4><p>{includedAudioCount} de {selected.lesson.narration.segments.length} segmentos com áudio gerado.</p></div><label className="slm-voice-select">Voz interna<select value={voiceId} onChange={event => setVoiceId(event.target.value)} disabled={!voiceReady}>{!voices.length && <option value="">Nenhuma voz pronta</option>}{voices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}</select></label><div className="slm-audio-actions"><button type="button" className="primary-button" disabled={!voiceReady || !voiceId || audioBusy} onClick={() => void generateInternalAudio(selected)}><AudioLines size={14}/>{audioBusy && audioCandidateId === selected.id ? "Gerando..." : "Gerar áudio interno"}</button><button type="button" className="secondary-button" onClick={() => void prepareElevenLabsScript(selected)}><Download size={14}/> Preparar roteiro ElevenLabs</button></div></div>}
+      {selected && <div className="slm-audio-panel"><div><h4><Volume2 size={16}/> Áudio da mini aula selecionada</h4><p>{includedAudioCount} de {selected.lesson.narration.segments.length} segmentos com áudio gerado.</p></div><label className="slm-voice-select">Voz interna<select value={voiceId} onChange={event => setVoiceId(event.target.value)} disabled={!voiceReady}>{!voices.length && <option value="">Nenhuma voz pronta</option>}{voices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}</select></label><div className="slm-audio-actions"><button type="button" className="primary-button" disabled={!voiceReady || !voiceId || audioBusy} onClick={() => void generateInternalAudio(selected)}><AudioLines size={14}/>{audioBusy && audioCandidateId === selected.id ? "Gerando..." : "Gerar áudio interno"}</button><button type="button" className="secondary-button" onClick={() => void prepareElevenLabsScript(selected)}><Download size={14}/> Preparar roteiro ElevenLabs</button><label className="secondary-button slm-upload"><Download size={14}/> Importar áudios ElevenLabs<input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac" multiple hidden onChange={event => { void importElevenLabsAudio(selected, event.target.files); event.target.value = ""; }}/></label></div><small className="slm-audio-help">Para importar áudio externo, nomeie cada arquivo com o ID do segmento, por exemplo: opening.mp3, explanation.mp3.</small></div>}
     </>}
   </section>;
 }
