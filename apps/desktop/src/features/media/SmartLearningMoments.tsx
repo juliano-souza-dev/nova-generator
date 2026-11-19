@@ -284,7 +284,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         const isSelected = value.final_selection === candidate.id;
         const isExpanded = expanded.includes(candidate.id);
         return <article className={"slm-candidate" + (isSelected ? " selected" : "")} key={candidate.id}>
-          <header><span className="slm-rank">#{candidate.rank}</span><div className="slm-candidate-title"><strong>{candidate.source.expression}</strong><small>{candidate.category.replaceAll("_", " ")} · {candidate.level} · {candidate.source.start_ms} ms</small></div><b className="slm-score">{candidate.pedagogical_score}/100</b></header>
+          <header><span className="slm-rank">#{candidate.rank}</span><div className="slm-candidate-title"><strong>{candidate.source.expression}</strong><small>{candidate.category.replaceAll("_", " ")} · {candidate.level} · pausa em {candidate.source.trigger_start_ms} ms</small></div><b className="slm-score">{candidate.pedagogical_score}/100</b></header>
           <p>{candidate.recommendation_reason}</p>
           <div className="slm-candidate-controls">
             <button type="button" className="secondary-button" onClick={() => toggleExpanded(candidate.id)}>{isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>} {isExpanded ? "Fechar prévia" : "Ver mini aula"}</button>
