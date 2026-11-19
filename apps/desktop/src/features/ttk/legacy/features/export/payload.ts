@@ -1,7 +1,7 @@
 import type { MediaAsset } from "../../shared/types";
 import type { TimelineClip } from "../timeline/model";
 import type { ImageOverlay } from "../image-overlays/model";
-import { motionAnimationTiming } from "../motion-graphics/model";
+import { captionWordsForKaraoke, motionAnimationTiming } from "../motion-graphics/model";
 import type { MotionGraphic } from "../motion-graphics/model";
 import { getLucideIconExportOffset } from "../motion-graphics/icon-layout";
 import { lucideIconLibrary, renderLucideIconPng } from "../motion-graphics/icon-library";
@@ -57,7 +57,9 @@ export async function buildExportTimelinePayload(input: ExportTimelineInput) {
         fontWeight: item.fontWeight || 900,
         textAlign: item.textAlign || "center",
         isCaption: !!item.isCaption,
-        captionWords: item.isCaption && item.captionMode === "karaoke" ? (item.captionWords || []) : [],
+        captionWords: item.isCaption && item.captionMode === "karaoke"
+          ? captionWordsForKaraoke(item.captionWords, item.captionEnglish || item.text, item.startMs, item.endMs)
+          : [],
         captionAccent: item.accent,
         captionBackgroundColor: item.captionBackgroundColor || "#000000",
         captionBackgroundOpacity: item.captionBackgroundOpacity ?? 0.76,
