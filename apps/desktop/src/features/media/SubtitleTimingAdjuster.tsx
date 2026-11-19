@@ -243,18 +243,18 @@ export default function SubtitleTimingAdjuster({
   const playCue = async () => {
     if (!active || !videoRef.current) return;
     const video = videoRef.current;
-    setPlaybackMode("cue");
     video.pause();
     video.currentTime = (videoOffsetMs + active.startMs) / 1000;
+    setPlaybackMode("cue");
     try { await video.play(); } catch { setPlaybackMode(null); }
   };
 
   const playPreview = async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
-    setPlaybackMode("preview");
     video.pause();
     video.currentTime = videoOffsetMs / 1000;
+    setPlaybackMode("preview");
     try { await video.play(); } catch { setPlaybackMode(null); }
   };
 
