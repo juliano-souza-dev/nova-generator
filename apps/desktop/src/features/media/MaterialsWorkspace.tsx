@@ -717,11 +717,30 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     }
     const selected = smartLearningMoments.candidates.find(item => item.id === smartLearningMoments.final_selection);
     if (!selected) return null;
+    const audioAssets = selected.audio_assets ?? [];
+    const missingSegments = selected.lesson.narration.segments.filter(segment => !audioAssets.some(asset => asset.segment_id === segment.id));
+    if (missingSegments.length) {
+      throw new Error("Gere ou importe o áudio de todos os segmentos da mini aula antes de exportar. Pendentes: " + missingSegments.map(item => item.id).join(", "));
+    }
+    const toBase64 = (bytes: Uint8Array) => {
+      let binary = "";
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+      return btoa(binary);
+    };
+    const embeddedAudio = await Promise.all(audioAssets.map(async asset => {
+      if (asset.audio_base64) return { ...asset, audio_path: undefined };
+      if (!asset.audio_path) throw new Error("Um segmento não possui arquivo de áudio: " + asset.segment_id);
+      const response = await fetch(convertFileSrc(asset.audio_path));
+      if (!response.ok) throw new Error("Não foi possível ler o áudio interno do segmento " + asset.segment_id + ".");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const blob = await response.blob();
+      return { segment_id: asset.segment_id, language: asset.language, audio_base64: toBase64(bytes), mime_type: blob.type || "audio/wav", provider: asset.provider };
+    }));
     return {
       contract: smartLearningMoments.contract,
       selection_limit: 1,
       selected_at: new Date().toISOString(),
-      moment: selected
+      moment: { ...selected, audio_assets: embeddedAudio }
     };
   }
 
