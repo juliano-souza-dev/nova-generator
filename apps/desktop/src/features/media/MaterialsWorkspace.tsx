@@ -743,7 +743,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           speaker: cue.speaker ?? "", final_en: cue.text,
           pt: sourceTranslations.find(item => item.id === cue.id)?.text ?? ""
         })),
-        pedagogical_content: { ...pedagogicalContent, items: selectedItems },
+        pedagogical_content: { ...pedagogicalContent, minimum_items: selectedItems.length, items: selectedItems },
         prediction_listening: predictionIsCurrent ? predictionReview.materials ?? null : null,
         learning_journey: journeyIsCurrent ? learningJourney : null
       };
