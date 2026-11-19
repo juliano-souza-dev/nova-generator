@@ -49,11 +49,13 @@ function renderEditorialEnglish(suggestion: any, fallback: string, currentMs: nu
   matches.forEach((match, index) => {
     const start = match.index ?? cursor;
     if (start > cursor) parts.push(text.slice(cursor, start));
-    parts.push(<span key={String(words[index]?.word_id ?? index)} style={index === activeIndex ? {
-      color: "#f4cf72",
-      fontWeight: 900,
-      textShadow: "0 0 12px rgba(244,207,114,.28)"
-    } : undefined}>{match[0]}</span>);
+    const state = index === activeIndex ? "active" : index < activeIndex ? "complete" : "upcoming";
+    parts.push(<span
+      key={String(words[index]?.word_id ?? index)}
+      className={`media-editor-karaoke-word is-${state}`}
+      data-word-state={state}
+      aria-current={state === "active" ? "true" : undefined}
+    >{match[0]}</span>);
     cursor = start + match[0].length;
   });
   if (cursor < text.length) parts.push(text.slice(cursor));
