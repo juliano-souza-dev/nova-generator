@@ -152,6 +152,7 @@ export default function SubtitleTimingAdjuster({
     let source: MediaElementAudioSourceNode | null = null;
     let analyser: AnalyserNode | null = null;
     let frame = 0;
+    let lastSampleAt = 0;
     let stopped = false;
     const connectAudio = async () => {
       try {
@@ -167,7 +168,9 @@ export default function SubtitleTimingAdjuster({
         const samples = new Uint8Array(analyser!.fftSize);
         const sample = () => {
           if (stopped || !analyser) return;
-          if (!video.paused && !video.ended) {
+          const now = performance.now();
+          if (!video.paused && !video.ended && now - lastSampleAt >= 80) {
+            lastSampleAt = now;
             analyser.getByteTimeDomainData(samples);
             let peak = 0;
             for (let i = 0; i < samples.length; i += 4) peak = Math.max(peak, Math.abs(samples[i] - 128) / 128);
@@ -284,12 +287,16 @@ export default function SubtitleTimingAdjuster({
   const playCue = async () => {
     if (!active || !videoRef.current) return;
     const video = videoRef.current;
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     video.pause();
     video.currentTime = (videoOffsetMs + active.startMs) / 1000;
     try { await video.play(); } catch { return; }
     const token = { cancelled: false };
     const tick = () => {
-      if (token.cancelled || !videoRef.current) return;
+      if (token.cancelled || !videoRef.current || video.paused) {
+        frameRef.current = null;
+        return;
+      }
       const local = video.currentTime * 1000 - videoOffsetMs;
       setPlayhead(clamp(local, 0, durationMs));
       if (local >= active.endMs || video.ended) {
