@@ -123,7 +123,7 @@ export function validateLearningJourney(value: unknown): string[] {
 
 export type JourneySourceCue = { id: string; text: string; startMs: number; endMs: number; order?: number };
 export type JourneySourceCard = {
-  id: string; sourceCueId: string; focus: string; meaning: string;
+  id: string; sourceCueId: string; type: string; focus: string; meaning: string;
   highlightEn: string; explanation: string; exampleEn: string; examplePt: string;
   status: "draft" | "approved";
 };
