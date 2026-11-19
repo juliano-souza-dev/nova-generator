@@ -94,6 +94,8 @@ export default function SubtitleTimingAdjuster({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const baselineCuesRef = useRef<SubtitleTimingCue[]>([]);
+  if (baselineCuesRef.current.length === 0) baselineCuesRef.current = draft.map(cue => ({ ...cue, words: cue.words?.map(word => ({ ...word })) }));
   const sorted = useMemo(() => [...draft].sort((a, b) => a.startMs - b.startMs), [draft]);
   const active = draft.find(cue => cue.id === activeId) ?? sorted[0] ?? null;
   const visibleDuration = Math.max(1, durationMs / zoom);
@@ -317,6 +319,32 @@ export default function SubtitleTimingAdjuster({
     frameRef.current = requestAnimationFrame(tick);
   };
 
+  const realignFollowing = () => {
+    if (!active) return;
+    const baseline = baselineCuesRef.current;
+    const originalAnchor = baseline.find(cue => cue.id === active.id);
+    if (!originalAnchor) return;
+    const delta = active.endMs - originalAnchor.endMs;
+    if (!delta) {
+      setMessage("As próximas cues já estão alinhadas com o fim desta cue.");
+      return;
+    }
+    const followingIds = new Set(baseline.filter(cue => cue.startMs >= originalAnchor.endMs).map(cue => cue.id));
+    setDraft(items => items.map(cue => {
+      if (!followingIds.has(cue.id)) return cue;
+      const startMs = clamp(cue.startMs + delta, 0, Math.max(0, durationMs - 1));
+      const endMs = clamp(cue.endMs + delta, startMs + 1, Math.max(startMs + 1, durationMs));
+      const shift = startMs - cue.startMs;
+      return {
+        ...cue,
+        startMs,
+        endMs,
+        words: cue.words?.map(word => ({ ...word, startMs: word.startMs + shift, endMs: word.endMs + shift })),
+      };
+    }));
+    setMessage(`${followingIds.size} cue(s) seguinte(s) realinhada(s) em ${delta > 0 ? "+" : ""}${delta} ms.`);
+  };
+
   const markIn = () => { setActiveEdge("start"); setRange(Math.min(playhead, rangeEnd - 1), rangeEnd); };
   const markOut = () => { setActiveEdge("end"); setRange(rangeStart, Math.max(rangeStart + 1, playhead)); };
   const nudge = (direction: number, amount: number) => {
@@ -439,6 +467,7 @@ export default function SubtitleTimingAdjuster({
           <div className="subtitle-timing-actions">
             <button type="button" onClick={markIn}>Marcar IN aqui <kbd>A</kbd></button>
             <button type="button" onClick={markOut}>Marcar OUT aqui <kbd>S</kbd></button>
+            <button type="button" onClick={realignFollowing}>Realinhar próximas <kbd>Ctrl+R</kbd></button>
             <button type="button" onClick={() => void playCue()}><Play size={13}/> Reproduzir cue <kbd>Space</kbd></button>
             <button type="button" onClick={() => { if (videoRef.current) { videoRef.current.currentTime = videoOffsetMs / 1000; void videoRef.current.play().catch(() => undefined); } }}>Reproduzir mídia <kbd>Shift+Space</kbd></button>
           </div>
