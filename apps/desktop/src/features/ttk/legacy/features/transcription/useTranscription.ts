@@ -267,7 +267,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   }
 
   return {
-    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, transcriptionInserted, openTranscriptionForClip,
+    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, transcriptionInserted, openTranscriptionForClip, loadExistingTranscript,
     translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue,
     transcriptionAssetId, setTranscriptionAssetId,
     transcriptionContext, setTranscriptionContext,
