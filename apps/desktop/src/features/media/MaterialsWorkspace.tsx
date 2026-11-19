@@ -825,7 +825,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           <div><strong>Pacote de estudo</strong><p>O ZIP final reúne o pacote Anki (.apkg), o JSON editável e os áudios dos cards aprovados.</p></div>
           <span>{approvedCount > 0 && pendingAudioCount === 0 ? <CheckCircle2 size={15}/> : <RefreshCw size={15}/>} {approvedCount > 0 && pendingAudioCount === 0 ? "Pronto para exportar" : "Aguardando revisão e áudios"}</span>
         </div>
-        </div>}}
+        </div>}
 
       </>}
     </>}
