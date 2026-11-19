@@ -612,6 +612,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
               </button>
             </div>
           </div>
+          {learningJourney && learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards) && <p className="materials-journey-stale">Os cards aprovados mudaram. Regenere a jornada antes de exportar ou publicar.</p>}
           {learningJourney ? <div className="materials-journey-days">
             {learningJourney.days.map(day => <article key={day.day} className="materials-journey-day">
               <span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong>
