@@ -93,6 +93,19 @@ export default function SubtitleTimingAdjuster({
   const rangeStart = active?.startMs ?? 0;
   const rangeEnd = active?.endMs ?? 1;
 
+  useEffect(() => {
+    setStartText(formatTime(rangeStart));
+    setEndText(formatTime(rangeEnd));
+  }, [activeId, rangeStart, rangeEnd]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(entries => setCanvasWidth(entries[0]?.contentRect.width ?? 0));
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
+
   const seek = useCallback((localMs: number) => {
     const safe = clamp(localMs, 0, durationMs);
     setPlayhead(safe);
@@ -222,7 +235,7 @@ export default function SubtitleTimingAdjuster({
       ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, height); ctx.stroke();
     }
-  }, [peaks, durationMs, viewStart, viewEnd, rangeStart, rangeEnd, playhead]);
+  }, [peaks, durationMs, viewStart, viewEnd, rangeStart, rangeEnd, playhead, canvasWidth]);
 
   useEffect(() => {
     if (!active) return;
