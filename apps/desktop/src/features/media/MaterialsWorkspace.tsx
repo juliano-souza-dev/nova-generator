@@ -43,7 +43,7 @@ function learningJourneySourceSignature(sourceSignature: string, cards: AnkiCard
   return JSON.stringify([
     sourceSignature,
     cards.filter(card => card.status === "approved").map(card => [
-      card.id, card.sourceCueId, card.focus, card.meaning, card.highlightEn,
+      card.id, card.sourceCueId, card.type, card.focus, card.meaning, card.highlightEn,
       card.explanation, card.exampleEn, card.examplePt
     ])
   ]);
