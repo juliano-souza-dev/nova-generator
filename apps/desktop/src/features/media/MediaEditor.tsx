@@ -974,7 +974,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
           <section className="media-editor-preview-v2">
             {loading ? <div className="media-editor-placeholder">Preparando vídeo...</div> : src ? <>
               <div className="media-editor-video-wrap">
-                <video ref={video} src={src} controls={ !predictionListeningOpen } playsInline preload="metadata"
+                <video ref={video} src={src} controls playsInline preload="metadata"
                   onLoadedMetadata={e => { const ms = e.currentTarget.duration * 1000; setDuration(ms); }}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
