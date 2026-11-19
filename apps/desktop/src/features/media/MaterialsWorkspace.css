@@ -109,3 +109,5 @@
 .materials-journey-note{padding-top:12px;border-top:1px solid var(--border,#dfe4ea)}
 @media(max-width:1050px){.materials-journey-days{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:650px){.materials-journey-heading{flex-direction:column}.materials-journey-days{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.materials-journey-stale{margin:0;padding:10px 12px;border-radius:8px;background:rgba(217,119,6,.1);color:#a16207;font-size:12px;line-height:1.45}
