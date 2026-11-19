@@ -174,7 +174,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         const hash = Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
         const errors = validateSmartLearningMoments(parsed, hash, cues);
         if (errors.length) throw new Error(errors.join("\\n"));
-        onChange({ ...parsed, candidates: parsed.candidates.map(candidate => ({ ...candidate, selected: false })), final_selection: null });
+        onChange({ ...parsed, source_signature: sourceSignature, candidates: parsed.candidates.map(candidate => ({ ...candidate, selected: false })), final_selection: null });
       });
       setNotice(parsedNotice(file.name));
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
