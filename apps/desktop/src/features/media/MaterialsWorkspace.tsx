@@ -225,6 +225,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       setCards([]);
       setLearningJourney(null);
       setPedagogicalContent(null);
+      setSmartLearningMoments(null);
       setSourceInfo({ cues: 0, translations: 0, editorial: 0, shadowing: 0, predictions: 0 });
       return;
     }
