@@ -60,6 +60,19 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionMessage("");
   }
 
+  function loadExistingTranscript(
+    result: TranscriptResult,
+    context: TranscriptionContext,
+    translations: CueTranslation[],
+  ) {
+    setTranscriptionContext(context);
+    setTranscriptionResult(result);
+    setTranscriptionTranslations(translations);
+    setTranscriptionInserted(true);
+    setExternalSourceHash("");
+    setTranscriptionMessage("Transcrição existente carregada da timeline. Você pode traduzir ou alinhar as palavras sem reprocessar o áudio e sem inserir outra cópia.");
+  }
+
   async function installLocalTranscription() {
     setLocalAsrInstalling(true);
     setTranscriptionMessage("");
