@@ -337,7 +337,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       const journey = buildLearningJourneyPackage({
         projectId, assetId, sourceSignature: learningJourneySourceSignature(sourceSignature, cards), cues: sourceCues,
         cards: cards.map(card => ({
-          id: card.id, sourceCueId: card.sourceCueId, focus: card.focus,
+          id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus,
           meaning: card.meaning, highlightEn: card.highlightEn,
           explanation: card.explanation, exampleEn: card.exampleEn,
           examplePt: card.examplePt, status: card.status
