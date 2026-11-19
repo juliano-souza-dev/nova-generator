@@ -5,7 +5,6 @@ import { ArrowLeft, AudioLines, Captions, Check, Clock3, Download, Film, Languag
 import { runTrackedTask } from "../tasks/TaskCenter";
 import { downloadExternalTranslationPackage, type ExternalTranslationPackage } from "./translationPackage";
 import ShadowingEditor from "./ShadowingEditor";
-import PredictionListening from "./PredictionListening";
 import MaterialsWorkspace from "./MaterialsWorkspace";
 import SubtitleTimingAdjuster, { type SubtitleTimingCue } from "./SubtitleTimingAdjuster";
 
