@@ -184,7 +184,7 @@ export function buildLearningJourneyPackage(input: {
         id: "recall-reconstruct-" + cue.id, type: "reconstruct",
         prompt: "Listen and rebuild the sentence in the correct order.",
         audioCueIds: [cue.id],
-        words: [...tokens].sort(() => 0.5 - 0.5),
+        words: tokens.length > 1 ? [...tokens.slice(1), tokens[0]] : tokens,
         answer: tokens
       });
     }
@@ -219,7 +219,9 @@ export function buildLearningJourneyPackage(input: {
     sourceText: cue.text,
     focus: (["rhythm", "pauses", "connected-speech", "intonation"] as const)[index % 4]
   }));
-  const day2Activities = listening.slice(0, Math.max(3, Math.min(10, listening.length)));
+  const day2Activities = (["identify", "gap", "detail", "word-recognition", "reconstruct"] as const)
+    .map(type => listening.find(item => item.type === type))
+    .filter((item): item is ListeningQuestion => Boolean(item));
   const mixedListening = listening.slice(0, 4);
   const mixedSpeaking = speaking.slice(0, 3);
   return {
