@@ -153,7 +153,7 @@ export function buildLearningJourneyPackage(input: {
         id: "recall-gap-" + cue.id,
         type: "gap",
         prompt: "Listen and complete the missing word.",
-        audioCueOrders: [cue.id],
+        audioCueOrders: [cueOrder(cue)],
         sentence: (() => { const at = cue.text.toLowerCase().indexOf(target.toLowerCase()); return at < 0 ? cue.text : cue.text.slice(0, at) + "_____" + cue.text.slice(at + target.length); })(),
         acceptedAnswers: [target]
       });
@@ -166,7 +166,7 @@ export function buildLearningJourneyPackage(input: {
       listening.push({
         id: "recall-detail-" + cue.id, type: "detail",
         prompt: "Which sentence matches the detail you heard?",
-        audioCueOrders: [cue.id],
+        audioCueOrders: [cueOrder(cue)],
         options: [{ id: "correct", text: cue.text }, ...alternatives.map((text, i) => ({ id: "detail-" + i, text }))],
         answerId: "correct"
       });
@@ -177,14 +177,14 @@ export function buildLearningJourneyPackage(input: {
       listening.push({
         id: "recall-word-" + cue.id, type: "word-recognition",
         prompt: "Which word did you hear at the end of the phrase?",
-        audioCueOrders: [cue.id],
+        audioCueOrders: [cueOrder(cue)],
         options: [{ id: "correct", text: target }, ...otherWords.map((text, i) => ({ id: "word-" + i, text }))],
         answerId: "correct"
       });
       listening.push({
         id: "recall-reconstruct-" + cue.id, type: "reconstruct",
         prompt: "Listen and rebuild the sentence in the correct order.",
-        audioCueOrders: [cue.id],
+        audioCueOrders: [cueOrder(cue)],
         words: tokens.length > 1 ? [...tokens.slice(1), tokens[0]] : tokens,
         answer: tokens
       });
@@ -216,7 +216,7 @@ export function buildLearningJourneyPackage(input: {
   }));
   const speaking: SpeakingPrompt[] = selected.slice(0, 8).map((cue, index) => ({
     id: "speak-" + cue.id,
-    cueOrders: [cue.id],
+    cueOrders: [cueOrder(cue)],
     sourceText: cue.text,
     focus: (["rhythm", "pauses", "connected-speech", "intonation"] as const)[index % 4]
   }));
