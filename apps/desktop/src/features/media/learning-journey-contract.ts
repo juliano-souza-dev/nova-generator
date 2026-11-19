@@ -197,13 +197,15 @@ export function buildLearningJourneyPackage(input: {
     if (tokens.length >= 2) {
       const target = tokens[tokens.length - 1];
       const otherWords = unique(cues.flatMap(item => wordsOf(item.text)).filter(word => word.toLowerCase() !== target.toLowerCase())).slice(0, 2);
-      listening.push({
-        id: "recall-word-" + cue.id, type: "word-recognition",
-        prompt: "Which word did you hear at the end of the phrase?",
-        audioCueOrders: [cueOrder(cue)],
-        options: [{ id: "correct", text: target }, ...otherWords.map((text, i) => ({ id: "word-" + i, text }))],
-        answerId: "correct"
-      });
+      if (otherWords.length) {
+        listening.push({
+          id: "recall-word-" + cue.id, type: "word-recognition",
+          prompt: "Which word did you hear at the end of the phrase?",
+          audioCueOrders: [cueOrder(cue)],
+          options: [{ id: "correct", text: target }, ...otherWords.map((text, i) => ({ id: "word-" + i, text }))],
+          answerId: "correct"
+        });
+      }
       listening.push({
         id: "recall-reconstruct-" + cue.id, type: "reconstruct",
         prompt: "Listen and rebuild the sentence in the correct order.",
