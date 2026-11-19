@@ -48,7 +48,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     transcriptionModel, setTranscriptionModel, transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
     localAsrInstalled, localAsrChecking, localAsrInstalling, transcriptionMessage, setTranscriptionMessage,
     installLocalTranscription, transcribeSelectedMedia,
-    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, transcriptionInserted, openTranscriptionForClip, translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue
+    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, transcriptionInserted, openTranscriptionForClip, loadExistingTranscript, translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue
   } = useTranscription(activeProject, assets);
 
   async function refresh() {
