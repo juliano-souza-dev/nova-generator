@@ -81,7 +81,7 @@ export function validateSmartLearningMoments(
     for (let start = 0; start <= cue.words.length - target.length; start++) {
       const candidate = cue.words.slice(start, start + target.length);
       if (candidate.every((word, index) => normalize(word.text) === target[index])) return {
-        start_ms: Math.round(candidate[0].startMs), end_ms: Math.round(candidate[candidate.length - 1].endMs)
+        start_ms: candidate[0].startMs, end_ms: candidate[candidate.length - 1].endMs
       };
     }
     return null;
@@ -103,7 +103,7 @@ export function validateSmartLearningMoments(
     if (Math.round(total) !== candidate.pedagogical_score) errors.push("A pontuação total não corresponde à soma dos critérios em " + candidate.id + ".");
     if (candidate.pedagogical_score < 70) errors.push("Candidatas abaixo de 70 pontos devem ser descartadas pela IA.");
     const cue = cues.find(item => item.id === candidate.source?.cue_id);
-    if (!cue || candidate.source.cue_order < 1 || candidate.source.start_ms !== Math.round(cue.startMs) || candidate.source.end_ms !== Math.round(cue.endMs)) errors.push("A candidata " + candidate.id + " não corresponde à cue e aos tempos originais.");
+    if (!cue || candidate.source.cue_order !== cues.findIndex(item => item.id === cue?.id) + 1 || candidate.source.start_ms !== cue.startMs || candidate.source.end_ms !== cue.endMs) errors.push("A candidata " + candidate.id + " não corresponde à cue e aos tempos originais.");
     const wordRange = alignedRange(cue, candidate.source?.expression ?? "");
     if (!candidate.source?.expression?.trim() || !candidate.source?.excerpt_en?.trim() || !cue?.text.includes(candidate.source.excerpt_en.trim()) || !candidate.source.excerpt_en.toLocaleLowerCase().includes(candidate.source.expression.toLocaleLowerCase())) errors.push("A expressão e o trecho de origem da candidata " + candidate.id + " não foram encontrados na transcrição.");
     if (!wordRange || candidate.source.trigger_start_ms !== wordRange.start_ms || candidate.source.trigger_end_ms !== wordRange.end_ms) errors.push("A candidata " + candidate.id + " precisa usar o timing exato das palavras alinhadas para disparar a pausa.");
@@ -134,7 +134,7 @@ export function buildSmartLearningSource(projectId: string, assetId: string, sou
       start_ms: Math.round(cue.startMs),
       end_ms: Math.round(cue.endMs),
       text_en: cue.text,
-      text_pt: translations.find(item => item.id === cue.id)?.text ?? "",\n      words: (cue.words ?? []).map(word => ({ text: word.text, start_ms: Math.round(word.startMs), end_ms: Math.round(word.endMs) }))
+      text_pt: translations.find(item => item.id === cue.id)?.text ?? "",\n      words: (cue.words ?? []).map(word => ({ text: word.text, start_ms: word.startMs, end_ms: word.endMs }))
     }))
   };
 }
