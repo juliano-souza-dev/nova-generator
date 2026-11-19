@@ -111,3 +111,13 @@
 @media(max-width:650px){.materials-journey-heading{flex-direction:column}.materials-journey-days{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .materials-journey-stale{margin:0;padding:10px 12px;border-radius:8px;background:rgba(217,119,6,.1);color:#a16207;font-size:12px;line-height:1.45}
+
+.materials-main-tabs,.materials-subtabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:22px 0 14px;padding-bottom:10px;border-bottom:1px solid #393342}
+.materials-main-tabs button,.materials-subtabs button{display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:1px solid #403a49;border-radius:8px;background:#211e27;color:#aaa4b2;font-size:11px;font-weight:650;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease}
+.materials-main-tabs button.active,.materials-subtabs button.active{border-color:#8064b4;background:#30263e;color:#e3d5ff}
+.materials-main-tabs button:hover,.materials-subtabs button:hover{border-color:#8064b4;color:#eee5ff}
+.materials-subtabs{margin:0 0 18px;padding:0;border:0}
+.materials-subtabs button{font-size:10px;padding:8px 12px}
+.materials-anki-content{display:grid;gap:18px}
+.materials-anki-content .materials-runtime{margin:0}
+@media(max-width:600px){.materials-main-tabs button,.materials-subtabs button{flex:1;justify-content:center}.materials-subtabs button{flex-basis:100%}}
