@@ -50,6 +50,7 @@ export type SmartLearningCandidate = {
 export type SmartLearningMomentsPackage = {
   contract: typeof SMART_LEARNING_MOMENTS_CONTRACT;
   source_hash: string;
+  source_signature?: string;
   recommendation_status: "recommended" | "no_recommendation";
   selection_limit: 1;
   candidates: SmartLearningCandidate[];
