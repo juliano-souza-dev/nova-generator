@@ -725,17 +725,19 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   }
 
   async function exportFinalPedagogicalPackage() {
-    if (!pedagogicalContent || !assetId || exporting) return;
-    const selectedItems = pedagogicalContent.items.filter(item => item.include_in_hub !== false);
-    if (!selectedItems.length) {
-      setError("Selecione pelo menos um item pedagógico para incluir no pacote final.");
+    if ((!pedagogicalContent && !smartLearningMoments?.final_selection) || !assetId || exporting) return;
+    const selectedItems = pedagogicalContent?.items.filter(item => item.include_in_hub !== false) ?? [];
+    if (!selectedItems.length && !smartLearningMoments?.final_selection) {
+      setError("Selecione conteúdo pedagógico ou aprove uma mini aula Smart Learning Moments antes de exportar.");
       return;
     }
     setError(""); setNotice(""); setExporting(true);
     try {
-      const { sourceHash } = await buildPedagogicalInput();
-      if (pedagogicalContent.source_hash !== sourceHash || pedagogicalContent.editorial_signature !== sourceSignature) {
-        throw new Error("Este conteúdo pedagógico está desatualizado em relação à transcrição. Gere novamente as instruções e importe um novo resultado da IA.");
+      if (pedagogicalContent) {
+        const { sourceHash } = await buildPedagogicalInput();
+        if (pedagogicalContent.source_hash !== sourceHash || pedagogicalContent.editorial_signature !== sourceSignature) {
+          throw new Error("Este conteúdo pedagógico está desatualizado em relação à transcrição. Gere novamente as instruções e importe um novo resultado da IA.");
+        }
       }
 
       const predictionReview = await invoke<any>("load_prediction_listening_result", { projectId, assetId }).catch(() => null);
@@ -765,7 +767,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           speaker: cue.speaker ?? "", final_en: cue.text,
           pt: sourceTranslations.find(item => item.id === cue.id)?.text ?? ""
         })),
-        pedagogical_content: { ...pedagogicalContent, minimum_items: selectedItems.length, items: selectedItems },
+        pedagogical_content: pedagogicalContent ? { ...pedagogicalContent, minimum_items: selectedItems.length, items: selectedItems } : null,
         smart_learning_moment: await buildSelectedSmartLearningMoment(),
         prediction_listening: predictionIsCurrent ? predictionReview.materials ?? null : null,
         learning_journey: journeyIsCurrent ? learningJourney : null
@@ -774,7 +776,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       const anchor = document.createElement("a");
       anchor.href = url; anchor.download = "ihub-conteudo-completo-" + assetId + ".json"; anchor.click();
       URL.revokeObjectURL(url);
-      setNotice("JSON completo gerado com " + selectedItems.length + " item(ns) pedagógico(s) selecionado(s)" +
+      setNotice("JSON completo gerado com " + selectedItems.length + " item(ns) pedagógico(s) selecionado(s)" + (smartLearningMoments?.final_selection ? " e uma mini aula Smart Learning Moments" : "") +
         (predictionIsCurrent ? ", Prediction Listening aprovado" : "") +
         (journeyIsCurrent ? " e Jornada de aprendizagem" : "") + ".");
     } catch (e) {
@@ -785,7 +787,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   }
 
   function exportJson() {
-    const payload = JSON.stringify({ schema: "nova-generator-materials/2.0", projectId, assetId, assetName: selectedAsset?.name, cards, pedagogical_content: pedagogicalContent ?? undefined }, null, 2);
+    const payload = JSON.stringify({ schema: "nova-generator-materials/2.0", projectId, assetId, assetName: selectedAsset?.name, cards, pedagogical_content: pedagogicalContent ?? undefined, smart_learning_moments: smartLearningMoments ?? undefined }, null, 2);
     const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
     const anchor = document.createElement("a");
     anchor.href = url; anchor.download = "materiais-" + assetId + ".json"; anchor.click();
@@ -795,7 +797,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   return <section className="materials-workspace">
     <header className="materials-heading">
       <div><span className="eyebrow">ESTÚDIO DIDÁTICO</span><h2>Materiais</h2><p>Reúna conteúdos aprovados, prepare cards Anki e gere os áudios usados no estudo.</p></div>
-      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="secondary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar no projeto"}</button><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={!pedagogicalContent || !includedPedagogicalCount || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
+      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="secondary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar no projeto"}</button><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={(!includedPedagogicalCount && !smartLearningMoments?.final_selection) || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
       {activeMaterialTab === "anki" && <div className="materials-heading-actions">
         <button className="secondary-button" onClick={() => void createExternalInput()} disabled={!cards.length || loading}><FileText size={15}/> Gerar TXT para IA</button>
         <button className="secondary-button" onClick={() => importInput.current?.click()}><Download size={15}/> Importar JSON da IA</button>
