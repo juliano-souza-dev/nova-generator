@@ -1374,7 +1374,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
           <button type="button" className="secondary-action" onClick={splitSelectedCaption} title="Dividir legenda"><Scissors size={12}/> Dividir</button>
           <button type="button" className="secondary-action" onClick={()=>mergeSelectedCaption("previous")} disabled={!captions.some(item=>item.id!==selectedMotion.id&&item.endMs<=selectedMotion.startMs)} title="Mesclar com a anterior">Mesclar ant.</button>
           <button type="button" className="secondary-action" onClick={()=>mergeSelectedCaption("next")} disabled={!captions.some(item=>item.id!==selectedMotion.id&&item.startMs>=selectedMotion.endMs)} title="Mesclar com a próxima">Mesclar próx.</button>
-          <button type="button" className="secondary-action" onClick={duplicateSelectedCaption} title="Duplicar legenda"><Copy size={12}/> Duplicar</button>
+          <button type="button" className="secondary-action" onClick={duplicateSelectedCaption} title="Duplicar legenda"><Copy size={12}/> Duplicar</button>{timingTargetClip && timingTargetAsset?.kind === "video" && timingTargetUrl && <button type="button" className="secondary-action" onClick={() => setTimingAdjusterOpen(true)} title="Abrir editor especializado de sincronização"><Clock3 size={12}/> Ajustar timing</button>}
         </div>}
         <div className="properties-scroll">
           {selectedMotion.isCaption ? <>
