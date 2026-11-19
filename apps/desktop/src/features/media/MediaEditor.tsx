@@ -995,7 +995,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
                 <button title="Pausar" onClick={() => video.current?.pause()}><Pause size={16}/></button>
                 <button title="Avançar 5 segundos" onClick={() => seek(current + 5000)}><SkipForward size={16}/></button>
                 <span>{fmt(current)} <i>/</i> {fmt(duration)}</span>
-                <button type="button" className="media-editor-secondary-action" title="Abrir editor especializado de sincronização" onClick={() => { video.current?.pause(); setIsPlaying(false); setTimingAdjusterOpen(true); }} disabled={loading || saving || aligning || !src || cues.length === 0}>
+                <button type="button" className="media-editor-secondary-action media-editor-timing-trigger" title="Abrir editor especializado de sincronização" onClick={() => { video.current?.pause(); setIsPlaying(false); setTimingAdjusterOpen(true); }} disabled={loading || saving || aligning || !src || cues.length === 0}>
                   <Clock3 size={14}/> Ajustar timing
                 </button>
               </div>
