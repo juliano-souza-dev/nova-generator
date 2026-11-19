@@ -7,7 +7,7 @@ import { downloadExternalTranslationPackage, type ExternalTranslationPackage } f
 import ShadowingEditor from "./ShadowingEditor";
 import PredictionListening from "./PredictionListening";
 import MaterialsWorkspace from "./MaterialsWorkspace";
-import SubtitleTimingAdjuster from "./SubtitleTimingAdjuster";
+import SubtitleTimingAdjuster, { type SubtitleTimingCue } from "./SubtitleTimingAdjuster";
 
 type Cue = { id: string; startMs: number; endMs: number; text: string; language?: string | null; wordAlignment?: string | null; wordAlignmentHash?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
 type AlignmentProgress = { projectId: string; assetId: string; completed: number; total: number; message: string };
@@ -423,6 +423,63 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
       return false;
     } finally { setSaving(false); }
   }
+  async function persistAdjustedTimings(adjusted: SubtitleTimingCue[]) {
+    const adjustedById = new Map(adjusted.map(cue => [cue.id, cue]));
+    const nextCues = cues.map(cue => {
+      const timing = adjustedById.get(cue.id);
+      return timing ? {
+        ...cue,
+        startMs: timing.startMs,
+        endMs: timing.endMs,
+        words: timing.words?.map(word => ({ ...word, text: word.text })) ?? cue.words,
+      } : cue;
+    });
+    const nextTranslations = translations.map(item => {
+      const timing = adjustedById.get(item.id);
+      return timing ? { ...item, startMs: timing.startMs, endMs: timing.endMs } : item;
+    });
+    const nextEditorial = editorialResult ? {
+      ...editorialResult,
+      suggestions: (editorialResult.suggestions ?? []).map((suggestion: any) => {
+        const timing = adjustedById.get(String(suggestion.cue_id ?? ""));
+        const previous = cues.find(cue => cue.id === String(suggestion.cue_id ?? ""));
+        if (!timing || !previous || !Array.isArray(suggestion.word_translations)) return suggestion;
+        const oldSpan = Math.max(1, previous.endMs - previous.startMs);
+        const newSpan = Math.max(1, timing.endMs - timing.startMs);
+        let previousEnd = timing.startMs;
+        const word_translations = suggestion.word_translations.map((word: any, index: number, all: any[]) => {
+          const project = (value: number) => timing.startMs + Math.round(Math.max(0, Math.min(oldSpan, value - previous.startMs)) * newSpan / oldSpan);
+          const remaining = all.length - index - 1;
+          const start_ms = Math.max(previousEnd, Math.min(project(Number(word.start_ms ?? word.startMs)), timing.endMs - remaining - 1));
+          const end_ms = Math.max(start_ms + 1, Math.min(project(Number(word.end_ms ?? word.endMs)), timing.endMs - remaining));
+          previousEnd = end_ms;
+          return { ...word, start_ms, end_ms };
+        });
+        return { ...suggestion, word_translations };
+      }),
+    } : null;
+
+    await runTrackedTask("export", "Salvar sincronização das legendas", async () => {
+      await invoke("save_project_subtitles", { projectId, assetId: asset.id, cues: nextCues });
+      await invoke("save_project_translations", { projectId, assetId: asset.id, translations: nextTranslations });
+      if (nextEditorial) {
+        await invoke("save_project_editorial_result", {
+          projectId, assetId: asset.id, result: nextEditorial, cues: nextCues,
+          includeWordTranslations, includeSemanticUnits
+        });
+      }
+      await unlockShadowingStage(nextCues.length);
+    });
+    setCues(nextCues);
+    setTranslations(nextTranslations);
+    setEditorialResult(nextEditorial);
+    setSaved(true);
+    setDirty(false);
+    setTranslationDirty(false);
+    setTimingAdjusterOpen(false);
+    setError("");
+  }
+
   async function transcribe() {
     if (transcribing || loading) return;
     setTranscribing(true); setError(""); setTranscriptionInfo("");
