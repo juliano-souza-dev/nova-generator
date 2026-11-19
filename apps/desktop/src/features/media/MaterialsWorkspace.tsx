@@ -3,14 +3,15 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save as saveFile } from "@tauri-apps/plugin-dialog";
 import {
   AudioLines, BookOpen, Check, CheckCircle2, Download, FileAudio, FileText, Layers3,
-  LoaderCircle, Plus, RefreshCw, Save, Sparkles, Trash2, Volume2, LockKeyhole
+  LoaderCircle, Plus, RefreshCw, Save, Sparkles, Trash2, Volume2
 } from "lucide-react";
 import "./MaterialsWorkspace.css";
 import { runTrackedTask } from "../tasks/TaskCenter";
+import PredictionListening from "./PredictionListening";
 import { buildLearningJourneyPackage, validateLearningJourney, type LearningJourneyPackage } from "./learning-journey-contract";
 
 type Asset = { id: string; name: string; kind: string; durationMs?: number | null; sourceVideoId?: string | null };
-type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string };
+type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string; wordAlignment?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
 type Translation = { id: string; text: string };
 type SourceType = "editorial" | "shadowing" | "prediction" | "manual";
 type AnkiCard = {
@@ -171,7 +172,14 @@ const cardFromShadowing = (cue: Cue, translation?: Translation): AnkiCard => {
   };
 };
 
-export default function MaterialsWorkspace({ projectId, initialAssetId, onProjectUpdated }: { projectId: string; initialAssetId?: string; onProjectUpdated?: () => void }) {
+type PredictionWorkspaceProps = {
+  assetName: string; cues: Cue[]; selectedCueIds: string[]; sourceSignature: string; ready: boolean;
+  onPreview: (timeMs: number) => void; onDemoSeekAndPlay: (timeMs: number) => void;
+  onDemoPause: () => void; onDemoResume: (timeMs: number) => void; getCurrentTime: () => number;
+};
+export default function MaterialsWorkspace({ projectId, initialAssetId, onProjectUpdated, prediction }: {
+  projectId: string; initialAssetId?: string; onProjectUpdated?: () => void; prediction?: PredictionWorkspaceProps;
+}) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetId, setAssetId] = useState("");
   const [cards, setCards] = useState<AnkiCard[]>([]);
@@ -181,11 +189,10 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const [audioBusy, setAudioBusy] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [predictionSaved, setPredictionSaved] = useState(false);
   const [learningJourney, setLearningJourney] = useState<LearningJourneyPackage | null>(null);
   const [pedagogicalContent, setPedagogicalContent] = useState<PedagogicalContentPackage | null>(null);
   const [activeMaterialTab, setActiveMaterialTab] = useState<"pedagogical" | "anki">("pedagogical");
-  const [activePedagogicalTab, setActivePedagogicalTab] = useState<"vocabulary" | "journey">("vocabulary");
+  const [activePedagogicalTab, setActivePedagogicalTab] = useState<"vocabulary" | "prediction" | "journey">("vocabulary");
   const [voices, setVoices] = useState<SharedVoice[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [voiceCloningReady, setVoiceCloningReady] = useState(false);
@@ -210,7 +217,6 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const loadSource = useCallback(async (selectedId: string) => {
     if (!selectedId) {
       setCards([]);
-      setPredictionSaved(false);
       setLearningJourney(null);
       setPedagogicalContent(null);
       setSourceInfo({ cues: 0, translations: 0, editorial: 0, shadowing: 0, predictions: 0 });
@@ -253,7 +259,6 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
           ? prediction.challenges.map((item: any) => [item.id, item.status, item.answerText])
           : []
       ]);
-      setPredictionSaved(isPredictionSaved);
       const savedJourney = stored?.learningJourney;
       const savedPedagogicalContent = stored?.pedagogicalContent;
 setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-content/1.0" && savedPedagogicalContent.editorial_signature === materialSignature ? savedPedagogicalContent : null);
@@ -704,11 +709,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         <select value={assetId} onChange={event => setAssetId(event.target.value)} aria-label="Vídeo de origem">{assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>
       </div>
 
-      {loading ? <div className="materials-loading"><LoaderCircle className="spin" size={20}/> Carregando fontes do projeto...</div> : !predictionSaved ? <div className="materials-gate">
-        <div><LockKeyhole size={23}/></div>
-        <h3>Materiais ainda não liberados</h3>
-        <p>Para liberar esta área, abra o editor da mídia, entre em Prediction Listening e clique em <strong>Salvar</strong>. Importar o JSON ou aprovar desafios, isoladamente, não libera a etapa.</p>
-      </div> : <>
+      {loading ? <div className="materials-loading"><LoaderCircle className="spin" size={20}/> Carregando fontes do projeto...</div> : <>
         <nav className="materials-main-tabs" aria-label="Categorias de materiais">
           <button type="button" className={activeMaterialTab === "pedagogical" ? "active" : ""} onClick={() => setActiveMaterialTab("pedagogical")}><BookOpen size={15}/> Conteúdo pedagógico</button>
           <button type="button" className={activeMaterialTab === "anki" ? "active" : ""} onClick={() => setActiveMaterialTab("anki")}><Layers3 size={15}/> ANKI</button>
@@ -716,6 +717,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         {activeMaterialTab === "pedagogical" ? <>
           <nav className="materials-subtabs" aria-label="Módulos de conteúdo pedagógico">
             <button type="button" className={activePedagogicalTab === "vocabulary" ? "active" : ""} onClick={() => setActivePedagogicalTab("vocabulary")}>Reconhecimento contextual do vocabulário</button>
+            <button type="button" className={activePedagogicalTab === "prediction" ? "active" : ""} onClick={() => setActivePedagogicalTab("prediction")}>Prediction Listening</button>
             <button type="button" className={activePedagogicalTab === "journey" ? "active" : ""} onClick={() => setActivePedagogicalTab("journey")}>Jornada de aprendizagem · 7 dias</button>
           </nav>
           {activePedagogicalTab === "vocabulary" && <>
@@ -741,6 +743,19 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               <div><CheckCircle2 size={17}/><strong>{sourceInfo.predictions}</strong><span>desafios aprovados</span></div>
             </div>
           </>}
+          {activePedagogicalTab === "prediction" && <section className="materials-prediction-panel">
+            {prediction?.ready ? <PredictionListening
+              projectId={projectId} assetId={assetId} assetName={prediction.assetName}
+              cues={prediction.cues} selectedCueIds={prediction.selectedCueIds} sourceSignature={prediction.sourceSignature}
+              onClose={() => setActivePedagogicalTab("vocabulary")} onPreview={prediction.onPreview}
+              onDemoSeekAndPlay={prediction.onDemoSeekAndPlay} onDemoPause={prediction.onDemoPause}
+              onDemoResume={prediction.onDemoResume} getCurrentTime={prediction.getCurrentTime}
+              onProjectUpdated={onProjectUpdated}
+            /> : <div className="materials-prediction-prerequisite">
+              <div><AudioLines size={20}/></div><h3>Prepare o Shadowing para gerar desafios</h3>
+              <p>O Prediction Listening usa os trechos selecionados no Shadowing e o alinhamento palavra por palavra do WhisperX. Salve a transcrição, prepare o Shadowing e alinhe os trechos selecionados. Depois, volte a esta aba.</p>
+            </div>}
+          </section>}
           {activePedagogicalTab === "journey" && <section className="materials-journey-panel">
             <div className="materials-journey-heading">
               <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Jornada de aprendizagem · 7 dias</h3>
@@ -764,7 +779,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           </div><span className={voiceCloningReady ? "ready" : "missing"}>{voiceCloningReady ? voices.length + (voices.length === 1 ? " voz" : " vozes") : "Indisponível"}</span>
         </div>
         <div className="materials-section-title">
-          <div><span className="eyebrow">GERADOR 01</span><h3>Cards Anki</h3><p>Conteúdo editorial, Shadowing e Prediction Listening. Revise cada card antes de incluí-lo no pacote.</p></div>
+          <div><span className="eyebrow">ANKI</span><h3>Cards de estudo</h3><p>Conteúdo editorial, Shadowing e desafios aprovados de Prediction Listening. Revise cada card antes de incluí-lo no pacote.</p></div>
           <div className="materials-card-count">{approvedCount} de {cards.length} aprovados · {pendingAudioCount} áudio(s) pendente(s)</div>
         </div>
 
