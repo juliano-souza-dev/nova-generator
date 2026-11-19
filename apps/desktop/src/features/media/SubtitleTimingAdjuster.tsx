@@ -67,7 +67,6 @@ export default function SubtitleTimingAdjuster({
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const frameRef = useRef<number | null>(null);
   const dragRef = useRef<"start" | "end" | null>(null);
   const [draft, setDraft] = useState<SubtitleTimingCue[]>(() => cues.map(cue => {
     const startMs = clamp(Math.round(cue.startMs), 0, Math.max(0, durationMs - 1));
@@ -88,6 +87,7 @@ export default function SubtitleTimingAdjuster({
   const [zoom, setZoom] = useState(1);
   const [viewStart, setViewStart] = useState(0);
   const [speed, setSpeed] = useState(1);
+  const [playbackMode, setPlaybackMode] = useState<"cue" | "preview" | null>(null);
   const [peaks, setPeaks] = useState<number[]>([]);
   const [waveMessage, setWaveMessage] = useState("Carregando forma de onda...");
   const [busy, setBusy] = useState(false);
@@ -240,34 +240,34 @@ export default function SubtitleTimingAdjuster({
     videoRef.current.playbackRate = speed;
   }, [speed, activeId]);
 
-  useEffect(() => {
-    if (!busy) return;
-    const stop = () => { if (frameRef.current !== null) cancelAnimationFrame(frameRef.current); };
-    return stop;
-  }, [busy]);
-
   const playCue = async () => {
     if (!active || !videoRef.current) return;
     const video = videoRef.current;
-    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    setPlaybackMode("cue");
     video.pause();
     video.currentTime = (videoOffsetMs + active.startMs) / 1000;
-    try { await video.play(); } catch { return; }
-    const token = { cancelled: false };
-    const tick = () => {
-      if (token.cancelled || !videoRef.current || video.paused) {
-        frameRef.current = null;
-        return;
-      }
-      const local = video.currentTime * 1000 - videoOffsetMs;
-      setPlayhead(clamp(local, 0, durationMs));
-      if (local >= active.endMs || video.ended) {
-        video.pause();
-        return;
-      }
-      frameRef.current = requestAnimationFrame(tick);
-    };
-    frameRef.current = requestAnimationFrame(tick);
+    try { await video.play(); } catch { setPlaybackMode(null); }
+  };
+
+  const playPreview = async () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    setPlaybackMode("preview");
+    video.pause();
+    video.currentTime = videoOffsetMs / 1000;
+    try { await video.play(); } catch { setPlaybackMode(null); }
+  };
+
+  const handleVideoTimeUpdate = (video: HTMLVideoElement) => {
+    const local = video.currentTime * 1000 - videoOffsetMs;
+    setPlayhead(clamp(local, 0, durationMs));
+    if (playbackMode === "cue" && active && local >= active.endMs) {
+      video.pause();
+      video.currentTime = (videoOffsetMs + active.endMs) / 1000;
+      setPlayhead(active.endMs);
+      setPlaybackMode(null);
+    }
+    if (video.ended) setPlaybackMode(null);
   };
 
   const realignFollowing = () => {
@@ -343,11 +343,10 @@ export default function SubtitleTimingAdjuster({
       if (event.code === "Space") {
         event.preventDefault();
         if (event.shiftKey) {
-          const video = videoRef.current;
-          if (video?.paused) void video.play().catch(() => undefined);
-          else video?.pause();
+          if (videoRef.current?.paused) void playPreview();
+          else { videoRef.current?.pause(); setPlaybackMode(null); }
         } else if (videoRef.current?.paused) void playCue();
-        else videoRef.current?.pause();
+        else { videoRef.current?.pause(); setPlaybackMode(null); }
       } else if (event.code === "KeyR" && event.ctrlKey) { event.preventDefault(); realignFollowing(); }
       else if (event.code === "KeyA") { event.preventDefault(); markIn(); }
       else if (event.code === "KeyS") { event.preventDefault(); markOut(); }
@@ -398,7 +397,7 @@ export default function SubtitleTimingAdjuster({
         </aside>
         <main className="subtitle-timing-main">
           <div className="subtitle-timing-video-wrap">
-            <video ref={videoRef} src={videoUrl} controls playsInline preload="metadata" onLoadedMetadata={() => seek(active?.startMs ?? 0)} onTimeUpdate={event => setPlayhead(clamp(event.currentTarget.currentTime * 1000 - videoOffsetMs, 0, durationMs))}/>
+            <video ref={videoRef} src={videoUrl} controls playsInline preload="metadata" onLoadedMetadata={() => seek(active?.startMs ?? 0)} onTimeUpdate={event => handleVideoTimeUpdate(event.currentTarget)} onPause={() => setPlaybackMode(null)}/>
             {active && playhead >= active.startMs && playhead < active.endMs && <div className="subtitle-timing-overlay"><strong>{active.text}</strong>{active.translation && <span>{active.translation}</span>}</div>}
           </div>
           {active && <div className="subtitle-timing-cue-text"><strong>{active.text}</strong>{active.translation && <span>{active.translation}</span>}</div>}
@@ -420,8 +419,8 @@ export default function SubtitleTimingAdjuster({
             <button type="button" onClick={markIn}>Marcar IN aqui <kbd>A</kbd></button>
             <button type="button" onClick={markOut}>Marcar OUT aqui <kbd>S</kbd></button>
             <button type="button" onClick={realignFollowing}>Realinhar próximas <kbd>Ctrl+R</kbd></button>
-            <button type="button" onClick={() => void playCue()}><Play size={13}/> Reproduzir cue <kbd>Space</kbd></button>
-            <button type="button" onClick={() => { if (videoRef.current) { videoRef.current.currentTime = videoOffsetMs / 1000; void videoRef.current.play().catch(() => undefined); } }}>Reproduzir mídia <kbd>Shift+Space</kbd></button>
+            <button type="button" className={playbackMode === "cue" ? "is-playing" : ""} onClick={() => videoRef.current?.paused ? void playCue() : (videoRef.current?.pause(), setPlaybackMode(null))}><Play size={13}/> Cue <kbd>Space</kbd></button>
+            <button type="button" className={playbackMode === "preview" ? "is-playing" : ""} onClick={() => videoRef.current?.paused ? void playPreview() : (videoRef.current?.pause(), setPlaybackMode(null))}><Play size={13}/> Preview <kbd>Shift+Space</kbd></button>
           </div>
           <div className="subtitle-timing-shortcuts">← / → ±10 ms · Shift ±100 ms · Alt ±1 ms · G salvar · Arraste as alças IN/OUT</div>
           {error && <div className="subtitle-timing-error" role="alert">{error}</div>}
