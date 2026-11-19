@@ -185,7 +185,7 @@ export function buildLearningJourneyPackage(input: {
       listening.push({
         id: "recall-reconstruct-" + cue.id, type: "reconstruct",
         prompt: "Listen and rebuild the sentence in the correct order.",
-        audioCueIds: [cue.id],
+        audioCueOrders: [cueOrder(cue)],
         words: tokens.length > 1 ? [...tokens.slice(1), tokens[0]!] : tokens,
         answer: tokens
       });
