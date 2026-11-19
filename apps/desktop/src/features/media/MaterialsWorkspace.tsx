@@ -38,7 +38,7 @@ type AnkiCard = {
   status: "draft" | "approved";
 };
 type PedagogicalLayer = { context: string; usage: string; example_en: string; example_pt: string; nuance?: string };
-type PedagogicalItem = { id: string; cue_order: number; start_ms: number; end_ms: number; type: string; expression: string; meaning_pt: string; explanation_pt: string; source_en: string; source_pt: string; layers: PedagogicalLayer[] };
+type PedagogicalItem = { id: string; cue_order: number; start_ms: number; end_ms: number; type: string; expression: string; meaning_pt: string; explanation_pt: string; source_en: string; source_pt: string; layers: PedagogicalLayer[]; include_in_hub?: boolean };
 type PedagogicalContentPackage = { contract: "ihub-pedagogical-content/1.0"; title: string; language: string; source_hash: string; minimum_items: number; items: PedagogicalItem[]; editorial_signature?: string };
 type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string; learningJourney?: LearningJourneyPackage; pedagogicalContent?: PedagogicalContentPackage };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
@@ -206,6 +206,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const pedagogicalInput = useRef<HTMLInputElement>(null);
 
   const selectedAsset = useMemo(() => assets.find(item => item.id === assetId), [assets, assetId]);
+  const includedPedagogicalCount = pedagogicalContent?.items.filter(item => item.include_in_hub !== false).length ?? 0;
   const approvedCards = useMemo(() => cards.filter(card => card.status === "approved"), [cards]);
   const approvedCount = approvedCards.length;
   const pendingAudioCount = approvedCards.filter(card => !card.audioPath).length;
@@ -663,7 +664,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           if (!text(item.meaning_pt).trim() || !text(item.explanation_pt).trim() || !text(item.source_en).trim() || !cue.text.includes(item.source_en.trim()) || !Array.isArray(item.layers) || item.layers.length < 3) throw new Error("O item \"" + expression + "\" precisa conter significado, explicação, trecho exato da fonte e ao menos três camadas.");
           if (item.layers.some(layer => !text(layer.context).trim() || !text(layer.usage).trim() || !text(layer.example_en).trim() || !text(layer.example_pt).trim())) throw new Error("Uma camada do item \"" + expression + "\" está incompleta.");
         }
-        const content: PedagogicalContentPackage = { ...parsed, editorial_signature: sourceSignature };
+        const content: PedagogicalContentPackage = { ...parsed, items: parsed.items.map(item => ({ ...item, include_in_hub: item.include_in_hub !== false })), editorial_signature: sourceSignature };
         const journeyIsCurrent = learningJourney?.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards);
         const document: MaterialDocument = {
           version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials",
@@ -685,27 +686,77 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     }
   }
 
-  async function exportPedagogicalForHub() {
-    if (!pedagogicalContent || !assetId) return;
-    const { sourceHash } = await buildPedagogicalInput();
-    if (pedagogicalContent.source_hash !== sourceHash || pedagogicalContent.editorial_signature !== sourceSignature) {
-      setError("Este conteúdo pedagógico está desatualizado em relação à transcrição. Gere novamente as instruções e importe um novo resultado da IA.");
+  function togglePedagogicalItem(itemId: string) {
+    setPedagogicalContent(current => current ? {
+      ...current,
+      items: current.items.map(item => item.id === itemId
+        ? { ...item, include_in_hub: item.include_in_hub === false }
+        : item)
+    } : current);
+  }
+
+  function setAllPedagogicalItemsIncluded(included: boolean) {
+    setPedagogicalContent(current => current ? {
+      ...current,
+      items: current.items.map(item => ({ ...item, include_in_hub: included }))
+    } : current);
+  }
+
+  async function exportFinalPedagogicalPackage() {
+    if (!pedagogicalContent || !assetId || exporting) return;
+    const selectedItems = pedagogicalContent.items.filter(item => item.include_in_hub !== false);
+    if (!selectedItems.length) {
+      setError("Selecione pelo menos um item pedagógico para incluir no pacote final.");
       return;
     }
-    const payload = {
-      schema: "ihub-generator-pedagogical-import/1.0",
-      cues: sourceCues.map((cue, index) => ({
-        order: index + 1, start_ms: Math.round(cue.startMs), end_ms: Math.round(cue.endMs),
-        speaker: cue.speaker ?? "", final_en: cue.text,
-        pt: sourceTranslations.find(item => item.id === cue.id)?.text ?? ""
-      })),
-      pedagogical_content: pedagogicalContent
-    };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" }));
-    const anchor = document.createElement("a");
-    anchor.href = url; anchor.download = "ihub-conteudo-pedagogico-" + assetId + ".json"; anchor.click();
-    URL.revokeObjectURL(url);
-    setNotice("Pacote de conteúdo pedagógico exportado para importação no iHub Admin.");
+    setError(""); setNotice("");
+    try {
+      const { sourceHash } = await buildPedagogicalInput();
+      if (pedagogicalContent.source_hash !== sourceHash || pedagogicalContent.editorial_signature !== sourceSignature) {
+        throw new Error("Este conteúdo pedagógico está desatualizado em relação à transcrição. Gere novamente as instruções e importe um novo resultado da IA.");
+      }
+
+      const predictionReview = await invoke<any>("load_prediction_listening_result", { projectId, assetId }).catch(() => null);
+      const predictionPackage = prediction?.ready
+        ? await invoke<{ sourceHash: string }>("prepare_prediction_listening_package", {
+            projectId, assetId, cues: prediction.cues, selectedCueIds: prediction.selectedCueIds,
+            sourceSignature: prediction.sourceSignature
+          }).catch(() => null)
+        : null;
+      const predictionIsCurrent = Boolean(
+        predictionReview?.contract === "nova-generator-prediction-listening-review/1.0" &&
+        predictionReview?.saved_at && predictionPackage?.sourceHash &&
+        predictionReview?.source_hash === predictionPackage.sourceHash
+      );
+      const journeyIsCurrent = Boolean(
+        learningJourney &&
+        learningJourney.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards) &&
+        validateLearningJourney(learningJourney).length === 0
+      );
+
+      await persistMaterials();
+      const payload = {
+        schema: "ihub-generator-pedagogical-import/1.0",
+        project: { id: projectId, asset_id: assetId, name: selectedAsset?.name ?? "" },
+        cues: sourceCues.map((cue, index) => ({
+          order: index + 1, start_ms: Math.round(cue.startMs), end_ms: Math.round(cue.endMs),
+          speaker: cue.speaker ?? "", final_en: cue.text,
+          pt: sourceTranslations.find(item => item.id === cue.id)?.text ?? ""
+        })),
+        pedagogical_content: { ...pedagogicalContent, items: selectedItems },
+        prediction_listening: predictionIsCurrent ? predictionReview.materials ?? null : null,
+        learning_journey: journeyIsCurrent ? learningJourney : null
+      };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = "ihub-conteudo-completo-" + assetId + ".json"; anchor.click();
+      URL.revokeObjectURL(url);
+      setNotice("JSON completo gerado com " + selectedItems.length + " item(ns) pedagógico(s) selecionado(s)" +
+        (predictionIsCurrent ? ", Prediction Listening aprovado" : "") +
+        (journeyIsCurrent ? " e Jornada de aprendizagem" : "") + ".");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   function exportJson() {
@@ -719,6 +770,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   return <section className="materials-workspace">
     <header className="materials-heading">
       <div><span className="eyebrow">ESTÚDIO DIDÁTICO</span><h2>Materiais</h2><p>Reúna conteúdos aprovados, prepare cards Anki e gere os áudios usados no estudo.</p></div>
+      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={!pedagogicalContent || !includedPedagogicalCount || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
       {activeMaterialTab === "anki" && <div className="materials-heading-actions">
         <button className="secondary-button" onClick={() => void createExternalInput()} disabled={!cards.length || loading}><FileText size={15}/> Gerar TXT para IA</button>
         <button className="secondary-button" onClick={() => importInput.current?.click()}><Download size={15}/> Importar JSON da IA</button>
@@ -764,12 +816,13 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               <div className="materials-pedagogical-steps">
                 <article className="materials-pedagogical-step"><span>01</span><div><strong>Preparar instruções</strong><p>Baixe um TXT com o roteiro pedagógico, contrato JSON e transcrição revisada.</p><button className="primary-button" type="button" onClick={() => void generatePedagogicalInput()} disabled={loading || !sourceCues.length || pedagogicalProcessing}><FileText size={15}/> Baixar instruções TXT</button></div></article>
                 <article className="materials-pedagogical-step"><span>02</span><div><strong>Enviar o resultado da IA</strong><p>Selecione o JSON retornado pela IA. O Nova valida os itens, as camadas e os tempos antes de salvar.</p><button className="secondary-button" type="button" onClick={() => pedagogicalInput.current?.click()} disabled={loading || !sourceCues.length || pedagogicalProcessing}><Download size={15}/> {pedagogicalProcessing ? "Processando JSON..." : "Selecionar JSON para importar"}</button><input ref={pedagogicalInput} type="file" accept=".json,application/json" hidden onChange={event => void importPedagogicalContent(event.target.files?.[0])}/></div></article>
-                <article className="materials-pedagogical-step"><span>03</span><div><strong>Revisar e enviar ao iHub</strong><p>Confira o conteúdo processado e exporte o pacote preparado para a importação no iHub Admin.</p><button className="secondary-button" type="button" onClick={() => void exportPedagogicalForHub()} disabled={!pedagogicalContent || pedagogicalProcessing}><Download size={15}/> Exportar pacote iHub</button></div></article>
+                
               </div>
               {pedagogicalProcessing && <div className="materials-pedagogical-processing"><LoaderCircle className="spin" size={18}/><div><strong>Validando e salvando o conteúdo pedagógico</strong><span>{pedagogicalFileName || "Arquivo JSON selecionado"}</span></div></div>}
               {pedagogicalContent ? <div className="materials-pedagogical-results">
-                <div className="materials-pedagogical-results-head"><div><span className="eyebrow">RESULTADO IMPORTADO</span><h4>{pedagogicalContent.title || "Mapa de vocabulário contextual"}</h4><p>Conteúdo validado e salvo no projeto atual.</p></div><div className="materials-pedagogical-result-count"><strong>{pedagogicalContent.items.length}</strong><span>itens</span></div></div>
-                <div className="materials-pedagogical-item-list">{pedagogicalContent.items.map((item,index) => <article className="materials-pedagogical-item" key={item.id || item.expression}><div className="materials-pedagogical-item-top"><span>{String(index+1).padStart(2,"0")}</span><strong>{item.expression}</strong><small>{item.type.replaceAll("_"," ")}</small></div><p>{item.meaning_pt}</p><div className="materials-pedagogical-item-meta"><span>Cue {item.cue_order}</span><span>{item.layers.length} camadas de uso</span></div><div className="materials-pedagogical-layer-preview">{item.layers.slice(0,3).map((layer,layerIndex)=><div key={layerIndex}><strong>{layer.context}</strong><p>{layer.example_en}</p><small>{layer.example_pt}</small></div>)}</div></article>)}</div>
+                <div className="materials-pedagogical-results-head"><div><span className="eyebrow">REVISÃO DO CONTEÚDO</span><h4>{pedagogicalContent.title || "Mapa de vocabulário contextual"}</h4><p>Escolha quais itens entram no JSON final. Os demais permanecem salvos no projeto, mas ficam fora da exportação.</p></div><div className="materials-pedagogical-result-count"><strong>{includedPedagogicalCount}/{pedagogicalContent.items.length}</strong><span>selecionados</span></div></div>
+                <div className="materials-pedagogical-curation"><span>{includedPedagogicalCount} de {pedagogicalContent.items.length} itens serão enviados ao iHub</span><div><button type="button" onClick={() => setAllPedagogicalItemsIncluded(true)}>Selecionar todos</button><button type="button" onClick={() => setAllPedagogicalItemsIncluded(false)}>Limpar seleção</button></div></div>
+                <div className="materials-pedagogical-item-list">{pedagogicalContent.items.map((item,index) => <article className="materials-pedagogical-item" key={item.id || item.expression}><div className="materials-pedagogical-item-top"><span>{String(index+1).padStart(2,"0")}</span><strong>{item.expression}</strong><small>{item.type.replaceAll("_"," ")}</small></div><button type="button" className={"materials-pedagogical-include" + (item.include_in_hub === false ? " excluded" : " included")} aria-pressed={item.include_in_hub !== false} onClick={() => togglePedagogicalItem(item.id)}>{item.include_in_hub === false ? <Plus size={13}/> : <Check size={13}/>} {item.include_in_hub === false ? "Incluir no JSON final" : "Incluído no JSON final"}</button><p>{item.meaning_pt}</p><div className="materials-pedagogical-item-meta"><span>Cue {item.cue_order}</span><span>{item.layers.length} camadas de uso</span></div><div className="materials-pedagogical-layer-preview">{item.layers.slice(0,3).map((layer,layerIndex)=><div key={layerIndex}><strong>{layer.context}</strong><p>{layer.example_en}</p><small>{layer.example_pt}</small></div>)}</div></article>)}</div>
               </div> : <div className="materials-pedagogical-empty"><Sparkles size={22}/><strong>Nenhum conteúdo importado ainda</strong><p>Comece baixando o TXT. Depois, envie o JSON produzido pela IA para validar e salvar o primeiro mapa de uso.</p></div>}
             </section>
             <div className="materials-stats">
