@@ -21,6 +21,7 @@ type Props = {
 };
 type Voice = { id: string; name: string };
 type AudioResult = { cardId: string; audioPath: string; language: string; speaker: string };
+type MergedAudioResult = { audioPath: string; fileName: string; mimeType: "audio/mpeg"; segmentCount: number };
 
 const scoreLabels: Record<keyof typeof SMART_LEARNING_SCORE_WEIGHTS, string> = {
   transferability: "Transferência para outros contextos",
@@ -44,6 +45,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
   const [voiceReady, setVoiceReady] = useState(false);
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioCandidateId, setAudioCandidateId] = useState("");
+  const [mergingAudio, setMergingAudio] = useState(false);
   const [editingSelected, setEditingSelected] = useState(false);
 
   const selected = useMemo(() => value?.candidates.find(item => item.id === value.final_selection) ?? null, [value]);
@@ -225,7 +227,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
       const existing = candidate.audio_assets ?? [];
       const byId = new Map(existing.map(asset => [asset.segment_id, asset]));
       imported.forEach(asset => byId.set(asset.segment_id, asset));
-      onChange({ ...value, candidates: value.candidates.map(item => item.id === candidate.id ? { ...item, audio_assets: [...byId.values()] } : item) });
+      onChange({ ...value, candidates: value.candidates.map(item => item.id === candidate.id ? { ...item, audio_assets: [...byId.values()], merged_audio: undefined } : item) });
       setNotice(imported.length + " áudio(s) do ElevenLabs importado(s) e incorporado(s) ao pacote.");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
@@ -254,10 +256,29 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         audio_path: result.audioPath,
         provider: "internal" as const
       }));
-      onChange({ ...value!, candidates: value!.candidates.map(item => item.id === candidate.id ? { ...item, audio_assets: audioAssets } : item) });
+      onChange({ ...value!, candidates: value!.candidates.map(item => item.id === candidate.id ? { ...item, audio_assets: audioAssets, merged_audio: undefined } : item) });
       setNotice("Áudios internos gerados para " + audioAssets.length + " segmentos da mini aula.");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setAudioBusy(false); setAudioCandidateId(""); }
+  }
+
+  async function mergeSelectedLessonAudio(candidate: SmartLearningCandidate) {
+    if (!value || mergingAudio) return;
+    setMergingAudio(true); setError(""); setNotice("");
+    try {
+      const orderedSegments = candidate.lesson.narration.segments.map(segment => {
+        const audio = candidate.audio_assets?.find(item => item.segment_id === segment.id);
+        if (!audio) throw new Error("Gere ou importe o áudio do segmento " + segment.id + " antes de concluir a mini aula.");
+        return { segmentId: segment.id, audioPath: audio.audio_path, audioBase64: audio.audio_base64, mimeType: audio.mime_type };
+      });
+      const merged = await runTrackedTask("materials", "Unificar áudio da mini aula", () =>
+        invoke<MergedAudioResult>("merge_smart_learning_moment_audio", { projectId, assetId, lessonId: candidate.id, segments: orderedSegments })
+      );
+      const mergedAudio = { audio_path: merged.audioPath, file_name: merged.fileName, mime_type: "audio/mpeg" as const, segment_count: merged.segmentCount };
+      onChange({ ...value, candidates: value.candidates.map(item => item.id === candidate.id ? { ...item, merged_audio: mergedAudio } : item) });
+      setNotice("Mini aula concluída. " + merged.segmentCount + " segmentos foram unificados em " + merged.fileName + ".");
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setMergingAudio(false); }
   }
 
   return <section className="slm-workspace">
@@ -339,7 +360,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
             <strong>Segmento {index + 1} · {segment.language.toUpperCase()} · {segment.purpose}</strong>
             <textarea className="slm-script-textarea" rows={4} value={segment.text} onChange={event => {
               const nextText = event.target.value;
-              updateSelectedLesson(item => ({ ...item, audio_assets: item.audio_assets?.filter(asset => asset.segment_id !== segment.id), lesson: { ...item.lesson, narration: { ...item.lesson.narration, segments: item.lesson.narration.segments.map(entry => entry.id === segment.id ? { ...entry, text: nextText } : entry) } } }));
+              updateSelectedLesson(item => ({ ...item, merged_audio: undefined, audio_assets: item.audio_assets?.filter(asset => asset.segment_id !== segment.id), lesson: { ...item.lesson, narration: { ...item.lesson.narration, segments: item.lesson.narration.segments.map(entry => entry.id === segment.id ? { ...entry, text: nextText } : entry) } } }));
             }}/>
             <small>Ao alterar este texto, o áudio anterior deste segmento será descartado e precisará ser gerado novamente.</small>
           </div>)}
@@ -356,6 +377,14 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
                 {src ? <audio controls preload="metadata" src={src}>Seu navegador não oferece suporte à reprodução de áudio.</audio> : <small className="slm-audio-not-ready">Áudio ainda não gerado</small>}
               </div>;
             })}
+          </div>
+          <div className="slm-merge-finalize">
+            <button type="button" className="primary-button" disabled={mergingAudio || includedAudioCount !== selected.lesson.narration.segments.length} onClick={() => void mergeSelectedLessonAudio(selected)}>
+              {mergingAudio ? <LoaderCircle size={14} className="spin"/> : <Check size={14}/>}
+              {mergingAudio ? "Unificando segmentos..." : selected.merged_audio ? "Atualizar áudio unificado" : "Concluir mini aula e unificar áudios"}
+            </button>
+            <small>{includedAudioCount === selected.lesson.narration.segments.length ? "Os segmentos serão unidos na ordem do roteiro, exclusivamente nesta mini aula." : "Gere ou importe todos os segmentos para habilitar a conclusão."}</small>
+            {selected.merged_audio && <div className="slm-merged-audio"><strong>Áudio final · {selected.merged_audio.file_name}</strong><audio controls preload="metadata" src={convertFileSrc(selected.merged_audio.audio_path)}>Seu navegador não oferece suporte à reprodução de áudio.</audio></div>}
           </div>
         </div>}
     </>}
