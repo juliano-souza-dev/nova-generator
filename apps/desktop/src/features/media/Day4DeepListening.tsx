@@ -94,7 +94,7 @@ export default function Day4DeepListening({ projectId, assetId, sourceSignature,
         "3. FIDELIDADE À FONTE",
         "O TXT contém transcrição e tempos, não contém áudio. Não afirme que você ouviu, mediu velocidade, volume, sotaque ou pronúncia da gravação. Use apenas cueOrders existentes. sourceText deve ser um excerto exato da cue referenciada; targetText deve estar contido nele. Não invente falas, palavras ou timestamps. Para rhythm, respeite a ordem e a integridade das palavras. Para connected-speech, descreva apenas fenômenos plausíveis pela sequência escrita e não apresente uma pronúncia inventada como fato.",
         "4. QUANTIDADE E QUALIDADE",
-        "Produza preferencialmente 8 atividades, em geral 2 por modalidade. Aceite entre 4 e 12. Inclua pelo menos uma atividade de cada modalidade. Se a fonte não sustentar uma modalidade sem invenção, retorne tasks vazio e explique isso apenas no campo pedagogical_rationale de uma tarefa válida? Não faça isso: em caso de impossibilidade real, retorne tasks vazio. Qualidade acima da quantidade.",
+        "Produza preferencialmente 8 atividades, em geral 2 por modalidade. Aceite entre 4 e 12. Inclua pelo menos uma atividade de cada modalidade. Se uma cue não sustentar uma atividade, escolha outra cue. Nunca invente conteúdo para preencher uma modalidade. Se a mídia inteira não oferecer base suficiente para as quatro modalidades, retorne tasks vazio; nesse caso, a importação será recusada e a fonte deverá ser revista. Qualidade acima da quantidade.",
         "Toda tarefa deve exigir ouvir o áudio original. Prompts e feedbacks curtos; explicações em português brasileiro; nível beginner como padrão, elevando somente quando a linguagem exigir.",
         "5. PONTUAÇÃO",
         "score deve ser número JSON entre 70 e 100. score_breakdown deve conter exatamente estas chaves, sem extras, com valores numéricos e soma igual a score: " + JSON.stringify(weights) + ".",
@@ -137,10 +137,12 @@ export default function Day4DeepListening({ projectId, assetId, sourceSignature,
     const target = normalize(clean(raw?.targetText));
     if (!cue || !normalize(cue.text_en).includes(source) || !source.includes(target)) errors.push("sourceText ou targetText não corresponde exatamente à cue");
     if (raw?.mode === "no-subtitles") {
+      const correctOption = Array.isArray(raw.options) ? raw.options.find((option: any) => option.id === raw.answerId) : undefined;
       if (!Array.isArray(raw.options) || raw.options.length < 3 || raw.options.length > 4 ||
-        !raw.options.some((option: any) => option.id === raw.answerId) ||
-        new Set(raw.options.map((option: any) => normalize(clean(option.text)))).size !== raw.options.length ||
-        !clean(raw.expectedText)) errors.push("no-subtitles precisa de 3 ou 4 alternativas únicas, answerId válido e expectedText");
+        !correctOption || new Set(raw.options.map((option: any) => normalize(clean(option.text)))).size !== raw.options.length ||
+        !clean(raw.expectedText) || normalize(clean(raw.expectedText)) !== normalize(clean(correctOption?.text))) {
+        errors.push("no-subtitles precisa de 3 ou 4 alternativas únicas, answerId válido e expectedText igual à alternativa correta");
+      }
     }
     if (raw?.mode === "gap-fill") {
       if ((clean(raw.sentence).match(/_____/g) ?? []).length !== 1 || !Array.isArray(raw.acceptedAnswers) || !raw.acceptedAnswers.length ||
