@@ -10,9 +10,10 @@ import { runTrackedTask } from "../tasks/TaskCenter";
 import PredictionListening from "./PredictionListening";
 import SmartLearningMoments from "./SmartLearningMoments";
 import Day2ListeningRecall from "./Day2ListeningRecall";
+import Day3NoticeInContext from "./Day3NoticeInContext";
 import { buildSmartLearningSource, validateSmartLearningMoments, type SmartLearningMomentsPackage } from "./smart-learning-moments-contract";
 import { buildLearningJourneyPackage, validateLearningJourney, validateLearningJourneyDraft, type LearningJourneyPackage } from "./learning-journey-contract";
-import type { ListeningQuestion } from "./learning-journey-contract";
+import type { ListeningQuestion, MicroLesson } from "./learning-journey-contract";
 
 type Asset = { id: string; name: string; kind: string; durationMs?: number | null; sourceVideoId?: string | null };
 type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string; wordAlignment?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
@@ -400,6 +401,30 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     }
   }
 
+  function updateDay3Lessons(lessons: MicroLesson[]) {
+    try {
+      const currentJourneySignature = learningJourneySourceSignature(sourceSignature, cards);
+      const base = learningJourney?.source.sourceSignature === currentJourneySignature
+        ? learningJourney
+        : buildLearningJourneyPackage({
+          projectId, assetId, sourceSignature: currentJourneySignature, mediaSignature: sourceSignature,
+          cues: sourceCues,
+          cards: cards.map(card => ({
+            id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus,
+            meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation,
+            exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status
+          }))
+        });
+      const days = base.days.map((day, index) => index === 2 ? { ...day, lessons } : day) as LearningJourneyPackage["days"];
+      setLearningJourney({ ...base, days });
+      setError("");
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  function approvedDay3Lessons(journey: LearningJourneyPackage) {
+    return journey.days[2].lessons.filter(item => item.status === "approved" && item.include_in_hub !== false);
+  }
+
   function approvedDay2Activities(journey: LearningJourneyPackage) {
     const requiredTypes = ["identify", "word-recognition", "gap", "reconstruct"];
     return journey.days[1].activities.filter(item =>
@@ -411,7 +436,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
 
   function remainingJourneyDaysApproved(journey: LearningJourneyPackage) {
     const groups = [
-      journey.days[2].lessons,
+      approvedDay3Lessons(journey),
       journey.days[3].tasks,
       journey.days[4].prompts,
       journey.days[5].listening,
@@ -440,9 +465,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       return;
     }
     const approvedActivities = approvedDay2Activities(learningJourney);
+    const approvedLessons = approvedDay3Lessons(learningJourney);
     const exportJourney = {
       ...learningJourney,
-      days: learningJourney.days.map((day, index) => index === 1 ? { ...day, activities: approvedActivities } : day)
+      days: learningJourney.days.map((day, index) => index === 1 ? { ...day, activities: approvedActivities } : index === 2 ? { ...day, lessons: approvedLessons } : day)
     };
     const errors = validateLearningJourney(exportJourney);
     if (errors.length) { setError(errors.join("\n")); return; }
@@ -860,7 +886,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         ...learningJourney,
         days: learningJourney.days.map((day, index) => index === 1
           ? { ...day, activities: approvedJourneyActivities }
-          : day)
+          : index === 2 ? { ...day, lessons: approvedDay3Lessons(learningJourney) } : day)
       } : null;
       if (!selectedItems.length && !smartLearningMoments?.final_selection && !predictionIsCurrent && !journeyIsCurrent) {
         throw new Error("Não há conteúdo aprovado e atualizado para exportar. Aprove os materiais ou conclua a revisão da jornada.");
@@ -1005,7 +1031,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 {[
                   { day: 1, title: "Explore & Understand", detail: "Etapas existentes", state: "is-established" },
                   { day: 2, title: "Listening Recall", detail: learningJourney ? learningJourney.days[1].activities.length + " atividades · " + approvedDay2Activities(learningJourney).length + " aprovadas" : "Preparar atividades de listening", state: "is-current" },
-                  { day: 3, title: "Notice in Context", detail: "Microaulas contextuais", state: "is-planned" },
+                  { day: 3, title: "Notice in Context", detail: learningJourney ? learningJourney.days[2].lessons.length + " microaulas · " + approvedDay3Lessons(learningJourney).length + " aprovadas" : "Preparar microaulas contextuais", state: "is-current" },
                   { day: 4, title: "Deep Listening", detail: "Compreensão profunda", state: "is-planned" },
                   { day: 5, title: "Speak & Compare", detail: "Pronúncia e fluência", state: "is-planned" },
                   { day: 6, title: "Listening & Speaking Challenge", detail: "Desafio integrado", state: "is-planned" },
@@ -1028,6 +1054,20 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                   Number.isFinite((item as ListeningQuestion & { score?: number }).score))
                 ) ?? []}
                 onActivitiesChange={updateDay2Activities}
+                onBack={() => setSelectedJourneyDay(null)}
+                onSave={() => void saveMaterials()}
+                saving={saving}
+              />
+            </div> : selectedJourneyDay === 3 ? <div className="materials-journey-work">
+              <Day3NoticeInContext
+                projectId={projectId}
+                assetId={assetId}
+                sourceSignature={sourceSignature}
+                cues={sourceCues}
+                cards={cards.map(card => ({ id: card.id, sourceCueId: card.sourceCueId, focus: card.focus, meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation, exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status }))}
+                smartLearningMoments={smartLearningMoments as any}
+                lessons={learningJourney?.days[2].lessons ?? []}
+                onLessonsChange={updateDay3Lessons}
                 onBack={() => setSelectedJourneyDay(null)}
                 onSave={() => void saveMaterials()}
                 saving={saving}
