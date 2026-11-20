@@ -52,7 +52,6 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [fileName, setFileName] = useState("");
-  const [candidateScores, setCandidateScores] = useState<Record<string, number>>({});
 
   const orderedCues = useMemo(() => cues
     .filter(cue => cue.text.trim() && cue.endMs > cue.startMs)
@@ -240,7 +239,6 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         include_in_hub: true
       }));
       onActivitiesChange(normalized);
-      setCandidateScores(Object.fromEntries(normalized.map(item => [item.id, Number(item.score ?? 0)])));
       setNotice(normalized.length + " atividades importadas e validadas. Todas estão em rascunho, aguardando sua aprovação.");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
