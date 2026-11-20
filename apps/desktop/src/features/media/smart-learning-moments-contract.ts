@@ -89,10 +89,10 @@ export function validateSmartLearningMoments(
   };
   const compareCandidates = (a: SmartLearningCandidate, b: SmartLearningCandidate) =>
     b.pedagogical_score - a.pedagogical_score ||
-    b.score_breakdown.transferability - a.score_breakdown.transferability ||
-    b.score_breakdown.communicative_utility - a.score_breakdown.communicative_utility ||
-    b.score_breakdown.instructional_value - a.score_breakdown.instructional_value ||
-    b.score_breakdown.scene_relevance - a.score_breakdown.scene_relevance;
+    (b.score_breakdown?.transferability ?? 0) - (a.score_breakdown?.transferability ?? 0) ||
+    (b.score_breakdown?.communicative_utility ?? 0) - (a.score_breakdown?.communicative_utility ?? 0) ||
+    (b.score_breakdown?.instructional_value ?? 0) - (a.score_breakdown?.instructional_value ?? 0) ||
+    (b.score_breakdown?.scene_relevance ?? 0) - (a.score_breakdown?.scene_relevance ?? 0);
   const sorted = [...pkg.candidates].sort(compareCandidates);
   pkg.candidates.forEach((candidate, index) => {
     if (!candidate?.id || ids.has(candidate.id)) errors.push("Há ID de candidata ausente ou duplicado.");
