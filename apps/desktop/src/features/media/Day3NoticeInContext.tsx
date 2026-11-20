@@ -7,7 +7,7 @@ import "./Day3NoticeInContext.css";
 
 type Cue = { id: string; text: string; startMs: number; endMs: number; words?: { text: string; startMs: number; endMs: number }[] };
 type Card = { id: string; sourceCueId: string; focus: string; meaning: string; highlightEn: string; explanation: string; exampleEn: string; examplePt: string; status: string };
-type SmartLesson = { final_selection?: string | null; candidates?: { id: string; lesson: { title: string; meaning_pt: string; communicative_intent_pt: string; explanation_pt: string; examples: { en: string; pt: string }[]; context_tree: unknown[] }; source: { cue_order: number; expression: string; excerpt_en: string; excerpt_pt: string } };
+type SmartLesson = { final_selection?: string | null; candidates?: { id: string; lesson: { title: string; meaning_pt: string; communicative_intent_pt: string; explanation_pt: string; examples: { en: string; pt: string }[]; context_tree: unknown[] }; source: { cue_order: number; expression: string; excerpt_en: string; excerpt_pt: string } }[] };
 type Lesson = MicroLesson & { score?: number; score_breakdown?: Record<string, number>; pedagogical_rationale?: string; status?: "draft" | "approved" | "rejected"; include_in_hub?: boolean; sourceText?: string; communicativeIntentPt?: string; contextTree?: { id: string; title: string; purpose: string; examples: { en: string; pt: string }[] }[] };
 type Props = {
   projectId: string; assetId: string; sourceSignature: string; cues: Cue[];
