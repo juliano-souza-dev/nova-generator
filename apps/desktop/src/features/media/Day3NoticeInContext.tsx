@@ -27,7 +27,7 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
   const [notice, setNotice] = useState("");
   const [fileName, setFileName] = useState("");
   const selectedMoment = smartLearningMoments?.candidates?.find(item => item.id === smartLearningMoments.final_selection) ?? null;
-  const approvedCards = useMemo(() => cards.filter(card => card.status === "approved"), [cards]);
+  const approvedCards = useMemo(() => cards.filter(card => card.status === "approved" && cues.some(cue => cue.id === card.sourceCueId)), [cards, cues]);
   const source = useMemo(() => ({
     contract: INPUT, project_id: projectId, asset_id: assetId, source_signature: sourceSignature,
     source_cues: cues.map((cue, index) => ({ cue_order: index + 1, cue_id: cue.id, start_ms: Math.round(cue.startMs), end_ms: Math.round(cue.endMs), text_en: cue.text, words: cue.words ?? [] })),
