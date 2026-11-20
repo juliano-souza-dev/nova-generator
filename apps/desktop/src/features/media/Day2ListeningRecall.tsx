@@ -142,30 +142,12 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         "Do not alter SOURCE_HASH. Do not invent cue orders. Do not use empty placeholders. Exactly one correct option is allowed for choice activities.",
         "",
         "7. OUTPUT TEMPLATE",
+        "For gap activities, sentence must preserve the original cue and replace one exact word or short expression with _____. For reconstruct activities, words must be a shuffled bank and answer must restore the exact source sequence.",
         JSON.stringify({
           contract: OUTPUT_CONTRACT,
           source_hash: hash,
           day: 2,
-          activities: [{
-            id: "day2-identify-01",
-            type: "identify",
-            prompt: "Qual expressão você ouviu?",
-            audioCueOrders: [1],
-            options: [{ id: "a", text: "..." }, { id: "b", text: "..." }, { id: "c", text: "..." }],
-            answerId: "a",
-            explanationPt: "...",
-            feedbackCorrectPt: "...",
-            feedbackIncorrectPt: "...",
-            difficulty: "beginner",
-            score: 90,
-            score_breakdown: {
-              auditory_learning_value: 18, source_fidelity: 20, clarity: 14,
-              pedagogical_usefulness: 14, level_fit: 9, response_quality: 9, variety: 6
-            },
-            pedagogical_rationale: "..."
-          }],
-          // Gap example: { id, type: "gap", prompt, audioCueOrders: [2], sentence: "I _____ it out.", acceptedAnswers: ["figured"], hint, explanationPt, feedbackCorrectPt, feedbackIncorrectPt, difficulty, score, score_breakdown, pedagogical_rationale }
-          // Reconstruction example: { id, type: "reconstruct", prompt, audioCueOrders: [3], words: ["today", "go", "we", "should"], answer: ["we", "should", "go", "today"], explanationPt, feedbackCorrectPt, feedbackIncorrectPt, difficulty, score, score_breakdown, pedagogical_rationale }
+          activities: []
         }, null, 2),
         "",
         "8. SOURCE CUES",
@@ -184,15 +166,28 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
     } finally { setBusy(""); }
   }
 
+  const normalizeForCompare = (value: string) => value.toLocaleLowerCase().replace(/[^\\p{L}\\p{N}']+/gu, " ").trim().replace(/\\s+/g, " ");
   function validateCandidate(raw: any, index: number, cueOrders: Set<number>): string[] {
     const errors: string[] = [];
     if (!normalize(raw?.id)) errors.push("ID ausente");
     if (!TYPES.includes(raw?.type)) errors.push("tipo inválido");
     if (!normalize(raw?.prompt)) errors.push("instrução ausente");
     if (!Array.isArray(raw?.audioCueOrders) || !raw.audioCueOrders.length || raw.audioCueOrders.some((order: any) => !cueOrders.has(Number(order)))) errors.push("referência de áudio inválida");
-    if (!normalize(raw?.explanationPt)) errors.push("explicação pedagógica ausente");
+    if (!normalize(raw?.explanationPt) || !normalize(raw?.feedbackCorrectPt) || !normalize(raw?.feedbackIncorrectPt)) errors.push("explicação ou feedback pedagógico ausente");
+    if (!["beginner", "elementary", "intermediate", "upper-intermediate"].includes(raw?.difficulty)) errors.push("nível de dificuldade inválido");
+    if (!normalize(raw?.pedagogical_rationale)) errors.push("justificativa pedagógica ausente");
     const score = Number(raw?.score);
     if (!Number.isFinite(score) || score < 70 || score > 100) errors.push("pontuação abaixo de 70 ou inválida");
+    const breakdown = raw?.score_breakdown;
+    const scoreKeys = ["auditory_learning_value", "source_fidelity", "clarity", "pedagogical_usefulness", "level_fit", "response_quality", "variety"];
+    if (!breakdown || scoreKeys.some(key => !Number.isFinite(Number(breakdown[key]))) ||
+        scoreKeys.reduce((sum, key) => sum + Number(breakdown?.[key] ?? 0), 0) !== 100) {
+      errors.push("distribuição da pontuação deve conter os sete critérios e somar 100");
+    }
+    const linkedTexts = Array.isArray(raw?.audioCueOrders)
+      ? raw.audioCueOrders.map((order: number) => orderedCues.find(cue => cue.cue_order === Number(order))?.text_en ?? "").filter(Boolean)
+      : [];
+    const sourceContains = (value: string) => linkedTexts.some(source => normalizeForCompare(source).includes(normalizeForCompare(value)));
     if (raw?.type === "identify" || raw?.type === "word-recognition") {
       if (!Array.isArray(raw.options) || raw.options.length < 3 || raw.options.length > 4) errors.push("precisa de 3 ou 4 alternativas");
       else {
@@ -200,15 +195,19 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         const labels = raw.options.map((option: any) => normalize(option?.text).toLocaleLowerCase());
         if (ids.some((id: string) => !id) || !unique(ids) || !unique(labels)) errors.push("alternativas vazias ou repetidas");
         if (!ids.includes(normalize(raw.answerId))) errors.push("resposta correta não existe nas alternativas");
+        const correct = raw.options.find((option: any) => normalize(option?.id) === normalize(raw.answerId));
+        if (correct && !sourceContains(normalize(correct.text))) errors.push("alternativa correta não corresponde ao texto do trecho vinculado");
       }
     }
     if (raw?.type === "gap") {
       if (!normalize(raw.sentence).includes("_____")) errors.push("lacuna não identificada");
       if (!Array.isArray(raw.acceptedAnswers) || !raw.acceptedAnswers.length || raw.acceptedAnswers.some((answer: any) => !normalize(answer))) errors.push("resposta aceita ausente");
+      else if (!raw.acceptedAnswers.some((answer: string) => sourceContains(raw.sentence.replace("_____", answer)))) errors.push("frase preenchida não corresponde ao trecho original");
     }
     if (raw?.type === "reconstruct") {
       if (!Array.isArray(raw.words) || raw.words.length < 3 || raw.words.length > 12 || !Array.isArray(raw.answer) || raw.answer.length !== raw.words.length) errors.push("banco de palavras ou resposta inválidos");
       else if ([...raw.words].sort().join("|") !== [...raw.answer].sort().join("|")) errors.push("banco e resposta não contêm exatamente as mesmas palavras");
+      else if (!sourceContains(raw.answer.join(" "))) errors.push("sequência reconstruída não corresponde ao trecho original");
     }
     if (index > 100) errors.push("limite de atividades excedido");
     return errors;
