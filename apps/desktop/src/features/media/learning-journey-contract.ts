@@ -145,6 +145,12 @@ export function validateLearningJourney(value: unknown): string[] {
   const day4 = value.days[3];
   if (isRecord(day4) && (!Array.isArray(day4.tasks) || day4.tasks.length === 0)) {
     errors.push("O Dia 4 precisa de ao menos uma tarefa de listening profundo.");
+  } else if (isRecord(day4) && Array.isArray(day4.tasks)) {
+    const requiredModes = ["no-subtitles", "gap-fill", "connected-speech", "rhythm"];
+    const availableModes = new Set(day4.tasks.filter(isRecord).map(task => task.mode));
+    if (requiredModes.some(mode => !availableModes.has(mode))) {
+      errors.push("O Dia 4 precisa incluir escuta sem legendas, lacunas, connected speech e ritmo.");
+    }
   }
   const day5 = value.days[4];
   if (isRecord(day5) && (!Array.isArray(day5.prompts) || day5.prompts.length === 0)) {
