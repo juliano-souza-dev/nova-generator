@@ -589,7 +589,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   }
 
   function canCompleteJourneyDay(day: number, journey: LearningJourneyPackage) {
-    const approved = (items: Array<{ status?: string; include_in_hub?: boolean }>) => items.filter(item => item.status === "approved" && item.include_in_hub !== false);
+    const approved = <T extends { status?: string; include_in_hub?: boolean }>(items: T[]) => items.filter(item => item.status === "approved" && item.include_in_hub !== false);
     if (day === 1) {
       const practice = journey.day1Preparation;
       return sourceInfo.shadowing > 0 && approved(journey.day1NoticeLessons ?? []).length > 0 &&
@@ -1389,8 +1389,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
             </section>}
             <footer className="materials-journey-stage-footer">
               <button className="secondary-button" type="button" onClick={() => setSelectedJourneyDay(null)}>Voltar aos dias</button>
-              <span>{(learningJourney?.completedDays ?? []).includes(selectedJourneyDay) ? "Etapa já concluída. Se alterar o conteúdo, conclua novamente." : "As alterações são salvas automaticamente."}</span>
-              <button className="primary-button" type="button" onClick={() => void completeJourneyDay()} disabled={saving || !learningJourney || (learningJourney.completedDays ?? []).includes(selectedJourneyDay)}><Save size={14}/>{saving ? "Salvando..." : "Salvar etapa e liberar próxima"}</button>
+              <span>{selectedJourneyDay !== null && (learningJourney?.completedDays ?? []).includes(selectedJourneyDay) ? "Etapa já concluída. Se alterar o conteúdo, conclua novamente." : "As alterações são salvas automaticamente."}</span>
+              <button className="primary-button" type="button" onClick={() => void completeJourneyDay()} disabled={saving || !learningJourney || selectedJourneyDay === null || (learningJourney.completedDays ?? []).includes(selectedJourneyDay)}><Save size={14}/>{saving ? "Salvando..." : "Salvar etapa e liberar próxima"}</button>
             </footer>
           </section>}
         </> : <div className="materials-anki-content">
