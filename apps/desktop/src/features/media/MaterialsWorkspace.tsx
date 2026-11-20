@@ -636,6 +636,18 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     return ["Etapa desconhecida."];
   }
 
+  function journeyReadinessProblems(journey: LearningJourneyPackage): string[] {
+    const problems: string[] = [];
+    for (let day = 1; day <= 7; day += 1) {
+      const missing = journeyDayMissingRequirements(day, journey);
+      if (missing.length) problems.push(...missing);
+      if (!(journey.completedDays ?? []).includes(day)) {
+        problems.push("Dia " + day + ": a etapa ainda não foi marcada como concluída pelo botão Salvar etapa e liberar próxima.");
+      }
+    }
+    return problems;
+  }
+
   async function completeJourneyDay() {
     if (!learningJourney || !selectedJourneyDay || saving) return;
     const day = selectedJourneyDay;
@@ -664,7 +676,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       return;
     }
     if (!journeyReadyForExport(learningJourney)) {
-      setError("O Day 2 pode ser revisado e salvo agora. A exportação será liberada quando o Dia 1 (Notice e Practice), o Dia 2 (quatro modalidades) e os Dias 3 a 7 estiverem preparados e aprovados.");
+      const problems = journeyReadinessProblems(learningJourney);
+      setError("A Jornada ainda não pode ser exportada. Pendências identificadas:\n• " + (problems.length ? problems.join("\n• ") : "A validação interna não reconheceu uma ou mais modalidades. Envie este diagnóstico para investigarmos."));
       return;
     }
     const approvedActivities = approvedDay2Activities(learningJourney);
@@ -1125,7 +1138,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         throw new Error("A Jornada de aprendizagem está desatualizada ou incompleta. Revise e salve os dias antes de exportar o JSON completo.");
       }
       if (learningJourney && !journeyReadyForExport(learningJourney)) {
-        throw new Error("A Jornada de aprendizagem ainda não está pronta. Cada modalidade obrigatória precisa ter ao menos uma atividade aprovada.");
+        const problems = journeyReadinessProblems(learningJourney);
+        throw new Error("A Jornada ainda não pode ser incluída no JSON completo. Pendências identificadas:\n• " + (problems.length ? problems.join("\n• ") : "A validação interna não reconheceu uma ou mais modalidades. Envie este diagnóstico para investigarmos."));
       }
       const journeyIsCurrent = Boolean(learningJourney && journeySourceIsCurrent && journeyReadyForExport(learningJourney));
       const exportJourney = journeyIsCurrent && learningJourney ? {
