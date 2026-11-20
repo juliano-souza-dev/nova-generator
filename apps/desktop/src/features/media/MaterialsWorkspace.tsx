@@ -391,8 +391,11 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
 
   function updateDay2Activities(activities: ListeningQuestion[]) {
     try {
-      const base = learningJourney ?? buildLearningJourneyPackage({
-        projectId, assetId, sourceSignature: learningJourneySourceSignature(sourceSignature, cards),
+      const currentJourneySignature = learningJourneySourceSignature(sourceSignature, cards);
+      const base = learningJourney?.source.sourceSignature === currentJourneySignature
+        ? learningJourney
+        : buildLearningJourneyPackage({
+        projectId, assetId, sourceSignature: currentJourneySignature,
         cues: sourceCues,
         cards: cards.map(card => ({
           id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus,
