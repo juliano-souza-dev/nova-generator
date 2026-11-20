@@ -557,7 +557,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       ["no-subtitles", "gap-fill", "connected-speech", "rhythm"].every(mode => deepModes.has(mode as any));
   }
 
-  function exportLearningJourney() {
+  async function exportLearningJourney() {
     if (!learningJourney) return;
     if (learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards)) {
       setError("Os cards aprovados foram alterados. Regenere a jornada antes de exportar.");
@@ -575,12 +575,23 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const approvedDay6Speak = approvedDay6Speaking(learningJourney);
     const approvedDay7Listen = approvedDay7Listening(learningJourney);
     const approvedDay7Speak = approvedDay7Speaking(learningJourney);
+    const predictionReview = await invoke<any>('load_prediction_listening_result', { projectId, assetId }).catch(() => null);
+    const predictionChallenges = predictionReview?.saved_at && Array.isArray(predictionReview.challenges)
+      ? predictionReview.challenges.filter((item: any) => item.status === 'approved').map((item: any) => ({
+          id: item.id, type: item.type, cueOrder: sourceCues.findIndex(cue => cue.id === item.cueId) + 1,
+          clipStart: item.clipStartMs / 1000, pauseAt: item.pauseAtMs / 1000, resumeAt: item.resumeAtMs / 1000,
+          prompt: item.prompt, choices: (item.choices || []).map((choice: any, index: number) => ({ id: item.id + '-choice-' + (index + 1), text: choice.text, isCorrect: choice.is_correct === true })),
+          status: 'approved', generatedBy: 'ai', reviewedAt: predictionReview.saved_at, reviewedBy: 'Nova Generator',
+          feedbackCorrect: 'Muito bem! Continue assistindo.', feedbackIncorrect: 'Ouça o trecho anterior novamente e tente outra vez.', explanation: item.explanation
+        })).filter((item: any) => item.cueOrder > 0)
+      : [];
     const selectedMoment = smartLearningMoments?.final_selection
       ? smartLearningMoments
       : null;
     const exportJourney = {
       ...learningJourney,
-      ...(learningJourney.day1Preparation ? { day1Preparation: learningJourney.day1Preparation } : {}),
+      ...(learningJourney.day1Preparation ? { day1Preparation: { ...learningJourney.day1Preparation, predictionListening: { version: 1 as const, challenges: predictionChallenges } } } : predictionChallenges.length ? { day1Preparation: { predictionListening: { version: 1 as const, challenges: predictionChallenges } } } : {}),
+      ...(learningJourney.day1NoticeLessons?.length ? { day1NoticeLessons: learningJourney.day1NoticeLessons.filter(item => item.status === 'approved' && item.include_in_hub !== false) } : {}),
       ...(selectedMoment ? { smartLearningMoments: selectedMoment } : {}),
       days: learningJourney.days.map((day, index) =>
         index === 1 ? { ...day, activities: approvedActivities } :
