@@ -138,6 +138,41 @@ export function validateLearningJourney(value: unknown): string[] {
 }
 
 
+/** Validates a persisted authoring draft without requiring unfinished Days 3–7. */
+export function validateLearningJourneyDraft(value: unknown): string[] {
+  const errors: string[] = [];
+  if (!isRecord(value)) return ["O rascunho da jornada precisa ser um objeto JSON."];
+  if (value.contract !== LEARNING_JOURNEY_CONTRACT || value.version !== 1) {
+    errors.push("Contrato ou versão do rascunho incompatível.");
+  }
+  if (!isRecord(value.source) || !nonEmpty(value.source.projectId) ||
+      !nonEmpty(value.source.assetId) || !nonEmpty(value.source.sourceSignature)) {
+    errors.push("Identificação da mídia de origem incompleta.");
+  }
+  if (!Array.isArray(value.days) || value.days.length !== 7) {
+    errors.push("O rascunho precisa preservar a estrutura dos sete dias.");
+    return errors;
+  }
+  const expectedModes = [
+    "existing-stages", "listening-recall", "micro-lessons", "deep-listening",
+    "speaking", "mixed-challenge", "final-challenge"
+  ];
+  value.days.forEach((day, index) => {
+    if (!isRecord(day) || day.day !== index + 1 || day.mode !== expectedModes[index]) {
+      errors.push("Estrutura inválida no Dia " + (index + 1) + ".");
+    }
+  });
+  const day2 = value.days[1];
+  if (isRecord(day2) && Array.isArray(day2.activities) && day2.activities.length > 0) {
+    const types = new Set(day2.activities.filter(isRecord).map(activity => activity.type));
+    if (["identify", "word-recognition", "gap", "reconstruct"].some(type => !types.has(type))) {
+      errors.push("O rascunho do Dia 2 precisa preservar as quatro modalidades de listening.");
+    }
+  }
+  return errors;
+}
+
+
 export type JourneySourceCue = { id: string; text: string; startMs: number; endMs: number; order?: number };
 export type JourneySourceCard = {
   id: string; sourceCueId: string; type: string; focus: string; meaning: string;
