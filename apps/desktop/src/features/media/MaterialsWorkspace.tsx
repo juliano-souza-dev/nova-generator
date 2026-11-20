@@ -578,8 +578,12 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const approvedDay6Speak = approvedDay6Speaking(learningJourney);
     const approvedDay7Listen = approvedDay7Listening(learningJourney);
     const approvedDay7Speak = approvedDay7Speaking(learningJourney);
-    const predictionReview = await invoke<any>('load_prediction_listening_result', { projectId, assetId }).catch(() => null);
-    const predictionChallenges = predictionReview?.saved_at && Array.isArray(predictionReview.challenges)
+    const currentPredictionPackage = prediction?.ready ? await invoke<{ sourceHash: string }>('prepare_prediction_listening_package', {
+      projectId, assetId, cues: prediction.cues, selectedCueIds: prediction.selectedCueIds, sourceSignature: prediction.sourceSignature
+    }).catch(() => null) : null;
+    const predictionReview = currentPredictionPackage ? await invoke<any>('load_prediction_listening_result', { projectId, assetId }).catch(() => null) : null;
+    const predictionIsCurrent = Boolean(predictionReview?.saved_at && currentPredictionPackage?.sourceHash === predictionReview?.source_hash);
+    const predictionChallenges = predictionIsCurrent && Array.isArray(predictionReview.challenges)
       ? predictionReview.challenges.filter((item: any) => item.status === 'approved').map((item: any) => ({
           id: item.id, type: item.type, cueOrder: sourceCues.findIndex(cue => cue.id === item.cueId) + 1,
           clipStart: item.clipStartMs / 1000, pauseAt: item.pauseAtMs / 1000, resumeAt: item.resumeAtMs / 1000,
