@@ -518,7 +518,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     }
     const approvedActivities = approvedDay2Activities(learningJourney);
     const approvedLessons = approvedDay3Lessons(learningJourney);
-    const approvedDeepTasks = approvedDay4Tasks(learningJourney);\n    const approvedSpeakingPrompts = approvedDay5Prompts(learningJourney);
+    const approvedDeepTasks = approvedDay4Tasks(learningJourney);
+    const approvedSpeakingPrompts = approvedDay5Prompts(learningJourney);
     const exportJourney = {
       ...learningJourney,
       days: learningJourney.days.map((day, index) => index === 1 ? { ...day, activities: approvedActivities } : index === 2 ? { ...day, lessons: approvedLessons } : index === 3 ? { ...day, tasks: approvedDeepTasks } : index === 4 ? { ...day, prompts: approvedSpeakingPrompts } : day)
