@@ -130,11 +130,11 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         "",
         "4. QUANTITY AND QUALITY",
         "Aim for 8–12 activities total, usually 2–3 per type. Include at least one high-quality activity of each of the four required types. Quality takes priority over quantity. If the source genuinely cannot support one type without inventing content, do not fabricate or lower the standard; return an empty activities array so the editor can address the source limitation.",
-        "Score each candidate from 0 to 100 using: auditory-learning value 20; fidelity to source wording and cue 20; clarity of task and answer 15; pedagogical usefulness 15; level appropriateness 10; distractor/response quality 10; variety and non-redundancy 10. Each score_breakdown value must stay within its criterion maximum, and the seven values must add up exactly to the final score.",
+        "Score each candidate from 0 to 100 using EXACTLY these score_breakdown keys and maximum values (keys are case-sensitive; do not translate, rename, omit or add keys): auditory_learning_value (maximum 20); source_fidelity (maximum 20); clarity (maximum 15); pedagogical_usefulness (maximum 15); level_fit (maximum 10); response_quality (maximum 10); variety (maximum 10). Every value must be a JSON number, not a string, between 0 and its maximum. The sum of these seven values MUST equal score exactly. Example of a valid score: score=90 and score_breakdown={\"auditory_learning_value\":18,\"source_fidelity\":19,\"clarity\":14,\"pedagogical_usefulness\":14,\"level_fit\":9,\"response_quality\":8,\"variety\":8}.",
         "Return candidates in descending score order. Reject any candidate below 70 instead of padding the list. A score is not a substitute for validation.",
         "",
         "5. REQUIRED OUTPUT FIELDS",
-        "Each activity: id, type, prompt, audioCueOrders, explanationPt, feedbackCorrectPt, feedbackIncorrectPt, difficulty, score, score_breakdown, pedagogical_rationale. Keep explanationPt to one or two concise sentences. Keep each feedback message short. Incorrect feedback must encourage another listen without revealing the answer; correct feedback may briefly explain what the learner successfully retrieved.",
+        "Each activity: id, type, prompt, audioCueOrders, explanationPt, feedbackCorrectPt, feedbackIncorrectPt, difficulty, score, score_breakdown, pedagogical_rationale. difficulty MUST be exactly one of these lowercase strings: beginner, elementary, intermediate, upper-intermediate. Use beginner for very familiar, short and highly supported language; elementary for common everyday language with a little more length or variation; intermediate for longer utterances, less predictable vocabulary or more complex phrasing; upper-intermediate for dense, idiomatic, fast-paced or structurally complex language. Do not use labels such as A1, A2, B1, B2, easy, medium or hard. score_breakdown MUST contain exactly these seven keys: auditory_learning_value, source_fidelity, clarity, pedagogical_usefulness, level_fit, response_quality, variety. Their maximum numeric values are respectively 20, 20, 15, 15, 10, 10, 10. No extra keys. The sum MUST equal score. Keep explanationPt to one or two concise sentences. Keep each feedback message short. Incorrect feedback must encourage another listen without revealing the answer; correct feedback may briefly explain what the learner successfully retrieved.",
         "For identify and word-recognition: options [{id,text}] and answerId.",
         "For gap: sentence, acceptedAnswers, optional hint.",
         "For reconstruct: words (shuffled bank) and answer (correct order).",
@@ -177,7 +177,8 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
     if (!normalize(raw?.prompt)) errors.push("instrução ausente");
     if (!Array.isArray(raw?.audioCueOrders) || raw.audioCueOrders.length !== 1 || raw.audioCueOrders.some((order: any) => !cueOrders.has(Number(order)))) errors.push("cada atividade precisa apontar para exatamente um trecho de áudio válido");
     if (!normalize(raw?.explanationPt) || !normalize(raw?.feedbackCorrectPt) || !normalize(raw?.feedbackIncorrectPt)) errors.push("explicação ou feedback pedagógico ausente");
-    if (!["beginner", "elementary", "intermediate", "upper-intermediate"].includes(raw?.difficulty)) errors.push("nível de dificuldade inválido");
+    const allowedDifficulties = ["beginner", "elementary", "intermediate", "upper-intermediate"];
+    if (typeof raw?.difficulty !== "string" || !allowedDifficulties.includes(raw.difficulty)) errors.push("nível de dificuldade inválido (use exatamente beginner, elementary, intermediate ou upper-intermediate)");
     if (!normalize(raw?.pedagogical_rationale)) errors.push("justificativa pedagógica ausente");
     const score = Number(raw?.score);
     if (!Number.isFinite(score) || score < 70 || score > 100) errors.push("pontuação abaixo de 70 ou inválida");
@@ -187,11 +188,13 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
       pedagogical_usefulness: 15, level_fit: 10, response_quality: 10, variety: 10
     };
     const scoreKeys = Object.keys(scoreLimits);
-    const breakdownTotal = scoreKeys.reduce((sum, key) => sum + Number(breakdown?.[key] ?? 0), 0);
-    if (!breakdown || scoreKeys.some(key =>
-      !Number.isFinite(Number(breakdown[key])) || Number(breakdown[key]) < 0 || Number(breakdown[key]) > scoreLimits[key]
-    ) || Math.abs(breakdownTotal - score) > 0.01) {
-      errors.push("a pontuação deve respeitar os pesos máximos de cada critério e somar o score final");
+    const breakdownKeys = breakdown && typeof breakdown === "object" && !Array.isArray(breakdown) ? Object.keys(breakdown) : [];
+    const breakdownTotal = scoreKeys.reduce((sum, key) => sum + (typeof breakdown?.[key] === "number" ? breakdown[key] : 0), 0);
+    if (!breakdown || typeof breakdown !== "object" || Array.isArray(breakdown) ||
+      scoreKeys.some(key => typeof breakdown[key] !== "number" || !Number.isFinite(breakdown[key]) || breakdown[key] < 0 || breakdown[key] > scoreLimits[key]) ||
+      breakdownKeys.length !== scoreKeys.length || breakdownKeys.some(key => !scoreKeys.includes(key)) ||
+      !Number.isFinite(score) || Math.abs(breakdownTotal - score) > 0.001) {
+      errors.push("score_breakdown deve usar exatamente as sete chaves documentadas, com números dentro dos pesos máximos, e a soma deve ser igual a score");
     }
     const linkedTexts = Array.isArray(raw?.audioCueOrders)
       ? raw.audioCueOrders.map((order: number) => orderedCues.find(cue => cue.cue_order === Number(order))?.text_en ?? "").filter(Boolean)
