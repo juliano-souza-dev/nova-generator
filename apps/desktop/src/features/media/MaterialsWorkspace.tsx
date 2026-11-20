@@ -837,11 +837,21 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         predictionReview?.saved_at && predictionPackage?.sourceHash &&
         predictionReview?.source_hash === predictionPackage.sourceHash
       );
+      const approvedJourneyActivities = learningJourney ? approvedDay2Activities(learningJourney) : [];
+      const approvedJourneyTypes = new Set(approvedJourneyActivities.map(item => item.type));
+      const journeyHasApprovedDay2 = ["identify", "word-recognition", "gap", "reconstruct"]
+        .every(type => approvedJourneyTypes.has(type as any));
       const journeyIsCurrent = Boolean(
-        learningJourney &&
+        learningJourney && journeyHasApprovedDay2 &&
         learningJourney.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards) &&
         validateLearningJourney(learningJourney).length === 0
       );
+      const exportJourney = journeyIsCurrent && learningJourney ? {
+        ...learningJourney,
+        days: learningJourney.days.map((day, index) => index === 1
+          ? { ...day, activities: approvedJourneyActivities }
+          : day)
+      } : null;
 
       await persistMaterials();
       const payload = {
@@ -855,7 +865,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         pedagogical_content: pedagogicalContent ? { ...pedagogicalContent, minimum_items: selectedItems.length, items: selectedItems } : null,
         smart_learning_moment: await buildSelectedSmartLearningMoment(),
         prediction_listening: predictionIsCurrent ? predictionReview.materials ?? null : null,
-        learning_journey: journeyIsCurrent ? learningJourney : null
+        learning_journey: exportJourney
       };
       const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" }));
       const anchor = document.createElement("a");
