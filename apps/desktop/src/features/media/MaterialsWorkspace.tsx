@@ -231,11 +231,12 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
     }
     setLoading(true); setError(""); setNotice("");
     try {
-      const [cues, translations, prediction, stored] = await Promise.all([
+      const [cues, translations, prediction, stored, savedSmartLearningMoments] = await Promise.all([
         invoke<Cue[]>("load_project_subtitles", { projectId, assetId: selectedId }),
         invoke<Translation[]>("load_project_translations", { projectId, assetId: selectedId }).catch(() => [] as Translation[]),
         invoke<any>("load_prediction_listening_result", { projectId, assetId: selectedId }).catch(() => null),
-        invoke<MaterialDocument | null>("load_project_materials", { projectId, assetId: selectedId }).catch(() => null)
+        invoke<MaterialDocument | null>("load_project_materials", { projectId, assetId: selectedId }).catch(() => null),
+        invoke<SmartLearningMomentsPackage | null>("load_smart_learning_moments", { projectId, assetId: selectedId }).catch(() => null)
       ]);
       setSourceCues(cues);
       setSourceTranslations(translations);
@@ -269,7 +270,8 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       const savedJourney = stored?.learningJourney;
       const savedPedagogicalContent = stored?.pedagogicalContent;
 setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-content/1.0" && savedPedagogicalContent.editorial_signature === materialSignature ? savedPedagogicalContent : null);
-      setSmartLearningMoments(stored?.smartLearningMoments?.source_signature === materialSignature ? stored.smartLearningMoments : null);
+      const smartLearningSnapshot = savedSmartLearningMoments ?? stored?.smartLearningMoments ?? null;
+      setSmartLearningMoments(smartLearningSnapshot?.source_signature === materialSignature ? smartLearningSnapshot : null);
       const storedJourneySignature = learningJourneySourceSignature(materialSignature, Array.isArray(stored?.cards) ? stored.cards : []);
       setLearningJourney(savedJourney && savedJourney.source?.sourceSignature === storedJourneySignature && validateLearningJourney(savedJourney).length === 0 ? savedJourney : null);
       setSourceSignature(materialSignature);
