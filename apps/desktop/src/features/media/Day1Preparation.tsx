@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { ArrowLeft, Download, FileText, Upload } from "lucide-react";
+import { ArrowLeft, FileText, Upload } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import "./Day1Preparation.css";
 
