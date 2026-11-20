@@ -110,6 +110,7 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
   const [saved, setSaved] = useState(false);
   const [shadowingOpen, setShadowingOpen] = useState(false);
   const [materialsOpen, setMaterialsOpen] = useState(false);
+  const [predictionPreviewMode, setPredictionPreviewMode] = useState(false);
   const [timingAdjusterOpen, setTimingAdjusterOpen] = useState(false);
   const [shadowingComplete, setShadowingComplete] = useState(false);
   const [shadowingSelectedCueIds, setShadowingSelectedCueIds] = useState<string[]>([]);
@@ -1139,10 +1140,11 @@ export default function MediaEditor({ projectId, asset, onClose, onProjectUpdate
       </div>
     </section>
   </div>{timingAdjusterOpen && src && <SubtitleTimingAdjuster title="Ajustar sincronização das legendas" videoUrl={src} durationMs={Math.max(duration, asset.durationMs ?? 0, ...cues.map(cue => cue.endMs), 1)} cues={cues.map(cue => ({id:cue.id,text:cue.text,translation:translations.find(item=>item.id===cue.id)?.text ?? "",startMs:cue.startMs,endMs:cue.endMs,words:cue.words ?? []}))} selectedCueId={selected} onCancel={() => setTimingAdjusterOpen(false)} onSave={persistAdjustedTimings}/>}{shadowingOpen && <ShadowingEditor projectId={projectId} asset={asset} cues={cues} translations={translations} editorialResult={editorialResult} onSaved={ids => { setShadowingComplete(true); setShadowingSelectedCueIds(ids); }} onClose={() => setShadowingOpen(false)}/>}
-    {materialsOpen && <div className="materials-flow-backdrop"><section className="materials-flow-panel" role="dialog" aria-modal="true" aria-label="Materiais"><header className="materials-flow-toolbar"><strong>ETAPA 04 · MATERIAIS</strong><button className="secondary-button" onClick={() => setMaterialsOpen(false)}><ArrowLeft size={15}/> Voltar ao fluxo</button></header><MaterialsWorkspace projectId={projectId} initialAssetId={asset.id} onProjectUpdated={onProjectUpdated} prediction={{
+    {materialsOpen && <div className={"materials-flow-backdrop" + (predictionPreviewMode ? " prediction-preview-mode" : "")}><section className={"materials-flow-panel" + (predictionPreviewMode ? " prediction-preview-mode" : "")} role="dialog" aria-modal="true" aria-label="Materiais"><header className="materials-flow-toolbar"><strong>ETAPA 04 · MATERIAIS</strong><button className="secondary-button" onClick={() => setMaterialsOpen(false)}><ArrowLeft size={15}/> Voltar ao fluxo</button></header><MaterialsWorkspace projectId={projectId} initialAssetId={asset.id} onProjectUpdated={onProjectUpdated} prediction={{
       assetName: asset.name, cues, selectedCueIds: shadowingSelectedCueIds, sourceSignature: shadowingSourceSignature,
       ready: predictionListeningReady && !dirty && !translationDirty,
-      onPreview: timeMs => { video.current?.pause(); seek(timeMs); },
+      onPreview: (startMs, _endMs) => { setPredictionPreviewMode(true); seek(startMs); void video.current?.play(); },
+      onPreviewModeChange: active => setPredictionPreviewMode(active),
       onDemoSeekAndPlay: timeMs => { seek(timeMs); void video.current?.play(); },
       onDemoPause: () => video.current?.pause(),
       onDemoResume: timeMs => { seek(timeMs); void video.current?.play(); },
