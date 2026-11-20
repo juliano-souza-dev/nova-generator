@@ -176,7 +176,7 @@ const cardFromShadowing = (cue: Cue, translation?: Translation): AnkiCard => {
 
 type PredictionWorkspaceProps = {
   assetName: string; cues: Cue[]; selectedCueIds: string[]; sourceSignature: string; ready: boolean;
-  onPreview: (timeMs: number) => void; onDemoSeekAndPlay: (timeMs: number) => void;
+  onPreview: (startMs: number, endMs: number) => void; onPreviewModeChange: (active: boolean) => void; onDemoSeekAndPlay: (timeMs: number) => void;
   onDemoPause: () => void; onDemoResume: (timeMs: number) => void; getCurrentTime: () => number;
 };
 export default function MaterialsWorkspace({ projectId, initialAssetId, onProjectUpdated, prediction }: {
@@ -918,7 +918,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
             {prediction?.ready ? <PredictionListening
               projectId={projectId} assetId={assetId} assetName={prediction.assetName}
               cues={prediction.cues} selectedCueIds={prediction.selectedCueIds} sourceSignature={prediction.sourceSignature}
-              onClose={() => setActivePedagogicalTab("vocabulary")} onPreview={prediction.onPreview}
+              onClose={() => setActivePedagogicalTab("vocabulary")} onPreview={prediction.onPreview} onPreviewModeChange={prediction.onPreviewModeChange}
               onDemoSeekAndPlay={prediction.onDemoSeekAndPlay} onDemoPause={prediction.onDemoPause}
               onDemoResume={prediction.onDemoResume} getCurrentTime={prediction.getCurrentTime}
               onProjectUpdated={onProjectUpdated} embedded
