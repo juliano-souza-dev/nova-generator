@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveFile } from "@tauri-apps/plugin-dialog";
-import { Check, CheckCircle2, Download, FileText, LoaderCircle, Upload } from "lucide-react";
+import { Check, CheckCircle2, FileText, LoaderCircle, Upload } from "lucide-react";
 import type { ListeningQuestion } from "./learning-journey-contract";
 import "./Day2ListeningRecall.css";
 
