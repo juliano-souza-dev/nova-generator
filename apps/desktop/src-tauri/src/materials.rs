@@ -363,6 +363,10 @@ pub async fn merge_smart_learning_moment_audio(
             !lesson_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
             return Err("Identificador da mini aula inválido.".to_string());
         }
+        if asset_id.is_empty() || asset_id.len() > 120 ||
+            !asset_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            return Err("Identificador da mídia inválido para gerar o áudio final.".to_string());
+        }
         if segments.is_empty() || segments.len() > 30 {
             return Err("A mini aula precisa ter entre 1 e 30 segmentos de áudio.".to_string());
         }
