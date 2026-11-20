@@ -35,10 +35,10 @@ const PREDICTION_SCORE_LABELS: Record<PredictionScoreKey, string> = {
 type Challenge = {
   id: string;
   challengeNumber: number;
-  rank: number;
-  pedagogicalScore: number;
-  scoreBreakdown: PredictionScoreBreakdown;
-  scoreEvidence: PredictionScoreEvidence;
+  rank?: number;
+  pedagogicalScore?: number;
+  scoreBreakdown?: PredictionScoreBreakdown;
+  scoreEvidence?: PredictionScoreEvidence;
   cueId: string;
   cueNumber: number;
   type: "word" | "expression" | "dialogue";
@@ -573,8 +573,8 @@ export default function PredictionListening({
           </div>
           : review.challenges.map(challenge => <article className={"prediction-challenge " + challenge.status} key={challenge.id}>
             <div className="prediction-challenge-heading">
-              <div><span className="prediction-challenge-type">#{challenge.rank} · {challenge.type.toUpperCase()}</span><strong>Desafio {challenge.challengeNumber}</strong></div>
-              <strong className="prediction-challenge-score">{challenge.pedagogicalScore}/100</strong>
+              <div><span className="prediction-challenge-type">#{challenge.rank ?? challenge.challengeNumber} · {challenge.type.toUpperCase()}</span><strong>Desafio {challenge.challengeNumber}</strong></div>
+              {challenge.pedagogicalScore != null && <strong className="prediction-challenge-score">{challenge.pedagogicalScore}/100</strong>}
               <span className={"prediction-challenge-status " + challenge.status}>{challenge.status === "approved" ? "Aprovado" : challenge.status === "rejected" ? "Rejeitado" : "Em revisão"}</span>
             </div>
             <h3>{challenge.prompt}</h3>
@@ -586,9 +586,9 @@ export default function PredictionListening({
             <div className="prediction-challenge-answer"><b>Trecho original:</b> {challenge.answerText}</div>
             <div className="prediction-challenge-explanation"><b>Explicação ao aluno:</b> {challenge.explanation}</div>
             <div className="prediction-challenge-rationale"><b>Justificativa editorial:</b> {challenge.editorialRationale}</div>
-            <details className="prediction-challenge-scoring"><summary>Ver pontuação pedagógica</summary>
-              <div>{(Object.keys(PREDICTION_SCORE_WEIGHTS) as PredictionScoreKey[]).map(key => <p key={key}><strong>{PREDICTION_SCORE_LABELS[key]} · {challenge.scoreBreakdown[key]}/{PREDICTION_SCORE_WEIGHTS[key]}</strong><span>{challenge.scoreEvidence[key]}</span></p>)}</div>
-            </details>
+            {challenge.scoreBreakdown && challenge.scoreEvidence && <details className="prediction-challenge-scoring"><summary>Ver pontuação pedagógica</summary>
+              <div>{(Object.keys(PREDICTION_SCORE_WEIGHTS) as PredictionScoreKey[]).map(key => <p key={key}><strong>{PREDICTION_SCORE_LABELS[key]} · {challenge.scoreBreakdown![key]}/{PREDICTION_SCORE_WEIGHTS[key]}</strong><span>{challenge.scoreEvidence![key]}</span></p>)}</div>
+            </details>}
             <footer>
               <span>Início {challenge.clipStartMs} ms · Pausa {challenge.pauseAtMs} ms · Retomada {challenge.resumeAtMs} ms</span>
               <button className="secondary-button" onClick={() => onPreview(challenge.clipStartMs)}>Pré-visualizar trecho</button>
