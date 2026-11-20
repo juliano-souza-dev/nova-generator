@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save as saveFile } from "@tauri-apps/plugin-dialog";
 import { AudioLines, Check, ChevronDown, ChevronRight, Download, FileText, LoaderCircle, Sparkles, Volume2 } from "lucide-react";
 import { runTrackedTask } from "../tasks/TaskCenter";
@@ -47,6 +47,12 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
 
   const selected = useMemo(() => value?.candidates.find(item => item.id === value.final_selection) ?? null, [value]);
   const includedAudioCount = selected?.audio_assets?.length ?? 0;
+
+  function getAudioPreviewSrc(asset: NonNullable<SmartLearningCandidate["audio_assets"]>[number]) {
+    if (asset.audio_base64) return "data:" + (asset.mime_type || "audio/mpeg") + ";base64," + asset.audio_base64;
+    if (asset.audio_path) return convertFileSrc(asset.audio_path);
+    return "";
+  }
 
   useEffect(() => {
     void invoke<any>("get_shared_runtime_status").then(status => {
@@ -307,7 +313,19 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
           </div>}
         </article>;
       })}</div>
-      {selected && <div className="slm-audio-panel"><div><h4><Volume2 size={16}/> Áudio da mini aula selecionada</h4><p>{includedAudioCount} de {selected.lesson.narration.segments.length} segmentos com áudio gerado.</p></div><label className="slm-voice-select">Voz interna<select value={voiceId} onChange={event => setVoiceId(event.target.value)} disabled={!voiceReady}>{!voices.length && <option value="">Nenhuma voz pronta</option>}{voices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}</select></label><div className="slm-audio-actions"><button type="button" className="primary-button" disabled={!voiceReady || !voiceId || audioBusy} onClick={() => void generateInternalAudio(selected)}><AudioLines size={14}/>{audioBusy && audioCandidateId === selected.id ? "Gerando..." : "Gerar áudio interno"}</button><button type="button" className="secondary-button" onClick={() => void prepareElevenLabsScript(selected)}><Download size={14}/> Preparar roteiro ElevenLabs</button><label className="secondary-button slm-upload"><Download size={14}/> Importar áudios ElevenLabs<input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac" multiple hidden onChange={event => { void importElevenLabsAudio(selected, event.target.files); event.target.value = ""; }}/></label></div><small className="slm-audio-help">Para importar áudio externo, nomeie cada arquivo com o ID do segmento, por exemplo: opening.mp3, explanation.mp3.</small></div>}
+      {selected && <div className="slm-audio-panel"><div><h4><Volume2 size={16}/> Áudio da mini aula selecionada</h4><p>{includedAudioCount} de {selected.lesson.narration.segments.length} segmentos com áudio gerado.</p></div><label className="slm-voice-select">Voz interna<select value={voiceId} onChange={event => setVoiceId(event.target.value)} disabled={!voiceReady}>{!voices.length && <option value="">Nenhuma voz pronta</option>}{voices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}</select></label><div className="slm-audio-actions"><button type="button" className="primary-button" disabled={!voiceReady || !voiceId || audioBusy} onClick={() => void generateInternalAudio(selected)}><AudioLines size={14}/>{audioBusy && audioCandidateId === selected.id ? "Gerando..." : "Gerar áudio interno"}</button><button type="button" className="secondary-button" onClick={() => void prepareElevenLabsScript(selected)}><Download size={14}/> Preparar roteiro ElevenLabs</button><label className="secondary-button slm-upload"><Download size={14}/> Importar áudios ElevenLabs<input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac" multiple hidden onChange={event => { void importElevenLabsAudio(selected, event.target.files); event.target.value = ""; }}/></label></div><small className="slm-audio-help">Para importar áudio externo, nomeie cada arquivo com o ID do segmento, por exemplo: opening.mp3, explanation.mp3.</small>
+          <div className="slm-audio-preview-list">
+            <div className="slm-audio-preview-heading"><strong>Prévia da narração</strong><span>Ouça cada trecho antes de exportar</span></div>
+            {selected.lesson.narration.segments.map((segment, index) => {
+              const audioAsset = selected.audio_assets?.find(asset => asset.segment_id === segment.id);
+              const src = audioAsset ? getAudioPreviewSrc(audioAsset) : "";
+              return <div className="slm-audio-preview-item" key={segment.id}>
+                <div className="slm-audio-preview-copy"><span>{String(index + 1).padStart(2, "0")} · {segment.language.toUpperCase()} · {segment.purpose}</span><p>{segment.text}</p></div>
+                {src ? <audio controls preload="metadata" src={src}>Seu navegador não oferece suporte à reprodução de áudio.</audio> : <small className="slm-audio-not-ready">Áudio ainda não gerado</small>}
+              </div>;
+            })}
+          </div>
+        </div>}
     </>}
   </section>;
 }
