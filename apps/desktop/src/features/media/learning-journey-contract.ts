@@ -34,6 +34,15 @@ export type MicroLesson = {
   targetPt: string;
   explanationPt: string;
   examples: { en: string; pt: string }[];
+  sourceText?: string;
+  communicativeIntentPt?: string;
+  contextTree?: { id: string; title: string; purpose: string; examples: { en: string; pt: string }[] }[];
+  score?: number;
+  score_breakdown?: Record<string, number>;
+  pedagogical_rationale?: string;
+  difficulty?: "beginner" | "elementary" | "intermediate" | "upper-intermediate";
+  status?: "draft" | "approved" | "rejected";
+  include_in_hub?: boolean;
   practice: {
     prompt: string;
     options: { id: string; text: string }[];
