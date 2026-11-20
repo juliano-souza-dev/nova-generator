@@ -274,7 +274,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       const smartLearningSnapshot = savedSmartLearningMoments ?? stored?.smartLearningMoments ?? null;
       setSmartLearningMoments(smartLearningSnapshot?.source_signature === materialSignature ? smartLearningSnapshot : null);
       const storedJourneySignature = learningJourneySourceSignature(materialSignature, Array.isArray(stored?.cards) ? stored.cards : []);
-      setLearningJourney(savedJourney && savedJourney.source?.sourceSignature === storedJourneySignature && validateLearningJourneyDraft(savedJourney).length === 0 ? savedJourney : null);
+      const savedJourneySourceMatches = savedJourney?.source?.mediaSignature
+        ? savedJourney.source.mediaSignature === materialSignature
+        : savedJourney?.source?.sourceSignature === storedJourneySignature;
+      setLearningJourney(savedJourney && savedJourneySourceMatches && validateLearningJourneyDraft(savedJourney).length === 0 ? savedJourney : null);
       setSourceSignature(materialSignature);
       setSourceInfo({
         cues: cues.length,
@@ -361,7 +364,11 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
 
   async function persistMaterials() {
     if (!assetId) throw new Error("Selecione uma mídia de origem.");
-    const journeyIsCurrent = learningJourney?.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards);
+    const journeyIsCurrent = Boolean(
+      learningJourney &&
+      (learningJourney.source?.mediaSignature === sourceSignature ||
+        learningJourney.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards))
+    );
     const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, learningJourney: journeyIsCurrent ? learningJourney ?? undefined : undefined, pedagogicalContent: pedagogicalContent ?? undefined, smartLearningMoments: smartLearningMoments ?? undefined, updatedAt: new Date().toISOString(), sourceSignature };
     await invoke("save_project_materials", { projectId, assetId, materials: document });
     await invoke("update_project_stage", { id: projectId, stage: "Materiais" });
@@ -375,7 +382,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       const base = learningJourney?.source.sourceSignature === currentJourneySignature
         ? learningJourney
         : buildLearningJourneyPackage({
-        projectId, assetId, sourceSignature: currentJourneySignature,
+        projectId, assetId, sourceSignature: currentJourneySignature, mediaSignature: sourceSignature,
         cues: sourceCues,
         cards: cards.map(card => ({
           id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus,
