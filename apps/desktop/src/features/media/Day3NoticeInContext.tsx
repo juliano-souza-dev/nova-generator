@@ -136,11 +136,23 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
           return <article className="day3-lesson" key={item.id}>
             <div className="day3-lesson-top"><span>#{index + 1} · {lesson.focus}</span><strong>{lesson.score ?? "—"}/100</strong></div>
             <label>Título<input value={item.title} onChange={e => update(item.id, { title: e.target.value })}/></label>
+            <div className="day3-source-excerpt"><strong>Trecho original da cena</strong><p>{lesson.sourceText || "Trecho não informado"}</p></div>
             <label>Expressão em inglês<input value={item.targetEn} onChange={e => update(item.id, { targetEn: e.target.value })}/></label>
             <label>Significado contextual<input value={item.targetPt} onChange={e => update(item.id, { targetPt: e.target.value })}/></label>
             <label>Intenção comunicativa<textarea value={lesson.communicativeIntentPt ?? ""} onChange={e => update(item.id, { communicativeIntentPt: e.target.value })}/></label>
             <label>Explicação<textarea value={item.explanationPt} onChange={e => update(item.id, { explanationPt: e.target.value })}/></label>
-            <div className="day3-examples"><strong>Exemplos</strong>{item.examples.map((example, i) => <div key={i}><span>{example.en}</span><small>{example.pt}</small></div>)}</div>
+            <div className="day3-examples"><strong>Exemplos em outros contextos</strong>{item.examples.map((example, i) => <div key={i}>
+              <label>EN<input value={example.en} onChange={e => update(item.id, { examples: item.examples.map((entry, index) => index === i ? { ...entry, en: e.target.value } : entry) })}/></label>
+              <label>PT<input value={example.pt} onChange={e => update(item.id, { examples: item.examples.map((entry, index) => index === i ? { ...entry, pt: e.target.value } : entry) })}/></label>
+            </div>)}</div>
+            <div className="day3-contexts"><strong>Árvore de contextos</strong>{(lesson.contextTree ?? []).map((branch, i) => <div key={branch.id}>
+              <label>Contexto<input value={branch.title} onChange={e => update(item.id, { contextTree: (lesson.contextTree ?? []).map((entry, index) => index === i ? { ...entry, title: e.target.value } : entry) })}/></label>
+              <label>Quando usar<textarea value={branch.purpose} onChange={e => update(item.id, { contextTree: (lesson.contextTree ?? []).map((entry, index) => index === i ? { ...entry, purpose: e.target.value } : entry) })}/></label>
+              {(branch.examples ?? []).map((example, j) => <div className="day3-context-example" key={j}>
+                <label>EN<input value={example.en} onChange={e => update(item.id, { contextTree: (lesson.contextTree ?? []).map((entry, index) => index === i ? { ...entry, examples: entry.examples.map((sample, sampleIndex) => sampleIndex === j ? { ...sample, en: e.target.value } : sample) } : entry) })}/></label>
+                <label>PT<input value={example.pt} onChange={e => update(item.id, { contextTree: (lesson.contextTree ?? []).map((entry, index) => index === i ? { ...entry, examples: entry.examples.map((sample, sampleIndex) => sampleIndex === j ? { ...sample, pt: e.target.value } : sample) } : entry) })}/></label>
+              </div>)}
+            </div>)}</div>
             <div className="day3-review"><label><input type="checkbox" checked={lesson.include_in_hub !== false} onChange={e => update(item.id, { include_in_hub: e.target.checked })}/> Incluir no iHub</label>
               <button type="button" className={lesson.status === "approved" ? "is-approved" : ""} onClick={() => update(item.id, { status: lesson.status === "approved" ? "draft" : "approved" })}>{lesson.status === "approved" ? "Aprovada ✓" : "Aprovar microaula"}</button>
               <button type="button" onClick={() => update(item.id, { status: "rejected", include_in_hub: false })}>Rejeitar</button>
