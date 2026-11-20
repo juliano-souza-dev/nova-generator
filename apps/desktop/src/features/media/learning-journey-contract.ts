@@ -105,8 +105,14 @@ export function validateLearningJourney(value: unknown): string[] {
     }
   });
   const day2 = value.days[1];
-  if (isRecord(day2) && (!Array.isArray(day2.activities) || day2.activities.length < 3)) {
-    errors.push("O Dia 2 precisa de pelo menos três exercícios reais de listening.");
+  if (isRecord(day2) && (!Array.isArray(day2.activities) || day2.activities.length < 4)) {
+    errors.push("O Dia 2 precisa de ao menos uma atividade em cada uma das quatro modalidades de listening.");
+  } else if (isRecord(day2) && Array.isArray(day2.activities)) {
+    const requiredTypes = ["identify", "word-recognition", "gap", "reconstruct"];
+    const availableTypes = new Set(day2.activities.filter(isRecord).map(activity => activity.type));
+    if (requiredTypes.some(type => !availableTypes.has(type))) {
+      errors.push("O Dia 2 precisa incluir identificação, reconhecimento auditivo, lacunas e reconstrução.");
+    }
   }
   const day3 = value.days[2];
   if (isRecord(day3) && (!Array.isArray(day3.lessons) || day3.lessons.length === 0)) {
