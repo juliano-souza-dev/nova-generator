@@ -72,48 +72,19 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
       const sourceHash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(source)));
       const hash = Array.from(new Uint8Array(sourceHash)).map(byte => byte.toString(16).padStart(2, "0")).join("");
       const weights = Object.entries(SMART_LEARNING_SCORE_WEIGHTS).map(([key, weight]) => key + ": " + weight + " points").join("\r\n");
-      const template = {
+      const outputShape = {
         contract: SMART_LEARNING_MOMENTS_CONTRACT,
         source_hash: hash,
-        recommendation_status: "recommended",
+        recommendation_status: "recommended | no_recommendation",
         selection_limit: 1,
-        candidates: [{
-          id: "moment_001", rank: 1, pedagogical_score: 94,
-          score_breakdown: { transferability: 20, communicative_utility: 15, instructional_value: 14, scene_relevance: 15, comprehension_potential: 9, level_fit: 9, explanation_clarity: 8, retention: 4 },
-          score_evidence: Object.fromEntries(Object.keys(SMART_LEARNING_SCORE_WEIGHTS).map(key => [key, "Evidence from the transcript and communicative context."])),
-          recommendation_reason: "Explain why this is the strongest teachable opportunity.",
-          category: "conversational_expression", level: "beginner",
-          source: { cue_id: "exact-cue-id", cue_order: 1, start_ms: 0, end_ms: 2500, trigger_start_ms: 850, trigger_end_ms: 1900, expression: "You know what we should do?", excerpt_en: "You know what we should do?", excerpt_pt: "Sabe o que a gente deveria fazer?" },
-          lesson: {
-            title: "Introducing suggestions",
-            meaning_pt: "Significado contextual em português brasileiro.",
-            communicative_intent_pt: "O que o falante pretende fazer ao usar a expressão.",
-            explanation_pt: "Explique forma, significado, intenção, registro e por que funciona nesta cena.",
-            examples: [
-              { context: "Making a suggestion", en: "You know what we could try?", pt: "Sabe o que poderíamos tentar?" },
-              { context: "Introducing an idea", en: "You know what? Let's go.", pt: "Quer saber? Vamos embora." }
-            ],
-            context_tree: [{
-              id: "suggestions", title: "Dar sugestões", purpose: "Apresentar uma ideia ou proposta.",
-              examples: [{ context: "Planning", en: "You know what we should do?", pt: "Sabe o que a gente deveria fazer?" }]
-            }, {
-              id: "new-idea", title: "Introduzir uma ideia", purpose: "Chamar a atenção antes de compartilhar uma ideia.",
-              examples: [{ context: "Decision", en: "You know what? Let's try again.", pt: "Quer saber? Vamos tentar de novo." }]
-            }],
-            narration: {
-              estimated_duration_seconds: 45,
-              voice_direction: "Natural, conversational teacher. Warm but restrained. Short phrases, clear articulation, no exaggerated enthusiasm.",
-              segments: [
-                { id: "opening", language: "pt", purpose: "opening", text: "Repare na expressão que ele usa...\nBem na hora de pedir mais um favor." },
-                { id: "explanation", language: "pt", purpose: "explanation", text: "Ela é usada para chamar a atenção da outra pessoa antes de apresentar uma ideia ou sugestão. Não é uma pergunta literal sobre o que alguém sabe. É uma forma natural de preparar o que vem a seguir." },
-                { id: "example-1", language: "en", purpose: "example", text: "You know what we could try?" },
-                { id: "example-1-pt", language: "pt", purpose: "example", text: "Sabe o que poderíamos tentar?" },
-                { id: "closing", language: "pt", purpose: "closing", text: "Perceba como a expressão ajuda a introduzir uma proposta de maneira natural." }
-              ]
-            }
-          }
-        }]
+        candidates: [],
+        final_selection: null
       };
+      const candidateFieldGuide = [
+        "Cada objeto em candidates deve conter: id (string única), rank (inteiro sequencial), pedagogical_score (número de 70 a 100), score_breakdown (objeto com os oito critérios e notas numéricas), score_evidence (objeto com os mesmos oito critérios e justificativas específicas), recommendation_reason (string), category (string), level (string), source (cue_id, cue_order, start_ms, end_ms, trigger_start_ms, trigger_end_ms, expression, excerpt_en, excerpt_pt) e lesson (title, meaning_pt, communicative_intent_pt, explanation_pt, examples, context_tree, narration).",
+        "Cada example deve conter context, en e pt. Cada nó de context_tree deve conter id, title, purpose e examples; pode conter children recursivos. Cada segmento de narration deve conter id, language (pt ou en), purpose (opening, explanation, example ou closing) e text. narration também contém estimated_duration_seconds e voice_direction.",
+        "Não inclua candidate_schema no JSON final. O objeto de saída deve conter somente os campos do contrato."
+      ];
       const lines = [
         "NOVA GENERATOR | SMART LEARNING MOMENTS",
         "EXTERNAL AI INSTRUCTIONS | VERSION 1.0",
@@ -127,7 +98,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         "WORD_ALIGNMENT_REQUIRED: the exact expression must match consecutive aligned words; use their first start and last end as trigger timing",
         "",
         "MISSION",
-        "Analyze the complete reviewed transcript and identify the strongest single teachable moment for an in-video micro-lesson. Return 3 to 5 ranked candidates when enough high-quality opportunities exist. Return fewer when appropriate. Never invent candidates to fill a quota. If no candidate reaches 70/100 and passes every rejection rule, return recommendation_status=no_recommendation and candidates=[].",
+        "Analyze the complete reviewed transcript and identify distinct, genuinely valuable opportunities for a contextual in-video micro-lesson. Return up to 8 ranked candidates. Aim for 3 to 5 only when the transcript genuinely contains that many strong opportunities; return 1 or 2 when only those qualify, and return zero when none qualifies. Never invent, split artificially, or weaken criteria to fill a quota. Each candidate must teach a meaningfully different learning opportunity. If no candidate reaches 70/100 and passes every rejection rule, return recommendation_status=no_recommendation, candidates=[], and final_selection=null.",
         "",
         "PEDAGOGICAL SCORING SYSTEM (maximum 100 points)",
         weights,
@@ -142,7 +113,8 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         "8. retention: is there a memorable pattern or contrast that helps learners retain and reuse it?",
         "",
         "HARD REJECTION RULES",
-        "Reject content with uncertain transcript evidence, incorrect or ambiguous interpretation, trivial literal translation only, low transfer value, redundancy, unnatural examples, excessive dependence on this one scene, or a source span that cannot be timed exactly. Do not recommend below 70 points. Rank by total score descending; break ties by transferability, then communicative_utility, then instructional_value.",
+        "Reject content with uncertain transcript evidence, incorrect or ambiguous interpretation, trivial literal translation only, low transfer value, redundancy with another candidate, unnatural examples, excessive dependence on this one scene, insufficient teaching depth, or a source span that cannot be timed exactly. Do not recommend below 70 points. A score of 70 is a minimum eligibility threshold, not a target. Do not inflate scores to reach it.",
+        "Rank candidates by pedagogical_score descending. For equal totals, compare transferability, then communicative_utility, then instructional_value, then scene_relevance, in that order. Assign rank 1 to the strongest candidate and use consecutive ranks. Return candidates in that exact order.",
         "",
         "SOURCE AND TIMING",
         "Select an exact expression heard in one cue. Copy cue_id, cue_order, start_ms and end_ms exactly. Also locate every word of the expression in the supplied word-level alignment and copy the first word start_ms as trigger_start_ms and the final word end_ms as trigger_end_ms. The video pauses at trigger_start_ms, not at the beginning of the whole subtitle cue. Never estimate, shift, round, or invent timing. Reject any candidate without exact consecutive aligned words. excerpt_en must be an exact substring of text_en and contain expression. excerpt_pt may use the supplied translation but must not change source meaning.",
@@ -154,8 +126,11 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         "Write narration as a human teacher speaking naturally, not as an article. Prepare the spoken text for natural TTS delivery using punctuation and layout as performance cues: commas for light pauses, periods for clear sentence endings, ellipses sparingly for anticipation or a reflective pause, and dashes for a brief spoken aside or emphasis. Use real line breaks to separate thought groups and create breathing space. Prefer short, speakable sentences and vary sentence length to avoid a flat rhythm. Example of voice-ready formatting: \"Repare na expressão que ele usa...\nBem na hora de pedir mais um favor.\" Keep punctuation natural in Brazilian Portuguese and English. Do not insert literal directions such as [pause], [emphasize], (slowly), stage directions, markdown headings, bullet symbols, pronunciation respellings, or production notes inside spoken text, because they may be read aloud. Put general voice direction in voice_direction only. Split narration into short segments, each tagged pt or en. English example segments must remain in English; Portuguese explanation segments must remain in Brazilian Portuguese. Aim for 30–60 seconds, hard range 20–90 seconds. Do not duplicate all on-screen text word for word.",
         "",
         "OUTPUT",
-        "Return ONLY valid JSON. No markdown, no commentary. Use the exact field names and shape below. score_breakdown values must add up exactly to pedagogical_score. score_evidence must contain all eight keys. Candidate array must be sorted from best to worst. Set selected=false or omit selected. final_selection must be null; the human curator selects later.",
-        JSON.stringify(template, null, 2),
+        "Return ONLY valid JSON. No markdown, no commentary. Use the exact field names and shape shown below. For each candidate, score_breakdown values must add up exactly to pedagogical_score; every score must be within its criterion's maximum weight. score_evidence must contain all eight keys with specific evidence from the supplied scene. The candidates array must be sorted from best to worst and rank must be sequential. Set selected=false or omit selected. final_selection must be null; the human curator selects later.",
+        "OUTPUT ENVELOPE",
+        JSON.stringify(outputShape, null, 2),
+        "CANDIDATE FIELD GUIDE",
+        ...candidateFieldGuide,
         "",
         "REVIEWED TRANSCRIPT",
         JSON.stringify(source, null, 2)
