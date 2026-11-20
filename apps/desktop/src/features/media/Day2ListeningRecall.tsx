@@ -166,7 +166,7 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
     } finally { setBusy(""); }
   }
 
-  const normalizeForCompare = (value: string) => value.toLocaleLowerCase().replace(/[^\\p{L}\\p{N}']+/gu, " ").trim().replace(/\\s+/g, " ");
+  const normalizeForCompare = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}']+/gu, " ").trim().replace(/\s+/g, " ");
   function validateCandidate(raw: any, index: number, cueOrders: Set<number>): string[] {
     const errors: string[] = [];
     if (!normalize(raw?.id)) errors.push("ID ausente");
