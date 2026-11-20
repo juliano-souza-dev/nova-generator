@@ -238,7 +238,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         // O backend aceita apenas IDs com letras, números, hífen e sublinhado.
         // Como esta operação gera os segmentos de uma única candidata, IDs curtos
         // e sequenciais evitam caracteres inválidos e colisões entre segmentos.
-        cardId: "slm-" + String(index + 1).padStart(2, "0"),
+        cardId: "slm-" + (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)) + "-" + String(index + 1).padStart(2, "0"),
         text: segment.text,
         language: segment.language === "pt" ? "Portuguese" : "English"
       }));
