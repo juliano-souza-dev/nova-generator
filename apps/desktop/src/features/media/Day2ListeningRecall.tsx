@@ -180,8 +180,8 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
     const allowedDifficulties = ["beginner", "elementary", "intermediate", "upper-intermediate"];
     if (typeof raw?.difficulty !== "string" || !allowedDifficulties.includes(raw.difficulty)) errors.push("nível de dificuldade inválido (use exatamente beginner, elementary, intermediate ou upper-intermediate)");
     if (!normalize(raw?.pedagogical_rationale)) errors.push("justificativa pedagógica ausente");
-    const score = Number(raw?.score);
-    if (!Number.isFinite(score) || score < 70 || score > 100) errors.push("pontuação abaixo de 70 ou inválida");
+    const score = raw?.score;
+    if (typeof score !== "number" || !Number.isFinite(score) || score < 70 || score > 100) errors.push("score deve ser um número JSON entre 70 e 100");
     const breakdown = raw?.score_breakdown;
     const scoreLimits: Record<string, number> = {
       auditory_learning_value: 20, source_fidelity: 20, clarity: 15,
