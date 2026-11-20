@@ -216,7 +216,7 @@ pub fn run() {
             translation_contract::prepare_external_translation_package, translation_contract::prepare_timeline_clip_external_translation_package,
             prediction_listening::prepare_prediction_listening_package, prediction_listening::load_prediction_listening_result,
             prediction_listening::save_prediction_listening_result,
-            materials::load_project_materials, materials::save_project_materials, materials::save_smart_learning_moments,
+            materials::load_project_materials, materials::save_project_materials, materials::load_smart_learning_moments, materials::save_smart_learning_moments,
             materials::generate_material_audio, materials::extract_material_source_audio, materials::export_project_materials_package,
             ttk::commands::media::projects::ttk_list_projects,
             ttk::commands::media::projects::ttk_create_project,
