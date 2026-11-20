@@ -732,6 +732,20 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const selected = smartLearningMoments.candidates.find(item => item.id === smartLearningMoments.final_selection);
     if (!selected) return null;
     const audioAssets = selected.audio_assets ?? [];
+    if (!selected.merged_audio?.audio_path) throw new Error("Conclua a mini aula e unifique seus segmentos de áudio antes de exportar.");
+    const mergedResponse = await fetch(convertFileSrc(selected.merged_audio.audio_path));
+    if (!mergedResponse.ok) throw new Error("Não foi possível ler o áudio unificado da mini aula.");
+    const mergedBytes = new Uint8Array(await mergedResponse.arrayBuffer());
+    const mergedBlob = await mergedResponse.blob();
+    const mergedBinary = Array.from({ length: Math.ceil(mergedBytes.length / 0x8000) }, (_, index) =>
+      String.fromCharCode(...mergedBytes.subarray(index * 0x8000, Math.min(mergedBytes.length, (index + 1) * 0x8000)))
+    ).join("");
+    const mergedAudio = {
+      file_name: selected.merged_audio.file_name,
+      mime_type: mergedBlob.type || "audio/mpeg",
+      audio_base64: btoa(mergedBinary),
+      segment_count: selected.merged_audio.segment_count
+    };
     const missingSegments = selected.lesson.narration.segments.filter(segment => !audioAssets.some(asset => asset.segment_id === segment.id));
     if (missingSegments.length) {
       throw new Error("Gere ou importe o áudio de todos os segmentos da mini aula antes de exportar. Pendentes: " + missingSegments.map(item => item.id).join(", "));
@@ -754,7 +768,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       contract: smartLearningMoments.contract,
       selection_limit: 1,
       selected_at: new Date().toISOString(),
-      moment: { ...selected, audio_assets: embeddedAudio }
+      moment: { ...selected, audio_assets: embeddedAudio, merged_audio: mergedAudio }
     };
   }
 
