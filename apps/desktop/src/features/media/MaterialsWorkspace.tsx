@@ -1363,8 +1363,12 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
             </div> : <section className="materials-journey-day-workspace">
               <header><div><span className="eyebrow">DIA {String(selectedJourneyDay).padStart(2, "0")} · PREPARAÇÃO</span><h4>{(["", "", "Listening Recall", "Notice in Context", "Deep Listening", "Speak & Compare", "Listening & Speaking Challenge", "Final Challenge"][selectedJourneyDay])}</h4><p>Área de preparação desta etapa. Aqui ficarão as atividades, instruções para IA, revisão e aprovação específicas do dia.</p></div></header>
               <div className="materials-journey-day-placeholder"><strong>Preparação do Dia {String(selectedJourneyDay).padStart(2, "0")}</strong><span>O espaço está reservado para construir e revisar o conteúdo desta etapa.</span></div>
-              <footer><button className="secondary-button" type="button" onClick={() => setSelectedJourneyDay(null)}>Voltar aos dias</button><button className="primary-button" type="button" onClick={() => void saveMaterials()} disabled={saving}><Save size={14}/>{saving ? "Salvando..." : "Salvar"}</button></footer>
             </section>}
+            <footer className="materials-journey-stage-footer">
+              <button className="secondary-button" type="button" onClick={() => setSelectedJourneyDay(null)}>Voltar aos dias</button>
+              <span>{(learningJourney?.completedDays ?? []).includes(selectedJourneyDay) ? "Etapa já concluída. Se alterar o conteúdo, conclua novamente." : "As alterações são salvas automaticamente."}</span>
+              <button className="primary-button" type="button" onClick={() => void completeJourneyDay()} disabled={saving || !learningJourney || (learningJourney.completedDays ?? []).includes(selectedJourneyDay)}><Save size={14}/>{saving ? "Salvando..." : "Salvar etapa e liberar próxima"}</button>
+            </footer>
           </section>}
         </> : <div className="materials-anki-content">
         <div className="materials-runtime">
