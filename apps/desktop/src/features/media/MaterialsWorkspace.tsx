@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save as saveFile } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
 import {
   AudioLines, BookOpen, Check, CheckCircle2, Download, FileAudio, FileText, Layers3,
   LoaderCircle, Plus, RefreshCw, Save, Sparkles, Trash2, Volume2
@@ -725,13 +726,13 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     };
     const errors = validateLearningJourney(exportJourney);
     if (errors.length) { setError(errors.join("\n")); return; }
-    const blob = new Blob([JSON.stringify(exportJourney, null, 2)], { type: "application/json;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "learning-journey-" + assetId + ".json";
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const path = await saveFile({
+      title: "Salvar Jornada de aprendizagem",
+      defaultPath: "learning-journey-" + assetId + ".json",
+      filters: [{ name: "Arquivo JSON", extensions: ["json"] }]
+    });
+    if (!path) return;
+    await writeFile(path, new TextEncoder().encode(JSON.stringify(exportJourney, null, 2)));
     setNotice(selectedMoment ? "Jornada completa exportada com Smart Learning Moment." : "Jornada completa exportada.");
   }
 
@@ -1196,10 +1197,17 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         prediction_listening: predictionIsCurrent ? predictionReview.materials ?? null : null,
         learning_journey: exportJourney
       };
-      const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" }));
-      const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = "ihub-conteudo-completo-" + assetId + ".json"; anchor.click();
-      URL.revokeObjectURL(url);
+      const json = JSON.stringify(payload, null, 2);
+      const path = await saveFile({
+        title: "Salvar JSON pedagógico completo",
+        defaultPath: "ihub-conteudo-completo-" + assetId + ".json",
+        filters: [{ name: "Arquivo JSON", extensions: ["json"] }]
+      });
+      if (!path) {
+        setNotice("Exportação cancelada. O projeto continua salvo.");
+        return;
+      }
+      await writeFile(path, new TextEncoder().encode(json));
       setNotice("JSON pedagógico completo gerado com " + selectedItems.length + " item(ns) selecionado(s)" + (smartLearningMoments?.final_selection ? " e uma mini aula Smart Learning Moments" : "") +
         (predictionIsCurrent ? ", Prediction Listening aprovado" : "") +
         (journeyIsCurrent ? " e Jornada de aprendizagem" : "") + ".");
