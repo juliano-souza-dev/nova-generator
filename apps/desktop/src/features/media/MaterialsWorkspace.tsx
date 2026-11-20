@@ -731,7 +731,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       filters: [{ name: "Arquivo JSON", extensions: ["json"] }]
     });
     if (!path) return;
-    await invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode(JSON.stringify(exportJourney, null, 2))) });
+    await invoke("save_generated_json", { path, bytes: Array.from(new TextEncoder().encode(JSON.stringify(exportJourney, null, 2))) });
     setNotice(selectedMoment ? "Jornada completa exportada com Smart Learning Moment." : "Jornada completa exportada.");
   }
 
@@ -1206,7 +1206,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         setNotice("Exportação cancelada. O projeto continua salvo.");
         return;
       }
-      await invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode(json)) });
+      await invoke("save_generated_json", { path, bytes: Array.from(new TextEncoder().encode(json)) });
       setNotice("JSON pedagógico completo gerado com " + selectedItems.length + " item(ns) selecionado(s)" + (smartLearningMoments?.final_selection ? " e uma mini aula Smart Learning Moments" : "") +
         (predictionIsCurrent ? ", Prediction Listening aprovado" : "") +
         (journeyIsCurrent ? " e Jornada de aprendizagem" : "") + ".");
@@ -1228,7 +1228,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   return <section className="materials-workspace">
     <header className="materials-heading">
       <div><span className="eyebrow">ESTÚDIO DIDÁTICO</span><h2>Materiais</h2><p>Reúna conteúdos aprovados, prepare cards Anki e gere os áudios usados no estudo.</p></div>
-      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="secondary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar no projeto"}</button><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={(!includedPedagogicalCount && !smartLearningMoments?.final_selection && !sourceInfo.predictions && !learningJourney && !approvedCount) || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
+      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="secondary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar no projeto"}</button><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={(!includedPedagogicalCount && !smartLearningMoments?.final_selection && !sourceInfo.predictions && !learningJourney) || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
       {activeMaterialTab === "anki" && <div className="materials-heading-actions">
         <button className="secondary-button" onClick={() => void createExternalInput()} disabled={!cards.length || loading}><FileText size={15}/> Gerar TXT para IA</button>
         <button className="secondary-button" onClick={() => importInput.current?.click()}><Download size={15}/> Importar JSON da IA</button>
