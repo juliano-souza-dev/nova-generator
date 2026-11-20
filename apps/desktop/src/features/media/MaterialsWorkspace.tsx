@@ -9,6 +9,7 @@ import "./MaterialsWorkspace.css";
 import { runTrackedTask } from "../tasks/TaskCenter";
 import PredictionListening from "./PredictionListening";
 import SmartLearningMoments from "./SmartLearningMoments";
+import Day1Preparation, { type Day1PreparationData } from "./Day1Preparation";
 import Day2ListeningRecall from "./Day2ListeningRecall";
 import Day3NoticeInContext from "./Day3NoticeInContext";
 import Day4DeepListening from "./Day4DeepListening";
@@ -382,6 +383,17 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     return document;
   }
 
+  function updateDay1Preparation(data: Day1PreparationData) {
+    try {
+      const currentJourneySignature = learningJourneySourceSignature(sourceSignature, cards);
+      const base = learningJourney?.source.sourceSignature === currentJourneySignature ? learningJourney : buildLearningJourneyPackage({
+        projectId, assetId, sourceSignature: currentJourneySignature, mediaSignature: sourceSignature, cues: sourceCues,
+        cards: cards.map(card => ({ id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus, meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation, exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status }))
+      });
+      setLearningJourney({ ...base, day1Preparation: data });
+      setError('');
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
   function updateDay2Activities(activities: ListeningQuestion[]) {
     try {
       const currentJourneySignature = learningJourneySourceSignature(sourceSignature, cards);
@@ -557,6 +569,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       : null;
     const exportJourney = {
       ...learningJourney,
+      ...(learningJourney.day1Preparation ? { day1Preparation: learningJourney.day1Preparation } : {}),
       ...(selectedMoment ? { smartLearningMoments: selectedMoment } : {}),
       days: learningJourney.days.map((day, index) =>
         index === 1 ? { ...day, activities: approvedActivities } :
@@ -1170,18 +1183,23 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               </div>
               <div className="materials-journey-days">
                 {[
-                  { day: 1, title: "Explore & Understand", detail: "Etapas existentes", state: "is-established" },
+                  { day: 1, title: "Explore & Understand", detail: learningJourney?.day1Preparation ? "Practice preparado · " + learningJourney.day1Preparation.expressionMatch.length + " expressões · " + learningJourney.day1Preparation.patternChallenge.length + " estruturas" : "Preparar Notice, Speak, Listen e Practice", state: "is-current" },
                   { day: 2, title: "Listening Recall", detail: learningJourney ? learningJourney.days[1].activities.length + " atividades · " + approvedDay2Activities(learningJourney).length + " aprovadas" : "Preparar atividades de listening", state: "is-current" },
                   { day: 3, title: "Notice in Context", detail: learningJourney ? learningJourney.days[2].lessons.length + " microaulas · " + approvedDay3Lessons(learningJourney).length + " aprovadas" : "Preparar microaulas contextuais", state: "is-current" },
                   { day: 4, title: "Deep Listening", detail: learningJourney ? learningJourney.days[3].tasks.length + " tarefas · " + approvedDay4Tasks(learningJourney).length + " aprovadas" : "Preparar escuta profunda", state: "is-current" },
                   { day: 5, title: "Speak & Compare", detail: learningJourney ? learningJourney.days[4].prompts.length + " práticas · " + approvedDay5Prompts(learningJourney).length + " aprovadas" : "Preparar prática oral e comparação", state: "is-current" },
                   { day: 6, title: "Listening & Speaking Challenge", detail: learningJourney ? learningJourney.days[5].listening.length + " listening · " + learningJourney.days[5].speaking.length + " speaking · " + (approvedDay6Listening(learningJourney).length + approvedDay6Speaking(learningJourney).length) + " aprovadas" : "Preparar desafio integrado", state: "is-current" },
                   { day: 7, title: "Final Challenge", detail: learningJourney ? learningJourney.days[6].listening.length + " listening · " + learningJourney.days[6].speaking.length + " speaking · " + (approvedDay7Listening(learningJourney).length + approvedDay7Speaking(learningJourney).length) + " aprovadas" : "Preparar avaliação final", state: "is-current" }
-                ].map(day => <button type="button" key={day.day} className={"materials-journey-day " + day.state + (day.day === 1 ? " is-locked" : "")} onClick={() => { if (day.day !== 1) setSelectedJourneyDay(day.day); }} disabled={day.day === 1}>
+                ].map(day => <button type="button" key={day.day} className={"materials-journey-day " + day.state} onClick={() => setSelectedJourneyDay(day.day)}>
                   <span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.detail}</small>
                   {day.day !== 1 && <em>Abrir preparação <span aria-hidden="true">→</span></em>}
                 </button>)}
               </div>
+            </div> : selectedJourneyDay === 1 ? <div className="materials-journey-work">
+              <Day1Preparation projectId={projectId} assetId={assetId} sourceSignature={sourceSignature} cues={sourceCues}
+                cards={cards.map(card => ({ id: card.id, sourceCueId: card.sourceCueId, focus: card.focus, meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation, exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status }))}
+                value={learningJourney?.day1Preparation ?? null} onChange={updateDay1Preparation}
+                onBack={() => setSelectedJourneyDay(null)} onSave={() => void saveMaterials()} saving={saving} />
             </div> : selectedJourneyDay === 2 ? <div className="materials-journey-work">
               <Day2ListeningRecall
                 projectId={projectId}
