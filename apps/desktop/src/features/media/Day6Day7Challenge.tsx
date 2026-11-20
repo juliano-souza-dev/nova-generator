@@ -117,7 +117,9 @@ export default function Day6Day7Challenge({ day, projectId, assetId, sourceSigna
       const criteria=day===7?data.successCriteria:[];
       if(day===7&&(!Array.isArray(criteria)||criteria.length!==4||criteria.some((v:any)=>!clean(v))))throw new Error("O Dia 7 exige exatamente quatro critérios de avaliação.");
       if(day===6&&(!Array.isArray(data.successCriteria)||data.successCriteria.length!==0))throw new Error("No Dia 6, successCriteria deve ser um array vazio.");
-      onChange({listening:data.listening.map((v:any)=>({...v,status:"approved"} as ListeningQuestion)),speaking:data.speaking.map((v:any)=>({...v,status:"approved"} as SpeakingPrompt)),successCriteria:criteria});
+      const importedListening = data.listening.map((v:any) => ({ ...v, status: "approved" }) as unknown as ListeningQuestion);
+      const importedSpeaking = data.speaking.map((v:any) => ({ ...v, status: "approved" }) as unknown as SpeakingPrompt);
+      onChange({ listening: importedListening, speaking: importedSpeaking, successCriteria: criteria });
       setNotice("Conteúdo importado e aprovado. Você pode rejeitar individualmente o que não deseja enviar ao iHub.");
     }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);if(fileRef.current)fileRef.current.value="";}
   }
