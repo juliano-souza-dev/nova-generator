@@ -123,7 +123,7 @@ export default function Day6Day7Challenge({ day, projectId, assetId, sourceSigna
       setNotice("Conteúdo importado e aprovado. Você pode rejeitar individualmente o que não deseja enviar ao iHub.");
     }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);if(fileRef.current)fileRef.current.value="";}
   }
-  function updateListening(id:string,patch:Partial<CandidateListening>){onChange({...current,listening:current.listening.map(item=>item.id===id?{...item,...patch}:item)});}
+  function updateListening(id:string,patch:Partial<CandidateListening>){onChange({...current,listening:current.listening.map(item=>item.id===id?({...item,...patch} as unknown as ListeningQuestion):item)});}
   function updateSpeaking(id:string,patch:Partial<CandidateSpeaking>){onChange({...current,speaking:current.speaking.map(item=>item.id===id?{...item,...patch}:item)});}
   const current={listening,speaking,successCriteria};
   const approvedListening=listening.filter(v=>(v as CandidateListening).status==="approved"&&(v as CandidateListening).include_in_hub!==false);
