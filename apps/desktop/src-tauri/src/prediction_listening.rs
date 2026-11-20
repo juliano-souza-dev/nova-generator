@@ -322,6 +322,10 @@ mod tests {
         assert!(txt.contains("SOURCE_HASH:"));
         assert!(txt.contains("[WORD 000001] I"));
         assert!(txt.contains("[WORD 000002] thought"));
+        assert!(txt.contains("prediction_value (20)"));
+        assert!(txt.contains("score_breakdown"));
+        assert!(txt.contains("score_evidence"));
+        assert!(txt.contains("Return up to 8 candidates"));
         assert_eq!(package.contract_id, OUTPUT_CONTRACT);
     }
 
