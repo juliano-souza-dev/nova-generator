@@ -335,6 +335,115 @@ pub async fn extract_material_source_audio(
     }).await.map_err(|e| format!("A extração do áudio foi interrompida: {e}"))?
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SmartLessonAudioSegment {
+    pub segment_id: String,
+    pub audio_path: Option<String>,
+    pub audio_base64: Option<String>,
+    pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SmartLessonMergedAudio {
+    pub audio_path: String,
+    pub file_name: String,
+    pub mime_type: String,
+    pub segment_count: usize,
+}
+
+#[tauri::command]
+pub async fn merge_smart_learning_moment_audio(
+    app: AppHandle, project_id: String, asset_id: String, lesson_id: String,
+    segments: Vec<SmartLessonAudioSegment>,
+) -> Result<SmartLessonMergedAudio, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if lesson_id.is_empty() || lesson_id.len() > 100 ||
+            !lesson_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            return Err("Identificador da mini aula inválido.".to_string());
+        }
+        if segments.is_empty() || segments.len() > 30 {
+            return Err("A mini aula precisa ter entre 1 e 30 segmentos de áudio.".to_string());
+        }
+        let mut seen = std::collections::HashSet::new();
+        let root = crate::media::project_media_root(&app, &project_id)?;
+        let audio_dir = root.join("materials").join("smart-learning-moments").join("audio");
+        fs::create_dir_all(&audio_dir).map_err(|e| format!("Não foi possível preparar a pasta de áudio final: {e}"))?;
+        let output = audio_dir.join(format!("{asset_id}-{lesson_id}.mp3"));
+        let temp_dir = audio_dir.join(format!(".merge-{asset_id}-{lesson_id}"));
+        if temp_dir.exists() { fs::remove_dir_all(&temp_dir).map_err(|e| e.to_string())?; }
+        fs::create_dir_all(&temp_dir).map_err(|e| format!("Não foi possível preparar os segmentos: {e}"))?;
+
+        let result = (|| -> Result<(), String> {
+            let mut inputs = Vec::<PathBuf>::new();
+            for (index, segment) in segments.iter().enumerate() {
+                if segment.segment_id.trim().is_empty() || !seen.insert(segment.segment_id.as_str()) {
+                    return Err("A lista contém identificadores de segmento vazios ou duplicados.".into());
+                }
+                let input = if let Some(encoded) = segment.audio_base64.as_deref() {
+                    let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded)
+                        .map_err(|e| format!("Áudio Base64 inválido no segmento {}: {e}", segment.segment_id))?;
+                    if bytes.is_empty() || bytes.len() > 50 * 1024 * 1024 {
+                        return Err(format!("O áudio do segmento {} está vazio ou excede 50 MB.", segment.segment_id));
+                    }
+                    let ext = match segment.mime_type.as_deref().unwrap_or("audio/mpeg") {
+                        "audio/wav" | "audio/x-wav" => "wav",
+                        "audio/mp4" | "audio/x-m4a" => "m4a",
+                        "audio/ogg" => "ogg",
+                        "audio/aac" => "aac",
+                        _ => "mp3"
+                    };
+                    let path = temp_dir.join(format!("{:03}.{}", index + 1, ext));
+                    fs::write(&path, bytes).map_err(|e| format!("Não foi possível gravar o segmento {}: {e}", segment.segment_id))?;
+                    path
+                } else if let Some(source) = segment.audio_path.as_deref() {
+                    let path = PathBuf::from(source);
+                    if !path.is_file() { return Err(format!("Arquivo de áudio não encontrado para o segmento {}.", segment.segment_id)); }
+                    path
+                } else {
+                    return Err(format!("O segmento {} não possui arquivo de áudio.", segment.segment_id));
+                };
+                inputs.push(input);
+            }
+            let ffmpeg = crate::media::shared_ffmpeg_path(&app)?;
+            let mut command = crate::process::hidden_command(&ffmpeg);
+            command.arg("-y");
+            for input in &inputs { command.arg("-i").arg(input); }
+            let mut filters = Vec::new();
+            for index in 0..inputs.len() {
+                filters.push(format!("[{}:a:0]aresample=24000,aformat=sample_fmts=fltp:channel_layouts=mono[a{}]", index, index));
+            }
+            let concat_inputs = (0..inputs.len()).map(|i| format!("[a{}]", i)).collect::<String>();
+            filters.push(format!("{}concat=n={}:v=0:a=1[outa]", concat_inputs, inputs.len()));
+            let status = command.arg("-filter_complex").arg(filters.join(";"))
+                .arg("-map").arg("[outa]").arg("-c:a").arg("libmp3lame")
+                .arg("-b:a").arg("128k").arg("-ar").arg("24000")
+                .arg(&output).output()
+                .map_err(|e| format!("Não foi possível iniciar o FFmpeg para unificar a mini aula: {e}"))?;
+            if !status.status.success() {
+                let detail = String::from_utf8_lossy(&status.stderr);
+                return Err(format!("Falha ao unificar os áudios da mini aula: {}", detail.lines().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join(" ")));
+            }
+            if !output.is_file() || fs::metadata(&output).map(|m| m.len()).unwrap_or(0) == 0 {
+                return Err("O FFmpeg terminou sem produzir o áudio final da mini aula.".into());
+            }
+            Ok(())
+        })();
+        let _ = fs::remove_dir_all(&temp_dir);
+        result?;
+        let canonical = output.canonicalize().map_err(|e| e.to_string())?;
+        app.asset_protocol_scope().allow_file(&canonical)
+            .map_err(|e| format!("Não foi possível liberar a reprodução do áudio final: {e}"))?;
+        Ok(SmartLessonMergedAudio {
+            audio_path: canonical.to_string_lossy().into_owned(),
+            file_name: output.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+            mime_type: "audio/mpeg".into(),
+            segment_count: segments.len(),
+        })
+    }).await.map_err(|e| format!("A unificação da mini aula foi interrompida: {e}"))?
+}
+
 #[tauri::command]
 pub async fn generate_material_audio(
     app: AppHandle, project_id: String, asset_id: String, voice_id: String, requests: Vec<AudioRequest>,
