@@ -138,7 +138,7 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         "For identify and word-recognition: options [{id,text}] and answerId.",
         "For gap: sentence, acceptedAnswers, optional hint.",
         "For reconstruct: words (shuffled bank) and answer (correct order).",
-        "Use stable unique IDs such as day2-identify-01. audioCueOrders must contain one or more existing cue_order values from the source. Keep each task anchored to the smallest useful original excerpt.",
+        "Use stable unique IDs such as day2-identify-01. audioCueOrders must contain exactly one existing cue_order from the source because the learner hears one precise original excerpt per activity. Keep each task anchored to the smallest useful original cue.",
         "",
         "6. STRICT OUTPUT RULES",
         "Return ONLY valid JSON. No Markdown, no comments and no prose outside JSON. Do not include Day 1 or any other day.",
@@ -175,7 +175,7 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
     if (!normalize(raw?.id)) errors.push("ID ausente");
     if (!TYPES.includes(raw?.type)) errors.push("tipo inválido");
     if (!normalize(raw?.prompt)) errors.push("instrução ausente");
-    if (!Array.isArray(raw?.audioCueOrders) || !raw.audioCueOrders.length || raw.audioCueOrders.some((order: any) => !cueOrders.has(Number(order)))) errors.push("referência de áudio inválida");
+    if (!Array.isArray(raw?.audioCueOrders) || raw.audioCueOrders.length !== 1 || raw.audioCueOrders.some((order: any) => !cueOrders.has(Number(order)))) errors.push("cada atividade precisa apontar para exatamente um trecho de áudio válido");
     if (!normalize(raw?.explanationPt) || !normalize(raw?.feedbackCorrectPt) || !normalize(raw?.feedbackIncorrectPt)) errors.push("explicação ou feedback pedagógico ausente");
     if (!["beginner", "elementary", "intermediate", "upper-intermediate"].includes(raw?.difficulty)) errors.push("nível de dificuldade inválido");
     if (!normalize(raw?.pedagogical_rationale)) errors.push("justificativa pedagógica ausente");
