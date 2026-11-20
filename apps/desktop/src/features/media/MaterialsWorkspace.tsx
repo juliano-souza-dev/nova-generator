@@ -13,6 +13,7 @@ import Day2ListeningRecall from "./Day2ListeningRecall";
 import Day3NoticeInContext from "./Day3NoticeInContext";
 import Day4DeepListening from "./Day4DeepListening";
 import Day5SpeakCompare from "./Day5SpeakCompare";
+import Day6Day7Challenge from "./Day6Day7Challenge";
 import { buildSmartLearningSource, validateSmartLearningMoments, type SmartLearningMomentsPackage } from "./smart-learning-moments-contract";
 import { buildLearningJourneyPackage, validateLearningJourney, validateLearningJourneyDraft, type LearningJourneyPackage } from "./learning-journey-contract";
 import type { DeepListeningTask, ListeningQuestion, MicroLesson, SpeakingPrompt } from "./learning-journey-contract";
@@ -475,6 +476,33 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     return journey.days[4].prompts.filter(item => item.status === "approved" && item.include_in_hub !== false);
   }
 
+  function updateDay6Challenge(value: { listening: ListeningQuestion[]; speaking: SpeakingPrompt[]; successCriteria: string[] }) {
+    if (!learningJourney) return;
+    const days = learningJourney.days.map((day, index) => index === 5 ? { ...day, listening: value.listening, speaking: value.speaking } : day) as LearningJourneyPackage["days"];
+    setLearningJourney({ ...learningJourney, days });
+    setError("");
+  }
+
+  function updateDay7Challenge(value: { listening: ListeningQuestion[]; speaking: SpeakingPrompt[]; successCriteria: string[] }) {
+    if (!learningJourney) return;
+    const days = learningJourney.days.map((day, index) => index === 6 ? { ...day, listening: value.listening, speaking: value.speaking, successCriteria: value.successCriteria } : day) as LearningJourneyPackage["days"];
+    setLearningJourney({ ...learningJourney, days });
+    setError("");
+  }
+
+  function approvedDay6Listening(journey: LearningJourneyPackage) {
+    return journey.days[5].listening.filter(item => item.status === "approved" && item.include_in_hub !== false);
+  }
+  function approvedDay6Speaking(journey: LearningJourneyPackage) {
+    return journey.days[5].speaking.filter(item => item.status === "approved" && item.include_in_hub !== false);
+  }
+  function approvedDay7Listening(journey: LearningJourneyPackage) {
+    return journey.days[6].listening.filter(item => item.status === "approved" && item.include_in_hub !== false);
+  }
+  function approvedDay7Speaking(journey: LearningJourneyPackage) {
+    return journey.days[6].speaking.filter(item => item.status === "approved" && item.include_in_hub !== false);
+  }
+
   function approvedDay2Activities(journey: LearningJourneyPackage) {
     const requiredTypes = ["identify", "word-recognition", "gap", "reconstruct"];
     return journey.days[1].activities.filter(item =>
@@ -489,10 +517,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       approvedDay3Lessons(journey),
       approvedDay4Tasks(journey),
       approvedDay5Prompts(journey),
-      journey.days[5].listening,
-      journey.days[5].speaking,
-      journey.days[6].listening,
-      journey.days[6].speaking
+      approvedDay6Listening(journey),
+      approvedDay6Speaking(journey),
+      approvedDay7Listening(journey),
+      approvedDay7Speaking(journey)
     ] as Array<Array<{ status?: string }>>;
     return groups.every(items => items.length > 0 && items.every(item => item.status === "approved"));
   }
@@ -520,9 +548,19 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const approvedLessons = approvedDay3Lessons(learningJourney);
     const approvedDeepTasks = approvedDay4Tasks(learningJourney);
     const approvedSpeakingPrompts = approvedDay5Prompts(learningJourney);
+    const approvedDay6Listen = approvedDay6Listening(learningJourney);
+    const approvedDay6Speak = approvedDay6Speaking(learningJourney);
+    const approvedDay7Listen = approvedDay7Listening(learningJourney);
+    const approvedDay7Speak = approvedDay7Speaking(learningJourney);
     const exportJourney = {
       ...learningJourney,
-      days: learningJourney.days.map((day, index) => index === 1 ? { ...day, activities: approvedActivities } : index === 2 ? { ...day, lessons: approvedLessons } : index === 3 ? { ...day, tasks: approvedDeepTasks } : index === 4 ? { ...day, prompts: approvedSpeakingPrompts } : day)
+      days: learningJourney.days.map((day, index) =>
+        index === 1 ? { ...day, activities: approvedActivities } :
+        index === 2 ? { ...day, lessons: approvedLessons } :
+        index === 3 ? { ...day, tasks: approvedDeepTasks } :
+        index === 4 ? { ...day, prompts: approvedSpeakingPrompts } :
+        index === 5 ? { ...day, listening: approvedDay6Listen, speaking: approvedDay6Speak } :
+        index === 6 ? { ...day, listening: approvedDay7Listen, speaking: approvedDay7Speak } : day)
     };
     const errors = validateLearningJourney(exportJourney);
     if (errors.length) { setError(errors.join("\n")); return; }
@@ -1089,8 +1127,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                   { day: 3, title: "Notice in Context", detail: learningJourney ? learningJourney.days[2].lessons.length + " microaulas · " + approvedDay3Lessons(learningJourney).length + " aprovadas" : "Preparar microaulas contextuais", state: "is-current" },
                   { day: 4, title: "Deep Listening", detail: learningJourney ? learningJourney.days[3].tasks.length + " tarefas · " + approvedDay4Tasks(learningJourney).length + " aprovadas" : "Preparar escuta profunda", state: "is-current" },
                   { day: 5, title: "Speak & Compare", detail: learningJourney ? learningJourney.days[4].prompts.length + " práticas · " + approvedDay5Prompts(learningJourney).length + " aprovadas" : "Preparar prática oral e comparação", state: "is-current" },
-                  { day: 6, title: "Listening & Speaking Challenge", detail: "Desafio integrado", state: "is-planned" },
-                  { day: 7, title: "Final Challenge", detail: "Avaliação final", state: "is-planned" }
+                  { day: 6, title: "Listening & Speaking Challenge", detail: learningJourney ? learningJourney.days[5].listening.length + " listening · " + learningJourney.days[5].speaking.length + " speaking · " + (approvedDay6Listening(learningJourney).length + approvedDay6Speaking(learningJourney).length) + " aprovadas" : "Preparar desafio integrado", state: "is-current" },
+                  { day: 7, title: "Final Challenge", detail: learningJourney ? learningJourney.days[6].listening.length + " listening · " + learningJourney.days[6].speaking.length + " speaking · " + (approvedDay7Listening(learningJourney).length + approvedDay7Speaking(learningJourney).length) + " aprovadas" : "Preparar avaliação final", state: "is-current" }
                 ].map(day => <button type="button" key={day.day} className={"materials-journey-day " + day.state + (day.day === 1 ? " is-locked" : "")} onClick={() => { if (day.day !== 1) setSelectedJourneyDay(day.day); }} disabled={day.day === 1}>
                   <span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.detail}</small>
                   {day.day !== 1 && <em>Abrir preparação <span aria-hidden="true">→</span></em>}
@@ -1147,6 +1185,21 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 cues={sourceCues}
                 prompts={learningJourney?.days[4].prompts.filter(item => Boolean(item.status || item.score)) ?? []}
                 onPromptsChange={updateDay5Prompts}
+                onBack={() => setSelectedJourneyDay(null)}
+                onSave={() => void saveMaterials()}
+                saving={saving}
+              />
+            </div> : selectedJourneyDay === 6 || selectedJourneyDay === 7 ? <div className="materials-journey-work">
+              <Day6Day7Challenge
+                day={selectedJourneyDay}
+                projectId={projectId}
+                assetId={assetId}
+                sourceSignature={sourceSignature}
+                cues={sourceCues}
+                listening={learningJourney?.days[selectedJourneyDay - 1].listening.filter(item => Boolean(item.status || item.score)) ?? []}
+                speaking={learningJourney?.days[selectedJourneyDay - 1].speaking.filter(item => Boolean(item.status || item.score)) ?? []}
+                successCriteria={selectedJourneyDay === 7 ? learningJourney?.days[6].successCriteria ?? [] : []}
+                onChange={selectedJourneyDay === 6 ? updateDay6Challenge : updateDay7Challenge}
                 onBack={() => setSelectedJourneyDay(null)}
                 onSave={() => void saveMaterials()}
                 saving={saving}
