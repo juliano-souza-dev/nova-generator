@@ -13,6 +13,7 @@ type Cue = {
   speaker?: string;
   words?: { text: string; startMs: number; endMs: number }[];
 };
+type Translation = { id: string; text: string };
 type Candidate = ListeningQuestion & {
   score?: number;
   score_breakdown?: Record<string, number>;
@@ -32,6 +33,7 @@ type Props = {
   assetId: string;
   sourceSignature: string;
   cues: Cue[];
+  translations: Translation[];
   activities: ListeningQuestion[];
   onActivitiesChange: (activities: ListeningQuestion[]) => void;
 };
@@ -47,7 +49,7 @@ const TYPE_LABELS: Record<string, string> = {
 const normalize = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const unique = (values: string[]) => new Set(values).size === values.length;
 
-export default function Day2ListeningRecall({ projectId, assetId, sourceSignature, cues, activities, onActivitiesChange }: Props) {
+export default function Day2ListeningRecall({ projectId, assetId, sourceSignature, cues, translations, activities, onActivitiesChange }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<"export" | "import" | "approve" | "">("");
   const [error, setError] = useState("");
@@ -63,6 +65,7 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
       end_ms: Math.round(cue.endMs),
       speaker: cue.speaker ?? "",
       text_en: cue.text,
+      text_pt: translations.find(translation => translation.id === cue.id)?.text ?? "",
       words: (cue.words ?? []).map(word => ({
         text: word.text,
         start_ms: Math.round(word.startMs),
@@ -117,7 +120,7 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         "Keep instructions direct and beginner-friendly. Use English for learner-facing prompts only when it is simpler than Portuguese; otherwise use concise Brazilian Portuguese. Explanations and feedback must be in natural Brazilian Portuguese.",
         "Do not create trivia, translation-only questions, grammar explanations, prediction tasks, or tasks solvable by reading the prompt without listening.",
         "Avoid duplicate targets and repeated use of the same cue unless the second task trains a genuinely different listening skill. Vary speakers and moments when the source allows it.",
-        "Do not invent words, alternative answers, speaker details, acoustic properties, pronunciation facts or timestamps. Use the transcript as the source of truth for lexical content and timing.",
+        "Do not invent words, alternative answers, speaker details, acoustic properties, pronunciation facts or timestamps. Use the transcript as the source of truth for lexical content and timing. Portuguese translations are contextual support only; do not turn them into translation-only questions.",
         "",
         "3. FOUR REQUIRED ACTIVITY TYPES",
         "identify: Show 3 or 4 short candidate words/expressions/sentences. Ask which one the learner heard in the linked audio. Exactly one answerId. Distractors must be plausible but clearly absent from that exact audio excerpt. Keep options similar in length and category.",
@@ -181,7 +184,7 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
     const breakdown = raw?.score_breakdown;
     const scoreKeys = ["auditory_learning_value", "source_fidelity", "clarity", "pedagogical_usefulness", "level_fit", "response_quality", "variety"];
     if (!breakdown || scoreKeys.some(key => !Number.isFinite(Number(breakdown[key]))) ||
-        scoreKeys.reduce((sum, key) => sum + Number(breakdown?.[key] ?? 0), 0) !== 100) {
+        Math.abs(scoreKeys.reduce((sum, key) => sum + Number(breakdown?.[key] ?? 0), 0) - 100) > 0.01) {
       errors.push("distribuição da pontuação deve conter os sete critérios e somar 100");
     }
     const linkedTexts = Array.isArray(raw?.audioCueOrders)
@@ -197,6 +200,9 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         if (!ids.includes(normalize(raw.answerId))) errors.push("resposta correta não existe nas alternativas");
         const correct = raw.options.find((option: any) => normalize(option?.id) === normalize(raw.answerId));
         if (correct && !sourceContains(normalize(correct.text))) errors.push("alternativa correta não corresponde ao texto do trecho vinculado");
+        if (correct && raw.options.some((option: any) => normalize(option?.id) !== normalize(raw.answerId) && sourceContains(normalize(option?.text)))) {
+          errors.push("um distrator também aparece no trecho vinculado; a questão não tem resposta única");
+        }
       }
     }
     if (raw?.type === "gap") {
