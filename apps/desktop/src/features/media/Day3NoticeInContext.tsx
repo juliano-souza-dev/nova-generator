@@ -97,7 +97,7 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
         const sourceCue = cues[cueOrders[0] - 1];
         if (!sourceCue || !clean(raw.sourceText) || !sourceCue.text.toLowerCase().includes(clean(raw.sourceText).toLowerCase()) || !clean(raw.targetEn) || !raw.sourceText.toLowerCase().includes(raw.targetEn.toLowerCase())) throw new Error("A fala de origem não corresponde à transcrição em " + raw.id + ".");
         if (!clean(raw.title) || !clean(raw.targetPt) || !clean(raw.explanationPt) || !clean(raw.communicativeIntentPt) || !Array.isArray(raw.examples) || raw.examples.length < 2 || !Array.isArray(raw.contextTree) || raw.contextTree.length < 2 || !isObject(raw.practice) || !Array.isArray(raw.practice.options) || raw.practice.options.length < 2 || !raw.practice.options.some((option: any) => option.id === raw.practice.answerId)) throw new Error("A microaula " + raw.id + " está incompleta.");
-        return { ...raw, status: "draft", include_in_hub: true } as Lesson;
+        return { ...raw, status: "approved" } as Lesson;
       });
       normalized.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       onLessonsChange(normalized);
@@ -107,7 +107,7 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
   }
 
   function update(id: string, patch: Partial<Lesson>) {
-    onLessonsChange(lessons.map(item => item.id === id ? { ...item, ...patch, status: "draft" } : item));
+    onLessonsChange(lessons.map(item => item.id === id ? { ...item, ...patch } : item));
   }
   const approved = lessons.filter(item => (item as Lesson).status === "approved" && (item as Lesson).include_in_hub !== false);
   return <section className="day3-workspace">
@@ -133,7 +133,7 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
       {lessons.length === 0 ? <div className="day3-empty"><strong>As microaulas aparecerão aqui</strong><p>Exporte as instruções, gere o JSON com a IA e importe para revisar cada proposta.</p></div> :
         lessons.map((item, index) => {
           const lesson = item as Lesson;
-          return <article className="day3-lesson" key={item.id}>
+          return <article className={"day3-lesson" + (lesson.status === "approved" ? " is-approved" : lesson.status === "rejected" ? " is-rejected" : "")} key={item.id}>
             <div className="day3-lesson-top"><span>#{index + 1} · {lesson.focus}</span><strong>{lesson.score ?? "—"}/100</strong></div>
             <label>Título<input value={item.title} onChange={e => update(item.id, { title: e.target.value })}/></label>
             <div className="day3-source-excerpt"><strong>Trecho original da cena</strong><p>{lesson.sourceText || "Trecho não informado"}</p></div>
@@ -153,9 +153,9 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
                 <label>PT<input value={example.pt} onChange={e => update(item.id, { contextTree: (lesson.contextTree ?? []).map((entry, index) => index === i ? { ...entry, examples: entry.examples.map((sample, sampleIndex) => sampleIndex === j ? { ...sample, pt: e.target.value } : sample) } : entry) })}/></label>
               </div>)}
             </div>)}</div>
-            <div className="day3-review"><label><input type="checkbox" checked={lesson.include_in_hub !== false} onChange={e => update(item.id, { include_in_hub: e.target.checked })}/> Incluir no iHub</label>
-              <button type="button" className={lesson.status === "approved" ? "is-approved" : ""} onClick={() => update(item.id, { status: lesson.status === "approved" ? "draft" : "approved" })}>{lesson.status === "approved" ? "Aprovada ✓" : "Aprovar microaula"}</button>
-              <button type="button" onClick={() => update(item.id, { status: "rejected", include_in_hub: false })}>Rejeitar</button>
+            <div className="day3-review">
+              <button type="button" className={lesson.status === "approved" ? "is-approved" : ""} onClick={() => update(item.id, { status: "approved" })} disabled={lesson.status === "approved"}>Aprovar</button>
+              <button type="button" className={lesson.status === "rejected" ? "is-rejected" : ""} onClick={() => update(item.id, { status: "rejected" })} disabled={lesson.status === "rejected"}>Rejeitar</button>
             </div>
             {lesson.pedagogical_rationale && <small className="day3-rationale">{lesson.pedagogical_rationale}</small>}
           </article>;
