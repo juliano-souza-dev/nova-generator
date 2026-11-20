@@ -7,7 +7,7 @@ import "./Day4DeepListening.css";
 
 type Cue = { id: string; text: string; startMs: number; endMs: number; words?: { text: string; startMs: number; endMs: number }[] };
 type Candidate = DeepListeningTask & {
-  sourceText?: string; targetText?: string; focus?: string; phenomenon?: string;
+  sourceText?: string; targetText?: string; focus?: string;
   options?: { id: string; text: string }[]; answerId?: string; phraseGroups?: string[];
   score?: number; score_breakdown?: Record<string, number>; pedagogical_rationale?: string;
   difficulty?: "beginner" | "elementary" | "intermediate" | "upper-intermediate";
