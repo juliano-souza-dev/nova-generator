@@ -175,8 +175,14 @@ export function validateLearningJourney(value: unknown): string[] {
     errors.push("O Dia 6 precisa combinar listening e speaking.");
   }
   const day7 = value.days[6];
-  if (isRecord(day7) && (!Array.isArray(day7.listening) || !day7.listening.length || !Array.isArray(day7.speaking) || !day7.speaking.length)) {
-    errors.push("O Dia 7 precisa combinar listening e speaking.");
+  if (isRecord(day7)) {
+    if (!Array.isArray(day7.listening) || !day7.listening.length || !Array.isArray(day7.speaking) || !day7.speaking.length) {
+      errors.push("O Dia 7 precisa combinar listening e speaking.");
+    }
+    if (!Array.isArray(day7.successCriteria) || day7.successCriteria.length !== 4 ||
+        day7.successCriteria.some(item => !nonEmpty(item))) {
+      errors.push("O Dia 7 precisa apresentar exatamente quatro critérios de conclusão da avaliação final.");
+    }
   }
   return errors;
 }
