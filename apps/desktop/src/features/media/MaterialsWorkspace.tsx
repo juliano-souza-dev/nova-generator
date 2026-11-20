@@ -993,7 +993,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               sourceSignature={sourceSignature}
               cues={sourceCues}
               translations={sourceTranslations}
-              activities={learningJourney?.days[1].activities ?? []}
+              activities={learningJourney?.days[1].activities.filter(item =>
+                Boolean((item as ListeningQuestion & { status?: string; score?: number }).status) ||
+                Number.isFinite((item as ListeningQuestion & { score?: number }).score)
+              ) ?? []}
               onActivitiesChange={updateDay2Activities}
             />
             {learningJourney ? <div className="materials-journey-days">{learningJourney.days.map(day => <article key={day.day} className="materials-journey-day"><span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.mode === "existing-stages" ? "Etapas atuais" : day.mode === "listening-recall" ? day.activities.length + " exercícios de listening" : day.mode === "micro-lessons" ? day.lessons.length + " microaulas" : day.mode === "deep-listening" ? day.tasks.length + " tarefas" : day.mode === "speaking" ? day.prompts.length + " propostas de speaking" : "Desafio integrado"}</small></article>)}</div> : <p className="materials-journey-empty">O rascunho será montado com exercícios de identificação, lacunas e compreensão auditiva; microaulas derivadas dos cards aprovados; tarefas de escuta profunda; e propostas de gravação e comparação.</p>}
