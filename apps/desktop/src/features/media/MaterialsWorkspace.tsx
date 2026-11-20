@@ -588,33 +588,56 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       ["no-subtitles", "gap-fill", "connected-speech", "rhythm"].every(mode => deepModes.has(mode as any));
   }
 
-  function canCompleteJourneyDay(day: number, journey: LearningJourneyPackage) {
-    const approved = <T extends { status?: string; include_in_hub?: boolean }>(items: T[]) => items.filter(item => item.status === "approved" && item.include_in_hub !== false);
+  function journeyDayMissingRequirements(day: number, journey: LearningJourneyPackage): string[] {
+    const approved = <T extends { status?: string; include_in_hub?: boolean }>(items: T[]) =>
+      items.filter(item => item.status === "approved" && item.include_in_hub !== false);
     if (day === 1) {
       const practice = journey.day1Preparation;
-      return sourceInfo.shadowing > 0 && approved(journey.day1NoticeLessons ?? []).length > 0 &&
-        Boolean(practice && practice.subtitleChallenge.cueOrders.length > 0 &&
-          approved(practice.expressionMatch).length > 0 && approved(practice.patternChallenge).length > 0);
+      const missing: string[] = [];
+      if (sourceInfo.shadowing <= 0) missing.push("Speak/Shadowing: selecione ou prepare ao menos um trecho de shadowing.");
+      if (approved(journey.day1NoticeLessons ?? []).length === 0) missing.push("Notice: aprove ao menos uma microaula.");
+      if (!practice || practice.subtitleChallenge.cueOrders.length === 0) missing.push("Subtitle Challenge: selecione ao menos um trecho.");
+      if (!practice || approved(practice.expressionMatch).length === 0) missing.push("Expression Match: aprove ao menos uma atividade.");
+      if (!practice || approved(practice.patternChallenge).length === 0) missing.push("Pattern Challenge: aprove ao menos uma atividade.");
+      return missing;
     }
     if (day === 2) {
       const items = approved(journey.days[1].activities);
-      return ["identify", "word-recognition", "gap", "reconstruct"].every(type => items.some(item => (item as ListeningQuestion).type === type));
+      const required: Array<[string, string]> = [["identify", "Identificação"], ["word-recognition", "Reconhecimento auditivo"], ["gap", "Completar lacunas"], ["reconstruct", "Reconstrução"]];
+      return required.filter(([type]) => !items.some(item => (item as ListeningQuestion).type === type)).map(([, label]) => "Listening Recall: falta uma atividade aprovada em " + label + ".");
     }
-    if (day === 3) return approved(journey.days[2].lessons).length > 0;
-    if (day === 4) return ["no-subtitles", "gap-fill", "connected-speech", "rhythm"].every(mode =>
-      approved(journey.days[3].tasks).some(item => item.mode === mode));
-    if (day === 5) return approved(journey.days[4].prompts).length > 0;
-    if (day === 6) return approved(journey.days[5].listening).length > 0 && approved(journey.days[5].speaking).length > 0;
-    if (day === 7) return approved(journey.days[6].listening).length > 0 && approved(journey.days[6].speaking).length > 0 &&
-      journey.days[6].successCriteria.length === 4;
-    return false;
+    if (day === 3) return approved(journey.days[2].lessons).length ? [] : ["Notice in Context: aprove ao menos uma microaula."];
+    if (day === 4) {
+      const items = approved(journey.days[3].tasks);
+      const required: Array<[string, string]> = [["no-subtitles", "Escuta sem legendas"], ["gap-fill", "Compreensão por lacunas"], ["connected-speech", "Connected speech"], ["rhythm", "Ritmo e grupos de sentido"]];
+      return required.filter(([mode]) => !items.some(item => item.mode === mode)).map(([, label]) => "Deep Listening: falta uma tarefa aprovada em " + label + ".");
+    }
+    if (day === 5) return approved(journey.days[4].prompts).length ? [] : ["Speak & Compare: aprove ao menos uma atividade de speaking."];
+    if (day === 6) {
+      const missing: string[] = [];
+      if (!approved(journey.days[5].listening).length) missing.push("Challenge: aprove ao menos uma atividade de listening.");
+      if (!approved(journey.days[5].speaking).length) missing.push("Challenge: aprove ao menos uma atividade de speaking.");
+      return missing;
+    }
+    if (day === 7) {
+      const missing: string[] = [];
+      if (!approved(journey.days[6].listening).length) missing.push("Final Challenge: aprove ao menos uma atividade de listening.");
+      if (!approved(journey.days[6].speaking).length) missing.push("Final Challenge: aprove ao menos uma atividade de speaking.");
+      if (journey.days[6].successCriteria.length !== 4) missing.push("Final Challenge: configure exatamente quatro critérios de sucesso.");
+      return missing;
+    }
+    return ["Etapa desconhecida."];
   }
 
+  function canCompleteJourneyDay(day: number, journey: LearningJourneyPackage) {
+    return journeyDayMissingRequirements(day, journey).length === 0;
+  }
   async function completeJourneyDay() {
     if (!learningJourney || !selectedJourneyDay || saving) return;
     const day = selectedJourneyDay;
-    if (!canCompleteJourneyDay(day, learningJourney)) {
-      setError("Esta etapa ainda tem modalidades obrigatórias sem atividade aprovada. Revise os itens pendentes antes de concluí-la.");
+    const missingRequirements = journeyDayMissingRequirements(day, learningJourney);
+    if (missingRequirements.length) {
+      setError("Não foi possível concluir o Dia " + day + ":\n• " + missingRequirements.join("\n• "));
       return;
     }
     const completedDays = Array.from(new Set([...(learningJourney.completedDays ?? []), day])).sort((a, b) => a - b);
