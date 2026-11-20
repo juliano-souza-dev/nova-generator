@@ -7,7 +7,7 @@ import Settings from "./features/settings/Settings";
 import { invoke } from "@tauri-apps/api/core";
 import {
   ArrowLeft, ArrowRight, Check, Clock3, Copy, FolderKanban, Layers3,
-  Plus, Search, Sparkles, Trash2, X, LayoutGrid, FileText, AudioLines, Settings2
+  Plus, Search, Sparkles, Trash2, X, LayoutGrid, FileText, AudioLines, Settings2, Download
 } from "lucide-react";
 
 type ProjectStatus = "in_progress" | "completed";
