@@ -992,6 +992,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               assetId={assetId}
               sourceSignature={sourceSignature}
               cues={sourceCues}
+              translations={sourceTranslations}
               activities={learningJourney?.days[1].activities ?? []}
               onActivitiesChange={updateDay2Activities}
             />
