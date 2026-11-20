@@ -77,3 +77,12 @@
 .slm-editor-nested{display:grid;gap:8px;margin-top:4px;padding:10px;border-left:2px solid #514465;background:#211e27}
 .slm-editor-fields .slm-script-textarea{min-height:100px;font:400 12px/1.65 'DM Sans',sans-serif;white-space:pre-wrap}
 @media(max-width:650px){.slm-editor-heading{align-items:flex-start;flex-direction:column}.slm-editor-grid{grid-template-columns:1fr}}
+
+.slm-merge-finalize{display:grid;gap:8px;margin-top:16px;padding:14px;border:1px solid #385748;border-radius:10px;background:rgba(83,164,130,.055)}
+.slm-merge-finalize>button{justify-self:start}
+.slm-merge-finalize>small{font-size:11px;color:#aaa4b2;line-height:1.45}
+.slm-merged-audio{display:grid;gap:8px;margin-top:6px}
+.slm-merged-audio strong{font-size:12px}
+.slm-merged-audio audio{width:100%;max-width:560px}
+.slm-merge-finalize .spin{animation:slm-spin 1s linear infinite}
+@keyframes slm-spin{to{transform:rotate(360deg)}}
