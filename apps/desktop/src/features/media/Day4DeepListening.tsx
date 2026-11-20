@@ -176,9 +176,9 @@ export default function Day4DeepListening({ projectId, assetId, sourceSignature,
       if (invalid.length) throw new Error("JSON não aprovado pela validação:\n" + invalid.slice(0, 8).map((entry: any) => entry.task?.id + ": " + entry.errors.join(", ")).join("\n"));
       const missing = modes.filter(mode => !parsed.tasks.some((task: any) => task.mode === mode));
       if (missing.length) throw new Error("Inclua pelo menos uma tarefa de cada modalidade: " + missing.map(mode => labels[mode]).join("; "));
-      const imported = parsed.tasks.map((task: Candidate) => ({ ...task, status: "approved" as const }));
+      const imported = parsed.tasks.map((task: Candidate) => ({ ...task, status: "draft" as const }));
       onTasksChange(imported);
-      setNotice(imported.length + " tarefas importadas e aprovadas. Você pode rejeitar as que não deseja enviar ao iHub.");
+      setNotice(imported.length + " tarefas importadas como rascunho. Revise e aprove as que deseja incluir no iHub.");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
   }
