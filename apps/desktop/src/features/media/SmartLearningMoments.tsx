@@ -275,8 +275,10 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         invoke<MergedAudioResult>("merge_smart_learning_moment_audio", { projectId, assetId, lessonId: candidate.id, segments: orderedSegments })
       );
       const mergedAudio = { audio_path: merged.audioPath, file_name: merged.fileName, mime_type: "audio/mpeg" as const, segment_count: merged.segmentCount };
-      onChange({ ...value, candidates: value.candidates.map(item => item.id === candidate.id ? { ...item, merged_audio: mergedAudio } : item) });
-      setNotice("Mini aula concluída. " + merged.segmentCount + " segmentos foram unificados em " + merged.fileName + ".");
+      const completedPackage = { ...value, candidates: value.candidates.map(item => item.id === candidate.id ? { ...item, merged_audio: mergedAudio } : item) };
+      await invoke("save_smart_learning_moments", { projectId, assetId, value: completedPackage });
+      onChange(completedPackage);
+      setNotice("Mini aula concluída e salva. " + merged.segmentCount + " segmentos foram unificados em " + merged.fileName + ".");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setMergingAudio(false); }
   }
