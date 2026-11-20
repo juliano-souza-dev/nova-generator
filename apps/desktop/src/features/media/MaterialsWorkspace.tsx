@@ -193,8 +193,8 @@ type PredictionWorkspaceProps = {
   onPreview: (startMs: number, endMs: number) => void; onPreviewModeChange: (active: boolean) => void; onDemoSeekAndPlay: (timeMs: number) => void;
   onDemoPause: () => void; onDemoResume: (timeMs: number) => void; getCurrentTime: () => number;
 };
-export default function MaterialsWorkspace({ projectId, initialAssetId, onProjectUpdated, prediction, onOpenShadowing }: {
-  projectId: string; initialAssetId?: string; onProjectUpdated?: () => void; prediction?: PredictionWorkspaceProps; onOpenShadowing?: () => void;
+export default function MaterialsWorkspace({ projectId, projectName, initialAssetId, onProjectUpdated, prediction, onOpenShadowing }: {
+  projectId: string; projectName: string; initialAssetId?: string; onProjectUpdated?: () => void; prediction?: PredictionWorkspaceProps; onOpenShadowing?: () => void;
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetId, setAssetId] = useState("");
@@ -1179,11 +1179,16 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       }
 
       await persistMaterials();
+      const normalizedProjectName = projectName.trim();
+      if (!normalizedProjectName) throw new Error("O projeto precisa ter um nome para preencher metadata.title.");
       const payload = {
         schema: "ihub-generator-pedagogical-import/1.0",
         package_version: 2,
         generated_at: new Date().toISOString(),
-        project: { id: projectId, asset_id: assetId, name: selectedAsset?.name ?? "", source_video_id: selectedAsset?.sourceVideoId ?? null },
+        metadata: {
+          title: normalizedProjectName
+        },
+        project: { id: projectId, asset_id: assetId, name: normalizedProjectName, asset_name: selectedAsset?.name ?? "", source_video_id: selectedAsset?.sourceVideoId ?? null },
         source: {
           signature: sourceSignature,
           cue_count: sourceCues.length,
