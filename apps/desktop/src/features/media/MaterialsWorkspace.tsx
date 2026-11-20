@@ -552,7 +552,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const approved = approvedDay2Activities(journey);
     const types = new Set(approved.map(item => item.type));
     const deepModes = new Set(approvedDay4Tasks(journey).map(task => task.mode));
-    return remainingJourneyDaysApproved(journey) &&
+    const day1 = journey.day1Preparation;
+    const day1Notice = (journey.day1NoticeLessons ?? []).filter(item => item.status === "approved" && item.include_in_hub !== false);
+    const day1Ready = Boolean(day1 && day1.subtitleChallenge.cueOrders.length >= 3 && day1.expressionMatch.length >= 3 && day1.patternChallenge.length >= 5 && day1Notice.length > 0);
+    return day1Ready && remainingJourneyDaysApproved(journey) &&
       ["identify", "word-recognition", "gap", "reconstruct"].every(type => types.has(type as any)) &&
       ["no-subtitles", "gap-fill", "connected-speech", "rhythm"].every(mode => deepModes.has(mode as any));
   }
@@ -564,7 +567,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       return;
     }
     if (!journeyReadyForExport(learningJourney)) {
-      setError("O Day 2 pode ser revisado e salvo agora. A exportação da jornada completa será liberada quando os Dias 3 a 7 também estiverem preparados e aprovados, e houver ao menos uma atividade aprovada em cada modalidade do Day 2.");
+      setError("O Day 2 pode ser revisado e salvo agora. A exportação será liberada quando o Dia 1 (Notice e Practice), o Dia 2 (quatro modalidades) e os Dias 3 a 7 estiverem preparados e aprovados.");
       return;
     }
     const approvedActivities = approvedDay2Activities(learningJourney);
@@ -1214,7 +1217,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                   { day: 7, title: "Final Challenge", detail: learningJourney ? learningJourney.days[6].listening.length + " listening · " + learningJourney.days[6].speaking.length + " speaking · " + (approvedDay7Listening(learningJourney).length + approvedDay7Speaking(learningJourney).length) + " aprovadas" : "Preparar avaliação final", state: "is-current" }
                 ].map(day => <button type="button" key={day.day} className={"materials-journey-day " + day.state} onClick={() => setSelectedJourneyDay(day.day)}>
                   <span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.detail}</small>
-                  {day.day !== 1 && <em>Abrir preparação <span aria-hidden="true">→</span></em>}
+                  <em>Abrir preparação <span aria-hidden="true">→</span></em>
                 </button>)}
               </div>
             </div> : selectedJourneyDay === 1 ? <div className="materials-journey-work">
