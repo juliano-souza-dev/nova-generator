@@ -10,7 +10,7 @@ type Card = { id: string; sourceCueId: string; focus: string; meaning: string; h
 type SmartLesson = { final_selection?: string | null; candidates?: { id: string; lesson: { title: string; meaning_pt: string; communicative_intent_pt: string; explanation_pt: string; examples: { en: string; pt: string }[]; context_tree: unknown[] }; source: { cue_order: number; expression: string; excerpt_en: string; excerpt_pt: string } }[] };
 type Lesson = MicroLesson & { score?: number; score_breakdown?: Record<string, number>; pedagogical_rationale?: string; status?: "draft" | "approved" | "rejected"; include_in_hub?: boolean; sourceText?: string; communicativeIntentPt?: string; contextTree?: { id: string; title: string; purpose: string; examples: { en: string; pt: string }[] }[] };
 type Props = {
-  projectId: string; assetId: string; sourceSignature: string; cues: Cue[];
+  projectId: string; assetId: string; sourceSignature: string; cues: Cue[]; day?: 1 | 3;
   cards: Card[]; smartLearningMoments: SmartLesson | null; lessons: MicroLesson[];
   onLessonsChange: (lessons: MicroLesson[]) => void; onBack: () => void; onSave: () => void; saving: boolean;
 };
@@ -20,7 +20,7 @@ const weights = { contextual_meaning: 20, communicative_value: 20, transferabili
 const clean = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const isObject = (value: unknown): value is Record<string, any> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 
-export default function Day3NoticeInContext({ projectId, assetId, sourceSignature, cues, cards, smartLearningMoments, lessons, onLessonsChange, onBack, onSave, saving }: Props) {
+export default function Day3NoticeInContext({ projectId, assetId, sourceSignature, cues, cards, smartLearningMoments, lessons, onLessonsChange, onBack, onSave, saving, day = 3 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -43,7 +43,7 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(source)));
       const sourceHash = Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
       const schema = {
-        contract: CONTRACT, source_hash: sourceHash, day: 3, lessons: [{
+        contract: CONTRACT, source_hash: sourceHash, day, lessons: [{
           id: "notice-01", title: "string", focus: "expression | grammar | connected-speech | pronunciation | pragmatics",
           sourceCueOrders: [1], sourceText: "exact excerpt from source cue", targetEn: "expression or structure",
           targetPt: "contextual meaning in Brazilian Portuguese", communicativeIntentPt: "what the speaker is doing with this expression",
@@ -54,7 +54,7 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
         }]
       };
       const instructions = [
-        "NOVA GENERATOR | DAY 3 · NOTICE IN CONTEXT", "EXTERNAL AI INSTRUCTIONS | VERSION 1.0",
+        "NOVA GENERATOR | DAY " + String(day).padStart(2, "0") + " · NOTICE", "EXTERNAL AI INSTRUCTIONS | VERSION 1.0",
         "OUTPUT CONTRACT: " + CONTRACT, "SOURCE HASH: " + sourceHash, "",
         "MISSION: Create 4 to 8 concise contextual micro-lessons from the supplied transcript cues, prioritizing the approved material cards and selected Smart Learning Moment when present. If neither exists, identify strong teaching opportunities directly in the transcript. The purpose is noticing: help the learner see how English communicates meaning in this exact situation, not merely memorize a translation.",
         "PRIORITY: If selected_smart_learning_moment exists, use it as the central anchor and preserve its teaching insight, expression, source cue, and communicative intent. Build complementary lessons only when they teach distinct insights. Do not duplicate the same expression or lesson. Approved material cards are trusted candidate sources, not a quota. If no approved cards or selected moment are supplied, inspect the transcript cues and select only expressions or structures with clear contextual teaching value. Do not invent source speech.",
@@ -65,10 +65,10 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
         "OUTPUT: Return ONLY valid JSON. Use the exact field names and structure below. Do not add markdown or commentary. The human editor will approve/reject each lesson; do not set final approval.",
         "OUTPUT SHAPE", JSON.stringify(schema, null, 2), "", "SOURCE MATERIAL", JSON.stringify(source, null, 2)
       ].join("\r\n");
-      const path = await saveFile({ title: "Salvar instruções do Dia 3", defaultPath: "day-3-notice-in-context-" + assetId + ".txt", filters: [{ name: "Instruções para IA externa", extensions: ["txt"] }] });
+      const path = await saveFile({ title: "Salvar instruções do Dia " + day, defaultPath: "day-" + day + "-notice-in-context-" + assetId + ".txt", filters: [{ name: "Instruções para IA externa", extensions: ["txt"] }] });
       if (!path) return;
       await invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode("\uFEFF" + instructions)) });
-      setNotice("Instruções do Dia 3 exportadas com fonte, materiais aprovados e mini aula selecionada.");
+      setNotice("Instruções do Dia " + day + " exportadas com fonte, materiais aprovados e mini aula selecionada.");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   }
@@ -81,7 +81,7 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
       const parsed = JSON.parse(await file.text());
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(source)));
       const hash = Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
-      if (!isObject(parsed) || parsed.contract !== CONTRACT || parsed.day !== 3 || parsed.source_hash !== hash || !Array.isArray(parsed.lessons) || parsed.lessons.length < 1 || parsed.lessons.length > 12) throw new Error("Contrato, origem ou quantidade de microaulas inválidos. Gere novamente as instruções para esta mídia.");
+      if (!isObject(parsed) || parsed.contract !== CONTRACT || parsed.day !== day || parsed.source_hash !== hash || !Array.isArray(parsed.lessons) || parsed.lessons.length < 1 || parsed.lessons.length > 12) throw new Error("Contrato, origem ou quantidade de microaulas inválidos. Gere novamente as instruções para esta mídia.");
       const ids = new Set<string>();
       const normalized = parsed.lessons.map((raw: any, index: number): Lesson => {
         if (!isObject(raw) || !clean(raw.id) || ids.has(raw.id)) throw new Error("ID ausente ou duplicado na microaula " + (index + 1) + ".");
