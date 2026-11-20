@@ -400,6 +400,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     return document;
   }
 
+  function invalidateCompletedStages(journey: LearningJourneyPackage, changedDay: number): LearningJourneyPackage {
+    return { ...journey, completedDays: (journey.completedDays ?? []).filter(day => day < changedDay) };
+  }
+
   function updateDay1Notice(lessons: MicroLesson[]) {
     try {
       const currentJourneySignature = learningJourneySourceSignature(sourceSignature, cards);
@@ -407,7 +411,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         projectId, assetId, sourceSignature: currentJourneySignature, mediaSignature: sourceSignature, cues: sourceCues,
         cards: cards.map(card => ({ id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus, meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation, exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status }))
       });
-      setLearningJourney({ ...base, day1NoticeLessons: lessons });
+      setLearningJourney(invalidateCompletedStages({ ...base, day1NoticeLessons: lessons }, 1));
       setError('');
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
@@ -418,7 +422,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         projectId, assetId, sourceSignature: currentJourneySignature, mediaSignature: sourceSignature, cues: sourceCues,
         cards: cards.map(card => ({ id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus, meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation, exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status }))
       });
-      setLearningJourney({ ...base, day1Preparation: data });
+      setLearningJourney(invalidateCompletedStages({ ...base, day1Preparation: data }, 1));
       setError('');
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
@@ -437,7 +441,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         }))
       });
       const days = base.days.map((day, index) => index === 1 ? { ...day, activities } : day) as LearningJourneyPackage["days"];
-      setLearningJourney({ ...base, days });
+      setLearningJourney(invalidateCompletedStages({ ...base, days }, 2));
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -459,7 +463,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           }))
         });
       const days = base.days.map((day, index) => index === 2 ? { ...day, lessons } : day) as LearningJourneyPackage["days"];
-      setLearningJourney({ ...base, days });
+      setLearningJourney(invalidateCompletedStages({ ...base, days }, 3));
       setError("");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
@@ -483,7 +487,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           }))
         });
       const days = base.days.map((day, index) => index === 3 ? { ...day, tasks } : day) as LearningJourneyPackage["days"];
-      setLearningJourney({ ...base, days });
+      setLearningJourney(invalidateCompletedStages({ ...base, days }, 4));
       setError("");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
@@ -507,7 +511,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           }))
         });
       const days = base.days.map((day, index) => index === 4 ? { ...day, prompts } : day) as LearningJourneyPackage["days"];
-      setLearningJourney({ ...base, days });
+      setLearningJourney(invalidateCompletedStages({ ...base, days }, 5));
       setError("");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
@@ -519,14 +523,14 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   function updateDay6Challenge(value: { listening: ListeningQuestion[]; speaking: SpeakingPrompt[]; successCriteria: string[] }) {
     if (!learningJourney) return;
     const days = learningJourney.days.map((day, index) => index === 5 ? { ...day, listening: value.listening, speaking: value.speaking } : day) as LearningJourneyPackage["days"];
-    setLearningJourney({ ...learningJourney, days });
+    setLearningJourney(invalidateCompletedStages({ ...learningJourney, days }, 6));
     setError("");
   }
 
   function updateDay7Challenge(value: { listening: ListeningQuestion[]; speaking: SpeakingPrompt[]; successCriteria: string[] }) {
     if (!learningJourney) return;
     const days = learningJourney.days.map((day, index) => index === 6 ? { ...day, listening: value.listening, speaking: value.speaking, successCriteria: value.successCriteria } : day) as LearningJourneyPackage["days"];
-    setLearningJourney({ ...learningJourney, days });
+    setLearningJourney(invalidateCompletedStages({ ...learningJourney, days }, 7));
     setError("");
   }
 
@@ -576,7 +580,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const approvedExpressions = day1?.expressionMatch.filter(item => item.status === "approved") ?? [];
     const approvedPatterns = day1?.patternChallenge.filter(item => item.status === "approved") ?? [];
     const day1Ready = Boolean(day1 && day1.subtitleChallenge.cueOrders.length >= 1 && approvedExpressions.length >= 1 && approvedPatterns.length >= 1 && day1Notice.length >= 1);
-    return day1Ready && remainingJourneyDaysApproved(journey) &&
+    const allStagesCompleted = [1, 2, 3, 4, 5, 6, 7].every(day => (journey.completedDays ?? []).includes(day));
+    return allStagesCompleted && day1Ready && remainingJourneyDaysApproved(journey) &&
       ["identify", "word-recognition", "gap", "reconstruct"].every(type => types.has(type as any)) &&
       ["no-subtitles", "gap-fill", "connected-speech", "rhythm"].every(mode => deepModes.has(mode as any));
   }
