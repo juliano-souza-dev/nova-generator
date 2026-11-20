@@ -186,8 +186,8 @@ type PredictionWorkspaceProps = {
   onPreview: (startMs: number, endMs: number) => void; onPreviewModeChange: (active: boolean) => void; onDemoSeekAndPlay: (timeMs: number) => void;
   onDemoPause: () => void; onDemoResume: (timeMs: number) => void; getCurrentTime: () => number;
 };
-export default function MaterialsWorkspace({ projectId, initialAssetId, onProjectUpdated, prediction }: {
-  projectId: string; initialAssetId?: string; onProjectUpdated?: () => void; prediction?: PredictionWorkspaceProps;
+export default function MaterialsWorkspace({ projectId, initialAssetId, onProjectUpdated, prediction, onOpenShadowing }: {
+  projectId: string; initialAssetId?: string; onProjectUpdated?: () => void; prediction?: PredictionWorkspaceProps; onOpenShadowing?: () => void;
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetId, setAssetId] = useState("");
@@ -1231,7 +1231,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 onBack={() => setSelectedJourneyDay(null)} onSave={() => void saveMaterials()} saving={saving} />
               <section className="day1-existing-stages">
                 <article><strong>Explore & Understand</strong><p>O vídeo, as legendas, os tempos, as traduções e os links continuam sendo preparados exclusivamente no editor. Esta etapa não altera esse material.</p></article>
-                <article><strong>Speak · Shadowing</strong><p>{sourceInfo.shadowing > 0 ? sourceInfo.shadowing + " trechos selecionados no Shadowing." : "Ainda não há Shadowing preparado. Use a página de Shadowing já existente e retorne aqui."}</p></article>
+                <article><strong>Speak · Shadowing</strong>{sourceInfo.shadowing > 0 ? <p>{sourceInfo.shadowing} trechos selecionados no Shadowing. O conteúdo já preparado será reutilizado.</p> : <><p>Ainda não há Shadowing preparado para esta mídia.</p><button type="button" className="secondary-button" onClick={onOpenShadowing}>Abrir Shadowing</button></>}</article>
                 <article><strong>Listen · Áudio</strong><p>Usa o áudio original da mídia e a transcrição sincronizada já carregados no Kit. Não exige uma segunda preparação de áudio.</p></article>
               </section>
               <section className="materials-prediction-panel">
