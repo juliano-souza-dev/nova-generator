@@ -544,8 +544,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       approvedDay6Speaking(journey),
       approvedDay7Listening(journey),
       approvedDay7Speaking(journey)
-    ] as Array<Array<{ status?: string }>>;
-    return groups.every(items => items.length > 0 && items.every(item => item.status === "approved"));
+    ];
+    // Cada modalidade obrigatória precisa de pelo menos um item aprovado.
+    // Itens em rascunho/rejeitados não devem bloquear os aprovados da mesma modalidade.
+    return groups.every(items => items.length >= 1);
   }
 
   function journeyReadyForExport(journey: LearningJourneyPackage) {
@@ -554,7 +556,9 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const deepModes = new Set(approvedDay4Tasks(journey).map(task => task.mode));
     const day1 = journey.day1Preparation;
     const day1Notice = (journey.day1NoticeLessons ?? []).filter(item => item.status === "approved" && item.include_in_hub !== false);
-    const day1Ready = Boolean(day1 && day1.subtitleChallenge.cueOrders.length >= 3 && day1.expressionMatch.length >= 3 && day1.patternChallenge.length >= 5 && day1Notice.length > 0);
+    const approvedExpressions = day1?.expressionMatch.filter(item => item.status === "approved") ?? [];
+    const approvedPatterns = day1?.patternChallenge.filter(item => item.status === "approved") ?? [];
+    const day1Ready = Boolean(day1 && day1.subtitleChallenge.cueOrders.length >= 1 && approvedExpressions.length >= 1 && approvedPatterns.length >= 1 && day1Notice.length >= 1);
     return day1Ready && remainingJourneyDaysApproved(journey) &&
       ["identify", "word-recognition", "gap", "reconstruct"].every(type => types.has(type as any)) &&
       ["no-subtitles", "gap-fill", "connected-speech", "rhythm"].every(mode => deepModes.has(mode as any));
@@ -597,7 +601,12 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       : null;
     const exportJourney = {
       ...learningJourney,
-      ...(learningJourney.day1Preparation ? { day1Preparation: { ...learningJourney.day1Preparation, predictionListening: { version: 1 as const, challenges: predictionChallenges } } } : {}),
+      ...(learningJourney.day1Preparation ? { day1Preparation: {
+        ...learningJourney.day1Preparation,
+        expressionMatch: learningJourney.day1Preparation.expressionMatch.filter(item => item.status === "approved"),
+        patternChallenge: learningJourney.day1Preparation.patternChallenge.filter(item => item.status === "approved"),
+        predictionListening: { version: 1 as const, challenges: predictionChallenges }
+      } } : {}),
       ...(learningJourney.day1NoticeLessons?.length ? { day1NoticeLessons: learningJourney.day1NoticeLessons.filter(item => item.status === 'approved' && item.include_in_hub !== false) } : {}),
       ...(selectedMoment ? { smartLearningMoments: selectedMoment } : {}),
       days: learningJourney.days.map((day, index) =>
