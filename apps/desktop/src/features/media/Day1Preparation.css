@@ -1,0 +1,17 @@
+.day1-practice{display:grid;gap:18px;padding:20px;border:1px solid var(--materials-border,var(--line));border-radius:16px;background:var(--materials-panel,var(--surface))}
+.day1-practice header h3{margin:4px 0;font-size:20px}
+.day1-practice header p{max-width:780px;margin:0;color:var(--muted);line-height:1.55}
+.day1-practice-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.day1-practice-grid article{display:grid;gap:8px;align-content:start;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-raised,var(--surface))}
+.day1-practice-grid article strong{font-size:14px}
+.day1-practice-grid article span{font-size:12px;color:var(--muted);line-height:1.45}
+.day1-practice-actions,.day1-practice footer{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.day1-practice footer{justify-content:space-between;padding-top:12px;border-top:1px solid var(--line)}
+.day1-practice-error,.day1-practice-notice{margin:0;padding:10px 12px;border-radius:9px;font-size:13px}
+.day1-practice-error{color:var(--danger,#a33);background:var(--danger-soft,#fff0f0)}
+.day1-practice-notice{color:var(--success,#176b45);background:var(--success-soft,#effaf3)}
+.day1-existing-stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.day1-existing-stages article{padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.day1-existing-stages strong{font-size:13px}
+.day1-existing-stages p{margin:7px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+@media(max-width:760px){.day1-practice-grid,.day1-existing-stages{grid-template-columns:1fr}}
