@@ -134,7 +134,7 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         "Return candidates in descending score order. Reject any candidate below 70 instead of padding the list. A score is not a substitute for validation.",
         "",
         "5. REQUIRED OUTPUT FIELDS",
-        "Each activity: id, type, prompt, audioCueOrders, explanationPt, feedbackCorrectPt, feedbackIncorrectPt, difficulty, score, score_breakdown, pedagogical_rationale.",
+        "Each activity: id, type, prompt, audioCueOrders, explanationPt, feedbackCorrectPt, feedbackIncorrectPt, difficulty, score, score_breakdown, pedagogical_rationale. Keep explanationPt to one or two concise sentences. Keep each feedback message short. Incorrect feedback must encourage another listen without revealing the answer; correct feedback may briefly explain what the learner successfully retrieved.",
         "For identify and word-recognition: options [{id,text}] and answerId.",
         "For gap: sentence, acceptedAnswers, optional hint.",
         "For reconstruct: words (shuffled bank) and answer (correct order).",
