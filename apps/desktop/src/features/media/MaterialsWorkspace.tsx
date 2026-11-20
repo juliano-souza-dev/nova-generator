@@ -552,8 +552,12 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const approvedDay6Speak = approvedDay6Speaking(learningJourney);
     const approvedDay7Listen = approvedDay7Listening(learningJourney);
     const approvedDay7Speak = approvedDay7Speaking(learningJourney);
+    const selectedMoment = smartLearningMoments?.final_selection
+      ? smartLearningMoments
+      : null;
     const exportJourney = {
       ...learningJourney,
+      ...(selectedMoment ? { smartLearningMoments: selectedMoment } : {}),
       days: learningJourney.days.map((day, index) =>
         index === 1 ? { ...day, activities: approvedActivities } :
         index === 2 ? { ...day, lessons: approvedLessons } :
@@ -571,7 +575,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     anchor.download = "learning-journey-" + assetId + ".json";
     anchor.click();
     URL.revokeObjectURL(url);
-    setNotice("Pacote JSON da jornada exportado.");
+    setNotice(selectedMoment ? "Jornada completa exportada com Smart Learning Moment." : "Jornada completa exportada.");
   }
 
   async function saveMaterials() {
