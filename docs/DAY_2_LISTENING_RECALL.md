@@ -8,12 +8,12 @@
 
 ## Four activity types
 
-1. **identify**: listen to the original cue and identify the word, expression, or short utterance that was spoken.
-2. **word-recognition**: recognize a target word or compact expression from plausible alternatives.
-3. **gap**: listen and complete one meaningful gap in the original wording.
-4. **reconstruct**: use a shuffled word bank to rebuild a short excerpt in its original order.
+1. **identify**: phrase-level recognition. Choose the expression or short utterance (normally 2–6 words) that was spoken.
+2. **word-recognition**: word-level recognition. Choose the individual word that was spoken from alternatives in the same broad grammatical category.
+3. **gap**: listen and complete exactly one meaningful gap in the original wording.
+4. **reconstruct**: use a shuffled word bank to rebuild a 4–9-word excerpt in its original order.
 
-Every activity references one or more one-based cue orders. iHub resolves those references to the original media timeline and plays the source audio. The external AI receives transcript text and timing metadata, not the audio recording; its instructions explicitly prohibit claims about acoustic analysis or invented pronunciation details.
+Every activity references exactly one one-based cue order. iHub resolves those references to the original media timeline and plays the source audio. The external AI receives transcript text and timing metadata, not the audio recording; its instructions explicitly prohibit claims about acoustic analysis or invented pronunciation details.
 
 ## External AI round trip
 
