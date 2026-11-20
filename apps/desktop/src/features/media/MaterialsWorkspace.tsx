@@ -592,7 +592,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const approved = (items: Array<{ status?: string; include_in_hub?: boolean }>) => items.filter(item => item.status === "approved" && item.include_in_hub !== false);
     if (day === 1) {
       const practice = journey.day1Preparation;
-      return approved(journey.day1NoticeLessons ?? []).length > 0 &&
+      return sourceInfo.shadowing > 0 && approved(journey.day1NoticeLessons ?? []).length > 0 &&
         Boolean(practice && practice.subtitleChallenge.cueOrders.length > 0 &&
           approved(practice.expressionMatch).length > 0 && approved(practice.patternChallenge).length > 0);
     }
