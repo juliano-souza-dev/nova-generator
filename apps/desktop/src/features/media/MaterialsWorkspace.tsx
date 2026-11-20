@@ -369,14 +369,15 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     }));
   }
 
-  async function persistMaterials() {
+  async function persistMaterials(journeyOverride?: LearningJourneyPackage | null) {
     if (!assetId) throw new Error("Selecione uma mídia de origem.");
+    const journeyToSave = journeyOverride === undefined ? learningJourney : journeyOverride;
     const journeyIsCurrent = Boolean(
-      learningJourney &&
-      (learningJourney.source?.mediaSignature === sourceSignature ||
-        learningJourney.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards))
+      journeyToSave &&
+      (journeyToSave.source?.mediaSignature === sourceSignature ||
+        journeyToSave.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards))
     );
-    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, learningJourney: journeyIsCurrent ? learningJourney ?? undefined : undefined, pedagogicalContent: pedagogicalContent ?? undefined, smartLearningMoments: smartLearningMoments ?? undefined, updatedAt: new Date().toISOString(), sourceSignature };
+    const document: MaterialDocument = { version: 2, projectId, assetId, assetName: selectedAsset?.name ?? "English Materials", sourceVideoId: selectedAsset?.sourceVideoId ?? null, cards, learningJourney: journeyIsCurrent ? journeyToSave ?? undefined : undefined, pedagogicalContent: pedagogicalContent ?? undefined, smartLearningMoments: smartLearningMoments ?? undefined, updatedAt: new Date().toISOString(), sourceSignature };
     await invoke("save_project_materials", { projectId, assetId, materials: document });
     await invoke("update_project_stage", { id: projectId, stage: "Materiais" });
     onProjectUpdated?.();
@@ -562,6 +563,48 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     return day1Ready && remainingJourneyDaysApproved(journey) &&
       ["identify", "word-recognition", "gap", "reconstruct"].every(type => types.has(type as any)) &&
       ["no-subtitles", "gap-fill", "connected-speech", "rhythm"].every(mode => deepModes.has(mode as any));
+  }
+
+  function canCompleteJourneyDay(day: number, journey: LearningJourneyPackage) {
+    const approved = (items: Array<{ status?: string; include_in_hub?: boolean }>) => items.filter(item => item.status === "approved" && item.include_in_hub !== false);
+    if (day === 1) {
+      const practice = journey.day1Preparation;
+      return approved(journey.day1NoticeLessons ?? []).length > 0 &&
+        Boolean(practice && practice.subtitleChallenge.cueOrders.length > 0 &&
+          approved(practice.expressionMatch).length > 0 && approved(practice.patternChallenge).length > 0);
+    }
+    if (day === 2) {
+      const items = approved(journey.days[1].activities);
+      return ["identify", "word-recognition", "gap", "reconstruct"].every(type => items.some(item => (item as ListeningQuestion).type === type));
+    }
+    if (day === 3) return approved(journey.days[2].lessons).length > 0;
+    if (day === 4) return ["no-subtitles", "gap-fill", "connected-speech", "rhythm"].every(mode =>
+      approved(journey.days[3].tasks).some(item => item.mode === mode));
+    if (day === 5) return approved(journey.days[4].prompts).length > 0;
+    if (day === 6) return approved(journey.days[5].listening).length > 0 && approved(journey.days[5].speaking).length > 0;
+    if (day === 7) return approved(journey.days[6].listening).length > 0 && approved(journey.days[6].speaking).length > 0 &&
+      journey.days[6].successCriteria.length === 4;
+    return false;
+  }
+
+  async function completeJourneyDay() {
+    if (!learningJourney || !selectedJourneyDay || saving) return;
+    const day = selectedJourneyDay;
+    if (!canCompleteJourneyDay(day, learningJourney)) {
+      setError("Esta etapa ainda tem modalidades obrigatórias sem atividade aprovada. Revise os itens pendentes antes de concluí-la.");
+      return;
+    }
+    const completedDays = Array.from(new Set([...(learningJourney.completedDays ?? []), day])).sort((a, b) => a - b);
+    const updatedJourney = { ...learningJourney, completedDays };
+    setSaving(true); setError(""); setNotice("");
+    try {
+      await persistMaterials(updatedJourney);
+      setLearningJourney(updatedJourney);
+      setNotice("Dia " + day + " concluído. A próxima etapa está liberada.");
+      setSelectedJourneyDay(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setSaving(false); }
   }
 
   async function exportLearningJourney() {
@@ -1207,17 +1250,21 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               </div>
               <div className="materials-journey-days">
                 {[
-                  { day: 1, title: "Explore & Understand", detail: learningJourney?.day1Preparation ? "Practice preparado · " + learningJourney.day1Preparation.expressionMatch.length + " expressões · " + learningJourney.day1Preparation.patternChallenge.length + " estruturas" : "Preparar Notice, Speak, Listen e Practice", state: "is-current" },
-                  { day: 2, title: "Listening Recall", detail: learningJourney ? learningJourney.days[1].activities.length + " atividades · " + approvedDay2Activities(learningJourney).length + " aprovadas" : "Preparar atividades de listening", state: "is-current" },
-                  { day: 3, title: "Notice in Context", detail: learningJourney ? learningJourney.days[2].lessons.length + " microaulas · " + approvedDay3Lessons(learningJourney).length + " aprovadas" : "Preparar microaulas contextuais", state: "is-current" },
-                  { day: 4, title: "Deep Listening", detail: learningJourney ? learningJourney.days[3].tasks.length + " tarefas · " + approvedDay4Tasks(learningJourney).length + " aprovadas" : "Preparar escuta profunda", state: "is-current" },
-                  { day: 5, title: "Speak & Compare", detail: learningJourney ? learningJourney.days[4].prompts.length + " práticas · " + approvedDay5Prompts(learningJourney).length + " aprovadas" : "Preparar prática oral e comparação", state: "is-current" },
-                  { day: 6, title: "Listening & Speaking Challenge", detail: learningJourney ? learningJourney.days[5].listening.length + " listening · " + learningJourney.days[5].speaking.length + " speaking · " + (approvedDay6Listening(learningJourney).length + approvedDay6Speaking(learningJourney).length) + " aprovadas" : "Preparar desafio integrado", state: "is-current" },
-                  { day: 7, title: "Final Challenge", detail: learningJourney ? learningJourney.days[6].listening.length + " listening · " + learningJourney.days[6].speaking.length + " speaking · " + (approvedDay7Listening(learningJourney).length + approvedDay7Speaking(learningJourney).length) + " aprovadas" : "Preparar avaliação final", state: "is-current" }
-                ].map(day => <button type="button" key={day.day} className={"materials-journey-day " + day.state} onClick={() => setSelectedJourneyDay(day.day)}>
+                  { day: 1, title: "Explore & Understand", detail: learningJourney?.day1Preparation ? "Practice preparado · " + learningJourney.day1Preparation.expressionMatch.length + " expressões · " + learningJourney.day1Preparation.patternChallenge.length + " estruturas" : "Preparar Notice, Speak, Listen e Practice" },
+                  { day: 2, title: "Listening Recall", detail: learningJourney ? learningJourney.days[1].activities.length + " atividades · " + approvedDay2Activities(learningJourney).length + " aprovadas" : "Preparar atividades de listening" },
+                  { day: 3, title: "Notice in Context", detail: learningJourney ? learningJourney.days[2].lessons.length + " microaulas · " + approvedDay3Lessons(learningJourney).length + " aprovadas" : "Preparar microaulas contextuais" },
+                  { day: 4, title: "Deep Listening", detail: learningJourney ? learningJourney.days[3].tasks.length + " tarefas · " + approvedDay4Tasks(learningJourney).length + " aprovadas" : "Preparar escuta profunda" },
+                  { day: 5, title: "Speak & Compare", detail: learningJourney ? learningJourney.days[4].prompts.length + " práticas · " + approvedDay5Prompts(learningJourney).length + " aprovadas" : "Preparar prática oral e comparação" },
+                  { day: 6, title: "Listening & Speaking Challenge", detail: learningJourney ? learningJourney.days[5].listening.length + " listening · " + learningJourney.days[5].speaking.length + " speaking · " + (approvedDay6Listening(learningJourney).length + approvedDay6Speaking(learningJourney).length) + " aprovadas" : "Preparar desafio integrado" },
+                  { day: 7, title: "Final Challenge", detail: learningJourney ? learningJourney.days[6].listening.length + " listening · " + learningJourney.days[6].speaking.length + " speaking · " + (approvedDay7Listening(learningJourney).length + approvedDay7Speaking(learningJourney).length) + " aprovadas" : "Preparar avaliação final" }
+                ].map(day => {
+                  const completed = (learningJourney?.completedDays ?? []).includes(day.day);
+                  const unlocked = day.day === 1 || (learningJourney?.completedDays ?? []).includes(day.day - 1);
+                  return <button type="button" key={day.day} disabled={!unlocked} className={"materials-journey-day" + (completed ? " is-completed" : "")} onClick={() => setSelectedJourneyDay(day.day)}>
                   <span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.detail}</small>
-                  <em>Abrir preparação <span aria-hidden="true">→</span></em>
-                </button>)}
+                  <em>{completed ? "Etapa concluída ✓" : unlocked ? "Abrir preparação →" : "Conclua o dia anterior para liberar"}</em>
+                </button>;
+                })}
               </div>
             </div> : selectedJourneyDay === 1 ? <div className="materials-journey-work">
               <Day3NoticeInContext day={1} projectId={projectId} assetId={assetId} sourceSignature={sourceSignature} cues={sourceCues}
