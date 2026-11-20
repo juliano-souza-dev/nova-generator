@@ -1061,43 +1061,57 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const selected = smartLearningMoments.candidates.find(item => item.id === smartLearningMoments.final_selection);
     if (!selected) return null;
     const audioAssets = selected.audio_assets ?? [];
-    if (!selected.merged_audio?.audio_path) throw new Error("Conclua a mini aula e unifique seus segmentos de áudio antes de exportar.");
-    const mergedResponse = await fetch(convertFileSrc(selected.merged_audio.audio_path));
-    if (!mergedResponse.ok) throw new Error("Não foi possível ler o áudio unificado da mini aula.");
-    const mergedBytes = new Uint8Array(await mergedResponse.arrayBuffer());
-    const mergedBlob = await mergedResponse.blob();
-    const mergedBinary = Array.from({ length: Math.ceil(mergedBytes.length / 0x8000) }, (_, index) =>
-      String.fromCharCode(...mergedBytes.subarray(index * 0x8000, Math.min(mergedBytes.length, (index + 1) * 0x8000)))
-    ).join("");
-    const mergedAudio = {
-      file_name: selected.merged_audio.file_name,
-      mime_type: mergedBlob.type || "audio/mpeg",
-      audio_base64: btoa(mergedBinary),
-      segment_count: selected.merged_audio.segment_count
-    };
-    const missingSegments = selected.lesson.narration.segments.filter(segment => !audioAssets.some(asset => asset.segment_id === segment.id));
-    if (missingSegments.length) {
-      throw new Error("Gere ou importe o áudio de todos os segmentos da mini aula antes de exportar. Pendentes: " + missingSegments.map(item => item.id).join(", "));
+    const audioWasStarted = audioAssets.length > 0 || Boolean(selected.merged_audio?.audio_path);
+    let embeddedAudio: typeof audioAssets = [];
+    let mergedAudio: { file_name: string; mime_type: string; audio_base64: string; segment_count: number } | undefined;
+
+    // A mini aula pode ser exclusivamente textual. Só exigimos a faixa unificada
+    // e todos os segmentos quando o usuário decidiu incluir áudio.
+    if (audioWasStarted) {
+      if (!selected.merged_audio?.audio_path) {
+        throw new Error("Há áudio na mini aula, mas a faixa final ainda não foi unificada. Conclua a unificação ou remova os áudios para exportar somente texto.");
+      }
+      const missingSegments = selected.lesson.narration.segments.filter(segment => !audioAssets.some(asset => asset.segment_id === segment.id));
+      if (missingSegments.length) {
+        throw new Error("A mini aula contém áudio parcial. Gere ou importe os segmentos pendentes ou remova os áudios para exportar somente texto. Pendentes: " + missingSegments.map(item => item.id).join(", "));
+      }
+      const mergedResponse = await fetch(convertFileSrc(selected.merged_audio.audio_path));
+      if (!mergedResponse.ok) throw new Error("Não foi possível ler o áudio unificado da mini aula.");
+      const mergedBytes = new Uint8Array(await mergedResponse.arrayBuffer());
+      const mergedBlob = await mergedResponse.blob();
+      const mergedBinary = Array.from({ length: Math.ceil(mergedBytes.length / 0x8000) }, (_, index) =>
+        String.fromCharCode(...mergedBytes.subarray(index * 0x8000, Math.min(mergedBytes.length, (index + 1) * 0x8000)))
+      ).join("");
+      mergedAudio = {
+        file_name: selected.merged_audio.file_name,
+        mime_type: mergedBlob.type || "audio/mpeg",
+        audio_base64: btoa(mergedBinary),
+        segment_count: selected.merged_audio.segment_count
+      };
+      const toBase64 = (bytes: Uint8Array) => {
+        let binary = "";
+        for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+        return btoa(binary);
+      };
+      embeddedAudio = await Promise.all(audioAssets.map(async asset => {
+        if (asset.audio_base64) return { ...asset, audio_path: undefined };
+        if (!asset.audio_path) throw new Error("Um segmento não possui arquivo de áudio: " + asset.segment_id);
+        const response = await fetch(convertFileSrc(asset.audio_path));
+        if (!response.ok) throw new Error("Não foi possível ler o áudio interno do segmento " + asset.segment_id + ".");
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const blob = await response.blob();
+        return { segment_id: asset.segment_id, language: asset.language, audio_base64: toBase64(bytes), mime_type: blob.type || "audio/wav", provider: asset.provider };
+      }));
     }
-    const toBase64 = (bytes: Uint8Array) => {
-      let binary = "";
-      for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-      return btoa(binary);
-    };
-    const embeddedAudio = await Promise.all(audioAssets.map(async asset => {
-      if (asset.audio_base64) return { ...asset, audio_path: undefined };
-      if (!asset.audio_path) throw new Error("Um segmento não possui arquivo de áudio: " + asset.segment_id);
-      const response = await fetch(convertFileSrc(asset.audio_path));
-      if (!response.ok) throw new Error("Não foi possível ler o áudio interno do segmento " + asset.segment_id + ".");
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      const blob = await response.blob();
-      return { segment_id: asset.segment_id, language: asset.language, audio_base64: toBase64(bytes), mime_type: blob.type || "audio/wav", provider: asset.provider };
-    }));
     return {
       contract: smartLearningMoments.contract,
       selection_limit: 1,
       selected_at: new Date().toISOString(),
-      moment: { ...selected, audio_assets: embeddedAudio, merged_audio: mergedAudio }
+      moment: {
+        ...selected,
+        audio_assets: embeddedAudio,
+        ...(mergedAudio ? { merged_audio: mergedAudio } : { merged_audio: undefined })
+      }
     };
   }
 
