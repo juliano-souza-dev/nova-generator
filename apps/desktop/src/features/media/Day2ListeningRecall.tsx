@@ -196,7 +196,7 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
     const linkedTexts = Array.isArray(raw?.audioCueOrders)
       ? raw.audioCueOrders.map((order: number) => orderedCues.find(cue => cue.cue_order === Number(order))?.text_en ?? "").filter(Boolean)
       : [];
-    const sourceContains = (value: string) => linkedTexts.some(source => normalizeForCompare(source).includes(normalizeForCompare(value)));
+    const sourceContains = (value: string) => linkedTexts.some((source: string) => normalizeForCompare(source).includes(normalizeForCompare(value)));
     if (raw?.type === "identify" || raw?.type === "word-recognition") {
       if (!Array.isArray(raw.options) || raw.options.length < 3 || raw.options.length > 4) errors.push("precisa de 3 ou 4 alternativas");
       else {
