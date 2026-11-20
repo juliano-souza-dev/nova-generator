@@ -19,9 +19,26 @@ type Package = {
   files: Record<string, string>;
 };
 type Choice = { text: string; is_correct: boolean };
+type PredictionScoreKey = "contextual_fit" | "prediction_value" | "communicative_value" | "answerability" | "pause_quality" | "level_fit" | "distractor_quality" | "variety";
+type PredictionScoreBreakdown = Record<PredictionScoreKey, number>;
+type PredictionScoreEvidence = Record<PredictionScoreKey, string>;
+const PREDICTION_SCORE_WEIGHTS: PredictionScoreBreakdown = {
+  contextual_fit: 20, prediction_value: 20, communicative_value: 15, answerability: 15,
+  pause_quality: 10, level_fit: 10, distractor_quality: 5, variety: 5
+};
+const PREDICTION_SCORE_LABELS: Record<PredictionScoreKey, string> = {
+  contextual_fit: "Adequação ao contexto", prediction_value: "Valor da previsão",
+  communicative_value: "Utilidade comunicativa", answerability: "Clareza da resposta",
+  pause_quality: "Qualidade da pausa", level_fit: "Adequação ao nível",
+  distractor_quality: "Qualidade das alternativas", variety: "Variedade pedagógica"
+};
 type Challenge = {
   id: string;
   challengeNumber: number;
+  rank: number;
+  pedagogicalScore: number;
+  scoreBreakdown: PredictionScoreBreakdown;
+  scoreEvidence: PredictionScoreEvidence;
   cueId: string;
   cueNumber: number;
   type: "word" | "expression" | "dialogue";
@@ -226,8 +243,8 @@ export default function PredictionListening({
       if (typeof parsed.source_hash !== "string" || parsed.source_hash !== sourceHash) {
         throw new Error("O SOURCE_HASH não corresponde ao TXT atual. Gere ou baixe novamente a entrada antes de importar.");
       }
-      if (!Array.isArray(parsed.challenges) || parsed.challenges.length > 100) {
-        throw new Error("O JSON precisa conter uma lista válida com no máximo 100 desafios.");
+      if (!Array.isArray(parsed.challenges) || parsed.challenges.length > 8) {
+        throw new Error("O JSON precisa conter no máximo 8 desafios ranqueados. Se não houver oportunidades fortes, use uma lista vazia.");
       }
 
       let nextWordNumber = 0;
@@ -250,7 +267,36 @@ export default function PredictionListening({
       });
 
       const seenChallenges = new Set<number>();
+      let previousScore = Number.POSITIVE_INFINITY;
+      const tieBreakKeys: PredictionScoreKey[] = ["prediction_value", "contextual_fit", "communicative_value", "answerability"];
+      let previousBreakdown: PredictionScoreBreakdown | null = null;
       const challenges: Challenge[] = parsed.challenges.map((item: any, index: number) => {
+        const rank = Number(item?.rank);
+        const pedagogicalScore = Number(item?.pedagogical_score);
+        if (rank !== index + 1 || !Number.isInteger(rank)) throw new Error("O ranking deve ser sequencial, começando em 1, sem lacunas.");
+        const rawBreakdown = item?.score_breakdown;
+        const scoreKeys = Object.keys(PREDICTION_SCORE_WEIGHTS) as PredictionScoreKey[];
+        if (!rawBreakdown || scoreKeys.some(key => !Number.isInteger(rawBreakdown[key]) || rawBreakdown[key] < 0 || rawBreakdown[key] > PREDICTION_SCORE_WEIGHTS[key])) {
+          throw new Error("O desafio " + rank + " contém notas inválidas no score_breakdown.");
+        }
+        const scoreBreakdown = rawBreakdown as PredictionScoreBreakdown;
+        const scoreTotal = scoreKeys.reduce((sum, key) => sum + scoreBreakdown[key], 0);
+        if (!Number.isInteger(pedagogicalScore) || pedagogicalScore < 70 || pedagogicalScore > 100 || scoreTotal !== pedagogicalScore) {
+          throw new Error("O desafio " + rank + " precisa atingir pelo menos 70 pontos e a soma dos critérios deve corresponder à nota final.");
+        }
+        const rawEvidence = item?.score_evidence;
+        if (!rawEvidence || scoreKeys.some(key => typeof rawEvidence[key] !== "string" || !rawEvidence[key].trim())) {
+          throw new Error("O desafio " + rank + " precisa justificar os oito critérios de pontuação.");
+        }
+        if (pedagogicalScore > previousScore) throw new Error("As recomendações precisam estar ordenadas da maior para a menor pontuação.");
+        if (pedagogicalScore === previousScore && previousBreakdown) {
+          const tieWinner = tieBreakKeys.find(key => scoreBreakdown[key] !== previousBreakdown![key]);
+          if (tieWinner && scoreBreakdown[tieWinner] > previousBreakdown[tieWinner]) {
+            throw new Error("O ranking não respeita os critérios de desempate pedagógico.");
+          }
+        }
+        previousScore = pedagogicalScore;
+        previousBreakdown = scoreBreakdown;
         const number = Number(item?.challenge_number);
         const cueNumber = Number(item?.cue_number);
         const type = String(item?.type ?? "");
@@ -323,6 +369,10 @@ export default function PredictionListening({
         return {
           id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : "prediction-" + Date.now() + "-" + index,
           challengeNumber: number,
+          rank,
+          pedagogicalScore,
+          scoreBreakdown,
+          scoreEvidence: rawEvidence as PredictionScoreEvidence,
           cueId: answerStart.cueId,
           cueNumber,
           type,
@@ -523,7 +573,8 @@ export default function PredictionListening({
           </div>
           : review.challenges.map(challenge => <article className={"prediction-challenge " + challenge.status} key={challenge.id}>
             <div className="prediction-challenge-heading">
-              <div><span className="prediction-challenge-type">{challenge.type.toUpperCase()}</span><strong>Desafio {challenge.challengeNumber}</strong></div>
+              <div><span className="prediction-challenge-type">#{challenge.rank} · {challenge.type.toUpperCase()}</span><strong>Desafio {challenge.challengeNumber}</strong></div>
+              <strong className="prediction-challenge-score">{challenge.pedagogicalScore}/100</strong>
               <span className={"prediction-challenge-status " + challenge.status}>{challenge.status === "approved" ? "Aprovado" : challenge.status === "rejected" ? "Rejeitado" : "Em revisão"}</span>
             </div>
             <h3>{challenge.prompt}</h3>
@@ -535,6 +586,9 @@ export default function PredictionListening({
             <div className="prediction-challenge-answer"><b>Trecho original:</b> {challenge.answerText}</div>
             <div className="prediction-challenge-explanation"><b>Explicação ao aluno:</b> {challenge.explanation}</div>
             <div className="prediction-challenge-rationale"><b>Justificativa editorial:</b> {challenge.editorialRationale}</div>
+            <details className="prediction-challenge-scoring"><summary>Ver pontuação pedagógica</summary>
+              <div>{(Object.keys(PREDICTION_SCORE_WEIGHTS) as PredictionScoreKey[]).map(key => <p key={key}><strong>{PREDICTION_SCORE_LABELS[key]} · {challenge.scoreBreakdown[key]}/{PREDICTION_SCORE_WEIGHTS[key]}</strong><span>{challenge.scoreEvidence[key]}</span></p>)}</div>
+            </details>
             <footer>
               <span>Início {challenge.clipStartMs} ms · Pausa {challenge.pauseAtMs} ms · Retomada {challenge.resumeAtMs} ms</span>
               <button className="secondary-button" onClick={() => onPreview(challenge.clipStartMs)}>Pré-visualizar trecho</button>
