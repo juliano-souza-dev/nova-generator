@@ -52,7 +52,14 @@ type PedagogicalContentPackage = { contract: "ihub-pedagogical-content/1.0"; tit
 type MaterialDocument = { version: 1 | 2; projectId?: string; assetId?: string; assetName?: string; sourceVideoId?: string | null; cards: AnkiCard[]; updatedAt?: string; sourceSignature?: string; learningJourney?: LearningJourneyPackage; pedagogicalContent?: PedagogicalContentPackage; smartLearningMoments?: SmartLearningMomentsPackage };
 type AudioResult = { cardId: string; audioPath: string; sampleRate: number; language: string; speaker: string };
 type SharedVoice = { id: string; name: string; mode?: "voice_clone" | "voice_design" };
-function learningJourneySourceSignature(sourceSignature: string, cards: AnkiCard[]) {
+// A Jornada depende da assinatura da mídia e das atividades pedagógicas.
+ // Os cards Anki têm ciclo de aprovação e exportação independentes.
+function learningJourneySourceSignature(sourceSignature: string, _cards?: AnkiCard[]) {
+  return sourceSignature;
+}
+
+// Compatibilidade para reconhecer jornadas antigas que ainda não tinham mediaSignature.
+function legacyLearningJourneySourceSignature(sourceSignature: string, cards: AnkiCard[]) {
   return JSON.stringify([
     sourceSignature,
     cards.filter(card => card.status === "approved").map(card => [
@@ -282,7 +289,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
 setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-content/1.0" && savedPedagogicalContent.editorial_signature === materialSignature ? savedPedagogicalContent : null);
       const smartLearningSnapshot = savedSmartLearningMoments ?? stored?.smartLearningMoments ?? null;
       setSmartLearningMoments(smartLearningSnapshot?.source_signature === materialSignature ? smartLearningSnapshot : null);
-      const storedJourneySignature = learningJourneySourceSignature(materialSignature, Array.isArray(stored?.cards) ? stored.cards : []);
+      const storedJourneySignature = legacyLearningJourneySourceSignature(materialSignature, Array.isArray(stored?.cards) ? stored.cards : []);
       const savedJourneySourceMatches = savedJourney?.source?.mediaSignature
         ? savedJourney.source.mediaSignature === materialSignature
         : savedJourney?.source?.sourceSignature === storedJourneySignature;
@@ -1146,21 +1153,6 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         }
         return btoa(binary);
       };
-      const exportedAnkiCards = await Promise.all(approvedCards.map(async card => {
-        let audio: { base64: string; mime_type: string; source: string } | null = null;
-        if (card.audioPath) {
-          const response = await fetch(convertFileSrc(card.audioPath));
-          if (!response.ok) throw new Error("Não foi possível incorporar o áudio do card aprovado " + card.id + " ao JSON completo.");
-          const blob = await response.blob();
-          audio = {
-            base64: toBase64(new Uint8Array(await blob.arrayBuffer())),
-            mime_type: blob.type || "audio/mpeg",
-            source: card.audioSource ?? "unknown"
-          };
-        }
-        const { audioPath: _audioPath, ...cardData } = card;
-        return { ...cardData, audio };
-      }));
       await persistMaterials();
       const payload = {
         schema: "ihub-generator-pedagogical-import/1.0",
@@ -1178,7 +1170,6 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           pt: sourceTranslations.find(item => item.id === cue.id)?.text ?? "",
           words: cue.words?.map(word => ({ text: word.text, start_ms: Math.round(word.startMs), end_ms: Math.round(word.endMs) })) ?? []
         })),
-        anki_cards: exportedAnkiCards,
         pedagogical_content: pedagogicalContent ? { ...pedagogicalContent, minimum_items: selectedItems.length, items: selectedItems } : null,
         smart_learning_moment: await buildSelectedSmartLearningMoment(),
         prediction_listening: predictionIsCurrent ? predictionReview.materials ?? null : null,
@@ -1188,7 +1179,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       const anchor = document.createElement("a");
       anchor.href = url; anchor.download = "ihub-conteudo-completo-" + assetId + ".json"; anchor.click();
       URL.revokeObjectURL(url);
-      setNotice("JSON completo gerado com " + selectedItems.length + " item(ns) pedagógico(s) selecionado(s)" + (smartLearningMoments?.final_selection ? " e uma mini aula Smart Learning Moments" : "") +
+      setNotice("JSON pedagógico completo gerado com " + selectedItems.length + " item(ns) selecionado(s)" + (smartLearningMoments?.final_selection ? " e uma mini aula Smart Learning Moments" : "") +
         (predictionIsCurrent ? ", Prediction Listening aprovado" : "") +
         (journeyIsCurrent ? " e Jornada de aprendizagem" : "") + ".");
     } catch (e) {
@@ -1285,7 +1276,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 <button className="secondary-button" type="button" onClick={exportLearningJourney} disabled={!learningJourney || !journeyReadyForExport(learningJourney)}><Download size={14}/> Exportar jornada completa</button>
               </div>
             </div>
-            {learningJourney && learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards) && <p className="materials-journey-stale">Os cards aprovados mudaram. Regenere a jornada antes de exportar ou publicar.</p>}
+            {learningJourney && learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature) && <p className="materials-journey-stale">A transcrição ou a seleção de trechos mudou. Revise a jornada antes de exportar ou publicar.</p>}
             {selectedJourneyDay === null ? <div className="materials-journey-overview">
               <div className="materials-journey-section-heading">
                 <div><span className="eyebrow">VISÃO GERAL</span><h4>Selecione um dia para preparar</h4></div>
