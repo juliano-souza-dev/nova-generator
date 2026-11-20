@@ -134,10 +134,11 @@ fn build_external_package(
         "Use surrounding context, including context-only cues, to understand the situation and choose a natural pause.".into(),
         "Do not create a challenge for every cue. Return fewer challenges when appropriate, or an empty array when no strong opportunities exist.".into(),
         String::new(),
-        "5. QUALITY RULES".into(),
-        "Avoid articles, prepositions, grammatical fragments, obvious completions, ambiguous answers, trivia, repeated tests, and pauses that split a natural expression.".into(),
-        "The learner must have enough preceding context to make a reasonable prediction, but must not hear or see the answer before choosing.".into(),
-        "Do not use knowledge that is absent from the transcript. Do not create multiple equally correct answers.".into(),
+        "5. QUALITY RULES AND RANKING".into(),
+        "Avoid articles, prepositions, grammatical fragments, obvious completions, ambiguous answers, trivia, repeated tests, and pauses that split a natural expression. The learner must have enough preceding context to make a reasonable prediction, but must not hear or see the answer before choosing. Do not use knowledge absent from the transcript or create multiple equally correct answers.".into(),
+        "Return up to 8 candidates. Aim for 3 to 5 only when that many genuinely strong opportunities exist. Return fewer when appropriate, and an empty challenges array when none qualifies. Never invent weak candidates to fill a quota.".into(),
+        "Score each candidate from 0 to 100 using score_breakdown: contextual_fit (20), prediction_value (20), communicative_value (15), answerability (15), pause_quality (10), level_fit (10), distractor_quality (5), variety (5). Each criterion must be an integer from 0 to its maximum and the sum must equal pedagogical_score. Include score_evidence with a concise, source-grounded justification for every criterion.".into(),
+        "Reject any candidate below 70. Rank candidates by pedagogical_score descending. Break ties by prediction_value, contextual_fit, communicative_value, then answerability, in that order. rank starts at 1 and is consecutive. Return candidates in ranked order.".into(),
         String::new(),
         "6. WORD REFERENCES AND TIMING".into(),
         "Use ONLY the global WORD numbers shown in this document. Never invent word numbers, cue numbers, timestamps, internal IDs, or timing values.".into(),
@@ -171,6 +172,28 @@ fn build_external_package(
   "challenges": [
     {
       "challenge_number": 1,
+      "rank": 1,
+      "pedagogical_score": 86,
+      "score_breakdown": {
+        "contextual_fit": 18,
+        "prediction_value": 19,
+        "communicative_value": 13,
+        "answerability": 14,
+        "pause_quality": 9,
+        "level_fit": 8,
+        "distractor_quality": 3,
+        "variety": 2
+      },
+      "score_evidence": {
+        "contextual_fit": "Specific evidence from the preceding context.",
+        "prediction_value": "Why the next item is meaningfully predictable.",
+        "communicative_value": "Why this is useful in communication.",
+        "answerability": "Why the source supports one clear answer.",
+        "pause_quality": "Why the pause is natural.",
+        "level_fit": "Why the challenge fits the learner level.",
+        "distractor_quality": "Why the alternatives are plausible but distinct.",
+        "variety": "How this differs from other challenges."
+      },
       "cue_number": 12,
       "type": "word",
       "clip_start_word": 41,
@@ -192,7 +215,7 @@ fn build_external_package(
 }"#.into(),
         String::new(),
         "11. FINAL VALIDATION".into(),
-        "Before responding, verify: exact contract and hash; unique positive challenge_number; allowed type; selected target cue; all cue and word references exist; clip_start_word is not after the answer; pause_before_word equals answer_word_start; answer words are contiguous; resume_after_word equals answer_word_end; exactly four unique choices and one correct answer; correct choice matches the source; prompt and explanations are non-empty.".into(),
+        "Before responding, verify: exact contract and hash; no more than 8 challenges; unique positive challenge_number; sequential unique rank starting at 1; descending score order with the stated tie-breaks; every score is at least 70; score_breakdown contains all eight criteria within their maximum weights and sums exactly to pedagogical_score; score_evidence contains all eight criteria; allowed type; selected target cue; all cue and word references exist; clip_start_word is not after the answer; pause_before_word equals answer_word_start; answer words are contiguous; resume_after_word equals answer_word_end; exactly four unique choices and one correct answer; correct choice matches the source; prompt and explanations are non-empty.".into(),
         "If no high-quality challenges exist, return the same contract and source_hash with an empty challenges array.".into(),
         "Return JSON only.".into(),
     ];
