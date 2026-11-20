@@ -8,6 +8,7 @@ export const LEARNING_JOURNEY_CONTRACT = "nova-generator-learning-journey/1.0" a
 export const IHUB_JOURNEY_CONTRACT = "ihub-learning-journey/1.0" as const;
 
 export type ListeningQuestionMetadata = {
+  sourceText?: string;
   explanationPt?: string;
   feedbackCorrectPt?: string;
   feedbackIncorrectPt?: string;
@@ -92,6 +93,10 @@ export type SpeakingPrompt = {
   difficulty?: "beginner" | "elementary" | "intermediate" | "upper-intermediate";
   status?: "draft" | "approved" | "rejected";
   include_in_hub?: boolean;
+  scenarioPt?: string;
+  responseTask?: string;
+  responseGuidancePt?: string;
+  expectedElements?: string[];
 };
 
 export type LearningJourneyPackage = {
