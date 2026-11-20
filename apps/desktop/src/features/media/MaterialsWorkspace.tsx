@@ -742,8 +742,9 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
 
   exportActionRef.current = () => { void exportFinalPedagogicalPackage(); };
   const projectSpaceExportReady = !loading && Boolean(assetId) && Boolean(
-    (pedagogicalContent?.items.some(item => item.include_in_hub !== false)) ||
-    smartLearningMoments?.final_selection || sourceInfo.predictions ||
+    (pedagogicalContent?.editorial_signature === sourceSignature && pedagogicalContent.items.some(item => item.include_in_hub !== false)) ||
+    (smartLearningMoments?.source_signature === sourceSignature && smartLearningMoments.final_selection) ||
+    (prediction?.ready && sourceInfo.predictions > 0) ||
     (learningJourney && learningJourney.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards) &&
       validateLearningJourney(learningJourney).length === 0 && journeyReadyForExport(learningJourney))
   );
