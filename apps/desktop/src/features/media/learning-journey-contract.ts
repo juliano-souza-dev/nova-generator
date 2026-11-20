@@ -230,11 +230,31 @@ export function validateLearningJourneyDraft(value: unknown): string[] {
     }
   });
   const day2 = value.days[1];
-  if (isRecord(day2) && Array.isArray(day2.activities) && day2.activities.length > 0) {
+  const day3 = value.days[2];
+  const day4 = value.days[3];
+  const day5 = value.days[4];
+  const day6 = value.days[5];
+  const day7 = value.days[6];
+  if (!isRecord(day2) || !Array.isArray(day2.activities)) errors.push("O rascunho do Dia 2 precisa conter a lista activities.");
+  else if (day2.activities.length > 0) {
     const types = new Set(day2.activities.filter(isRecord).map(activity => activity.type));
     if (["identify", "word-recognition", "gap", "reconstruct"].some(type => !types.has(type))) {
       errors.push("O rascunho do Dia 2 precisa preservar as quatro modalidades de listening.");
     }
+  }
+  if (!isRecord(day3) || !Array.isArray(day3.lessons)) errors.push("O rascunho do Dia 3 precisa conter a lista lessons.");
+  if (!isRecord(day4) || !Array.isArray(day4.tasks)) errors.push("O rascunho do Dia 4 precisa conter a lista tasks.");
+  if (!isRecord(day5) || !Array.isArray(day5.prompts)) errors.push("O rascunho do Dia 5 precisa conter a lista prompts.");
+  if (!isRecord(day6) || !Array.isArray(day6.listening) || !Array.isArray(day6.speaking)) {
+    errors.push("O rascunho do Dia 6 precisa preservar as listas listening e speaking.");
+  }
+  if (!isRecord(day7) || !Array.isArray(day7.listening) || !Array.isArray(day7.speaking) || !Array.isArray(day7.successCriteria)) {
+    errors.push("O rascunho do Dia 7 precisa preservar listening, speaking e successCriteria.");
+  }
+  if (value.completedDays !== undefined && (!Array.isArray(value.completedDays) ||
+      value.completedDays.some(day => !Number.isInteger(day) || Number(day) < 1 || Number(day) > 7) ||
+      new Set(value.completedDays).size !== value.completedDays.length)) {
+    errors.push("A lista completedDays contém dias inválidos ou duplicados.");
   }
   return errors;
 }
