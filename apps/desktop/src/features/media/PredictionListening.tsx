@@ -88,7 +88,8 @@ type Props = {
   selectedCueIds: string[];
   sourceSignature: string;
   onClose: () => void;
-  onPreview: (timeMs: number) => void;
+  onPreview: (startMs: number, endMs: number) => void;
+  onPreviewModeChange: (active: boolean) => void;
   onDemoSeekAndPlay: (timeMs: number) => void;
   onDemoPause: () => void;
   onDemoResume: (timeMs: number) => void;
@@ -123,7 +124,7 @@ const buildMaterials = (review: Review, assetName: string): Materials => ({
 
 export default function PredictionListening({
   projectId, assetId, assetName, cues, selectedCueIds, sourceSignature, onClose, onPreview,
-  onDemoSeekAndPlay, onDemoPause, onDemoResume, getCurrentTime, onProjectUpdated, embedded = false
+  onPreviewModeChange, onDemoSeekAndPlay, onDemoPause, onDemoResume, getCurrentTime, onProjectUpdated, embedded = false
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [sourceHash, setSourceHash] = useState("");
@@ -136,6 +137,7 @@ export default function PredictionListening({
   const [demoIndex, setDemoIndex] = useState(0);
   const [demoFeedback, setDemoFeedback] = useState("");
   const [demoReplayCount, setDemoReplayCount] = useState(0);
+  const [previewingChallenge, setPreviewingChallenge] = useState<Challenge | null>(null);
   const demoCallbacks = useRef({ onDemoPause, onDemoResume, getCurrentTime });
   demoCallbacks.current = { onDemoPause, onDemoResume, getCurrentTime };
 
@@ -431,8 +433,37 @@ export default function PredictionListening({
   );
   const activeDemoChallenge = approvedChallenges[demoIndex] ?? null;
 
+  function previewChallenge(challenge: Challenge) {
+    if (busy || loading || demoState !== "idle") return;
+    setPreviewingChallenge(challenge);
+    onPreviewModeChange(true);
+    onPreview(challenge.clipStartMs, challenge.resumeAtMs);
+  }
+
+  function stopChallengePreview() {
+    onDemoPause();
+    setPreviewingChallenge(null);
+    onPreviewModeChange(false);
+  }
+
+  useEffect(() => {
+    if (!previewingChallenge) return;
+    let frame = 0;
+    const tick = () => {
+      if (getCurrentTime() >= previewingChallenge.resumeAtMs) {
+        onDemoPause();
+        setPreviewingChallenge(null);
+        onPreviewModeChange(false);
+        return;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [previewingChallenge, getCurrentTime, onDemoPause, onPreviewModeChange]);
+
   function startDemo() {
-    if (!approvedChallenges.length || busy || loading) return;
+    if (!approvedChallenges.length || busy || loading || previewingChallenge) return;
     setDemoIndex(0);
     setDemoFeedback("");
     setDemoReplayCount(0);
@@ -442,6 +473,7 @@ export default function PredictionListening({
 
   function stopDemo() {
     onDemoPause();
+    onPreviewModeChange(false);
     setDemoState("idle");
     setDemoFeedback("");
   }
@@ -498,20 +530,20 @@ export default function PredictionListening({
 
   useEffect(() => () => {
     demoCallbacks.current.onDemoPause();
+    onPreviewModeChange(false);
   }, []);
 
   return <div className={"prediction-listening-backdrop" + (embedded ? " embedded" : "") + (demoState !== "idle" ? " demo-active" : "")}>
     <section className="prediction-listening-modal" role="dialog" aria-modal={!embedded} aria-label="Prediction Listening">
       <header className="prediction-listening-header">
         <div>
-          <span className="eyebrow">NOVA GENERATOR · MÓDULO EDITORIAL</span>
+          <span className="eyebrow">CONTEÚDO PEDAGÓGICO</span>
           <h2>Prediction Listening</h2>
-          <p>{assetName} · {selectedCueIds.length} blocos concluídos no Shadowing</p>
+          <p>{assetName}</p>
         </div>
         <button className="icon-button" title="Fechar" onClick={() => { if (demoState !== "idle") onDemoPause(); onClose(); }}><X size={18}/></button>
       </header>
       <div className="prediction-listening-toolbar">
-        <div className="prediction-listening-prerequisite"><Check size={15}/> Shadowing concluído</div>
         <button className="primary-button" onClick={startDemo} disabled={busy || loading || approvedChallenges.length === 0 || demoState !== "idle"} title={approvedChallenges.length === 0 ? "Aprove ao menos um desafio para testar" : "Executar a experiência do aluno"}><PlayCircle size={15}/> Testar experiência</button>
         <button className="secondary-button" onClick={() => void downloadInput()} disabled={busy || loading}>
           <FileText size={15}/>{busy ? "Processando..." : "Baixar TXT para IA"}
@@ -533,6 +565,12 @@ export default function PredictionListening({
         {sourceHash && <small>HASH {sourceHash}</small>}
         {review?.saved_at && <small className="prediction-materials-saved">SALVO PARA MATERIAIS</small>}
       </div>
+      {previewingChallenge && <section className="prediction-demo-panel prediction-preview-panel" aria-live="polite">
+        <div className="prediction-demo-topline"><span>PRÉVIA DO TRECHO</span><button className="icon-button" title="Fechar prévia" onClick={stopChallengePreview}><X size={16}/></button></div>
+        <h2>{previewingChallenge.prompt}</h2>
+        <p className="prediction-demo-feedback">O vídeo está reproduzindo do início do contexto até o ponto em que a previsão deve acontecer.</p>
+        <div className="prediction-demo-progress"><span>Desafio {previewingChallenge.challengeNumber}</span><span>{previewingChallenge.clipStartMs} ms → {previewingChallenge.resumeAtMs} ms</span></div>
+      </section>}
       {demoState !== "idle" && <section className="prediction-demo-panel" aria-live="polite">
         <div className="prediction-demo-topline">
           <span>SIMULAÇÃO DO ALUNO</span>
@@ -591,7 +629,7 @@ export default function PredictionListening({
             </details>}
             <footer>
               <span>Início {challenge.clipStartMs} ms · Pausa {challenge.pauseAtMs} ms · Retomada {challenge.resumeAtMs} ms</span>
-              <button className="secondary-button" onClick={() => onPreview(challenge.clipStartMs)}>Pré-visualizar trecho</button>
+              <button className="secondary-button" onClick={() => previewChallenge(challenge)} disabled={Boolean(previewingChallenge) || demoState !== "idle"}><PlayCircle size={14}/> Pré-visualizar trecho</button>
               {challenge.status !== "approved" && <button className="primary-button" onClick={() => void changeStatus(challenge.id, "approved")} disabled={busy}>Aprovar</button>}
               {challenge.status !== "rejected" && <button className="secondary-button" onClick={() => void changeStatus(challenge.id, "rejected")} disabled={busy}>Rejeitar</button>}
               {challenge.status !== "draft" && <button className="secondary-button" onClick={() => void changeStatus(challenge.id, "draft")} disabled={busy}>Revisar novamente</button>}
