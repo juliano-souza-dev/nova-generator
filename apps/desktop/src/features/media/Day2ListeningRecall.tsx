@@ -57,7 +57,6 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
   const [fileName, setFileName] = useState("");
 
   const orderedCues = useMemo(() => cues
-    .filter(cue => cue.text.trim() && cue.endMs > cue.startMs)
     .map((cue, index) => ({
       cue_order: index + 1,
       cue_id: cue.id,
@@ -71,7 +70,8 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         start_ms: Math.round(word.startMs),
         end_ms: Math.round(word.endMs)
       }))
-    })), [cues]);
+    }))
+    .filter(cue => cue.text_en.trim() && cue.end_ms > cue.start_ms), [cues, translations]);
 
   const inputPayload = useMemo(() => ({
     contract: INPUT_CONTRACT,
