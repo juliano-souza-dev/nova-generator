@@ -12,6 +12,7 @@ import SmartLearningMoments from "./SmartLearningMoments";
 import Day2ListeningRecall from "./Day2ListeningRecall";
 import { buildSmartLearningSource, validateSmartLearningMoments, type SmartLearningMomentsPackage } from "./smart-learning-moments-contract";
 import { buildLearningJourneyPackage, validateLearningJourney, validateLearningJourneyDraft, type LearningJourneyPackage } from "./learning-journey-contract";
+import type { ListeningQuestion } from "./learning-journey-contract";
 
 type Asset = { id: string; name: string; kind: string; durationMs?: number | null; sourceVideoId?: string | null };
 type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string; wordAlignment?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
