@@ -82,7 +82,12 @@ fn validate_editorial_result(result: &Value, cues: &[crate::media::SubtitleCue],
         for field in ["approved_en", "approved_pt", "trailing", "notes"] {
             if suggestion.get(field).and_then(Value::as_str).is_none() { return Err(format!("A sugestão '{cue_id}' não contém '{field}'.")); }
         }
-        if suggestion["approved_pt"].as_str().unwrap_or("").trim().is_empty() { return Err(format!("A tradução de '{cue_id}' está vazia.")); }
+        if suggestion["approved_en"].as_str().unwrap_or("").trim().is_empty() {
+            return Err(format!("A revisão em inglês de '{cue_id}' está vazia."));
+        }
+        if suggestion["approved_pt"].as_str().unwrap_or("").trim().is_empty() {
+            return Err(format!("A tradução de '{cue_id}' está vazia."));
+        }
 
         let expected_words = source["words"].as_array().cloned().unwrap_or_default();
         if include_words {
