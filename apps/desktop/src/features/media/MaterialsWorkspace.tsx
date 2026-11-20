@@ -215,6 +215,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const [sourceTranslations, setSourceTranslations] = useState<Translation[]>([]);
   const importInput = useRef<HTMLInputElement>(null);
   const pedagogicalInput = useRef<HTMLInputElement>(null);
+  const materialsReadyRef = useRef(false);
 
   const selectedAsset = useMemo(() => assets.find(item => item.id === assetId), [assets, assetId]);
   const includedPedagogicalCount = pedagogicalContent?.items.filter(item => item.include_in_hub !== false).length ?? 0;
@@ -237,6 +238,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
       setSourceInfo({ cues: 0, translations: 0, editorial: 0, shadowing: 0, predictions: 0 });
       return;
     }
+    materialsReadyRef.current = false;
     setLoading(true); setError(""); setNotice("");
     try {
       const [cues, translations, prediction, stored, savedSmartLearningMoments] = await Promise.all([
@@ -321,10 +323,24 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       if (savedCards.length && stored?.sourceSignature !== materialSignature) setNotice("As fontes mudaram. Novos cards foram incorporados; suas edições e cards anteriores foram preservados para revisão.");
     } catch (e) {
       setError(String(e)); setCards([]);
-    } finally { setLoading(false); }
+    } finally { setLoading(false); materialsReadyRef.current = true; }
   }, [projectId]);
 
   useEffect(() => { void refreshAssets().catch(e => setError(String(e))); }, [refreshAssets]);
+
+  // As edições da jornada são persistidas automaticamente. O botão da etapa
+  // apenas confirma sua conclusão e libera a próxima.
+  useEffect(() => {
+    if (!materialsReadyRef.current || loading || !assetId) return;
+    const timer = window.setTimeout(async () => {
+      try {
+        await persistMaterials();
+      } catch (e) {
+        setError("Não foi possível salvar automaticamente: " + (e instanceof Error ? e.message : String(e)));
+      }
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [learningJourney, cards, pedagogicalContent, smartLearningMoments, loading, assetId, sourceSignature]);
   useEffect(() => { if (assetId) void loadSource(assetId); else setLoading(false); }, [assetId, loadSource]);
 
   // Persist Smart Learning Moments independently so edits and imported audio survive
