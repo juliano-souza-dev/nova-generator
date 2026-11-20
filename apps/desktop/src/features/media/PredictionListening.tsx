@@ -469,6 +469,7 @@ export default function PredictionListening({
     setDemoIndex(0);
     setDemoFeedback("");
     setDemoReplayCount(0);
+    onPreviewModeChange(true);
     setDemoState("playing");
     onDemoSeekAndPlay(approvedChallenges[0].clipStartMs);
   }
