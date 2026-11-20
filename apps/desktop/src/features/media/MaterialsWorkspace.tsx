@@ -1066,7 +1066,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 cues={sourceCues}
                 cards={cards.map(card => ({ id: card.id, sourceCueId: card.sourceCueId, focus: card.focus, meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation, exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status }))}
                 smartLearningMoments={smartLearningMoments as any}
-                lessons={learningJourney?.days[2].lessons ?? []}
+                lessons={learningJourney?.days[2].lessons.filter(item => Boolean(item.status || item.score)) ?? []}
                 onLessonsChange={updateDay3Lessons}
                 onBack={() => setSelectedJourneyDay(null)}
                 onSave={() => void saveMaterials()}
