@@ -1,0 +1,38 @@
+.day2-listening-recall{display:grid;gap:16px;margin-top:18px;padding:20px;border:1px solid #393342;border-radius:10px;background:#17151d;color:#eee9f5}
+.day2-listening-recall__header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.day2-listening-recall__header h3{margin:6px 0;font:600 18px 'Space Grotesk'}
+.day2-listening-recall__header p{max-width:680px;margin:0;color:#aaa4b2;font-size:11px;line-height:1.65}
+.day2-listening-recall__actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;flex:none}
+.day2-listening-recall__stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.day2-listening-recall__stats>div{display:grid;gap:4px;padding:10px;border:1px solid #302d37;border-radius:8px;background:#1d1a23}
+.day2-listening-recall__stats strong{font:600 16px 'Space Grotesk';color:#cbb7f2}
+.day2-listening-recall__stats span{font-size:9px;line-height:1.4;color:#aaa4b2}
+.day2-listening-recall__message{margin:0;padding:10px 12px;border-radius:7px;font-size:10px;line-height:1.5}
+.day2-listening-recall__message.is-error{color:#e7a9aa;background:#321f23;border:1px solid #70484b;white-space:pre-wrap}
+.day2-listening-recall__message.is-success{color:#a4d7b3;background:#1d2c23;border:1px solid #385844}
+.day2-listening-recall__empty{display:grid;justify-items:center;gap:8px;padding:30px 18px;border:1px dashed #51465f;border-radius:9px;text-align:center;background:#141318}
+.day2-listening-recall__empty svg{color:#b99bf1}
+.day2-listening-recall__empty strong{font-size:12px}
+.day2-listening-recall__empty p{max-width:480px;margin:0;color:#898491;font-size:10px;line-height:1.6}
+.day2-listening-recall__list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.day2-listening-recall__item{min-width:0;padding:14px;border:1px solid #38323f;border-radius:9px;background:#1b1920}
+.day2-listening-recall__item.is-approved{border-color:#385844}
+.day2-listening-recall__item.is-rejected{opacity:.58}
+.day2-listening-recall__item-head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.day2-listening-recall__item-head label{display:flex;align-items:center;gap:7px;flex:1;font:9px 'DM Mono';letter-spacing:.08em;color:#b99bf1}
+.day2-listening-recall__item-head input{accent-color:#a98bed}
+.day2-listening-recall__score{font:10px 'DM Mono';color:#d9b77e}
+.day2-listening-recall__status{padding:4px 7px;border-radius:12px;background:#302a23;color:#d9b77e;font-size:8px}
+.day2-listening-recall__status.approved{background:#203328;color:#8bd2a3}
+.day2-listening-recall__status.rejected{background:#382528;color:#e7a9aa}
+.day2-listening-recall__item>strong{display:block;font-size:11px}
+.day2-listening-recall__item>p{margin:7px 0;color:#d8d1df;font-size:11px;line-height:1.5}
+.day2-listening-recall__item>small{color:#898491;font-size:9px}
+.day2-listening-recall__item ul{display:grid;gap:5px;margin:10px 0;padding-left:18px;color:#c9c2d0;font-size:10px}
+.day2-listening-recall__preview{margin:10px 0;padding:10px;border:1px solid #302d37;border-radius:7px;background:#141318;color:#d9c9f5;font-size:10px;line-height:1.5}
+.day2-listening-recall__rationale{padding-left:9px;border-left:2px solid #594a70;color:#aaa4b2!important;font-size:9px!important}
+.day2-listening-recall__item .day2-listening-recall__explanation{padding:9px;border-radius:6px;background:#22202a;color:#bcb4c8;font-size:10px}
+.day2-listening-recall__item-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:12px;padding-top:10px;border-top:1px solid #302d37}
+.day2-listening-recall__filename{color:#898491;font-size:9px}
+@media(max-width:950px){.day2-listening-recall__header{flex-direction:column}.day2-listening-recall__actions{justify-content:flex-start}.day2-listening-recall__stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.day2-listening-recall__list{grid-template-columns:1fr}.day2-listening-recall__stats{grid-template-columns:repeat(2,minmax(0,1fr))}.day2-listening-recall__item-head{flex-wrap:wrap}.day2-listening-recall__item-head label{flex-basis:100%}}
