@@ -9,6 +9,7 @@ import "./MaterialsWorkspace.css";
 import { runTrackedTask } from "../tasks/TaskCenter";
 import PredictionListening from "./PredictionListening";
 import SmartLearningMoments from "./SmartLearningMoments";
+import Day2ListeningRecall from "./Day2ListeningRecall";
 import { buildSmartLearningSource, validateSmartLearningMoments, type SmartLearningMomentsPackage } from "./smart-learning-moments-contract";
 import { buildLearningJourneyPackage, validateLearningJourney, type LearningJourneyPackage } from "./learning-journey-contract";
 
@@ -388,15 +389,51 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     } catch (e) { setError(String(e)); }
   }
 
+  function updateDay2Activities(activities: ListeningQuestion[]) {
+    try {
+      const base = learningJourney ?? buildLearningJourneyPackage({
+        projectId, assetId, sourceSignature: learningJourneySourceSignature(sourceSignature, cards),
+        cues: sourceCues,
+        cards: cards.map(card => ({
+          id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus,
+          meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation,
+          exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status
+        }))
+      });
+      const days = base.days.map((day, index) => index === 1 ? { ...day, activities } : day) as LearningJourneyPackage["days"];
+      setLearningJourney({ ...base, days });
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function approvedDay2Activities(journey: LearningJourneyPackage) {
+    return journey.days[1].activities.filter(item =>
+      (item as ListeningQuestion & { status?: string }).status === "approved" &&
+      (item as ListeningQuestion & { include_in_hub?: boolean }).include_in_hub !== false
+    );
+  }
+
   function exportLearningJourney() {
     if (!learningJourney) return;
     if (learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards)) {
       setError("Os cards aprovados foram alterados. Regenere a jornada antes de exportar.");
       return;
     }
-    const errors = validateLearningJourney(learningJourney);
+    const approvedActivities = approvedDay2Activities(learningJourney);
+    const approvedTypes = new Set(approvedActivities.map(item => item.type));
+    if (["identify", "word-recognition", "gap", "reconstruct"].some(type => !approvedTypes.has(type as any))) {
+      setError("Antes de exportar, aprove ao menos uma atividade de cada modalidade do Dia 2.");
+      return;
+    }
+    const exportJourney = {
+      ...learningJourney,
+      days: learningJourney.days.map((day, index) => index === 1 ? { ...day, activities: approvedActivities } : day)
+    };
+    const errors = validateLearningJourney(exportJourney);
     if (errors.length) { setError(errors.join("\n")); return; }
-    const blob = new Blob([JSON.stringify(learningJourney, null, 2)], { type: "application/json;charset=utf-8" });
+    const blob = new Blob([JSON.stringify(exportJourney, null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -930,13 +967,21 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           {activePedagogicalTab === "journey" && <section className="materials-journey-panel">
             <div className="materials-journey-heading">
               <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Jornada de aprendizagem · 7 dias</h3>
-                <p>Prepare atividades progressivas a partir da transcrição revisada e dos cards aprovados. O Dia 1 reaproveita as etapas atuais do iHubEnglish.</p></div>
+                <p>O Dia 1 permanece como está. Estamos produzindo o Day 2 · Listening Recall por geração externa, revisão e aprovação antes do envio ao iHubEnglish.</p></div>
               <div className="materials-journey-actions">
-                <button className="secondary-button" type="button" onClick={createLearningJourney} disabled={loading || !sourceCues.length}><Sparkles size={14}/>{learningJourney ? "Regenerar rascunho" : "Gerar jornada"}</button>
+                <button className="secondary-button" type="button" onClick={createLearningJourney} disabled={loading || sourceCues.length < 3}><Sparkles size={14}/>{learningJourney ? "Preparar novamente a estrutura" : "Preparar estrutura da jornada"}</button>
                 <button className="secondary-button" type="button" onClick={exportLearningJourney} disabled={!learningJourney}><Download size={14}/> Exportar JSON</button>
               </div>
             </div>
             {learningJourney && learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards) && <p className="materials-journey-stale">Os cards aprovados mudaram. Regenere a jornada antes de exportar ou publicar.</p>}
+            <Day2ListeningRecall
+              projectId={projectId}
+              assetId={assetId}
+              sourceSignature={sourceSignature}
+              cues={sourceCues}
+              activities={learningJourney?.days[1].activities ?? []}
+              onActivitiesChange={updateDay2Activities}
+            />
             {learningJourney ? <div className="materials-journey-days">{learningJourney.days.map(day => <article key={day.day} className="materials-journey-day"><span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.mode === "existing-stages" ? "Etapas atuais" : day.mode === "listening-recall" ? day.activities.length + " exercícios de listening" : day.mode === "micro-lessons" ? day.lessons.length + " microaulas" : day.mode === "deep-listening" ? day.tasks.length + " tarefas" : day.mode === "speaking" ? day.prompts.length + " propostas de speaking" : "Desafio integrado"}</small></article>)}</div> : <p className="materials-journey-empty">O rascunho será montado com exercícios de identificação, lacunas e compreensão auditiva; microaulas derivadas dos cards aprovados; tarefas de escuta profunda; e propostas de gravação e comparação.</p>}
             {learningJourney && <p className="materials-journey-note">Rascunho editável · {learningJourney.days[1].activities.length} atividades no Dia 2 · {learningJourney.days[2].lessons.length} microaulas no Dia 3. Salve os Materiais para manter o pacote neste projeto.</p>}
           </section>}
