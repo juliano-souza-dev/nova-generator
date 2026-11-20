@@ -759,9 +759,9 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   }
 
   async function exportFinalPedagogicalPackage() {
-    if ((!pedagogicalContent && !smartLearningMoments?.final_selection) || !assetId || exporting) return;
+    if ((!pedagogicalContent && !smartLearningMoments?.final_selection && !sourceInfo.predictions) || !assetId || exporting) return;
     const selectedItems = pedagogicalContent?.items.filter(item => item.include_in_hub !== false) ?? [];
-    if (!selectedItems.length && !smartLearningMoments?.final_selection) {
+    if (!selectedItems.length && !smartLearningMoments?.final_selection && !sourceInfo.predictions) {
       setError("Selecione conteúdo pedagógico ou aprove uma mini aula Smart Learning Moments antes de exportar.");
       return;
     }
@@ -831,7 +831,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   return <section className="materials-workspace">
     <header className="materials-heading">
       <div><span className="eyebrow">ESTÚDIO DIDÁTICO</span><h2>Materiais</h2><p>Reúna conteúdos aprovados, prepare cards Anki e gere os áudios usados no estudo.</p></div>
-      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="secondary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar no projeto"}</button><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={(!includedPedagogicalCount && !smartLearningMoments?.final_selection) || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
+      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="secondary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar no projeto"}</button><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={(!includedPedagogicalCount && !smartLearningMoments?.final_selection && !sourceInfo.predictions) || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
       {activeMaterialTab === "anki" && <div className="materials-heading-actions">
         <button className="secondary-button" onClick={() => void createExternalInput()} disabled={!cards.length || loading}><FileText size={15}/> Gerar TXT para IA</button>
         <button className="secondary-button" onClick={() => importInput.current?.click()}><Download size={15}/> Importar JSON da IA</button>
