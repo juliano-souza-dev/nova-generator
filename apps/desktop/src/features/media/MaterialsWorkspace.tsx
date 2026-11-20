@@ -810,10 +810,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   }
 
   async function exportFinalPedagogicalPackage() {
-    if ((!pedagogicalContent && !smartLearningMoments?.final_selection && !sourceInfo.predictions) || !assetId || exporting) return;
+    if ((!pedagogicalContent && !smartLearningMoments?.final_selection && !sourceInfo.predictions && !learningJourney) || !assetId || exporting) return;
     const selectedItems = pedagogicalContent?.items.filter(item => item.include_in_hub !== false) ?? [];
-    if (!selectedItems.length && !smartLearningMoments?.final_selection && !sourceInfo.predictions) {
-      setError("Selecione conteúdo pedagógico ou aprove uma mini aula Smart Learning Moments antes de exportar.");
+    if (!selectedItems.length && !smartLearningMoments?.final_selection && !sourceInfo.predictions && !learningJourney) {
+      setError("Selecione conteúdo pedagógico, aprove uma mini aula ou prepare a Jornada de aprendizagem antes de exportar.");
       return;
     }
     setError(""); setNotice(""); setExporting(true);
@@ -852,6 +852,9 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           ? { ...day, activities: approvedJourneyActivities }
           : day)
       } : null;
+      if (!selectedItems.length && !smartLearningMoments?.final_selection && !predictionIsCurrent && !journeyIsCurrent) {
+        throw new Error("Não há conteúdo aprovado e atualizado para exportar. Aprove os materiais ou conclua a revisão da jornada.");
+      }
 
       await persistMaterials();
       const payload = {
