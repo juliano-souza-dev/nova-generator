@@ -203,7 +203,6 @@ export function buildLearningJourneyPackage(input: {
 }): LearningJourneyPackage {
   const cues = input.cues.filter(cue => cue.id && cue.text.trim() && cue.endMs > cue.startMs);
   if (cues.length < 3) throw new Error("A jornada precisa de pelo menos três trechos válidos de transcrição.");
-  const approvedCards = input.cards.filter(card => card.status === "approved" && card.focus.trim() && card.meaning.trim());
   const selected = cues.slice(0, 12);
   const cueOrder = (cue: JourneySourceCue) => Number(cue.order) > 0 ? Number(cue.order) : cues.indexOf(cue) + 1;
   const distractors = (cue: JourneySourceCue) => unique(
@@ -277,22 +276,8 @@ export function buildLearningJourneyPackage(input: {
       });
     }
   });
-  const lessons: MicroLesson[] = approvedCards.slice(0, 12).map(card => ({
-    id: "micro-" + card.id,
-    title: card.highlightEn || card.focus,
-    focus: /connected[ -]speech|linking|reduction/i.test(card.type + " " + card.focus) ? "connected-speech" : /pronunciation|stress|intonation/i.test(card.type + " " + card.focus) ? "pronunciation" : /grammar|structure|tense/i.test(card.type + " " + card.focus) ? "grammar" : "expression",
-    sourceCueOrders: (() => { const source = cues.find(cue => cue.id === card.sourceCueId); return source ? [cueOrder(source)] : []; })(),
-    targetEn: card.highlightEn || card.focus,
-    targetPt: card.meaning,
-    explanationPt: card.explanation || "Observe como esta expressão funciona no contexto original.",
-    examples: card.exampleEn ? [{ en: card.exampleEn, pt: card.examplePt }] : [],
-    practice: {
-      prompt: "Qual alternativa mantém o sentido da expressão no contexto?",
-      options: [{ id: "context", text: card.meaning }, { id: "literal", text: "Uma tradução palavra por palavra, sem considerar o contexto." }],
-      answerId: "context",
-      feedbackPt: "A resposta considera o significado contextual da expressão."
-    }
-  }));
+  // Day 3 lessons are authored through the reviewed external-AI workflow, never auto-invented from Anki cards.
+  const lessons: MicroLesson[] = [];
   const deepTasks: DeepListeningTask[] = selected.slice(0, 8).map((cue, index) => ({
     id: "deep-" + cue.id,
     cueOrders: [cueOrder(cue)],
