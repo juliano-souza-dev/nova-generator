@@ -64,7 +64,7 @@ export type SpeakingPrompt = {
 export type LearningJourneyPackage = {
   contract: typeof LEARNING_JOURNEY_CONTRACT;
   version: 1;
-  source: { projectId: string; assetId: string; sourceSignature: string };
+  source: { projectId: string; assetId: string; sourceSignature: string; mediaSignature?: string };
   language: { source: "en"; support: "pt-BR" };
   days: [
     { day: 1; title: "Explore & Understand"; mode: "existing-stages"; stageKeys: ["english", "word", "shadowing", "audio", "practice"] },
@@ -188,6 +188,7 @@ export function buildLearningJourneyPackage(input: {
   projectId: string;
   assetId: string;
   sourceSignature: string;
+  mediaSignature?: string;
   cues: JourneySourceCue[];
   cards: JourneySourceCard[];
 }): LearningJourneyPackage {
@@ -307,7 +308,7 @@ export function buildLearningJourneyPackage(input: {
   return {
     contract: LEARNING_JOURNEY_CONTRACT,
     version: 1,
-    source: { projectId: input.projectId, assetId: input.assetId, sourceSignature: input.sourceSignature },
+    source: { projectId: input.projectId, assetId: input.assetId, sourceSignature: input.sourceSignature, mediaSignature: input.mediaSignature },
     language: { source: "en", support: "pt-BR" },
     days: [
       { day: 1, title: "Explore & Understand", mode: "existing-stages", stageKeys: ["english", "word", "shadowing", "audio", "practice"] },
