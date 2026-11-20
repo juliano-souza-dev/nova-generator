@@ -184,13 +184,24 @@ fn save_external_translation_package(path: String, bytes: Vec<u8>) -> Result<(),
     fs::write(&path, bytes).map_err(|e| format!("Não foi possível gravar o arquivo TXT: {e}"))
 }
 
+#[tauri::command]
+fn save_generated_json(path: String, bytes: Vec<u8>) -> Result<(), String> {
+    if !path.to_ascii_lowercase().ends_with(".json") {
+        return Err("O arquivo de exportação precisa usar a extensão .json.".into());
+    }
+    if bytes.is_empty() || bytes.len() > 50 * 1024 * 1024 {
+        return Err("O JSON está vazio ou excede o limite de 50 MB.".into());
+    }
+    fs::write(&path, bytes).map_err(|e| format!("Não foi possível gravar o JSON: {e}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| { ttk::setup(app)?; Ok(()) })
         .invoke_handler(tauri::generate_handler![
-            list_projects, create_project, duplicate_project, delete_project, update_project_status, update_project_stage, save_external_translation_package,
+            list_projects, create_project, duplicate_project, delete_project, update_project_status, update_project_stage, save_external_translation_package, save_generated_json,
             media::nova_inspect_youtube, media::nova_prepare_youtube_cache, media::nova_authorize_youtube_preview, media::list_project_media,
             media::nova_import_media_files, media::nova_trim_youtube_cache,
             media::open_project_media, media::load_project_subtitles, media::save_project_subtitles, media::load_shadowing_selection, media::save_shadowing_selection,
