@@ -857,9 +857,6 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         predictionReview?.source_hash === predictionPackage.sourceHash
       );
       const approvedJourneyActivities = learningJourney ? approvedDay2Activities(learningJourney) : [];
-      const approvedJourneyTypes = new Set(approvedJourneyActivities.map(item => item.type));
-      const journeyHasApprovedDay2 = ["identify", "word-recognition", "gap", "reconstruct"]
-        .every(type => approvedJourneyTypes.has(type as any));
       const journeyIsCurrent = Boolean(
         learningJourney && journeyReadyForExport(learningJourney) &&
         learningJourney.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards) &&
