@@ -1215,6 +1215,21 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 cards={cards.map(card => ({ id: card.id, sourceCueId: card.sourceCueId, focus: card.focus, meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation, exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status }))}
                 value={learningJourney?.day1Preparation ?? null} onChange={updateDay1Preparation}
                 onBack={() => setSelectedJourneyDay(null)} onSave={() => void saveMaterials()} saving={saving} />
+              <section className="day1-existing-stages">
+                <article><strong>Explore & Understand</strong><p>O vídeo, as legendas, os tempos, as traduções e os links continuam sendo preparados exclusivamente no editor. Esta etapa não altera esse material.</p></article>
+                <article><strong>Speak · Shadowing</strong><p>{sourceInfo.shadowing > 0 ? sourceInfo.shadowing + " trechos selecionados no Shadowing." : "Ainda não há Shadowing preparado. Use a página de Shadowing já existente e retorne aqui."}</p></article>
+                <article><strong>Listen · Áudio</strong><p>Usa o áudio original da mídia e a transcrição sincronizada já carregados no Kit. Não exige uma segunda preparação de áudio.</p></article>
+              </section>
+              <section className="materials-prediction-panel">
+                {prediction?.ready ? <PredictionListening
+                  projectId={projectId} assetId={assetId} assetName={prediction.assetName}
+                  cues={prediction.cues} selectedCueIds={prediction.selectedCueIds} sourceSignature={prediction.sourceSignature}
+                  onClose={() => setSelectedJourneyDay(null)} onPreview={prediction.onPreview} onPreviewModeChange={prediction.onPreviewModeChange}
+                  onDemoSeekAndPlay={prediction.onDemoSeekAndPlay} onDemoPause={prediction.onDemoPause}
+                  onDemoResume={prediction.onDemoResume} getCurrentTime={prediction.getCurrentTime}
+                  onProjectUpdated={onProjectUpdated} embedded
+                /> : <div className="materials-prediction-prerequisite"><h3>Prediction Listening</h3><p>Prepare o Shadowing e o alinhamento WhisperX para liberar a geração de desafios de previsão.</p></div>}
+              </section>
             </div> : selectedJourneyDay === 2 ? <div className="materials-journey-work">
               <Day2ListeningRecall
                 projectId={projectId}
