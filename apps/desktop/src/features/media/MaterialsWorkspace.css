@@ -208,7 +208,7 @@
 @media(max-width:650px){.materials-pedagogical-curation{align-items:flex-start;flex-direction:column}.materials-pedagogical-steps{grid-template-columns:1fr}}
 
 /* Jornada: somente etapas concluídas recebem cor de destaque. */
-.materials-journey-day>span{color:#aaa4b2}
+.materials-journey-day>span,.materials-journey-day em{color:#aaa4b2}
 .materials-journey-day.is-completed{border-color:#385844;background:#1d2a23;box-shadow:inset 3px 0 #68b982}
 .materials-journey-day.is-completed>span,.materials-journey-day.is-completed em{color:#8bd2a3}
 .materials-journey-day:not(:disabled):hover{border-color:#55515f;background:#25232b;transform:translateY(-1px)}
