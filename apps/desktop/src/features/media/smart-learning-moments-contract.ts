@@ -72,6 +72,7 @@ export function validateSmartLearningMoments(
   if (!["recommended", "no_recommendation"].includes(pkg.recommendation_status)) errors.push("recommendation_status inválido.");
   if (!Array.isArray(pkg.candidates) || pkg.candidates.length > 8) return [...errors, "A IA deve retornar de 1 a 8 candidatas, ou nenhuma quando não houver recomendação."];
   if (pkg.recommendation_status === "no_recommendation" && pkg.candidates.length) errors.push("Uma resposta sem recomendação não pode conter candidatas.");
+  if (pkg.recommendation_status === "no_recommendation" && pkg.final_selection !== null) errors.push("Uma resposta sem recomendação deve manter final_selection como null.");
   if (pkg.recommendation_status === "recommended" && !pkg.candidates.length) errors.push("Inclua candidatas ou marque no_recommendation.");
   const ids = new Set<string>();
   const alignedRange = (cue: SmartLearningCue | undefined, expression: string) => {
@@ -86,7 +87,13 @@ export function validateSmartLearningMoments(
     }
     return null;
   };
-  const sorted = [...pkg.candidates].sort((a, b) => b.pedagogical_score - a.pedagogical_score);
+  const compareCandidates = (a: SmartLearningCandidate, b: SmartLearningCandidate) =>
+    b.pedagogical_score - a.pedagogical_score ||
+    b.score_breakdown.transferability - a.score_breakdown.transferability ||
+    b.score_breakdown.communicative_utility - a.score_breakdown.communicative_utility ||
+    b.score_breakdown.instructional_value - a.score_breakdown.instructional_value ||
+    b.score_breakdown.scene_relevance - a.score_breakdown.scene_relevance;
+  const sorted = [...pkg.candidates].sort(compareCandidates);
   pkg.candidates.forEach((candidate, index) => {
     if (!candidate?.id || ids.has(candidate.id)) errors.push("Há ID de candidata ausente ou duplicado.");
     ids.add(candidate.id);
