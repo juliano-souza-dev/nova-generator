@@ -328,6 +328,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
 
   useEffect(() => { void refreshAssets().catch(e => setError(String(e))); }, [refreshAssets]);
 
+  useEffect(() => { materialsReadyRef.current = false; }, [assetId]);
+
   // As edições da jornada são persistidas automaticamente. O botão da etapa
   // apenas confirma sua conclusão e libera a próxima.
   useEffect(() => {
