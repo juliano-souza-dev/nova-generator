@@ -399,7 +399,9 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   }
 
   function approvedDay2Activities(journey: LearningJourneyPackage) {
+    const requiredTypes = ["identify", "word-recognition", "gap", "reconstruct"];
     return journey.days[1].activities.filter(item =>
+      requiredTypes.includes(item.type) &&
       (item as ListeningQuestion & { status?: string }).status === "approved" &&
       (item as ListeningQuestion & { include_in_hub?: boolean }).include_in_hub !== false
     );
