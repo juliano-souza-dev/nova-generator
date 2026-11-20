@@ -383,6 +383,17 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     return document;
   }
 
+  function updateDay1Notice(lessons: MicroLesson[]) {
+    try {
+      const currentJourneySignature = learningJourneySourceSignature(sourceSignature, cards);
+      const base = learningJourney?.source.sourceSignature === currentJourneySignature ? learningJourney : buildLearningJourneyPackage({
+        projectId, assetId, sourceSignature: currentJourneySignature, mediaSignature: sourceSignature, cues: sourceCues,
+        cards: cards.map(card => ({ id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus, meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation, exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status }))
+      });
+      setLearningJourney({ ...base, day1NoticeLessons: lessons });
+      setError('');
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
   function updateDay1Preparation(data: Day1PreparationData) {
     try {
       const currentJourneySignature = learningJourneySourceSignature(sourceSignature, cards);
@@ -1196,6 +1207,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 </button>)}
               </div>
             </div> : selectedJourneyDay === 1 ? <div className="materials-journey-work">
+              <Day3NoticeInContext day={1} projectId={projectId} assetId={assetId} sourceSignature={sourceSignature} cues={sourceCues}
+                cards={cards.map(card => ({ id: card.id, sourceCueId: card.sourceCueId, focus: card.focus, meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation, exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status }))}
+                smartLearningMoments={smartLearningMoments as any} lessons={learningJourney?.day1NoticeLessons ?? []}
+                onLessonsChange={updateDay1Notice} onBack={() => setSelectedJourneyDay(null)} onSave={() => void saveMaterials()} saving={saving} />
               <Day1Preparation projectId={projectId} assetId={assetId} sourceSignature={sourceSignature} cues={sourceCues}
                 cards={cards.map(card => ({ id: card.id, sourceCueId: card.sourceCueId, focus: card.focus, meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation, exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status }))}
                 value={learningJourney?.day1Preparation ?? null} onChange={updateDay1Preparation}
