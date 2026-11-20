@@ -200,6 +200,7 @@ export default function MaterialsWorkspace({ projectId, initialAssetId, onProjec
   const [pedagogicalFileName, setPedagogicalFileName] = useState("");
   const [activeMaterialTab, setActiveMaterialTab] = useState<"pedagogical" | "anki">("pedagogical");
   const [activePedagogicalTab, setActivePedagogicalTab] = useState<"smart" | "vocabulary" | "prediction" | "journey">("smart");
+  const [selectedJourneyDay, setSelectedJourneyDay] = useState<number | null>(null);
   const [voices, setVoices] = useState<SharedVoice[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [voiceCloningReady, setVoiceCloningReady] = useState(false);
@@ -995,31 +996,26 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               </div>
             </div>
             {learningJourney && learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards) && <p className="materials-journey-stale">Os cards aprovados mudaram. Regenere a jornada antes de exportar ou publicar.</p>}
-            <div className="materials-journey-overview">
+            {selectedJourneyDay === null ? <div className="materials-journey-overview">
               <div className="materials-journey-section-heading">
-                <div><span className="eyebrow">VISÃO GERAL</span><h4>Sequência de aprendizagem</h4></div>
-                <span className="materials-journey-progress">{learningJourney ? "Estrutura da jornada" : "Planejamento dos 7 dias"}</span>
+                <div><span className="eyebrow">VISÃO GERAL</span><h4>Selecione um dia para preparar</h4></div>
+                <span className="materials-journey-progress">7 etapas</span>
               </div>
               <div className="materials-journey-days">
-                {(learningJourney?.days ?? [
-                  { day: 1, title: "Explore & Understand", mode: "existing-stages" },
-                  { day: 2, title: "Listening Recall", mode: "listening-recall" },
-                  { day: 3, title: "Notice in Context", mode: "micro-lessons" },
-                  { day: 4, title: "Deep Listening", mode: "deep-listening" },
-                  { day: 5, title: "Speak & Compare", mode: "speaking" },
-                  { day: 6, title: "Listening & Speaking Challenge", mode: "mixed-challenge" },
-                  { day: 7, title: "Final Challenge", mode: "final-challenge" }
-                ] as const).map(day => <article key={day.day} className={"materials-journey-day" + (day.day === 2 ? " is-current" : day.day === 1 ? " is-established" : " is-planned")}>
-                  <span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong>
-                  <small>{day.day === 1 ? "Etapas existentes" : day.day === 2 ? (learningJourney ? learningJourney.days[1].activities.length + " atividades · " + approvedDay2Activities(learningJourney).length + " aprovadas" : "Em produção") : day.day === 3 ? "Microaulas contextuais" : day.day === 4 ? "Compreensão profunda" : day.day === 5 ? "Pronúncia e fluência" : day.day === 6 ? "Desafio integrado" : "Avaliação final"}</small>
-                </article>)}
+                {[
+                  { day: 1, title: "Explore & Understand", detail: "Etapas existentes", state: "is-established" },
+                  { day: 2, title: "Listening Recall", detail: learningJourney ? learningJourney.days[1].activities.length + " atividades · " + approvedDay2Activities(learningJourney).length + " aprovadas" : "Preparar atividades de listening", state: "is-current" },
+                  { day: 3, title: "Notice in Context", detail: "Microaulas contextuais", state: "is-planned" },
+                  { day: 4, title: "Deep Listening", detail: "Compreensão profunda", state: "is-planned" },
+                  { day: 5, title: "Speak & Compare", detail: "Pronúncia e fluência", state: "is-planned" },
+                  { day: 6, title: "Listening & Speaking Challenge", detail: "Desafio integrado", state: "is-planned" },
+                  { day: 7, title: "Final Challenge", detail: "Avaliação final", state: "is-planned" }
+                ].map(day => <button type="button" key={day.day} className={"materials-journey-day " + day.state + (day.day === 1 ? " is-locked" : "")} onClick={() => { if (day.day !== 1) setSelectedJourneyDay(day.day); }} disabled={day.day === 1}>
+                  <span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.detail}</small>
+                  {day.day !== 1 && <em>Abrir preparação <span aria-hidden="true">→</span></em>}
+                </button>)}
               </div>
-            </div>
-            <div className="materials-journey-work">
-              <div className="materials-journey-section-heading">
-                <div><span className="eyebrow">DIA 02</span><h4>Listening Recall</h4><p>Gere as atividades, revise cada candidata e aprove somente o que deseja enviar ao iHubEnglish.</p></div>
-                {learningJourney && <span className="materials-journey-progress">{learningJourney.days[1].activities.length} no rascunho · {approvedDay2Activities(learningJourney).length} aprovadas</span>}
-              </div>
+            </div> : selectedJourneyDay === 2 ? <div className="materials-journey-work">
               <Day2ListeningRecall
                 projectId={projectId}
                 assetId={assetId}
@@ -1032,8 +1028,15 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                   Number.isFinite((item as ListeningQuestion & { score?: number }).score))
                 ) ?? []}
                 onActivitiesChange={updateDay2Activities}
+                onBack={() => setSelectedJourneyDay(null)}
+                onSave={() => void saveMaterials()}
+                saving={saving}
               />
-            </div>
+            </div> : <section className="materials-journey-day-workspace">
+              <header><div><span className="eyebrow">DIA {String(selectedJourneyDay).padStart(2, "0")} · PREPARAÇÃO</span><h4>{(["", "", "Listening Recall", "Notice in Context", "Deep Listening", "Speak & Compare", "Listening & Speaking Challenge", "Final Challenge"][selectedJourneyDay])}</h4><p>Área de preparação desta etapa. Aqui ficarão as atividades, instruções para IA, revisão e aprovação específicas do dia.</p></div></header>
+              <div className="materials-journey-day-placeholder"><strong>Preparação do Dia {String(selectedJourneyDay).padStart(2, "0")}</strong><span>O espaço está reservado para construir e revisar o conteúdo desta etapa.</span></div>
+              <footer><button className="secondary-button" type="button" onClick={() => setSelectedJourneyDay(null)}>Voltar aos dias</button><button className="primary-button" type="button" onClick={() => void saveMaterials()} disabled={saving}><Save size={14}/>{saving ? "Salvando..." : "Salvar"}</button></footer>
+            </section>}
           </section>}
         </> : <div className="materials-anki-content">
         <div className="materials-runtime">
