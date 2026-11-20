@@ -109,6 +109,7 @@ export type Day1PreparationPackage = {
   subtitleChallenge: { cueOrders: number[] };
   expressionMatch: Day1PracticeItem[];
   patternChallenge: Day1PracticeItem[];
+  predictionListening?: { version: 1; challenges: Record<string, unknown>[] };
 };
 
 export type LearningJourneyPackage = {
