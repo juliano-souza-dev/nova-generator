@@ -83,6 +83,15 @@ export type SpeakingPrompt = {
   sourceText: string;
   translationPt?: string;
   focus: "rhythm" | "pauses" | "connected-speech" | "intonation" | "fluency";
+  prompt?: string;
+  guidancePt?: string;
+  successCriteria?: string[];
+  score?: number;
+  score_breakdown?: Record<string, number>;
+  pedagogical_rationale?: string;
+  difficulty?: "beginner" | "elementary" | "intermediate" | "upper-intermediate";
+  status?: "draft" | "approved" | "rejected";
+  include_in_hub?: boolean;
 };
 
 export type LearningJourneyPackage = {
