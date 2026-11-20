@@ -97,11 +97,11 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
         const sourceCue = cues[cueOrders[0] - 1];
         if (!sourceCue || !clean(raw.sourceText) || !sourceCue.text.toLowerCase().includes(clean(raw.sourceText).toLowerCase()) || !clean(raw.targetEn) || !raw.sourceText.toLowerCase().includes(raw.targetEn.toLowerCase())) throw new Error("A fala de origem não corresponde à transcrição em " + raw.id + ".");
         if (!clean(raw.title) || !clean(raw.targetPt) || !clean(raw.explanationPt) || !clean(raw.communicativeIntentPt) || !Array.isArray(raw.examples) || raw.examples.length < 2 || !Array.isArray(raw.contextTree) || raw.contextTree.length < 2 || !isObject(raw.practice) || !Array.isArray(raw.practice.options) || raw.practice.options.length < 2 || !raw.practice.options.some((option: any) => option.id === raw.practice.answerId)) throw new Error("A microaula " + raw.id + " está incompleta.");
-        return { ...raw, status: "approved" } as Lesson;
+        return { ...raw, status: "draft" } as Lesson;
       });
       normalized.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       onLessonsChange(normalized);
-      setNotice(normalized.length + " microaulas importadas e ordenadas por pontuação. Todas aguardam sua revisão.");
+      setNotice(normalized.length + " microaulas importadas como rascunho e ordenadas por pontuação. Revise e aprove as que deseja incluir no iHub.");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
   }
