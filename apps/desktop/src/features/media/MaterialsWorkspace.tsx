@@ -968,32 +968,76 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         predictionReview?.saved_at && predictionPackage?.sourceHash &&
         predictionReview?.source_hash === predictionPackage.sourceHash
       );
-      const approvedJourneyActivities = learningJourney ? approvedDay2Activities(learningJourney) : [];
-      const journeyIsCurrent = Boolean(
-        learningJourney && journeyReadyForExport(learningJourney) &&
+      const journeySourceIsCurrent = Boolean(
+        learningJourney &&
         learningJourney.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards) &&
         validateLearningJourney(learningJourney).length === 0
       );
+      if (learningJourney && !journeySourceIsCurrent) {
+        throw new Error("A Jornada de aprendizagem está desatualizada ou incompleta. Revise e salve os dias antes de exportar o JSON completo.");
+      }
+      if (learningJourney && !journeyReadyForExport(learningJourney)) {
+        throw new Error("A Jornada de aprendizagem ainda não está pronta. Cada modalidade obrigatória precisa ter ao menos uma atividade aprovada.");
+      }
+      const journeyIsCurrent = Boolean(learningJourney && journeySourceIsCurrent && journeyReadyForExport(learningJourney));
       const exportJourney = journeyIsCurrent && learningJourney ? {
         ...learningJourney,
-        days: learningJourney.days.map((day, index) => index === 1
-          ? { ...day, activities: approvedJourneyActivities }
-          : index === 2 ? { ...day, lessons: approvedDay3Lessons(learningJourney) }
-          : index === 3 ? { ...day, tasks: approvedDay4Tasks(learningJourney) } : day)
+        days: learningJourney.days.map((day, index) =>
+          index === 1 ? { ...day, activities: approvedDay2Activities(learningJourney) } :
+          index === 2 ? { ...day, lessons: approvedDay3Lessons(learningJourney) } :
+          index === 3 ? { ...day, tasks: approvedDay4Tasks(learningJourney) } :
+          index === 4 ? { ...day, prompts: approvedDay5Prompts(learningJourney) } :
+          index === 5 ? { ...day, listening: approvedDay6Listening(learningJourney), speaking: approvedDay6Speaking(learningJourney) } :
+          index === 6 ? { ...day, listening: approvedDay7Listening(learningJourney), speaking: approvedDay7Speaking(learningJourney) } : day)
       } : null;
+      if (exportJourney) {
+        const journeyErrors = validateLearningJourney(exportJourney);
+        if (journeyErrors.length) throw new Error("A Jornada de aprendizagem não passou na validação final: " + journeyErrors.join(" "));
+      }
       if (!selectedItems.length && !smartLearningMoments?.final_selection && !predictionIsCurrent && !journeyIsCurrent) {
         throw new Error("Não há conteúdo aprovado e atualizado para exportar. Aprove os materiais ou conclua a revisão da jornada.");
       }
 
+      const toBase64 = (bytes: Uint8Array) => {
+        let binary = "";
+        for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+          binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+        }
+        return btoa(binary);
+      };
+      const exportedAnkiCards = await Promise.all(approvedCards.map(async card => {
+        let audio: { base64: string; mime_type: string; source: string } | null = null;
+        if (card.audioPath) {
+          const response = await fetch(convertFileSrc(card.audioPath));
+          if (!response.ok) throw new Error("Não foi possível incorporar o áudio do card aprovado " + card.id + " ao JSON completo.");
+          const blob = await response.blob();
+          audio = {
+            base64: toBase64(new Uint8Array(await blob.arrayBuffer())),
+            mime_type: blob.type || "audio/mpeg",
+            source: card.audioSource ?? "unknown"
+          };
+        }
+        const { audioPath: _audioPath, ...cardData } = card;
+        return { ...cardData, audio };
+      }));
       await persistMaterials();
       const payload = {
         schema: "ihub-generator-pedagogical-import/1.0",
-        project: { id: projectId, asset_id: assetId, name: selectedAsset?.name ?? "" },
+        package_version: 2,
+        generated_at: new Date().toISOString(),
+        project: { id: projectId, asset_id: assetId, name: selectedAsset?.name ?? "", source_video_id: selectedAsset?.sourceVideoId ?? null },
+        source: {
+          signature: sourceSignature,
+          cue_count: sourceCues.length,
+          translation_count: sourceTranslations.length
+        },
         cues: sourceCues.map((cue, index) => ({
           order: index + 1, start_ms: Math.round(cue.startMs), end_ms: Math.round(cue.endMs),
           speaker: cue.speaker ?? "", final_en: cue.text,
-          pt: sourceTranslations.find(item => item.id === cue.id)?.text ?? ""
+          pt: sourceTranslations.find(item => item.id === cue.id)?.text ?? "",
+          words: cue.words?.map(word => ({ text: word.text, start_ms: Math.round(word.startMs), end_ms: Math.round(word.endMs) })) ?? []
         })),
+        anki_cards: exportedAnkiCards,
         pedagogical_content: pedagogicalContent ? { ...pedagogicalContent, minimum_items: selectedItems.length, items: selectedItems } : null,
         smart_learning_moment: await buildSelectedSmartLearningMoment(),
         prediction_listening: predictionIsCurrent ? predictionReview.materials ?? null : null,
@@ -1024,7 +1068,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   return <section className="materials-workspace">
     <header className="materials-heading">
       <div><span className="eyebrow">ESTÚDIO DIDÁTICO</span><h2>Materiais</h2><p>Reúna conteúdos aprovados, prepare cards Anki e gere os áudios usados no estudo.</p></div>
-      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="secondary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar no projeto"}</button><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={(!includedPedagogicalCount && !smartLearningMoments?.final_selection && !sourceInfo.predictions) || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
+      {activeMaterialTab === "pedagogical" && <div className="materials-heading-actions"><button className="secondary-button" onClick={() => void saveMaterials()} disabled={!assetId || saving}><Save size={15}/>{saving ? "Salvando..." : "Salvar no projeto"}</button><button className="primary-button" onClick={() => void exportFinalPedagogicalPackage()} disabled={(!includedPedagogicalCount && !smartLearningMoments?.final_selection && !sourceInfo.predictions && !learningJourney && !approvedCount) || pedagogicalProcessing || exporting}><Download size={15}/>{exporting ? "Preparando JSON..." : "Exportar JSON completo"}</button></div>}
       {activeMaterialTab === "anki" && <div className="materials-heading-actions">
         <button className="secondary-button" onClick={() => void createExternalInput()} disabled={!cards.length || loading}><FileText size={15}/> Gerar TXT para IA</button>
         <button className="secondary-button" onClick={() => importInput.current?.click()}><Download size={15}/> Importar JSON da IA</button>
