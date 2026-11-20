@@ -129,7 +129,7 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         "reconstruct: Select a short, coherent spoken excerpt, ideally 4–9 words. Provide words as a shuffled word bank and answer as the exact original word sequence. Preserve contractions and lexical identity. Do not add or remove words. Use the same tokens in words and answer, including repeated tokens.",
         "",
         "4. QUANTITY AND QUALITY",
-        "Aim for 8–12 activities total, usually 2–3 per type. Quality takes priority over quantity. Return fewer only if the source does not support more high-quality tasks, but include at least one valid activity of each of the four types when possible.",
+        "Aim for 8–12 activities total, usually 2–3 per type. Include at least one high-quality activity of each of the four required types. Quality takes priority over quantity. If the source genuinely cannot support one type without inventing content, do not fabricate or lower the standard; return an empty activities array so the editor can address the source limitation.",
         "Score each candidate from 0 to 100 using: auditory-learning value 20; fidelity to source wording and cue 20; clarity of task and answer 15; pedagogical usefulness 15; level appropriateness 10; distractor/response quality 10; variety and non-redundancy 10. Each score_breakdown value must stay within its criterion maximum, and the seven values must add up exactly to the final score.",
         "Return candidates in descending score order. Reject any candidate below 70 instead of padding the list. A score is not a substitute for validation.",
         "",
