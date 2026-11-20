@@ -72,3 +72,20 @@
 .prediction-listening-backdrop.embedded.demo-active .prediction-listening-modal{width:100%;height:auto;max-height:none;box-shadow:none}
 .prediction-listening-backdrop.embedded.demo-active .prediction-listening-header{padding:18px 20px}
 .prediction-listening-backdrop.embedded.demo-active .prediction-listening-header p{display:block}
+
+/* Prediction Listening layout refinement. */
+.prediction-listening-header{align-items:center;padding:20px 24px;background:linear-gradient(120deg,rgba(71,105,151,.13),transparent 65%)}
+.prediction-listening-header h2{font-size:24px;letter-spacing:-.025em}
+.prediction-listening-toolbar{background:rgba(255,255,255,.018);gap:10px}
+.prediction-listening-toolbar button{min-height:36px}
+.prediction-listening-summary{background:rgba(255,255,255,.018);gap:22px}
+.prediction-listening-content{gap:16px;padding-top:20px}
+.prediction-challenge{padding:19px;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012));box-shadow:0 5px 18px rgba(0,0,0,.08)}
+.prediction-challenge-heading{justify-content:flex-start;flex-wrap:wrap}
+.prediction-challenge-status{margin-left:auto;padding:5px 8px;border-radius:20px;background:rgba(255,255,255,.045)}
+.prediction-challenge h3{font-size:17px;line-height:1.45;margin:16px 0}
+.prediction-challenge footer{gap:9px}
+.prediction-challenge footer>span{flex-basis:100%;margin:0 0 2px}
+.prediction-demo-panel.prediction-preview-panel{background:linear-gradient(155deg,rgba(26,48,65,.99),rgba(15,23,34,.99))}
+.prediction-preview-panel h2{font-size:18px}
+@media(max-width:700px){.prediction-listening-header{padding:16px}.prediction-listening-header h2{font-size:20px}.prediction-challenge{padding:14px}.prediction-challenge-heading{align-items:flex-start}.prediction-challenge-status{margin-left:0}}
