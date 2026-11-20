@@ -67,7 +67,7 @@
 .slm-editor-heading p{margin:0;color:#9b94a4;font-size:10px}
 .slm-editor-fields{display:grid;gap:12px}
 .slm-editor-fields label{display:grid;gap:5px;color:#c8bfd2;font-size:10px;font-weight:600}
-.slm-editor-fields input,.slm-editor-fields textarea{width:100%;min-width:0;box-sizing:border-box;padding:9px 10px;border:1px solid #494151;border-radius:7px;outline:none;background:#17151d;color:#eee9f4;font:400 11px/1.55 inherit;resize:vertical}
+.slm-editor-fields input,.slm-editor-fields textarea{width:100%;min-width:0;box-sizing:border-box;padding:9px 10px;border:1px solid #494151;border-radius:7px;outline:none;background:#17151d;color:#eee9f4;font:400 11px/1.55 'DM Sans',sans-serif;resize:vertical}
 .slm-editor-fields input:focus,.slm-editor-fields textarea:focus{border-color:#a78bd2;box-shadow:0 0 0 2px #a78bd21c}
 .slm-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .slm-editor-subheading{padding-top:8px;border-top:1px solid #3c3546;color:#d8c5f6;font-size:11px;font-weight:750}
