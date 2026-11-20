@@ -200,8 +200,9 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         if (!ids.includes(normalize(raw.answerId))) errors.push("resposta correta não existe nas alternativas");
         const correct = raw.options.find((option: any) => normalize(option?.id) === normalize(raw.answerId));
         if (correct && !sourceContains(normalize(correct.text))) errors.push("alternativa correta não corresponde ao texto do trecho vinculado");
-        if (correct && raw.type === "identify" && normalizeForCompare(correct.text).split(" ").length < 2) errors.push("identificação deve trabalhar uma expressão ou fragmento de frase, não uma palavra isolada");
-        if (correct && raw.type === "word-recognition" && normalizeForCompare(correct.text).split(" ").length !== 1) errors.push("reconhecimento auditivo deve trabalhar uma palavra isolada");
+        const optionWordCounts = raw.options.map((option: any) => normalizeForCompare(normalize(option?.text)).split(" ").filter(Boolean).length);
+        if (raw.type === "identify" && optionWordCounts.some((count: number) => count < 2 || count > 6)) errors.push("as alternativas de identificação devem conter de duas a seis palavras");
+        if (raw.type === "word-recognition" && optionWordCounts.some((count: number) => count !== 1)) errors.push("todas as alternativas de reconhecimento auditivo devem ser palavras isoladas");
         if (correct && raw.options.some((option: any) => normalize(option?.id) !== normalize(raw.answerId) && sourceContains(normalize(option?.text)))) {
           errors.push("um distrator também aparece no trecho vinculado; a questão não tem resposta única");
         }
