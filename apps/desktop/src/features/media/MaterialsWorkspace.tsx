@@ -1146,13 +1146,6 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         throw new Error("Não há conteúdo aprovado e atualizado para exportar. Aprove os materiais ou conclua a revisão da jornada.");
       }
 
-      const toBase64 = (bytes: Uint8Array) => {
-        let binary = "";
-        for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-          binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-        }
-        return btoa(binary);
-      };
       await persistMaterials();
       const payload = {
         schema: "ihub-generator-pedagogical-import/1.0",
