@@ -36,6 +36,9 @@ type Props = {
   translations: Translation[];
   activities: ListeningQuestion[];
   onActivitiesChange: (activities: ListeningQuestion[]) => void;
+  onBack: () => void;
+  onSave: () => void;
+  saving: boolean;
 };
 const OUTPUT_CONTRACT = "nova-generator-listening-recall-output/1.0" as const;
 const INPUT_CONTRACT = "nova-generator-listening-recall-input/1.0" as const;
@@ -49,7 +52,7 @@ const TYPE_LABELS: Record<string, string> = {
 const normalize = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const unique = (values: string[]) => new Set(values).size === values.length;
 
-export default function Day2ListeningRecall({ projectId, assetId, sourceSignature, cues, translations, activities, onActivitiesChange }: Props) {
+export default function Day2ListeningRecall({ projectId, assetId, sourceSignature, cues, translations, activities, onActivitiesChange, onBack, onSave, saving }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<"export" | "import" | "approve" | "">("");
   const [error, setError] = useState("");
@@ -302,6 +305,8 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
       <div><span className="eyebrow">DAY 02 · LISTENING RECALL</span><h3>Treinar o ouvido para recuperar o que foi dito</h3>
         <p>Quatro modalidades de escuta, com atividades criadas pela IA a partir dos trechos reais da transcrição e revisadas antes de chegar ao aluno.</p></div>
       <div className="day2-listening-recall__actions">
+        <button className="secondary-button" type="button" onClick={onBack}>Voltar aos dias</button>
+        <button className="primary-button" type="button" onClick={onSave} disabled={saving || busy !== ""}><Check size={14}/>{saving ? "Salvando..." : "Salvar"}</button>
         <button className="secondary-button" type="button" onClick={() => void exportInstructions()} disabled={busy !== "" || orderedCues.length < 4}>
           {busy === "export" ? <LoaderCircle className="spin" size={14}/> : <FileText size={14}/>} Exportar instruções para IA
         </button>
