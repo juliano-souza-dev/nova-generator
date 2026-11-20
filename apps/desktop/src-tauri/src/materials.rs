@@ -39,6 +39,31 @@ pub fn save_project_materials(app: AppHandle, project_id: String, asset_id: Stri
     fs::rename(temp, path).map_err(|e| format!("Não foi possível concluir o salvamento dos Materiais: {e}"))
 }
 
+#[tauri::command]
+pub fn save_smart_learning_moments(
+    app: AppHandle, project_id: String, asset_id: String, value: Option<Value>,
+) -> Result<(), String> {
+    let path = materials_file(&app, &project_id, &asset_id)?;
+    let mut document = if path.exists() {
+        let raw = fs::read_to_string(&path).map_err(|e| format!("Não foi possível ler os Materiais existentes: {e}"))?;
+        if raw.trim().is_empty() { json!({}) } else {
+            serde_json::from_str::<Value>(&raw).map_err(|e| format!("Materiais existentes inválidos: {e}"))?
+        }
+    } else { json!({}) };
+    if !document.is_object() { return Err("O documento de Materiais existente não é um objeto válido.".into()); }
+    match value {
+        Some(moment) => { document["smartLearningMoments"] = moment; }
+        None => { document.as_object_mut().unwrap().remove("smartLearningMoments"); }
+    }
+    let bytes = serde_json::to_vec_pretty(&document).map_err(|e| e.to_string())?;
+    if bytes.is_empty() || bytes.len() > 20 * 1024 * 1024 {
+        return Err("Os Materiais estão vazios ou excedem o limite de 20 MB.".into());
+    }
+    let temp = path.with_extension("json.tmp");
+    fs::write(&temp, bytes).map_err(|e| format!("Não foi possível salvar Smart Learning Moments: {e}"))?;
+    fs::rename(temp, path).map_err(|e| format!("Não foi possível concluir o salvamento de Smart Learning Moments: {e}"))
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioRequest {
