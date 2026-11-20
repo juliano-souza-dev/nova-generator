@@ -570,7 +570,7 @@ export default function PredictionListening({
       {previewingChallenge && <section className="prediction-demo-panel prediction-preview-panel" aria-live="polite">
         <div className="prediction-demo-topline"><span>PRÉVIA DO TRECHO</span><button className="icon-button" title="Fechar prévia" onClick={stopChallengePreview}><X size={16}/></button></div>
         <h2>{previewingChallenge.prompt}</h2>
-        <p className="prediction-demo-feedback">O vídeo está reproduzindo do início do contexto até o ponto em que a previsão deve acontecer.</p>
+        <p className="prediction-demo-feedback">O vídeo está reproduzindo o trecho original, incluindo a fala que completa o desafio.</p>
         <div className="prediction-demo-progress"><span>Desafio {previewingChallenge.challengeNumber}</span><span>{previewingChallenge.clipStartMs} ms → {previewingChallenge.resumeAtMs} ms</span></div>
       </section>}
       {demoState !== "idle" && <section className="prediction-demo-panel" aria-live="polite">
