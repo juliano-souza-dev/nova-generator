@@ -588,7 +588,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     const day1Notice = (journey.day1NoticeLessons ?? []).filter(item => item.status === "approved" && item.include_in_hub !== false);
     const approvedExpressions = day1?.expressionMatch.filter(item => item.status === "approved") ?? [];
     const approvedPatterns = day1?.patternChallenge.filter(item => item.status === "approved") ?? [];
-    const day1Ready = Boolean(day1 && day1.subtitleChallenge.cueOrders.length >= 1 && approvedExpressions.length >= 1 && approvedPatterns.length >= 1 && day1Notice.length >= 1);
+    const day1Ready = Boolean(sourceInfo.shadowing > 0 && day1 && day1.subtitleChallenge.cueOrders.length >= 1 && approvedExpressions.length >= 1 && approvedPatterns.length >= 1 && day1Notice.length >= 1);
     const allStagesCompleted = [1, 2, 3, 4, 5, 6, 7].every(day => (journey.completedDays ?? []).includes(day));
     return allStagesCompleted && day1Ready && remainingJourneyDaysApproved(journey) &&
       ["identify", "word-recognition", "gap", "reconstruct"].every(type => types.has(type as any)) &&
@@ -672,7 +672,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   async function exportLearningJourney() {
     if (!learningJourney) return;
     if (learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards)) {
-      setError("Os cards aprovados foram alterados. Regenere a jornada antes de exportar.");
+      setError("A transcrição, as traduções ou a seleção de trechos mudaram. Regenere a jornada antes de exportar.");
       return;
     }
     if (!journeyReadyForExport(learningJourney)) {
@@ -725,14 +725,18 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     };
     const errors = validateLearningJourney(exportJourney);
     if (errors.length) { setError(errors.join("\n")); return; }
-    const path = await saveFile({
-      title: "Salvar Jornada de aprendizagem",
-      defaultPath: "learning-journey-" + assetId + ".json",
-      filters: [{ name: "Arquivo JSON", extensions: ["json"] }]
-    });
-    if (!path) return;
-    await invoke("save_generated_json", { path, bytes: Array.from(new TextEncoder().encode(JSON.stringify(exportJourney, null, 2))) });
-    setNotice(selectedMoment ? "Jornada completa exportada com Smart Learning Moment." : "Jornada completa exportada.");
+    try {
+      const path = await saveFile({
+        title: "Salvar Jornada de aprendizagem",
+        defaultPath: "learning-journey-" + assetId + ".json",
+        filters: [{ name: "Arquivo JSON", extensions: ["json"] }]
+      });
+      if (!path) return;
+      await invoke("save_generated_json", { path, bytes: Array.from(new TextEncoder().encode(JSON.stringify(exportJourney, null, 2))) });
+      setNotice(selectedMoment ? "Jornada completa exportada com Smart Learning Moment." : "Jornada completa exportada.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   async function saveMaterials() {
