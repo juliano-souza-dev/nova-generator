@@ -123,8 +123,8 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         "Do not invent words, alternative answers, speaker details, acoustic properties, pronunciation facts or timestamps. Use the transcript as the source of truth for lexical content and timing. Portuguese translations are contextual support only; do not turn them into translation-only questions.",
         "",
         "3. FOUR REQUIRED ACTIVITY TYPES",
-        "identify: Show 3 or 4 short candidate words/expressions/sentences. Ask which one the learner heard in the linked audio. Exactly one answerId. Distractors must be plausible but clearly absent from that exact audio excerpt. Keep options similar in length and category.",
-        "word-recognition: Focus on one important word or compact expression. Ask the learner to recognize which item was actually spoken. Use 3 or 4 plausible alternatives. Do not fabricate minimal pairs or claim sound contrasts that cannot be verified from the transcript.",
+        "identify: Make this phrase-level. Show 3 or 4 short expressions or utterance fragments (normally 2–6 words) and ask which one the learner heard in the linked audio. Exactly one answerId. Distractors must be plausible but clearly absent from that exact audio excerpt. Keep options similar in length and communicative category.",
+        "word-recognition: Make this word-level. Focus on one individual word actually present in the cue and ask which word the learner heard. Show 3 or 4 single-word alternatives from the same broad grammatical category. Distractors must be absent from the linked cue. Do not fabricate minimal pairs or claim sound contrasts that cannot be verified from the transcript.",
         "gap: Present the original sentence with exactly one meaningful lexical gap represented by _____. The learner listens and types the missing word or short expression. acceptedAnswers must contain only legitimate variants that preserve the spoken wording (for example, punctuation/case variants are not needed).",
         "reconstruct: Select a short, coherent spoken excerpt, ideally 4–9 words. Provide words as a shuffled word bank and answer as the exact original word sequence. Preserve contractions and lexical identity. Do not add or remove words. Use the same tokens in words and answer, including repeated tokens.",
         "",
@@ -200,18 +200,20 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
         if (!ids.includes(normalize(raw.answerId))) errors.push("resposta correta não existe nas alternativas");
         const correct = raw.options.find((option: any) => normalize(option?.id) === normalize(raw.answerId));
         if (correct && !sourceContains(normalize(correct.text))) errors.push("alternativa correta não corresponde ao texto do trecho vinculado");
+        if (correct && raw.type === "identify" && normalizeForCompare(correct.text).split(" ").length < 2) errors.push("identificação deve trabalhar uma expressão ou fragmento de frase, não uma palavra isolada");
+        if (correct && raw.type === "word-recognition" && normalizeForCompare(correct.text).split(" ").length !== 1) errors.push("reconhecimento auditivo deve trabalhar uma palavra isolada");
         if (correct && raw.options.some((option: any) => normalize(option?.id) !== normalize(raw.answerId) && sourceContains(normalize(option?.text)))) {
           errors.push("um distrator também aparece no trecho vinculado; a questão não tem resposta única");
         }
       }
     }
     if (raw?.type === "gap") {
-      if (!normalize(raw.sentence).includes("_____")) errors.push("lacuna não identificada");
+      if ((normalize(raw.sentence).match(/_____/g) ?? []).length !== 1) errors.push("a frase precisa conter exatamente uma lacuna");
       if (!Array.isArray(raw.acceptedAnswers) || !raw.acceptedAnswers.length || raw.acceptedAnswers.some((answer: any) => !normalize(answer))) errors.push("resposta aceita ausente");
       else if (!raw.acceptedAnswers.some((answer: string) => sourceContains(raw.sentence.replace("_____", answer)))) errors.push("frase preenchida não corresponde ao trecho original");
     }
     if (raw?.type === "reconstruct") {
-      if (!Array.isArray(raw.words) || raw.words.length < 3 || raw.words.length > 12 || !Array.isArray(raw.answer) || raw.answer.length !== raw.words.length) errors.push("banco de palavras ou resposta inválidos");
+      if (!Array.isArray(raw.words) || raw.words.length < 4 || raw.words.length > 9 || !Array.isArray(raw.answer) || raw.answer.length !== raw.words.length) errors.push("banco de palavras ou resposta inválidos");
       else if ([...raw.words].sort().join("|") !== [...raw.answer].sort().join("|")) errors.push("banco e resposta não contêm exatamente as mesmas palavras");
       else if (!sourceContains(raw.answer.join(" "))) errors.push("sequência reconstruída não corresponde ao trecho original");
     }
