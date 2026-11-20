@@ -415,10 +415,27 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     );
   }
 
+  function remainingJourneyDaysApproved(journey: LearningJourneyPackage) {
+    const groups = [
+      journey.days[2].lessons,
+      journey.days[3].tasks,
+      journey.days[4].prompts,
+      journey.days[5].listening,
+      journey.days[5].speaking,
+      journey.days[6].listening,
+      journey.days[6].speaking
+    ] as Array<Array<{ status?: string }>>;
+    return groups.every(items => items.length > 0 && items.every(item => item.status === "approved"));
+  }
+
   function exportLearningJourney() {
     if (!learningJourney) return;
     if (learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards)) {
       setError("Os cards aprovados foram alterados. Regenere a jornada antes de exportar.");
+      return;
+    }
+    if (!remainingJourneyDaysApproved(learningJourney)) {
+      setError("O Day 2 pode ser revisado e salvo agora. A exportação da jornada completa será liberada quando os Dias 3 a 7 também estiverem preparados e aprovados.");
       return;
     }
     const approvedActivities = approvedDay2Activities(learningJourney);
@@ -842,7 +859,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       const journeyHasApprovedDay2 = ["identify", "word-recognition", "gap", "reconstruct"]
         .every(type => approvedJourneyTypes.has(type as any));
       const journeyIsCurrent = Boolean(
-        learningJourney && journeyHasApprovedDay2 &&
+        learningJourney && journeyHasApprovedDay2 && remainingJourneyDaysApproved(learningJourney) &&
         learningJourney.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards) &&
         validateLearningJourney(learningJourney).length === 0
       );
