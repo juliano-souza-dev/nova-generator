@@ -369,26 +369,6 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     return document;
   }
 
-  function createLearningJourney() {
-    if (!assetId) return;
-    try {
-      const journey = buildLearningJourneyPackage({
-        projectId, assetId, sourceSignature: learningJourneySourceSignature(sourceSignature, cards), cues: sourceCues,
-        cards: cards.map(card => ({
-          id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus,
-          meaning: card.meaning, highlightEn: card.highlightEn,
-          explanation: card.explanation, exampleEn: card.exampleEn,
-          examplePt: card.examplePt, status: card.status
-        }))
-      });
-      const errors = validateLearningJourney(journey);
-      if (errors.length) throw new Error(errors.join("\n"));
-      setLearningJourney(journey);
-      setNotice("Rascunho da jornada criado. Revise as atividades antes de publicar no iHubEnglish.");
-      setError("");
-    } catch (e) { setError(String(e)); }
-  }
-
   function updateDay2Activities(activities: ListeningQuestion[]) {
     try {
       const currentJourneySignature = learningJourneySourceSignature(sourceSignature, cards);
@@ -1001,7 +981,6 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Jornada de aprendizagem · 7 dias</h3>
                 <p>O Dia 1 permanece como está. Estamos produzindo o Day 2 · Listening Recall por geração externa, revisão e aprovação antes do envio ao iHubEnglish.</p></div>
               <div className="materials-journey-actions">
-                <button className="secondary-button" type="button" onClick={createLearningJourney} disabled={loading || sourceCues.length < 3}><Sparkles size={14}/>{learningJourney ? "Preparar novamente a estrutura" : "Preparar estrutura da jornada"}</button>
                 <button className="secondary-button" type="button" onClick={exportLearningJourney} disabled={!learningJourney || !journeyReadyForExport(learningJourney)}><Download size={14}/> Exportar jornada completa</button>
               </div>
             </div>
