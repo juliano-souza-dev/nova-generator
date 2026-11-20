@@ -629,9 +629,6 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     return ["Etapa desconhecida."];
   }
 
-  function canCompleteJourneyDay(day: number, journey: LearningJourneyPackage) {
-    return journeyDayMissingRequirements(day, journey).length === 0;
-  }
   async function completeJourneyDay() {
     if (!learningJourney || !selectedJourneyDay || saving) return;
     const day = selectedJourneyDay;
