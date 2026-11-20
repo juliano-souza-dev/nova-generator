@@ -44,6 +44,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
   const [voiceReady, setVoiceReady] = useState(false);
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioCandidateId, setAudioCandidateId] = useState("");
+  const [editingSelected, setEditingSelected] = useState(false);
 
   const selected = useMemo(() => value?.candidates.find(item => item.id === value.final_selection) ?? null, [value]);
   const includedAudioCount = selected?.audio_assets?.length ?? 0;
@@ -194,6 +195,15 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
       candidates: value.candidates.map(candidate => ({ ...candidate, selected: value.final_selection !== id && candidate.id === id })) });
   }
 
+  function updateCandidate(candidateId: string, updater: (candidate: SmartLearningCandidate) => SmartLearningCandidate) {
+    if (!value) return;
+    onChange({ ...value, candidates: value.candidates.map(item => item.id === candidateId ? updater(item) : item) });
+  }
+
+  function updateSelectedLesson(updater: (candidate: SmartLearningCandidate) => SmartLearningCandidate) {
+    if (selected) updateCandidate(selected.id, updater);
+  }
+
   function toggleExpanded(id: string) {
     setExpanded(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
   }
@@ -313,6 +323,52 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
           </div>}
         </article>;
       })}</div>
+      {selected && <section className="slm-editor-panel">
+        <div className="slm-editor-heading">
+          <div><h4>Conteúdo da mini aula selecionada</h4><p>Edite o material antes de gerar a narração e exportar.</p></div>
+          <button type="button" className={editingSelected ? "primary-button" : "secondary-button"} onClick={() => setEditingSelected(current => !current)}>{editingSelected ? "Concluir edição" : "Editar conteúdo"}</button>
+        </div>
+        {editingSelected && <div className="slm-editor-fields">
+          <label>Justificativa da recomendação<textarea value={selected.recommendation_reason} onChange={event => updateSelectedLesson(item => ({ ...item, recommendation_reason: event.target.value }))}/></label>
+          <div className="slm-editor-grid">
+            <label>Título da mini aula<input value={selected.lesson.title} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, title: event.target.value } }))}/></label>
+            <label>Categoria<input value={selected.category} onChange={event => updateSelectedLesson(item => ({ ...item, category: event.target.value }))}/></label>
+            <label>Nível<input value={selected.level} onChange={event => updateSelectedLesson(item => ({ ...item, level: event.target.value }))}/></label>
+            <label>Sentido em português<textarea value={selected.lesson.meaning_pt} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, meaning_pt: event.target.value } }))}/></label>
+          </div>
+          <label>Intenção comunicativa<textarea value={selected.lesson.communicative_intent_pt} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, communicative_intent_pt: event.target.value } }))}/></label>
+          <label>Explicação pedagógica<textarea rows={5} value={selected.lesson.explanation_pt} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, explanation_pt: event.target.value } }))}/></label>
+          <div className="slm-editor-subheading">Exemplos</div>
+          {selected.lesson.examples.map((example, index) => <div className="slm-editor-card" key={index}>
+            <strong>Exemplo {index + 1}</strong>
+            <label>Contexto<input value={example.context} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, examples: item.lesson.examples.map((entry, i) => i === index ? { ...entry, context: event.target.value } : entry) } }))}/></label>
+            <label>Inglês<textarea value={example.en} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, examples: item.lesson.examples.map((entry, i) => i === index ? { ...entry, en: event.target.value } : entry) } }))}/></label>
+            <label>Português<textarea value={example.pt} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, examples: item.lesson.examples.map((entry, i) => i === index ? { ...entry, pt: event.target.value } : entry) } }))}/></label>
+          </div>)}
+          <div className="slm-editor-subheading">Árvore de contextos</div>
+          {selected.lesson.context_tree.map((node, index) => <div className="slm-editor-card" key={node.id}>
+            <strong>Contexto {index + 1}</strong>
+            <label>Título<input value={node.title} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, context_tree: item.lesson.context_tree.map((entry, i) => i === index ? { ...entry, title: event.target.value } : entry) } }))}/></label>
+            <label>Finalidade<textarea value={node.purpose} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, context_tree: item.lesson.context_tree.map((entry, i) => i === index ? { ...entry, purpose: event.target.value } : entry) } }))}/></label>
+            {node.examples.map((example, exampleIndex) => <div className="slm-editor-nested" key={exampleIndex}>
+              <label>Contexto do exemplo<input value={example.context} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, context_tree: item.lesson.context_tree.map((entry, i) => i === index ? { ...entry, examples: entry.examples.map((ex, j) => j === exampleIndex ? { ...ex, context: event.target.value } : ex) } : entry) } }))}/></label>
+              <label>Inglês<textarea value={example.en} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, context_tree: item.lesson.context_tree.map((entry, i) => i === index ? { ...entry, examples: entry.examples.map((ex, j) => j === exampleIndex ? { ...ex, en: event.target.value } : ex) } : entry) } }))}/></label>
+              <label>Português<textarea value={example.pt} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, context_tree: item.lesson.context_tree.map((entry, i) => i === index ? { ...entry, examples: entry.examples.map((ex, j) => j === exampleIndex ? { ...ex, pt: event.target.value } : ex) } : entry) } }))}/></label>
+            </div>)}
+          </div>)}
+          <div className="slm-editor-subheading">Roteiro de narração</div>
+          <label>Direção da voz<textarea value={selected.lesson.narration.voice_direction} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, narration: { ...item.lesson.narration, voice_direction: event.target.value } } }))}/></label>
+          <label>Duração estimada (segundos)<input type="number" min="1" max="300" value={selected.lesson.narration.estimated_duration_seconds} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, narration: { ...item.lesson.narration, estimated_duration_seconds: Number(event.target.value) || 1 } } }))}/></label>
+          {selected.lesson.narration.segments.map((segment, index) => <div className="slm-editor-card" key={segment.id}>
+            <strong>Segmento {index + 1} · {segment.language.toUpperCase()} · {segment.purpose}</strong>
+            <textarea className="slm-script-textarea" rows={4} value={segment.text} onChange={event => {
+              const nextText = event.target.value;
+              updateSelectedLesson(item => ({ ...item, audio_assets: item.audio_assets?.filter(asset => asset.segment_id !== segment.id), lesson: { ...item.lesson, narration: { ...item.lesson.narration, segments: item.lesson.narration.segments.map(entry => entry.id === segment.id ? { ...entry, text: nextText } : entry) } } }));
+            }}/>
+            <small>Ao alterar este texto, o áudio anterior deste segmento será descartado e precisará ser gerado novamente.</small>
+          </div>)}
+        </div>}
+      </section>}
       {selected && <div className="slm-audio-panel"><div><h4><Volume2 size={16}/> Áudio da mini aula selecionada</h4><p>{includedAudioCount} de {selected.lesson.narration.segments.length} segmentos com áudio gerado.</p></div><label className="slm-voice-select">Voz interna<select value={voiceId} onChange={event => setVoiceId(event.target.value)} disabled={!voiceReady}>{!voices.length && <option value="">Nenhuma voz pronta</option>}{voices.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}</select></label><div className="slm-audio-actions"><button type="button" className="primary-button" disabled={!voiceReady || !voiceId || audioBusy} onClick={() => void generateInternalAudio(selected)}><AudioLines size={14}/>{audioBusy && audioCandidateId === selected.id ? "Gerando..." : "Gerar áudio interno"}</button><button type="button" className="secondary-button" onClick={() => void prepareElevenLabsScript(selected)}><Download size={14}/> Preparar roteiro ElevenLabs</button><label className="secondary-button slm-upload"><Download size={14}/> Importar áudios ElevenLabs<input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac" multiple hidden onChange={event => { void importElevenLabsAudio(selected, event.target.files); event.target.value = ""; }}/></label></div><small className="slm-audio-help">Para importar áudio externo, nomeie cada arquivo com o ID do segmento, por exemplo: opening.mp3, explanation.mp3.</small>
           <div className="slm-audio-preview-list">
             <div className="slm-audio-preview-heading"><strong>Prévia da narração</strong><span>Ouça cada trecho antes de exportar</span></div>
