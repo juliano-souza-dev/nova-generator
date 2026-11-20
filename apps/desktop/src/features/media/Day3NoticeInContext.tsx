@@ -154,7 +154,7 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
               </div>)}
             </div>)}</div>
             <div className="day3-review">
-              <button type="button" className={lesson.status === "approved" ? "is-approved" : ""} onClick={() => update(item.id, { status: "approved" })} disabled={lesson.status === "approved"}>Aprovar</button>
+              <button type="button" className={lesson.status === "approved" ? "is-approved" : ""} onClick={() => update(item.id, { status: "approved", include_in_hub: true })} disabled={lesson.status === "approved"}>Aprovar</button>
               <button type="button" className={lesson.status === "rejected" ? "is-rejected" : ""} onClick={() => update(item.id, { status: "rejected" })} disabled={lesson.status === "rejected"}>Rejeitar</button>
             </div>
             {lesson.pedagogical_rationale && <small className="day3-rationale">{lesson.pedagogical_rationale}</small>}
