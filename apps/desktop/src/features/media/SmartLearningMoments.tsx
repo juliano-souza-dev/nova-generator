@@ -330,6 +330,7 @@ export default function SmartLearningMoments({ projectId, assetId, sourceSignatu
         </div>
         {editingSelected && <div className="slm-editor-fields">
           <label>Justificativa da recomendação<textarea value={selected.recommendation_reason} onChange={event => updateSelectedLesson(item => ({ ...item, recommendation_reason: event.target.value }))}/></label>
+          <label>Tradução da fala original na cena<textarea value={selected.source.excerpt_pt} onChange={event => updateSelectedLesson(item => ({ ...item, source: { ...item.source, excerpt_pt: event.target.value } }))}/></label>
           <div className="slm-editor-grid">
             <label>Título da mini aula<input value={selected.lesson.title} onChange={event => updateSelectedLesson(item => ({ ...item, lesson: { ...item.lesson, title: event.target.value } }))}/></label>
             <label>Categoria<input value={selected.category} onChange={event => updateSelectedLesson(item => ({ ...item, category: event.target.value }))}/></label>
