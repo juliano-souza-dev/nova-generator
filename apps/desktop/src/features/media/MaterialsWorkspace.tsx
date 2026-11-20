@@ -1221,7 +1221,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 onBack={() => setSelectedJourneyDay(null)} onSave={() => void saveMaterials()} saving={saving} />
               <section className="day1-existing-stages">
                 <article><strong>Explore & Understand</strong><p>O vídeo, as legendas, os tempos, as traduções e os links continuam sendo preparados exclusivamente no editor. Esta etapa não altera esse material.</p></article>
-                <article><strong>Speak · Shadowing</strong>{sourceInfo.shadowing > 0 ? <p>{sourceInfo.shadowing} trechos selecionados no Shadowing. O conteúdo já preparado será reutilizado.</p> : <><p>Ainda não há Shadowing preparado para esta mídia.</p><button type="button" className="secondary-button" onClick={onOpenShadowing}>Abrir Shadowing</button></>}</article>
+                <article><strong>Speak · Shadowing</strong>{sourceInfo.shadowing > 0 ? <p>{sourceInfo.shadowing} trechos selecionados no Shadowing. O conteúdo já preparado será reutilizado.</p> : <><p>Ainda não há Shadowing preparado para esta mídia.</p>{onOpenShadowing && <button type="button" className="secondary-button" onClick={onOpenShadowing}>Abrir Shadowing</button>}</>}</article>
                 <article><strong>Listen · Áudio</strong><p>Usa o áudio original da mídia e a transcrição sincronizada já carregados no Kit. Não exige uma segunda preparação de áudio.</p></article>
               </section>
               <section className="materials-prediction-panel">
