@@ -590,7 +590,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       : null;
     const exportJourney = {
       ...learningJourney,
-      ...(learningJourney.day1Preparation ? { day1Preparation: { ...learningJourney.day1Preparation, predictionListening: { version: 1 as const, challenges: predictionChallenges } } } : predictionChallenges.length ? { day1Preparation: { predictionListening: { version: 1 as const, challenges: predictionChallenges } } } : {}),
+      ...(learningJourney.day1Preparation ? { day1Preparation: { ...learningJourney.day1Preparation, predictionListening: { version: 1 as const, challenges: predictionChallenges } } } : {}),
       ...(learningJourney.day1NoticeLessons?.length ? { day1NoticeLessons: learningJourney.day1NoticeLessons.filter(item => item.status === 'approved' && item.include_in_hub !== false) } : {}),
       ...(selectedMoment ? { smartLearningMoments: selectedMoment } : {}),
       days: learningJourney.days.map((day, index) =>
