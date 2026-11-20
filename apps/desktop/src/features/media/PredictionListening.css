@@ -15,6 +15,13 @@
 .prediction-challenge.approved{border-color:rgba(91,184,131,.45)}.prediction-challenge.rejected{opacity:.72}
 .prediction-challenge-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.prediction-challenge-heading>div{display:flex;align-items:center;gap:9px;font-size:12px}
 .prediction-challenge-type{padding:4px 7px;border-radius:6px;background:rgba(127,146,180,.12);font-size:9px;letter-spacing:.06em}
+.prediction-challenge-score{padding:5px 9px;border-radius:7px;background:rgba(91,184,131,.1);color:#8fd5ad;font-size:12px;font-variant-numeric:tabular-nums}
+.prediction-challenge-scoring{margin-top:11px;border:1px solid var(--border-subtle,#343a46);border-radius:8px;padding:9px 11px}
+.prediction-challenge-scoring summary{cursor:pointer;color:var(--text-muted,#b5bfcd);font-size:11px;font-weight:700}
+.prediction-challenge-scoring>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.prediction-challenge-scoring p{display:grid;gap:3px;margin:0;padding:8px;border-radius:7px;background:rgba(255,255,255,.025)}
+.prediction-challenge-scoring p strong{font-size:10px;color:var(--text,#f4f6fa)}
+.prediction-challenge-scoring p span{font-size:10px;line-height:1.4;color:var(--text-muted,#9ba5b5)}
 .prediction-challenge-status{font-size:10px;color:var(--text-muted,#9ba5b5)}.prediction-challenge-status.approved{color:#8fd5ad}.prediction-challenge-status.rejected{color:#e7a0a0}
 .prediction-challenge h3{margin:13px 0;font-size:16px}
 .prediction-challenge-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
