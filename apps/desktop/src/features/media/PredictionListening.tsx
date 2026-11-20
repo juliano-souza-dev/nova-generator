@@ -140,6 +140,8 @@ export default function PredictionListening({
   const [previewingChallenge, setPreviewingChallenge] = useState<Challenge | null>(null);
   const demoCallbacks = useRef({ onDemoPause, onDemoResume, getCurrentTime });
   demoCallbacks.current = { onDemoPause, onDemoResume, getCurrentTime };
+  const previewCallbacks = useRef({ onDemoPause, getCurrentTime, onPreviewModeChange });
+  previewCallbacks.current = { onDemoPause, getCurrentTime, onPreviewModeChange };
 
   const selectedSet = useMemo(() => new Set(selectedCueIds), [selectedCueIds]);
   const counts = useMemo(() => ({
@@ -450,17 +452,17 @@ export default function PredictionListening({
     if (!previewingChallenge) return;
     let frame = 0;
     const tick = () => {
-      if (getCurrentTime() >= previewingChallenge.resumeAtMs) {
-        onDemoPause();
+      if (previewCallbacks.current.getCurrentTime() >= previewingChallenge.resumeAtMs) {
+        previewCallbacks.current.onDemoPause();
         setPreviewingChallenge(null);
-        onPreviewModeChange(false);
+        previewCallbacks.current.onPreviewModeChange(false);
         return;
       }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [previewingChallenge, getCurrentTime, onDemoPause, onPreviewModeChange]);
+  }, [previewingChallenge]);
 
   function startDemo() {
     if (!approvedChallenges.length || busy || loading || previewingChallenge) return;
