@@ -313,6 +313,18 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
 
   useEffect(() => { void refreshAssets().catch(e => setError(String(e))); }, [refreshAssets]);
   useEffect(() => { if (assetId) void loadSource(assetId); else setLoading(false); }, [assetId, loadSource]);
+
+  // Persist Smart Learning Moments independently so edits and imported audio survive
+  // closing the workspace without requiring the user to save all Anki materials.
+  useEffect(() => {
+    if (loading || !assetId || !smartLearningMoments || smartLearningMoments.source_signature !== sourceSignature) return;
+    const timeout = window.setTimeout(() => {
+      void invoke("save_smart_learning_moments", {
+        projectId, assetId, value: smartLearningMoments
+      }).catch(error => setError("Não foi possível salvar Smart Learning Moments automaticamente: " + String(error)));
+    }, 700);
+    return () => window.clearTimeout(timeout);
+  }, [projectId, assetId, loading, smartLearningMoments, sourceSignature]);
   const refreshVoices = useCallback(async () => {
     const status = await invoke<any>("get_shared_runtime_status");
     const available = Array.isArray(status?.voices) ? status.voices as SharedVoice[] : [];
