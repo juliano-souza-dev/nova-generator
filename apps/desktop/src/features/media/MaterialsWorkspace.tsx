@@ -1001,8 +1001,9 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               cues={sourceCues}
               translations={sourceTranslations}
               activities={learningJourney?.days[1].activities.filter(item =>
-                Boolean((item as ListeningQuestion & { status?: string; score?: number }).status) ||
-                Number.isFinite((item as ListeningQuestion & { score?: number }).score)
+                ["identify", "word-recognition", "gap", "reconstruct"].includes(item.type) &&
+                (Boolean((item as ListeningQuestion & { status?: string; score?: number }).status) ||
+                Number.isFinite((item as ListeningQuestion & { score?: number }).score))
               ) ?? []}
               onActivitiesChange={updateDay2Activities}
             />
