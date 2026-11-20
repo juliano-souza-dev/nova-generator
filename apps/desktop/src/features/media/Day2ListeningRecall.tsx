@@ -232,6 +232,14 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
       }
       const expectedHash = await sourceHash();
       if (parsed.source_hash !== expectedHash) throw new Error("O JSON foi gerado para outra mídia ou outra versão da transcrição. Exporte instruções atualizadas.");
+      if (parsed.activities.length < 4 || parsed.activities.length > 20) {
+        throw new Error("A IA deve retornar entre 4 e 20 atividades, mantendo qualidade acima da quantidade.");
+      }
+      for (let index = 1; index < parsed.activities.length; index++) {
+        if (Number(parsed.activities[index - 1]?.score) < Number(parsed.activities[index]?.score)) {
+          throw new Error("As atividades precisam estar ordenadas da maior para a menor pontuação.");
+        }
+      }
       const validOrders = new Set(orderedCues.map(cue => cue.cue_order));
       const ids = parsed.activities.map(item => normalize(item?.id));
       if (!unique(ids) || ids.some(id => !id)) throw new Error("Existem IDs de atividade ausentes ou duplicados.");
