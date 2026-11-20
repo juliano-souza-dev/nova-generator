@@ -428,22 +428,24 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     return groups.every(items => items.length > 0 && items.every(item => item.status === "approved"));
   }
 
+  function journeyReadyForExport(journey: LearningJourneyPackage) {
+    const approved = approvedDay2Activities(journey);
+    const types = new Set(approved.map(item => item.type));
+    return remainingJourneyDaysApproved(journey) &&
+      ["identify", "word-recognition", "gap", "reconstruct"].every(type => types.has(type as any));
+  }
+
   function exportLearningJourney() {
     if (!learningJourney) return;
     if (learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards)) {
       setError("Os cards aprovados foram alterados. Regenere a jornada antes de exportar.");
       return;
     }
-    if (!remainingJourneyDaysApproved(learningJourney)) {
-      setError("O Day 2 pode ser revisado e salvo agora. A exportação da jornada completa será liberada quando os Dias 3 a 7 também estiverem preparados e aprovados.");
+    if (!journeyReadyForExport(learningJourney)) {
+      setError("O Day 2 pode ser revisado e salvo agora. A exportação da jornada completa será liberada quando os Dias 3 a 7 também estiverem preparados e aprovados, e houver ao menos uma atividade aprovada em cada modalidade do Day 2.");
       return;
     }
     const approvedActivities = approvedDay2Activities(learningJourney);
-    const approvedTypes = new Set(approvedActivities.map(item => item.type));
-    if (["identify", "word-recognition", "gap", "reconstruct"].some(type => !approvedTypes.has(type as any))) {
-      setError("Antes de exportar, aprove ao menos uma atividade de cada modalidade do Dia 2.");
-      return;
-    }
     const exportJourney = {
       ...learningJourney,
       days: learningJourney.days.map((day, index) => index === 1 ? { ...day, activities: approvedActivities } : day)
@@ -859,7 +861,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       const journeyHasApprovedDay2 = ["identify", "word-recognition", "gap", "reconstruct"]
         .every(type => approvedJourneyTypes.has(type as any));
       const journeyIsCurrent = Boolean(
-        learningJourney && journeyHasApprovedDay2 && remainingJourneyDaysApproved(learningJourney) &&
+        learningJourney && journeyReadyForExport(learningJourney) &&
         learningJourney.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards) &&
         validateLearningJourney(learningJourney).length === 0
       );
@@ -1000,7 +1002,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 <p>O Dia 1 permanece como está. Estamos produzindo o Day 2 · Listening Recall por geração externa, revisão e aprovação antes do envio ao iHubEnglish.</p></div>
               <div className="materials-journey-actions">
                 <button className="secondary-button" type="button" onClick={createLearningJourney} disabled={loading || sourceCues.length < 3}><Sparkles size={14}/>{learningJourney ? "Preparar novamente a estrutura" : "Preparar estrutura da jornada"}</button>
-                <button className="secondary-button" type="button" onClick={exportLearningJourney} disabled={!learningJourney}><Download size={14}/> Exportar JSON</button>
+                <button className="secondary-button" type="button" onClick={exportLearningJourney} disabled={!learningJourney || !journeyReadyForExport(learningJourney)}><Download size={14}/> Exportar jornada completa</button>
               </div>
             </div>
             {learningJourney && learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards) && <p className="materials-journey-stale">Os cards aprovados mudaram. Regenere a jornada antes de exportar ou publicar.</p>}
@@ -1017,7 +1019,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               onActivitiesChange={updateDay2Activities}
             />
             {learningJourney ? <div className="materials-journey-days">{learningJourney.days.map(day => <article key={day.day} className="materials-journey-day"><span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.mode === "existing-stages" ? "Etapas atuais" : day.mode === "listening-recall" ? day.activities.length + " exercícios de listening" : day.mode === "micro-lessons" ? day.lessons.length + " microaulas" : day.mode === "deep-listening" ? day.tasks.length + " tarefas" : day.mode === "speaking" ? day.prompts.length + " propostas de speaking" : "Desafio integrado"}</small></article>)}</div> : <p className="materials-journey-empty">O rascunho será montado com exercícios de identificação, lacunas e compreensão auditiva; microaulas derivadas dos cards aprovados; tarefas de escuta profunda; e propostas de gravação e comparação.</p>}
-            {learningJourney && <p className="materials-journey-note">Rascunho editável · {learningJourney.days[1].activities.length} atividades no Dia 2 · {learningJourney.days[2].lessons.length} microaulas no Dia 3. Salve os Materiais para manter o pacote neste projeto.</p>}
+            {learningJourney && <p className="materials-journey-note">Dia 2: {learningJourney.days[1].activities.length} atividade(s) no rascunho, {approvedDay2Activities(learningJourney).length} aprovada(s). O conteúdo fica salvo no Nova Generator; a exportação da jornada completa será liberada após a produção e aprovação dos Dias 3 a 7.</p>}
           </section>}
         </> : <div className="materials-anki-content">
         <div className="materials-runtime">
