@@ -182,10 +182,16 @@ export default function Day2ListeningRecall({ projectId, assetId, sourceSignatur
     const score = Number(raw?.score);
     if (!Number.isFinite(score) || score < 70 || score > 100) errors.push("pontuação abaixo de 70 ou inválida");
     const breakdown = raw?.score_breakdown;
-    const scoreKeys = ["auditory_learning_value", "source_fidelity", "clarity", "pedagogical_usefulness", "level_fit", "response_quality", "variety"];
-    if (!breakdown || scoreKeys.some(key => !Number.isFinite(Number(breakdown[key]))) ||
-        Math.abs(scoreKeys.reduce((sum, key) => sum + Number(breakdown?.[key] ?? 0), 0) - 100) > 0.01) {
-      errors.push("distribuição da pontuação deve conter os sete critérios e somar 100");
+    const scoreLimits: Record<string, number> = {
+      auditory_learning_value: 20, source_fidelity: 20, clarity: 15,
+      pedagogical_usefulness: 15, level_fit: 10, response_quality: 10, variety: 10
+    };
+    const scoreKeys = Object.keys(scoreLimits);
+    const breakdownTotal = scoreKeys.reduce((sum, key) => sum + Number(breakdown?.[key] ?? 0), 0);
+    if (!breakdown || scoreKeys.some(key =>
+      !Number.isFinite(Number(breakdown[key])) || Number(breakdown[key]) < 0 || Number(breakdown[key]) > scoreLimits[key]
+    ) || Math.abs(breakdownTotal - score) > 0.01) {
+      errors.push("a pontuação deve respeitar os pesos máximos de cada critério e somar o score final");
     }
     const linkedTexts = Array.isArray(raw?.audioCueOrders)
       ? raw.audioCueOrders.map((order: number) => orderedCues.find(cue => cue.cue_order === Number(order))?.text_en ?? "").filter(Boolean)
