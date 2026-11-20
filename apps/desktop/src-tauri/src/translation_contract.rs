@@ -44,6 +44,9 @@ pub fn build_editorial_input(
     include_word_translations: bool,
     include_semantic_units: bool,
 ) -> Result<Value, String> {
+    if include_semantic_units && !include_word_translations {
+        return Err("Unidades semânticas dependem das traduções palavra por palavra. Ative as duas predições.".into());
+    }
     let cue_values = cues.iter().enumerate().map(|(cue_order, cue)| {
         let words = if include_word_translations {
             cue.words.as_deref().unwrap_or(&[]).iter().enumerate().map(|(order, word)| {
