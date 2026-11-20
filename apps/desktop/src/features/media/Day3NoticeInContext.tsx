@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveFile } from "@tauri-apps/plugin-dialog";
-import { Check, Download, FileText, LoaderCircle, Upload } from "lucide-react";
+import { Check, FileText, LoaderCircle, Upload } from "lucide-react";
 import type { MicroLesson } from "./learning-journey-contract";
 import "./Day3NoticeInContext.css";
 
 type Cue = { id: string; text: string; startMs: number; endMs: number; words?: { text: string; startMs: number; endMs: number }[] };
 type Card = { id: string; sourceCueId: string; focus: string; meaning: string; highlightEn: string; explanation: string; exampleEn: string; examplePt: string; status: string };
-type SmartLesson = { final_selection?: string | null; candidates?: { id: string; lesson: { title: string; meaning_pt: string; communicative_intent_pt: string; explanation_pt: string; examples: { en: string; pt: string }[]; context_tree: unknown[] }; source: { cue_order: number; expression: string; excerpt_en: string; excerpt_pt: string }[] };
+type SmartLesson = { final_selection?: string | null; candidates?: { id: string; lesson: { title: string; meaning_pt: string; communicative_intent_pt: string; explanation_pt: string; examples: { en: string; pt: string }[]; context_tree: unknown[] }; source: { cue_order: number; expression: string; excerpt_en: string; excerpt_pt: string } };
 type Lesson = MicroLesson & { score?: number; score_breakdown?: Record<string, number>; pedagogical_rationale?: string; status?: "draft" | "approved" | "rejected"; include_in_hub?: boolean; sourceText?: string; communicativeIntentPt?: string; contextTree?: { id: string; title: string; purpose: string; examples: { en: string; pt: string }[] }[] };
 type Props = {
   projectId: string; assetId: string; sourceSignature: string; cues: Cue[];
@@ -88,7 +88,7 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
         ids.add(raw.id);
         const score = Number(raw.score);
         const breakdown = raw.score_breakdown;
-        if (!Number.isFinite(score) || score < 70 || score > 100 || !isObject(breakdown) || Object.keys(weights).some(key => typeof breakdown[key] !== "number" || breakdown[key] < 0 || breakdown[key] > (weights as any)[key]) || Object.keys(breakdown).length !== Object.keys(weights).length || Object.values(weights).reduce((sum, max) => sum + Number(breakdown[Object.keys(weights).find(key => (weights as any)[key] === max)] ?? 0), 0) < 0) throw new Error("Pontuação ou score_breakdown inválido na microaula " + raw.id + ".");
+        if (!Number.isFinite(score) || score < 70 || score > 100 || !isObject(breakdown) || Object.keys(weights).some(key => typeof breakdown[key] !== "number" || breakdown[key] < 0 || breakdown[key] > (weights as any)[key]) || Object.keys(breakdown).length !== Object.keys(weights).length) throw new Error("Pontuação ou score_breakdown inválido na microaula " + raw.id + ".");
         const sum = Object.entries(weights).reduce((total, [key]) => total + breakdown[key], 0);
         if (sum !== score) throw new Error("A soma do score_breakdown deve ser igual ao score em " + raw.id + ".");
         if (!["beginner", "elementary", "intermediate", "upper-intermediate"].includes(raw.difficulty)) throw new Error("difficulty inválido em " + raw.id + ".");
