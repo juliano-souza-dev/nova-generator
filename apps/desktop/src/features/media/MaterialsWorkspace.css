@@ -96,19 +96,30 @@
 .materials-voice-refresh:hover{background:#30263e;color:#e3d5ff}
 
 
-.materials-journey-panel{border:1px solid var(--border,#dfe4ea);border-radius:14px;padding:20px;margin:22px 0;background:var(--surface,#fff);display:grid;gap:16px}
-.materials-journey-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
-.materials-journey-heading h3{margin:5px 0 6px;font-size:18px}
-.materials-journey-heading p,.materials-journey-empty,.materials-journey-note{margin:0;color:var(--muted,#64748b);font-size:13px;line-height:1.55;max-width:760px}
+.materials-journey-panel{border:1px solid #393342;border-radius:14px;padding:22px;margin:22px 0;background:#17151d;color:#eee9f5;display:grid;gap:22px}
+.materials-journey-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding-bottom:16px;border-bottom:1px solid #34313d}
+.materials-journey-heading h3{margin:5px 0 6px;font:650 19px 'Space Grotesk';color:#f2edf7}
+.materials-journey-heading p,.materials-journey-empty,.materials-journey-note{margin:0;color:#aaa4b2;font-size:12px;line-height:1.6;max-width:760px}
 .materials-journey-actions{display:flex;gap:8px;flex-wrap:wrap}
-.materials-journey-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
-.materials-journey-day{display:flex;flex-direction:column;gap:7px;padding:12px 10px;border:1px solid var(--border,#dfe4ea);border-radius:10px;min-width:0}
-.materials-journey-day>span{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--accent,#4768e8)}
-.materials-journey-day strong{font-size:12px;line-height:1.35}
-.materials-journey-day small{font-size:11px;color:var(--muted,#64748b);line-height:1.4}
-.materials-journey-note{padding-top:12px;border-top:1px solid var(--border,#dfe4ea)}
-@media(max-width:1050px){.materials-journey-days{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(max-width:650px){.materials-journey-heading{flex-direction:column}.materials-journey-days{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.materials-journey-overview,.materials-journey-work{display:grid;gap:13px;min-width:0}
+.materials-journey-section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.materials-journey-section-heading h4{margin:4px 0 0;font:650 15px 'Space Grotesk';color:#f0ebf6}
+.materials-journey-section-heading p{margin:5px 0 0;color:#aaa4b2;font-size:11px;line-height:1.5}
+.materials-journey-progress{flex:none;padding:6px 9px;border:1px solid #40384c;border-radius:20px;background:#211e28;color:#cbb7f2;font-size:9px;font-weight:650}
+.materials-journey-days{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.materials-journey-day{display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid #393541;border-radius:10px;min-width:0;background:#201e27;color:#eee9f5;transition:border-color .16s ease,background .16s ease}
+.materials-journey-day.is-current{border-color:#8064b4;background:#292236;box-shadow:inset 3px 0 #a98bed}
+.materials-journey-day.is-established{border-color:#385844;background:#1d2a23}
+.materials-journey-day.is-planned{background:#1b1920}
+.materials-journey-day>span{font-size:9px;font-weight:800;letter-spacing:.1em;color:#b99bf1}
+.materials-journey-day.is-established>span{color:#8bd2a3}
+.materials-journey-day strong{font-size:12px;line-height:1.4;color:#f0ebf6;overflow-wrap:anywhere}
+.materials-journey-day small{font-size:10px;color:#aaa4b2;line-height:1.45}
+.materials-journey-work{padding-top:18px;border-top:1px solid #34313d}
+.materials-journey-note{padding-top:12px;border-top:1px solid #34313d;color:#aaa4b2}
+.materials-journey-empty{padding:13px 15px;border:1px dashed #51465f;border-radius:9px;background:#1b1921}
+@media(max-width:1050px){.materials-journey-days{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.materials-journey-panel{padding:15px}.materials-journey-heading{flex-direction:column}.materials-journey-section-heading{align-items:flex-start;flex-direction:column}.materials-journey-days{grid-template-columns:1fr}.materials-journey-progress{white-space:normal}}
 
 .materials-journey-stale{margin:0;padding:10px 12px;border-radius:8px;background:rgba(217,119,6,.1);color:#a16207;font-size:12px;line-height:1.45}
 
