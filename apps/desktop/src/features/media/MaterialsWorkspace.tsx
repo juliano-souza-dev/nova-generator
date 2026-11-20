@@ -1196,8 +1196,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 assetId={assetId}
                 sourceSignature={sourceSignature}
                 cues={sourceCues}
-                listening={learningJourney?.days[selectedJourneyDay - 1].listening.filter(item => Boolean(item.status || item.score)) ?? []}
-                speaking={learningJourney?.days[selectedJourneyDay - 1].speaking.filter(item => Boolean(item.status || item.score)) ?? []}
+                listening={selectedJourneyDay === 6 ? learningJourney?.days[5].listening.filter(item => Boolean(item.status || item.score)) ?? [] : learningJourney?.days[6].listening.filter(item => Boolean(item.status || item.score)) ?? []}
+                speaking={selectedJourneyDay === 6 ? learningJourney?.days[5].speaking.filter(item => Boolean(item.status || item.score)) ?? [] : learningJourney?.days[6].speaking.filter(item => Boolean(item.status || item.score)) ?? []}
                 successCriteria={selectedJourneyDay === 7 ? learningJourney?.days[6].successCriteria ?? [] : []}
                 onChange={selectedJourneyDay === 6 ? updateDay6Challenge : updateDay7Challenge}
                 onBack={() => setSelectedJourneyDay(null)}
