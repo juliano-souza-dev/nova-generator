@@ -117,6 +117,7 @@ export type LearningJourneyPackage = {
   source: { projectId: string; assetId: string; sourceSignature: string; mediaSignature?: string };
   language: { source: "en"; support: "pt-BR" };
   day1Preparation?: Day1PreparationPackage;
+  day1NoticeLessons?: MicroLesson[];
   days: [
     { day: 1; title: "Explore & Understand"; mode: "existing-stages"; stageKeys: ["english", "word", "shadowing", "audio", "practice"] },
     { day: 2; title: "Listening Recall"; mode: "listening-recall"; activities: ListeningQuestion[] },
