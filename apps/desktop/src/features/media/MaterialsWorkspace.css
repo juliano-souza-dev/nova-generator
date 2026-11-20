@@ -206,3 +206,15 @@
 .materials-pedagogical-include.excluded{border-color:#51465f;background:#292431;color:#aaa1b4}
 .materials-pedagogical-include:hover{filter:brightness(1.15)}
 @media(max-width:650px){.materials-pedagogical-curation{align-items:flex-start;flex-direction:column}.materials-pedagogical-steps{grid-template-columns:1fr}}
+
+/* Jornada: somente etapas concluídas recebem cor de destaque. */
+.materials-journey-day>span{color:#aaa4b2}
+.materials-journey-day.is-completed{border-color:#385844;background:#1d2a23;box-shadow:inset 3px 0 #68b982}
+.materials-journey-day.is-completed>span,.materials-journey-day.is-completed em{color:#8bd2a3}
+.materials-journey-day:not(:disabled):hover{border-color:#55515f;background:#25232b;transform:translateY(-1px)}
+.materials-journey-day.is-completed:not(:disabled):hover{border-color:#4a7757;background:#223329}
+.materials-journey-work>section>footer,.materials-journey-work>div>section>footer{display:none!important}
+.materials-journey-stage-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding-top:16px;border-top:1px solid #34313d}
+.materials-journey-stage-footer>span{flex:1;text-align:center;color:#aaa4b2;font-size:10px}
+.materials-journey-stage-footer .primary-button{white-space:nowrap}
+@media(max-width:720px){.materials-journey-stage-footer{align-items:stretch;flex-direction:column}.materials-journey-stage-footer>span{text-align:left}}
