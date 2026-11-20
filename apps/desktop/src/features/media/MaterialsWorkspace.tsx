@@ -11,7 +11,7 @@ import PredictionListening from "./PredictionListening";
 import SmartLearningMoments from "./SmartLearningMoments";
 import Day2ListeningRecall from "./Day2ListeningRecall";
 import { buildSmartLearningSource, validateSmartLearningMoments, type SmartLearningMomentsPackage } from "./smart-learning-moments-contract";
-import { buildLearningJourneyPackage, validateLearningJourney, type LearningJourneyPackage } from "./learning-journey-contract";
+import { buildLearningJourneyPackage, validateLearningJourney, validateLearningJourneyDraft, type LearningJourneyPackage } from "./learning-journey-contract";
 
 type Asset = { id: string; name: string; kind: string; durationMs?: number | null; sourceVideoId?: string | null };
 type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string; wordAlignment?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
@@ -274,7 +274,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       const smartLearningSnapshot = savedSmartLearningMoments ?? stored?.smartLearningMoments ?? null;
       setSmartLearningMoments(smartLearningSnapshot?.source_signature === materialSignature ? smartLearningSnapshot : null);
       const storedJourneySignature = learningJourneySourceSignature(materialSignature, Array.isArray(stored?.cards) ? stored.cards : []);
-      setLearningJourney(savedJourney && savedJourney.source?.sourceSignature === storedJourneySignature && validateLearningJourney(savedJourney).length === 0 ? savedJourney : null);
+      setLearningJourney(savedJourney && savedJourney.source?.sourceSignature === storedJourneySignature && validateLearningJourneyDraft(savedJourney).length === 0 ? savedJourney : null);
       setSourceSignature(materialSignature);
       setSourceInfo({
         cues: cues.length,
