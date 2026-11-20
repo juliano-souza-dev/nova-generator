@@ -99,11 +99,24 @@ export type SpeakingPrompt = {
   expectedElements?: string[];
 };
 
+export type Day1PracticeItem = {
+  id: string; cueOrder: number; expression: string; meaningPt: string;
+  explanationPt?: string; exampleEn?: string; examplePt?: string;
+  score: number; status: "approved" | "rejected";
+};
+export type Day1PreparationPackage = {
+  sourceHash: string;
+  subtitleChallenge: { cueOrders: number[] };
+  expressionMatch: Day1PracticeItem[];
+  patternChallenge: Day1PracticeItem[];
+};
+
 export type LearningJourneyPackage = {
   contract: typeof LEARNING_JOURNEY_CONTRACT;
   version: 1;
   source: { projectId: string; assetId: string; sourceSignature: string; mediaSignature?: string };
   language: { source: "en"; support: "pt-BR" };
+  day1Preparation?: Day1PreparationPackage;
   days: [
     { day: 1; title: "Explore & Understand"; mode: "existing-stages"; stageKeys: ["english", "word", "shadowing", "audio", "practice"] },
     { day: 2; title: "Listening Recall"; mode: "listening-recall"; activities: ListeningQuestion[] },
