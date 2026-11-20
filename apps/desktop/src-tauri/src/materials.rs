@@ -46,10 +46,12 @@ pub fn save_smart_learning_moments(
     let path = materials_file(&app, &project_id, &asset_id)?;
     let mut document = if path.exists() {
         let raw = fs::read_to_string(&path).map_err(|e| format!("Não foi possível ler os Materiais existentes: {e}"))?;
-        if raw.trim().is_empty() { json!({}) } else {
+        if raw.trim().is_empty() { json!({ "version": 2, "projectId": project_id, "assetId": asset_id, "cards": [] }) } else {
             serde_json::from_str::<Value>(&raw).map_err(|e| format!("Materiais existentes inválidos: {e}"))?
         }
-    } else { json!({}) };
+    } else {
+        json!({ "version": 2, "projectId": project_id, "assetId": asset_id, "cards": [] })
+    };
     if !document.is_object() { return Err("O documento de Materiais existente não é um objeto válido.".into()); }
     match value {
         Some(moment) => { document["smartLearningMoments"] = moment; }
@@ -61,6 +63,7 @@ pub fn save_smart_learning_moments(
     }
     let temp = path.with_extension("json.tmp");
     fs::write(&temp, bytes).map_err(|e| format!("Não foi possível salvar Smart Learning Moments: {e}"))?;
+    if path.exists() { fs::remove_file(&path).map_err(|e| format!("Não foi possível substituir os Materiais existentes: {e}"))?; }
     fs::rename(temp, path).map_err(|e| format!("Não foi possível concluir o salvamento de Smart Learning Moments: {e}"))
 }
 
