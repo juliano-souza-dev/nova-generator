@@ -989,27 +989,51 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           {activePedagogicalTab === "journey" && <section className="materials-journey-panel">
             <div className="materials-journey-heading">
               <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Jornada de aprendizagem · 7 dias</h3>
-                <p>O Dia 1 permanece como está. Estamos produzindo o Day 2 · Listening Recall por geração externa, revisão e aprovação antes do envio ao iHubEnglish.</p></div>
+                <p>Uma sequência progressiva de compreensão, percepção e produção do inglês.</p></div>
               <div className="materials-journey-actions">
                 <button className="secondary-button" type="button" onClick={exportLearningJourney} disabled={!learningJourney || !journeyReadyForExport(learningJourney)}><Download size={14}/> Exportar jornada completa</button>
               </div>
             </div>
             {learningJourney && learningJourney.source.sourceSignature !== learningJourneySourceSignature(sourceSignature, cards) && <p className="materials-journey-stale">Os cards aprovados mudaram. Regenere a jornada antes de exportar ou publicar.</p>}
-            <Day2ListeningRecall
-              projectId={projectId}
-              assetId={assetId}
-              sourceSignature={sourceSignature}
-              cues={sourceCues}
-              translations={sourceTranslations}
-              activities={learningJourney?.days[1].activities.filter(item =>
-                ["identify", "word-recognition", "gap", "reconstruct"].includes(item.type) &&
-                (Boolean((item as ListeningQuestion & { status?: string; score?: number }).status) ||
-                Number.isFinite((item as ListeningQuestion & { score?: number }).score))
-              ) ?? []}
-              onActivitiesChange={updateDay2Activities}
-            />
-            {learningJourney ? <div className="materials-journey-days">{learningJourney.days.map(day => <article key={day.day} className="materials-journey-day"><span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong><small>{day.mode === "existing-stages" ? "Etapas atuais" : day.mode === "listening-recall" ? day.activities.length + " exercícios de listening" : day.mode === "micro-lessons" ? day.lessons.length + " microaulas" : day.mode === "deep-listening" ? day.tasks.length + " tarefas" : day.mode === "speaking" ? day.prompts.length + " propostas de speaking" : "Desafio integrado"}</small></article>)}</div> : <p className="materials-journey-empty">Exporte as instruções do Day 2, importe o JSON da IA e aprove as atividades. A estrutura dos demais dias será preparada nas próximas etapas, sem alterar o Dia 1.</p>}
-            {learningJourney && <p className="materials-journey-note">Dia 2: {learningJourney.days[1].activities.length} atividade(s) no rascunho, {approvedDay2Activities(learningJourney).length} aprovada(s). O conteúdo fica salvo no Nova Generator; a exportação da jornada completa será liberada após a produção e aprovação dos Dias 3 a 7.</p>}
+            <div className="materials-journey-overview">
+              <div className="materials-journey-section-heading">
+                <div><span className="eyebrow">VISÃO GERAL</span><h4>Sequência de aprendizagem</h4></div>
+                <span className="materials-journey-progress">{learningJourney ? "Estrutura da jornada" : "Planejamento dos 7 dias"}</span>
+              </div>
+              <div className="materials-journey-days">
+                {(learningJourney?.days ?? [
+                  { day: 1, title: "Explore & Understand", mode: "existing-stages" },
+                  { day: 2, title: "Listening Recall", mode: "listening-recall" },
+                  { day: 3, title: "Notice in Context", mode: "micro-lessons" },
+                  { day: 4, title: "Deep Listening", mode: "deep-listening" },
+                  { day: 5, title: "Speak & Compare", mode: "speaking" },
+                  { day: 6, title: "Listening & Speaking Challenge", mode: "mixed-challenge" },
+                  { day: 7, title: "Final Challenge", mode: "final-challenge" }
+                ] as const).map(day => <article key={day.day} className={"materials-journey-day" + (day.day === 2 ? " is-current" : day.day === 1 ? " is-established" : " is-planned")}>
+                  <span>DIA {String(day.day).padStart(2, "0")}</span><strong>{day.title}</strong>
+                  <small>{day.day === 1 ? "Etapas existentes" : day.day === 2 ? (learningJourney ? learningJourney.days[1].activities.length + " atividades · " + approvedDay2Activities(learningJourney).length + " aprovadas" : "Em produção") : day.day === 3 ? "Microaulas contextuais" : day.day === 4 ? "Compreensão profunda" : day.day === 5 ? "Pronúncia e fluência" : day.day === 6 ? "Desafio integrado" : "Avaliação final"}</small>
+                </article>)}
+              </div>
+            </div>
+            <div className="materials-journey-work">
+              <div className="materials-journey-section-heading">
+                <div><span className="eyebrow">DIA 02</span><h4>Listening Recall</h4><p>Gere as atividades, revise cada candidata e aprove somente o que deseja enviar ao iHubEnglish.</p></div>
+                {learningJourney && <span className="materials-journey-progress">{learningJourney.days[1].activities.length} no rascunho · {approvedDay2Activities(learningJourney).length} aprovadas</span>}
+              </div>
+              <Day2ListeningRecall
+                projectId={projectId}
+                assetId={assetId}
+                sourceSignature={sourceSignature}
+                cues={sourceCues}
+                translations={sourceTranslations}
+                activities={learningJourney?.days[1].activities.filter(item =>
+                  ["identify", "word-recognition", "gap", "reconstruct"].includes(item.type) &&
+                  (Boolean((item as ListeningQuestion & { status?: string; score?: number }).status) ||
+                  Number.isFinite((item as ListeningQuestion & { score?: number }).score))
+                ) ?? []}
+                onActivitiesChange={updateDay2Activities}
+              />
+            </div>
           </section>}
         </> : <div className="materials-anki-content">
         <div className="materials-runtime">
