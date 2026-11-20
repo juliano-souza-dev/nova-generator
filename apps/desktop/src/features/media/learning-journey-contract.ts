@@ -119,6 +119,8 @@ export type LearningJourneyPackage = {
   language: { source: "en"; support: "pt-BR" };
   day1Preparation?: Day1PreparationPackage;
   day1NoticeLessons?: MicroLesson[];
+  /** Dias explicitamente concluídos pelo autor no fluxo de preparação. */
+  completedDays?: number[];
   days: [
     { day: 1; title: "Explore & Understand"; mode: "existing-stages"; stageKeys: ["english", "word", "shadowing", "audio", "practice"] },
     { day: 2; title: "Listening Recall"; mode: "listening-recall"; activities: ListeningQuestion[] },
