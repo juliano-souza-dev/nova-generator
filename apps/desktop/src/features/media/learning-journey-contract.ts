@@ -56,10 +56,25 @@ export type DeepListeningTask = {
   cueOrders: number[];
   mode: "no-subtitles" | "gap-fill" | "connected-speech" | "rhythm";
   prompt: string;
+  sourceText?: string;
+  targetText?: string;
   expectedText?: string;
   sentence?: string;
   acceptedAnswers?: string[];
+  options?: { id: string; text: string }[];
+  answerId?: string;
+  focus?: string;
+  phenomenon?: "consonant-vowel-linking" | "consonant-linking" | "contraction" | "common-reduction" | "resyllabification";
+  phraseGroups?: string[];
   explanationPt?: string;
+  feedbackCorrectPt?: string;
+  feedbackIncorrectPt?: string;
+  score?: number;
+  score_breakdown?: Record<string, number>;
+  pedagogical_rationale?: string;
+  difficulty?: "beginner" | "elementary" | "intermediate" | "upper-intermediate";
+  status?: "draft" | "approved" | "rejected";
+  include_in_hub?: boolean;
 };
 
 export type SpeakingPrompt = {
