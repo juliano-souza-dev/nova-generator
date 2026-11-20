@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import MediaWorkspace from "./features/media/MediaWorkspace";
 import MaterialsWorkspace from "./features/media/MaterialsWorkspace";
 import TtkMediaModule from "./features/ttk/TtkMediaModule";
@@ -50,6 +50,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [projectExportAction, setProjectExportAction] = useState<(() => void) | null>(null);
+  const registerProjectExportAction = useCallback((action: (() => void) | null) => setProjectExportAction(() => action), []);
 
   async function refreshProjects() {
     try {
@@ -103,6 +104,7 @@ export default function App() {
     } catch (e) { setError(String(e)); }
   }
   function openProject(project: Project) {
+    setProjectExportAction(null);
     setActiveProject(project); setView("project");
   }
 
@@ -139,7 +141,7 @@ export default function App() {
           <div className="stage-track">{stages.map((stage, index) => { const Icon = stageIcons[index]; return <div className={index < currentStage ? "stage-item done" : index === currentStage ? "stage-item current" : "stage-item"} key={stage}><div className="stage-icon">{index < currentStage ? <Check size={17}/> : <Icon size={17}/>}</div><span>{stage}</span></div>; })}</div>
           <div className="stage-note"><span className="stage-note-dot"/><div><strong>Etapa atual: {stageLabel(activeProject.stage)}</strong><p>O espaço está preparado para receber as ferramentas de produção desta etapa.</p></div></div>
         </section>}
-        {activeProject.project_type === "materials" ? <MaterialsWorkspace projectId={activeProject.id} projectName={activeProject.name} onProjectUpdated={() => void refreshProjects()} onRegisterExportAction={(action) => setProjectExportAction(() => action)} /> : <><MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} /><div style={{ display: "none" }} aria-hidden="true"><MaterialsWorkspace projectId={activeProject.id} projectName={activeProject.name} onProjectUpdated={() => void refreshProjects()} onRegisterExportAction={(action) => setProjectExportAction(() => action)} /></div></>}
+        {activeProject.project_type === "materials" ? <MaterialsWorkspace projectId={activeProject.id} projectName={activeProject.name} onProjectUpdated={() => void refreshProjects()} onRegisterExportAction={registerProjectExportAction} /> : <><MediaWorkspace projectId={activeProject.id} onProjectUpdated={() => void refreshProjects()} /><div style={{ display: "none" }} aria-hidden="true"><MaterialsWorkspace projectId={activeProject.id} projectName={activeProject.name} onProjectUpdated={() => void refreshProjects()} onRegisterExportAction={(action) => setProjectExportAction(() => action)} /></div></>}
       </main>
     </div>;
   }
