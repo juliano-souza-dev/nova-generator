@@ -193,8 +193,8 @@ type PredictionWorkspaceProps = {
   onPreview: (startMs: number, endMs: number) => void; onPreviewModeChange: (active: boolean) => void; onDemoSeekAndPlay: (timeMs: number) => void;
   onDemoPause: () => void; onDemoResume: (timeMs: number) => void; getCurrentTime: () => number;
 };
-export default function MaterialsWorkspace({ projectId, projectName, initialAssetId, onProjectUpdated, prediction, onOpenShadowing }: {
-  projectId: string; projectName: string; initialAssetId?: string; onProjectUpdated?: () => void; prediction?: PredictionWorkspaceProps; onOpenShadowing?: () => void;
+export default function MaterialsWorkspace({ projectId, projectName, initialAssetId, onProjectUpdated, onRegisterExportAction, prediction, onOpenShadowing }: {
+  projectId: string; projectName: string; initialAssetId?: string; onProjectUpdated?: () => void; onRegisterExportAction?: (action: (() => void) | null) => void; prediction?: PredictionWorkspaceProps; onOpenShadowing?: () => void;
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetId, setAssetId] = useState("");
@@ -223,6 +223,7 @@ export default function MaterialsWorkspace({ projectId, projectName, initialAsse
   const importInput = useRef<HTMLInputElement>(null);
   const pedagogicalInput = useRef<HTMLInputElement>(null);
   const materialsReadyRef = useRef(false);
+  const exportActionRef = useRef<() => void>(() => {});
 
   const selectedAsset = useMemo(() => assets.find(item => item.id === assetId), [assets, assetId]);
   const includedPedagogicalCount = pedagogicalContent?.items.filter(item => item.include_in_hub !== false).length ?? 0;
@@ -738,6 +739,18 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       setError(e instanceof Error ? e.message : String(e));
     }
   }
+
+  exportActionRef.current = () => { void exportFinalPedagogicalPackage(); };
+  const projectSpaceExportReady = !loading && Boolean(assetId) && Boolean(
+    (pedagogicalContent?.items.some(item => item.include_in_hub !== false)) ||
+    smartLearningMoments?.final_selection || sourceInfo.predictions ||
+    (learningJourney && learningJourney.source?.sourceSignature === learningJourneySourceSignature(sourceSignature, cards) &&
+      validateLearningJourney(learningJourney).length === 0 && journeyReadyForExport(learningJourney))
+  );
+  useEffect(() => {
+    onRegisterExportAction?.(projectSpaceExportReady ? () => exportActionRef.current() : null);
+    return () => onRegisterExportAction?.(null);
+  }, [onRegisterExportAction, projectSpaceExportReady]);
 
   async function saveMaterials() {
     if (!assetId || saving) return;
