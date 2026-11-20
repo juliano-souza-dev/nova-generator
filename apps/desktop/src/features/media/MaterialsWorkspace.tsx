@@ -1140,7 +1140,6 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           <nav className="materials-subtabs" aria-label="Módulos de conteúdo pedagógico">
             <button type="button" className={activePedagogicalTab === "smart" ? "active" : ""} onClick={() => setActivePedagogicalTab("smart")}>Smart Learning Moments</button>
             <button type="button" className={activePedagogicalTab === "vocabulary" ? "active" : ""} onClick={() => setActivePedagogicalTab("vocabulary")}>Reconhecimento contextual do vocabulário</button>
-            <button type="button" className={activePedagogicalTab === "prediction" ? "active" : ""} onClick={() => setActivePedagogicalTab("prediction")}>Prediction Listening</button>
             <button type="button" className={activePedagogicalTab === "journey" ? "active" : ""} onClick={() => setActivePedagogicalTab("journey")}>Jornada de aprendizagem · 7 dias</button>
           </nav>
           {activePedagogicalTab === "smart" && <SmartLearningMoments
@@ -1179,19 +1178,6 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
               <div><CheckCircle2 size={17}/><strong>{sourceInfo.predictions}</strong><span>desafios aprovados</span></div>
             </div>
           </>}
-          {activePedagogicalTab === "prediction" && <section className="materials-prediction-panel">
-            {prediction?.ready ? <PredictionListening
-              projectId={projectId} assetId={assetId} assetName={prediction.assetName}
-              cues={prediction.cues} selectedCueIds={prediction.selectedCueIds} sourceSignature={prediction.sourceSignature}
-              onClose={() => setActivePedagogicalTab("vocabulary")} onPreview={prediction.onPreview} onPreviewModeChange={prediction.onPreviewModeChange}
-              onDemoSeekAndPlay={prediction.onDemoSeekAndPlay} onDemoPause={prediction.onDemoPause}
-              onDemoResume={prediction.onDemoResume} getCurrentTime={prediction.getCurrentTime}
-              onProjectUpdated={onProjectUpdated} embedded
-            /> : <div className="materials-prediction-prerequisite">
-              <div><AudioLines size={20}/></div><h3>Prepare o Shadowing para gerar desafios</h3>
-              <p>O Prediction Listening usa os trechos selecionados no Shadowing e o alinhamento palavra por palavra do WhisperX. Salve a transcrição, prepare o Shadowing e alinhe os trechos selecionados. Depois, volte a esta aba.</p>
-            </div>}
-          </section>}
           {activePedagogicalTab === "journey" && <section className="materials-journey-panel">
             <div className="materials-journey-heading">
               <div><span className="eyebrow">CONTEÚDO PEDAGÓGICO</span><h3>Jornada de aprendizagem · 7 dias</h3>
