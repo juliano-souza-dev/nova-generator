@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save as saveFile } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
 import {
   AudioLines, BookOpen, Check, CheckCircle2, Download, FileAudio, FileText, Layers3,
   LoaderCircle, Plus, RefreshCw, Save, Sparkles, Trash2, Volume2
@@ -732,7 +731,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       filters: [{ name: "Arquivo JSON", extensions: ["json"] }]
     });
     if (!path) return;
-    await writeFile(path, new TextEncoder().encode(JSON.stringify(exportJourney, null, 2)));
+    await invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode(JSON.stringify(exportJourney, null, 2))) });
     setNotice(selectedMoment ? "Jornada completa exportada com Smart Learning Moment." : "Jornada completa exportada.");
   }
 
@@ -1207,7 +1206,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         setNotice("Exportação cancelada. O projeto continua salvo.");
         return;
       }
-      await writeFile(path, new TextEncoder().encode(json));
+      await invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode(json)) });
       setNotice("JSON pedagógico completo gerado com " + selectedItems.length + " item(ns) selecionado(s)" + (smartLearningMoments?.final_selection ? " e uma mini aula Smart Learning Moments" : "") +
         (predictionIsCurrent ? ", Prediction Listening aprovado" : "") +
         (journeyIsCurrent ? " e Jornada de aprendizagem" : "") + ".");
