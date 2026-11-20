@@ -46,6 +46,7 @@ export type SmartLearningCandidate = {
   };
   selected?: boolean;
   audio_assets?: Array<{ segment_id: string; language: string; audio_path?: string; audio_base64?: string; mime_type?: string; file_name?: string; provider: "internal" | "elevenlabs" }>;
+  merged_audio?: { audio_path: string; file_name: string; mime_type: "audio/mpeg"; segment_count: number };
 };
 export type SmartLearningMomentsPackage = {
   contract: typeof SMART_LEARNING_MOMENTS_CONTRACT;
