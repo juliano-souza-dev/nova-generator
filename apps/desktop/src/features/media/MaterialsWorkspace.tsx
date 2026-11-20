@@ -11,9 +11,10 @@ import PredictionListening from "./PredictionListening";
 import SmartLearningMoments from "./SmartLearningMoments";
 import Day2ListeningRecall from "./Day2ListeningRecall";
 import Day3NoticeInContext from "./Day3NoticeInContext";
+import Day4DeepListening from "./Day4DeepListening";
 import { buildSmartLearningSource, validateSmartLearningMoments, type SmartLearningMomentsPackage } from "./smart-learning-moments-contract";
 import { buildLearningJourneyPackage, validateLearningJourney, validateLearningJourneyDraft, type LearningJourneyPackage } from "./learning-journey-contract";
-import type { ListeningQuestion, MicroLesson } from "./learning-journey-contract";
+import type { DeepListeningTask, ListeningQuestion, MicroLesson } from "./learning-journey-contract";
 
 type Asset = { id: string; name: string; kind: string; durationMs?: number | null; sourceVideoId?: string | null };
 type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string; wordAlignment?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
@@ -425,6 +426,30 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     return journey.days[2].lessons.filter(item => item.status === "approved" && item.include_in_hub !== false);
   }
 
+  function updateDay4Tasks(tasks: DeepListeningTask[]) {
+    try {
+      const currentJourneySignature = learningJourneySourceSignature(sourceSignature, cards);
+      const base = learningJourney?.source.sourceSignature === currentJourneySignature
+        ? learningJourney
+        : buildLearningJourneyPackage({
+          projectId, assetId, sourceSignature: currentJourneySignature, mediaSignature: sourceSignature,
+          cues: sourceCues,
+          cards: cards.map(card => ({
+            id: card.id, sourceCueId: card.sourceCueId, type: card.type, focus: card.focus,
+            meaning: card.meaning, highlightEn: card.highlightEn, explanation: card.explanation,
+            exampleEn: card.exampleEn, examplePt: card.examplePt, status: card.status
+          }))
+        });
+      const days = base.days.map((day, index) => index === 3 ? { ...day, tasks } : day) as LearningJourneyPackage["days"];
+      setLearningJourney({ ...base, days });
+      setError("");
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  function approvedDay4Tasks(journey: LearningJourneyPackage) {
+    return journey.days[3].tasks.filter(item => item.status === "approved" && item.include_in_hub !== false);
+  }
+
   function approvedDay2Activities(journey: LearningJourneyPackage) {
     const requiredTypes = ["identify", "word-recognition", "gap", "reconstruct"];
     return journey.days[1].activities.filter(item =>
@@ -437,7 +462,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   function remainingJourneyDaysApproved(journey: LearningJourneyPackage) {
     const groups = [
       approvedDay3Lessons(journey),
-      journey.days[3].tasks,
+      approvedDay4Tasks(journey),
       journey.days[4].prompts,
       journey.days[5].listening,
       journey.days[5].speaking,
@@ -450,8 +475,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   function journeyReadyForExport(journey: LearningJourneyPackage) {
     const approved = approvedDay2Activities(journey);
     const types = new Set(approved.map(item => item.type));
+    const deepModes = new Set(approvedDay4Tasks(journey).map(task => task.mode));
     return remainingJourneyDaysApproved(journey) &&
-      ["identify", "word-recognition", "gap", "reconstruct"].every(type => types.has(type as any));
+      ["identify", "word-recognition", "gap", "reconstruct"].every(type => types.has(type as any)) &&
+      ["no-subtitles", "gap-fill", "connected-speech", "rhythm"].every(mode => deepModes.has(mode as any));
   }
 
   function exportLearningJourney() {
@@ -466,9 +493,10 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     }
     const approvedActivities = approvedDay2Activities(learningJourney);
     const approvedLessons = approvedDay3Lessons(learningJourney);
+    const approvedDeepTasks = approvedDay4Tasks(learningJourney);
     const exportJourney = {
       ...learningJourney,
-      days: learningJourney.days.map((day, index) => index === 1 ? { ...day, activities: approvedActivities } : index === 2 ? { ...day, lessons: approvedLessons } : day)
+      days: learningJourney.days.map((day, index) => index === 1 ? { ...day, activities: approvedActivities } : index === 2 ? { ...day, lessons: approvedLessons } : index === 3 ? { ...day, tasks: approvedDeepTasks } : day)
     };
     const errors = validateLearningJourney(exportJourney);
     if (errors.length) { setError(errors.join("\n")); return; }
@@ -886,7 +914,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         ...learningJourney,
         days: learningJourney.days.map((day, index) => index === 1
           ? { ...day, activities: approvedJourneyActivities }
-          : index === 2 ? { ...day, lessons: approvedDay3Lessons(learningJourney) } : day)
+          : index === 2 ? { ...day, lessons: approvedDay3Lessons(learningJourney) }
+          : index === 3 ? { ...day, tasks: approvedDay4Tasks(learningJourney) } : day)
       } : null;
       if (!selectedItems.length && !smartLearningMoments?.final_selection && !predictionIsCurrent && !journeyIsCurrent) {
         throw new Error("Não há conteúdo aprovado e atualizado para exportar. Aprove os materiais ou conclua a revisão da jornada.");
@@ -1032,7 +1061,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                   { day: 1, title: "Explore & Understand", detail: "Etapas existentes", state: "is-established" },
                   { day: 2, title: "Listening Recall", detail: learningJourney ? learningJourney.days[1].activities.length + " atividades · " + approvedDay2Activities(learningJourney).length + " aprovadas" : "Preparar atividades de listening", state: "is-current" },
                   { day: 3, title: "Notice in Context", detail: learningJourney ? learningJourney.days[2].lessons.length + " microaulas · " + approvedDay3Lessons(learningJourney).length + " aprovadas" : "Preparar microaulas contextuais", state: "is-current" },
-                  { day: 4, title: "Deep Listening", detail: "Compreensão profunda", state: "is-planned" },
+                  { day: 4, title: "Deep Listening", detail: learningJourney ? learningJourney.days[3].tasks.length + " tarefas · " + approvedDay4Tasks(learningJourney).length + " aprovadas" : "Preparar escuta profunda", state: "is-current" },
                   { day: 5, title: "Speak & Compare", detail: "Pronúncia e fluência", state: "is-planned" },
                   { day: 6, title: "Listening & Speaking Challenge", detail: "Desafio integrado", state: "is-planned" },
                   { day: 7, title: "Final Challenge", detail: "Avaliação final", state: "is-planned" }
@@ -1068,6 +1097,18 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
                 smartLearningMoments={smartLearningMoments as any}
                 lessons={learningJourney?.days[2].lessons.filter(item => Boolean(item.status || item.score)) ?? []}
                 onLessonsChange={updateDay3Lessons}
+                onBack={() => setSelectedJourneyDay(null)}
+                onSave={() => void saveMaterials()}
+                saving={saving}
+              />
+            </div> : selectedJourneyDay === 4 ? <div className="materials-journey-work">
+              <Day4DeepListening
+                projectId={projectId}
+                assetId={assetId}
+                sourceSignature={sourceSignature}
+                cues={sourceCues}
+                tasks={learningJourney?.days[3].tasks.filter(item => Boolean(item.status || item.score)) ?? []}
+                onTasksChange={updateDay4Tasks}
                 onBack={() => setSelectedJourneyDay(null)}
                 onSave={() => void saveMaterials()}
                 saving={saving}
