@@ -133,9 +133,9 @@ export default function Day5SpeakCompare({ projectId, assetId, sourceSignature, 
       const validOrders = new Set(sourceCues.map(cue => cue.cue_order));
       const invalid = parsed.prompts.map((prompt: any) => ({ prompt, errors: validatePrompt(prompt, validOrders) })).filter((entry: any) => entry.errors.length);
       if (invalid.length) throw new Error("JSON não aprovado pela validação:\n" + invalid.slice(0, 8).map((entry: any) => entry.prompt?.id + ": " + entry.errors.join(", ")).join("\n"));
-      const imported = parsed.prompts.map((prompt: Candidate) => ({ ...prompt, status: "approved" as const }));
+      const imported = parsed.prompts.map((prompt: Candidate) => ({ ...prompt, status: "draft" as const }));
       onPromptsChange(imported);
-      setNotice(imported.length + " práticas importadas e aprovadas. Você pode rejeitar as que não deseja enviar ao iHub.");
+      setNotice(imported.length + " práticas importadas como rascunho. Revise e aprove as que deseja incluir no iHub.");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
   }
