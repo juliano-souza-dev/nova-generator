@@ -7,12 +7,23 @@
 export const LEARNING_JOURNEY_CONTRACT = "nova-generator-learning-journey/1.0" as const;
 export const IHUB_JOURNEY_CONTRACT = "ihub-learning-journey/1.0" as const;
 
+export type ListeningQuestionMetadata = {
+  explanationPt?: string;
+  feedbackCorrectPt?: string;
+  feedbackIncorrectPt?: string;
+  difficulty?: "beginner" | "elementary" | "intermediate" | "upper-intermediate";
+  score?: number;
+  score_breakdown?: Record<string, number>;
+  pedagogical_rationale?: string;
+  status?: "draft" | "approved" | "rejected";
+  include_in_hub?: boolean;
+};
 export type ListeningQuestion =
-  | { id: string; type: "identify"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string }
-  | { id: string; type: "gap"; prompt: string; audioCueOrders: number[]; sentence: string; acceptedAnswers: string[]; hint?: string }
-  | { id: string; type: "detail"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string }
-  | { id: string; type: "word-recognition"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string }
-  | { id: string; type: "reconstruct"; prompt: string; audioCueOrders: number[]; words: string[]; answer: string[] };
+  | ({ id: string; type: "identify"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string } & ListeningQuestionMetadata)
+  | ({ id: string; type: "gap"; prompt: string; audioCueOrders: number[]; sentence: string; acceptedAnswers: string[]; hint?: string } & ListeningQuestionMetadata)
+  | ({ id: string; type: "detail"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string } & ListeningQuestionMetadata)
+  | ({ id: string; type: "word-recognition"; prompt: string; audioCueOrders: number[]; options: { id: string; text: string }[]; answerId: string } & ListeningQuestionMetadata)
+  | ({ id: string; type: "reconstruct"; prompt: string; audioCueOrders: number[]; words: string[]; answer: string[] } & ListeningQuestionMetadata);
 
 export type MicroLesson = {
   id: string;
