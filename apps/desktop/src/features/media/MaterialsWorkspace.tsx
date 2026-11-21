@@ -1199,13 +1199,23 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       await persistMaterials();
       const normalizedProjectName = projectName.trim();
       if (!normalizedProjectName) throw new Error("O projeto precisa ter um nome para preencher metadata.title.");
+      const youtubeUrl = selectedAsset?.sourceUrl?.trim() ?? "";
+      const youtubeVideoId = selectedAsset?.sourceVideoId?.trim() ?? "";
+      if (!youtubeUrl || !/^[A-Za-z0-9_-]{11}$/.test(youtubeVideoId)) {
+        throw new Error("A mídia selecionada não possui a URL e o ID do YouTube original. Selecione a mídia importada diretamente do YouTube, não um arquivo MP4 local.");
+      }
+      const sceneStartMs = Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0));
+      const sceneEndMs = Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0);
+      if (!Number.isFinite(sceneStartMs) || !Number.isFinite(sceneEndMs) || sceneEndMs <= sceneStartMs) {
+        throw new Error("A mídia não possui uma janela de reprodução válida no tempo do vídeo original.");
+      }
       const payload = {
         schema: "ihub-generator-pedagogical-import/1.0",
         package_version: 2,
         generated_at: new Date().toISOString(),
         metadata: {
           title: normalizedProjectName,
-          youtube: selectedAsset?.sourceUrl ?? ""
+          youtube: youtubeUrl
         },
         project: {
           id: projectId,
@@ -1213,29 +1223,26 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           name: normalizedProjectName,
           asset_name: selectedAsset?.name ?? "",
           source_video_id: selectedAsset?.sourceVideoId ?? null,
-          youtube_url: selectedAsset?.sourceUrl ?? "",
-          source_video_start_ms: Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0)),
-          source_video_end_ms: Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0),
+          youtube_url: youtubeUrl,
+          source_video_start_ms: sceneStartMs,
+          source_video_end_ms: sceneEndMs,
           timeline: "scene_local_ms"
         },
         kit: {
-          youtube: selectedAsset?.sourceUrl ?? "",
-          youtube_video_id: selectedAsset?.sourceVideoId ?? null,
+          youtube: youtubeUrl,
+          youtube_video_id: youtubeVideoId,
           contentType: "immersion",
-          scene_start_ms: Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0)),
-          scene_end_ms: Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0),
-          scene_duration_ms: Math.max(0,
-            Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0) -
-            Number(selectedAsset?.sourceStartMs ?? 0)
-          )
+          scene_start_ms: sceneStartMs,
+          scene_end_ms: sceneEndMs,
+          scene_duration_ms: sceneEndMs - sceneStartMs
         },
         generator: {
           project: {
             id: projectId,
             timeline: "scene_local_ms",
             source_video_id: selectedAsset?.sourceVideoId ?? null,
-            source_video_start_ms: Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0)),
-            source_video_end_ms: Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0)
+            source_video_start_ms: sceneStartMs,
+            source_video_end_ms: sceneEndMs
           },
           media_window: {
             start_ms: Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0)),
