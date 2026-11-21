@@ -631,6 +631,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
   }, [playheadMs, previewTick, playing, visualClips, audioClips, assets]);
 
   function exportIHubSuperJson() {
+    try {
     const sourceWindows = JSON.parse(
       localStorage.getItem(`ttk-creator:youtube-source-windows:${projectId}`) || "{}",
     ) as Record<string, { youtubeUrl?: string; sourceStartMs?: number; sourceEndMs?: number }>;
@@ -694,6 +695,9 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
     anchor.click();
     URL.revokeObjectURL(url);
     setSceneSpecMessage(`Super JSON compatível com iHubEnglish exportado com ${payload.cues.length} legendas.`);
+    } catch (error) {
+      setSceneSpecMessage("Não foi possível exportar o Super JSON: " + String(error));
+    }
   }
 
   async function exportVideo() {
