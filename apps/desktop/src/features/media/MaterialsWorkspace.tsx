@@ -1179,6 +1179,16 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       }
       const journeyIsCurrent = Boolean(learningJourney && journeySourceIsCurrent && journeyReadyForExport(learningJourney));
       const selectedMoment = await buildSelectedSmartLearningMoment();
+      // iHub's journey contract expects the reviewed candidate collection and
+      // final_selection, while the standalone overlay consumes the selected
+      // moment directly. Preserve both shapes without duplicating unselected drafts.
+      const journeySmartLearningMoments = selectedMoment?.moment
+        ? {
+            contract: selectedMoment.contract,
+            candidates: [selectedMoment.moment],
+            final_selection: String(selectedMoment.moment.id || "")
+          }
+        : null;
       const predictionChallenges = predictionIsCurrent && Array.isArray(predictionReview?.challenges)
         ? predictionReview.challenges.filter((item: any) => item.status === "approved").map((item: any) => ({
             id: item.id,
@@ -1272,7 +1282,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         ...(learningJourney.day1NoticeLessons?.length ? {
           day1NoticeLessons: learningJourney.day1NoticeLessons.filter(item => item.status === "approved" && item.include_in_hub !== false)
         } : {}),
-        ...(selectedMoment ? { smartLearningMoments: selectedMoment } : {}),
+        ...(journeySmartLearningMoments ? { smartLearningMoments: journeySmartLearningMoments } : {}),
         days: learningJourney.days.map((day, index) =>
           index === 1 ? { ...day, activities: approvedDay2Activities(learningJourney) } :
           index === 2 ? { ...day, lessons: approvedDay3Lessons(learningJourney) } :
