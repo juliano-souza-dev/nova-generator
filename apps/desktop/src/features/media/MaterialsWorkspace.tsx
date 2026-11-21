@@ -1365,7 +1365,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         })),
         pedagogical_content: pedagogicalContent ? { ...pedagogicalContent, minimum_items: selectedItems.length, items: selectedItems } : null,
         smart_learning_moment: selectedMoment,
-        shadowingPractice,
+        ...(shadowingPractice ? { shadowingPractice } : {}),
         prediction_listening: predictionIsCurrent ? predictionReview.materials ?? null : null,
         learning_journey: exportJourney
       };
