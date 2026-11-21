@@ -1178,8 +1178,101 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         throw new Error("A Jornada ainda não pode ser incluída no JSON completo. Pendências identificadas:\n• " + (problems.length ? problems.join("\n• ") : "A validação interna não reconheceu uma ou mais modalidades. Envie este diagnóstico para investigarmos."));
       }
       const journeyIsCurrent = Boolean(learningJourney && journeySourceIsCurrent && journeyReadyForExport(learningJourney));
+      const selectedMoment = await buildSelectedSmartLearningMoment();
+      const predictionChallenges = predictionIsCurrent && Array.isArray(predictionReview?.challenges)
+        ? predictionReview.challenges.filter((item: any) => item.status === "approved").map((item: any) => ({
+            id: item.id,
+            type: item.type,
+            cueOrder: sourceCues.findIndex(cue => cue.id === item.cueId) + 1,
+            clipStart: item.clipStartMs / 1000,
+            pauseAt: item.pauseAtMs / 1000,
+            resumeAt: item.resumeAtMs / 1000,
+            prompt: item.prompt,
+            choices: (item.choices || []).map((choice: any, index: number) => ({
+              id: item.id + "-choice-" + (index + 1),
+              text: choice.text,
+              isCorrect: choice.is_correct === true
+            })),
+            status: "approved",
+            generatedBy: "ai",
+            reviewedAt: predictionReview.saved_at,
+            reviewedBy: "Nova Generator",
+            feedbackCorrect: "Muito bem! Continue assistindo.",
+            feedbackIncorrect: "Ouça o trecho anterior novamente e tente outra vez.",
+            explanation: item.explanation
+          })).filter((item: any) => item.cueOrder > 0)
+        : [];
+
+      // Exporta a seleção realmente salva no editor de Shadowing. A seleção
+      // usa IDs locais, mas o iHub precisa de cueOrders e tempos relativos à cena.
+      const shadowingPlan = await invoke<any>("load_shadowing_selection", {
+        projectId, assetId, cues: sourceCues, sourceSignature: ""
+      }).catch(() => null);
+      const shadowingSnapshotMatches = Boolean(
+        shadowingPlan && Array.isArray(shadowingPlan.sourceSnapshot) &&
+        JSON.stringify(shadowingPlan.sourceSnapshot.map((cue: any) => [cue.id, cue.startMs, cue.endMs, cue.text])) ===
+        JSON.stringify(sourceCues.map(cue => [cue.id, cue.startMs, cue.endMs, cue.text]))
+      );
+      const cueOrderById = new Map(sourceCues.map((cue, index) => [cue.id, index + 1]));
+      const shadowingBlocks = shadowingSnapshotMatches && Array.isArray(shadowingPlan.blocks)
+        ? shadowingPlan.blocks.flatMap((block: any, index: number) => {
+            const blockCues = (Array.isArray(block.cueIds) ? block.cueIds : [])
+              .map((id: string) => sourceCues.find(cue => cue.id === id))
+              .filter((cue: Cue | undefined): cue is Cue => Boolean(cue));
+            const cueOrders = (Array.isArray(block.cueIds) ? block.cueIds : [])
+              .map((id: string) => cueOrderById.get(id))
+              .filter((order: number | undefined): order is number => Number.isInteger(order));
+            if (!blockCues.length || cueOrders.length !== block.cueIds.length) return [];
+            const startMs = Math.max(0, Math.round(blockCues[0].startMs));
+            const endMs = Math.max(startMs + 1, Math.round(blockCues[blockCues.length - 1].endMs));
+            const nextBlock = shadowingPlan.blocks[index + 1];
+            const nextCue = nextBlock?.cueIds?.[0]
+              ? sourceCues.find(cue => cue.id === nextBlock.cueIds[0])
+              : null;
+            return [{
+              order: index + 1,
+              start_ms: startMs,
+              end_ms: endMs,
+              pause_at_ms: endMs,
+              speech_duration_ms: endMs - startMs,
+              pause_duration_ms: Math.min(30000, Math.max(1000, Math.round(Number(block.pauseDurationMs) || 4000))),
+              repeat_ms: Math.min(30000, Math.max(1000, Math.round(Number(block.pauseDurationMs) || 4000))),
+              cueOrders,
+              terminal: !nextBlock,
+              boundary_type: nextBlock ? "segment_end" : "final_end",
+              continue_at_ms: nextCue ? Math.max(0, Math.round(nextCue.startMs)) : null
+            }];
+          })
+        : [];
+      const shadowingPractice = shadowingBlocks.length ? {
+        version: 3,
+        enabled: true,
+        mode: "discontinuous_segments",
+        timeline: "scene_relative_ms",
+        scene_duration_ms: sceneEndMs - sceneStartMs,
+        source_window: { start_ms: 0, end_ms: sceneEndMs - sceneStartMs },
+        source_windows: shadowingBlocks.map((block: any) => ({ start_ms: block.start_ms, end_ms: block.end_ms })),
+        blocks: shadowingBlocks,
+        generator: {
+          source_contract: "nova-generator-shadowing-selection/1.0",
+          source_signature: shadowingPlan.sourceSignature || null
+        }
+      } : null;
+
       const exportJourney = journeyIsCurrent && learningJourney ? {
         ...learningJourney,
+        ...(learningJourney.day1Preparation ? {
+          day1Preparation: {
+            ...learningJourney.day1Preparation,
+            expressionMatch: learningJourney.day1Preparation.expressionMatch.filter(item => item.status === "approved"),
+            patternChallenge: learningJourney.day1Preparation.patternChallenge.filter(item => item.status === "approved"),
+            predictionListening: { version: 1 as const, challenges: predictionChallenges }
+          }
+        } : {}),
+        ...(learningJourney.day1NoticeLessons?.length ? {
+          day1NoticeLessons: learningJourney.day1NoticeLessons.filter(item => item.status === "approved" && item.include_in_hub !== false)
+        } : {}),
+        ...(selectedMoment ? { smartLearningMoments: selectedMoment } : {}),
         days: learningJourney.days.map((day, index) =>
           index === 1 ? { ...day, activities: approvedDay2Activities(learningJourney) } :
           index === 2 ? { ...day, lessons: approvedDay3Lessons(learningJourney) } :
@@ -1261,7 +1354,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           words: cue.words?.map(word => ({ text: word.text, start_ms: Math.round(word.startMs), end_ms: Math.round(word.endMs) })) ?? []
         })),
         pedagogical_content: pedagogicalContent ? { ...pedagogicalContent, minimum_items: selectedItems.length, items: selectedItems } : null,
-        smart_learning_moment: await buildSelectedSmartLearningMoment(),
+        smart_learning_moment: selectedMoment,
+        shadowingPractice,
         prediction_listening: predictionIsCurrent ? predictionReview.materials ?? null : null,
         learning_journey: exportJourney
       };
