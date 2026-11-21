@@ -631,7 +631,61 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
   }, [playheadMs, previewTick, playing, visualClips, audioClips, assets]);
 
   function exportIHubSuperJson() {
-    const payload = buildIHubSuperJson(projectId, captions);
+    const sourceWindows = JSON.parse(
+      localStorage.getItem(`ttk-creator:youtube-source-windows:${projectId}`) || "{}",
+    ) as Record<string, { youtubeUrl?: string; sourceStartMs?: number; sourceEndMs?: number }>;
+    const captionSourceClips = [...new Set(captions.filter(item => item.isCaption).map(item => item.sourceClipId).filter((id): id is string => !!id))];
+    const sourceClips = captionSourceClips.length
+      ? captionSourceClips.map(id => clips.find(clip => clip.id === id)).filter((clip): clip is TimelineClip => !!clip)
+      : visualClips.filter(clip => assets.find(asset => asset.id === clip.assetId)?.source === "youtube");
+    if (!sourceClips.length) {
+      throw new Error("Não encontrei o clipe de origem do YouTube. Associe as legendas a um vídeo do YouTube antes de exportar.");
+    }
+
+    const sourceEntries = sourceClips.map(clip => {
+      const asset = assets.find(item => item.id === clip.assetId);
+      if (!asset || asset.source !== "youtube" || !asset.sourceUrl) {
+        throw new Error("O clipe associado às legendas não possui uma origem válida do YouTube.");
+      }
+      const saved = sourceWindows[asset.id];
+      if (!saved || !Number.isFinite(saved.sourceStartMs) || !Number.isFinite(saved.sourceEndMs)) {
+        throw new Error("O corte deste vídeo foi criado antes da preservação da linha do tempo original. Reimporte o vídeo e refaça o corte para exportar com os tempos corretos.");
+      }
+      return {
+        clip,
+        asset,
+        youtubeUrl: saved.youtubeUrl || asset.sourceUrl,
+        sourceStartMs: Math.max(0, Math.round(saved.sourceStartMs! + clip.sourceStartMs)),
+        sourceEndMs: Math.max(0, Math.round(saved.sourceStartMs! + clip.sourceEndMs)),
+        timelineOffsetMs: saved.sourceStartMs! + clip.sourceStartMs - clip.timelineStartMs,
+      };
+    });
+    const youtubeUrls = new Set(sourceEntries.map(item => item.youtubeUrl));
+    if (youtubeUrls.size !== 1) {
+      throw new Error("O JSON do iHub aceita um único vídeo de origem. Separe as legendas por vídeo antes de exportar.");
+    }
+    const youtubeUrl = sourceEntries[0].youtubeUrl;
+    const sourceStartMs = Math.min(...sourceEntries.map(item => item.sourceStartMs));
+    const sourceEndMs = Math.max(...sourceEntries.map(item => item.sourceEndMs));
+    const offsetsByClip = new Map(sourceEntries.map(item => [item.clip.id, item.timelineOffsetMs]));
+    const fallbackOffset = sourceEntries.length === 1 ? sourceEntries[0].timelineOffsetMs : null;
+    const sourceCaptions = captions.filter(item => item.isCaption && item.visible !== false).map(item => {
+      const offset = item.sourceClipId ? offsetsByClip.get(item.sourceClipId) : fallbackOffset;
+      if (offset === undefined || offset === null) {
+        throw new Error("Uma ou mais legendas não estão associadas ao vídeo original. Reassocie os trechos e tente novamente.");
+      }
+      return {
+        ...item,
+        startMs: Math.max(0, Math.round(item.startMs + offset)),
+        endMs: Math.max(1, Math.round(item.endMs + offset)),
+        captionWords: (item.captionWords || []).map(word => ({
+          ...word,
+          startMs: Math.max(0, Math.round(word.startMs + offset)),
+          endMs: Math.max(1, Math.round(word.endMs + offset)),
+        })),
+      };
+    });
+    const payload = buildIHubSuperJson(projectId, sourceCaptions, { youtubeUrl, sceneStartMs: sourceStartMs, sceneEndMs: sourceEndMs });
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
