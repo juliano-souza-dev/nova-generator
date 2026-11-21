@@ -1215,6 +1215,11 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
 
       // A janela da cena precisa estar disponível antes de montar o Shadowing,
       // pois os tempos exportados são relativos a essa janela.
+      const sceneStartMs = Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0));
+      const sceneEndMs = Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0);
+      if (!Number.isFinite(sceneStartMs) || !Number.isFinite(sceneEndMs) || sceneEndMs <= sceneStartMs) {
+        throw new Error("A mídia não possui uma janela de reprodução válida no tempo do vídeo original.");
+      }
 
       // Exporta a seleção realmente salva no editor de Shadowing. A seleção
       // usa IDs locais, mas o iHub precisa de cueOrders e tempos relativos à cena.
