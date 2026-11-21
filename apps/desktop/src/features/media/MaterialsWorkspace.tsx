@@ -19,7 +19,11 @@ import { buildSmartLearningSource, validateSmartLearningMoments, type SmartLearn
 import { buildLearningJourneyPackage, validateLearningJourney, validateLearningJourneyDraft, type LearningJourneyPackage } from "./learning-journey-contract";
 import type { DeepListeningTask, ListeningQuestion, MicroLesson, SpeakingPrompt } from "./learning-journey-contract";
 
-type Asset = { id: string; name: string; kind: string; durationMs?: number | null; sourceVideoId?: string | null };
+type Asset = {
+  id: string; name: string; kind: string; durationMs?: number | null;
+  sourceVideoId?: string | null; sourceUrl?: string | null;
+  sourceStartMs?: number | null; sourceEndMs?: number | null;
+};
 type Cue = { id: string; text: string; startMs: number; endMs: number; speaker?: string; wordAlignment?: string | null; words?: { text: string; startMs: number; endMs: number }[] };
 type Translation = { id: string; text: string };
 type SourceType = "editorial" | "shadowing" | "prediction" | "manual";
@@ -1200,9 +1204,44 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         package_version: 2,
         generated_at: new Date().toISOString(),
         metadata: {
-          title: normalizedProjectName
+          title: normalizedProjectName,
+          youtube: selectedAsset?.sourceUrl ?? ""
         },
-        project: { id: projectId, asset_id: assetId, name: normalizedProjectName, asset_name: selectedAsset?.name ?? "", source_video_id: selectedAsset?.sourceVideoId ?? null },
+        project: {
+          id: projectId,
+          asset_id: assetId,
+          name: normalizedProjectName,
+          asset_name: selectedAsset?.name ?? "",
+          source_video_id: selectedAsset?.sourceVideoId ?? null,
+          youtube_url: selectedAsset?.sourceUrl ?? "",
+          source_video_start_ms: Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0)),
+          source_video_end_ms: Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0),
+          timeline: "scene_local_ms"
+        },
+        kit: {
+          youtube: selectedAsset?.sourceUrl ?? "",
+          youtube_video_id: selectedAsset?.sourceVideoId ?? null,
+          contentType: "immersion",
+          scene_start_ms: Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0)),
+          scene_end_ms: Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0),
+          scene_duration_ms: Math.max(0,
+            Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0) -
+            Number(selectedAsset?.sourceStartMs ?? 0)
+          )
+        },
+        generator: {
+          project: {
+            id: projectId,
+            timeline: "scene_local_ms",
+            source_video_id: selectedAsset?.sourceVideoId ?? null,
+            source_video_start_ms: Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0)),
+            source_video_end_ms: Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0)
+          },
+          media_window: {
+            start_ms: Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0)),
+            end_ms: Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0)
+          }
+        },
         source: {
           signature: sourceSignature,
           cue_count: sourceCues.length,
