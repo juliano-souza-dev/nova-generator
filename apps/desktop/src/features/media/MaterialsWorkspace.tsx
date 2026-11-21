@@ -1316,11 +1316,6 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       if (!youtubeUrl || !/^[A-Za-z0-9_-]{11}$/.test(youtubeVideoId)) {
         throw new Error("A mídia selecionada não possui a URL e o ID do YouTube original. Selecione a mídia importada diretamente do YouTube, não um arquivo MP4 local.");
       }
-      const sceneStartMs = Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0));
-      const sceneEndMs = Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0);
-      if (!Number.isFinite(sceneStartMs) || !Number.isFinite(sceneEndMs) || sceneEndMs <= sceneStartMs) {
-        throw new Error("A mídia não possui uma janela de reprodução válida no tempo do vídeo original.");
-      }
       const payload = {
         schema: "ihub-generator-pedagogical-import/1.0",
         package_version: 2,
