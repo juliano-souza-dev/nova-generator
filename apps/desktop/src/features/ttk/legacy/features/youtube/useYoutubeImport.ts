@@ -74,6 +74,17 @@ export function useYoutubeImport({ project, setAssets, setBusy, setError, setNot
     setError("");
     try {
       const asset = await runTrackedTask("trim", "Preparando vídeo em 9:16", () => desktopApi.trimYoutubeCache(project.id, youtubeCache.videoId, trimStartMs, trimEndMs, outputRatio, frameMode, frameColor));
+      // The MP4 is physically trimmed, so its local timestamps start at zero.
+      // Keep the original YouTube coordinates separately for the iHub export.
+      const sourceWindowKey = `ttk-creator:youtube-source-windows:${project.id}`;
+      const savedWindows = JSON.parse(localStorage.getItem(sourceWindowKey) || "{}") as Record<string, unknown>;
+      savedWindows[asset.id] = {
+        youtubeUrl: asset.sourceUrl || `https://www.youtube.com/watch?v=${youtubeCache.videoId}`,
+        videoId: youtubeCache.videoId,
+        sourceStartMs: Math.max(0, Math.round(trimStartMs)),
+        sourceEndMs: Math.max(Math.round(trimStartMs) + 1, Math.round(trimEndMs)),
+      };
+      localStorage.setItem(sourceWindowKey, JSON.stringify(savedWindows));
       setAssets(current => [asset, ...current]);
       setNotice("Trecho preparado em 9:16 e importado para a biblioteca. A imagem original foi preservada, com preenchimento de fundo. O download original permanece no cache temporário por até 7 dias.");
       setYoutubeCache(null);
