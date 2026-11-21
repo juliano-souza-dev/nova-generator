@@ -1245,8 +1245,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
             source_video_end_ms: sceneEndMs
           },
           media_window: {
-            start_ms: Math.max(0, Number(selectedAsset?.sourceStartMs ?? 0)),
-            end_ms: Number(selectedAsset?.sourceEndMs ?? selectedAsset?.durationMs ?? 0)
+            start_ms: sceneStartMs,
+            end_ms: sceneEndMs
           }
         },
         source: {
