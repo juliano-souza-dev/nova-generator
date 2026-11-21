@@ -1213,6 +1213,9 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
           })).filter((item: any) => item.cueOrder > 0)
         : [];
 
+      // A janela da cena precisa estar disponível antes de montar o Shadowing,
+      // pois os tempos exportados são relativos a essa janela.
+
       // Exporta a seleção realmente salva no editor de Shadowing. A seleção
       // usa IDs locais, mas o iHub precisa de cueOrders e tempos relativos à cena.
       const shadowingPlan = await invoke<any>("load_shadowing_selection", {
