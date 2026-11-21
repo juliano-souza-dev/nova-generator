@@ -1226,13 +1226,14 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       const cueOrderById = new Map(sourceCues.map((cue, index) => [cue.id, index + 1]));
       const shadowingBlocks = shadowingSnapshotMatches && Array.isArray(shadowingPlan.blocks)
         ? shadowingPlan.blocks.flatMap((block: any, index: number) => {
-            const blockCues = (Array.isArray(block.cueIds) ? block.cueIds : [])
+            const blockCueIds: string[] = Array.isArray(block.cueIds) ? block.cueIds : [];
+            const blockCues = blockCueIds
               .map((id: string) => sourceCues.find(cue => cue.id === id))
               .filter((cue: Cue | undefined): cue is Cue => Boolean(cue));
-            const cueOrders = (Array.isArray(block.cueIds) ? block.cueIds : [])
+            const cueOrders = blockCueIds
               .map((id: string) => cueOrderById.get(id))
               .filter((order: number | undefined): order is number => Number.isInteger(order));
-            if (!blockCues.length || cueOrders.length !== block.cueIds.length) return [];
+            if (!blockCues.length || cueOrders.length !== blockCueIds.length) return [];
             const startMs = Math.max(0, Math.round(blockCues[0].startMs));
             const endMs = Math.max(startMs + 1, Math.round(blockCues[blockCues.length - 1].endMs));
             const nextBlock = shadowingPlan.blocks[index + 1];
