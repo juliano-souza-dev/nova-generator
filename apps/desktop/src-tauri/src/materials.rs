@@ -295,7 +295,8 @@ fn generate_audio_batch(
                 if response.get("status").and_then(Value::as_str) == Some("completed") {
                     responses.push(response);
                 } else {
-                    executor_error = Some(response);
+                    // Preserve the first failure reported by the worker.
+                    executor_error.get_or_insert(response);
                 }
             }
             Err(error) => {
