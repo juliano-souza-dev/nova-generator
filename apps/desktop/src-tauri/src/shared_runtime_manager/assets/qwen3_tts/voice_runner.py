@@ -11,7 +11,7 @@ import torch
 from qwen_tts import Qwen3TTSModel
 
 
-def handle_request(model, profile_path: Path, request: dict, set_stage) -> dict:
+def handle_request(model, profile_path: Path, request: dict, set_stage, prompt_cache: dict) -> dict:
     operation = request.get("operation")
     if operation == "prepare_voice":
         set_stage("reference_audio_encoding")
@@ -22,8 +22,14 @@ def handle_request(model, profile_path: Path, request: dict, set_stage) -> dict:
                 x_vector_only_mode=False,
             )
         set_stage("voice_prompt_saving")
-        torch.save(items, profile_path / "voice_clone_prompt.pt")
+        prompt_path = profile_path / "voice_clone_prompt.pt"
+        torch.save(items, prompt_path)
         (profile_path / "voice_clone_mode.txt").write_text("full_prompt", encoding="utf-8")
+        stat = prompt_path.stat()
+        prompt_cache[str(prompt_path.resolve())] = {
+            "signature": (stat.st_mtime_ns, stat.st_size),
+            "prompt": items,
+        }
         return {
             "status": "completed",
             "profile_path": str(profile_path),
@@ -48,7 +54,17 @@ def handle_request(model, profile_path: Path, request: dict, set_stage) -> dict:
             raise ValueError("Modo de voz Qwen desconhecido.")
         prompt_path = profile_path / "voice_clone_prompt.pt"
         set_stage("voice_prompt_loading")
-        prompt = torch.load(prompt_path, map_location="cpu", weights_only=False) if voice_mode == "voice_clone" else None
+        prompt = None
+        if voice_mode == "voice_clone":
+            cache_key = str(prompt_path.resolve())
+            stat = prompt_path.stat()
+            signature = (stat.st_mtime_ns, stat.st_size)
+            cached = prompt_cache.get(cache_key)
+            if cached is not None and cached.get("signature") == signature:
+                prompt = cached["prompt"]
+            else:
+                prompt = torch.load(prompt_path, map_location="cpu", weights_only=False)
+                prompt_cache[cache_key] = {"signature": signature, "prompt": prompt}
         # Rebuild profiles created with speaker-only conditioning using the
         # full reference prompt, preserving the original reference WAV.
         mode_path = profile_path / "voice_clone_mode.txt"
@@ -70,6 +86,11 @@ def handle_request(model, profile_path: Path, request: dict, set_stage) -> dict:
                 set_stage("voice_prompt_saving")
                 torch.save(prompt, prompt_path)
                 mode_path.write_text("full_prompt", encoding="utf-8")
+                stat = prompt_path.stat()
+                prompt_cache[str(prompt_path.resolve())] = {
+                    "signature": (stat.st_mtime_ns, stat.st_size),
+                    "prompt": prompt,
+                }
         if voice_mode == "voice_clone" and (not isinstance(prompt, (list, tuple)) or not prompt):
             raise ValueError("O perfil de voz contém um prompt Qwen inválido ou vazio.")
         text = str(request["text"]).strip()
@@ -163,6 +184,10 @@ def main() -> int:
         }, ensure_ascii=False), flush=True)
         return 1
 
+    # A worker serves one profile at a time. Keep its prepared prompt in RAM
+    # for the duration of the batch, and invalidate it if the on-disk prompt changes.
+    prompt_cache = {}
+
     for line_number, raw in enumerate(sys.stdin, start=1):
         request = {}
         operation = "request_parsing"
@@ -177,7 +202,7 @@ def main() -> int:
             def set_stage(value):
                 nonlocal stage
                 stage = value
-            response = handle_request(model, profile_path, request, set_stage)
+            response = handle_request(model, profile_path, request, set_stage, prompt_cache)
             response.update({
                 "id": request.get("id"),
                 "operation": operation,
