@@ -58,7 +58,8 @@ export default function TaskCenter() {
    listen<ProgressPayload>("media-task-progress",e=>{const p=e.payload;update("download",p.percent??null,p.message,p.status);}),
    listen<ProgressPayload>("transcription-progress",e=>{const p=e.payload;update("transcription",p.percent??null,p.message,p.status);}),
    listen<ProgressPayload>("translation-progress",e=>{const p=e.payload;update("translation",p.percent??null,p.message,p.status);}),
-   listen<ProgressPayload>("export-progress",e=>{const p=e.payload;update("export",p.percent??null,p.message||"Renderizando mídia...",p.status);})
+   listen<ProgressPayload>("export-progress",e=>{const p=e.payload;update("export",p.percent??null,p.message||"Renderizando mídia...",p.status);}),
+   listen<ProgressPayload>("materials-audio-progress",e=>{const p=e.payload;update("materials",p.percent??null,p.message,p.status);})
   ]).then(items=>{if(disposed)items.forEach(fn=>fn());else unlisteners=items;}).catch(error=>console.error("Falha ao acompanhar processamentos:",error));
   return()=>{disposed=true;unlisteners.forEach(fn=>fn());};
  },[]);
