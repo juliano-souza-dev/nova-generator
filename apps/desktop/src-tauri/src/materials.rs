@@ -196,7 +196,7 @@ fn generate_audio_batch(
                     let card_id = value.get("id").and_then(Value::as_str).unwrap_or("");
                     let card_index = card_positions.get(card_id).copied().unwrap_or(completed.saturating_add(1));
                     let _ = progress_app.emit("materials-audio-progress", json!({
-                        "projectId": progress_project_id,
+                        "projectId": progress_project_id.clone(),
                         "status": "running",
                         "message": format!("Card {card_index}/{total_requests}: {stage_label}")
                     }));
@@ -204,7 +204,7 @@ fn generate_audio_batch(
                     completed += 1;
                     let percent = ((completed * 100) / total_requests).min(100);
                     let _ = progress_app.emit("materials-audio-progress", json!({
-                        "projectId": progress_project_id,
+                        "projectId": progress_project_id.clone(),
                         "status": "running",
                         "percent": percent,
                         "message": format!("Card {completed}/{total_requests}: áudio concluído")
@@ -212,7 +212,7 @@ fn generate_audio_batch(
                 } else if value.get("status").and_then(Value::as_str) == Some("error") {
                     let error = value.get("error").and_then(Value::as_str).unwrap_or("Falha não especificada pelo executor.");
                     let _ = progress_app.emit("materials-audio-progress", json!({
-                        "projectId": progress_project_id,
+                        "projectId": progress_project_id.clone(),
                         "status": "failed",
                         "message": format!("Falha na síntese: {error}")
                     }));
