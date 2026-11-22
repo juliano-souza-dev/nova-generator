@@ -183,18 +183,24 @@ fn diagnostic_excerpt(value: &str, limit: usize) -> String {
 }
 
 fn parse_worker_response(stdout: &str) -> Result<(Value, String)> {
-    // Python libraries may print warnings to stdout before the worker's JSON.
-    for (offset, character) in stdout.char_indices() {
-        if character != '{' {
+    // Ignore structured progress messages and preserve unrelated stdout diagnostics.
+    let mut warnings = Vec::new();
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
             continue;
         }
-        if let Ok(value) = serde_json::from_str::<Value>(&stdout[offset..]) {
-            if value.is_object() {
-                return Ok((value, stdout[..offset].trim().to_owned()));
+        if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+            if value.is_object() && value.get("type").and_then(Value::as_str) == Some("progress") {
+                continue;
+            }
+            if value.is_object() && value.get("status").is_some() {
+                return Ok((value, warnings.join("\n")));
             }
         }
+        warnings.push(trimmed.to_owned());
     }
-    bail!("Nenhum objeto JSON válido foi encontrado na saída do executor.")
+    bail!("Nenhum objeto JSON válido de resposta foi encontrado na saída do executor.")
 }
 
 fn run_worker(python: &Path, runner: &Path, model: &Path, profile: &Path, request: Value) -> Result<Value> {
