@@ -207,7 +207,7 @@ fn run_worker(python: &Path, runner: &Path, model: &Path, profile: &Path, reques
     let mut child = silent_command(python)
         .arg(runner).arg(model).arg(profile)
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
-        .spawn().context("Não foi possível iniciar o executor Qwen3-TTS Base")?;
+        .spawn().context("Não foi possível iniciar o executor Qwen3-TTS")?;
     child.stdin.take().ok_or_else(|| anyhow!("Entrada do executor indisponível"))?
         .write_all(format!("{}\n", serde_json::to_string(&request)?).as_bytes())?;
     let stdout_pipe = child.stdout.take().ok_or_else(|| anyhow!("Saída do executor Qwen indisponível"))?;
@@ -244,7 +244,7 @@ fn run_worker(python: &Path, runner: &Path, model: &Path, profile: &Path, reques
         let stdout_detail = diagnostic_excerpt(&stdout, 6000);
         let stderr_detail = diagnostic_excerpt(&stderr, 6000);
         format!(
-            "O executor Qwen3-TTS Base não retornou um objeto JSON válido. Código de saída: {}.\nstdout: {}\nstderr: {}",
+            "O executor Qwen3-TTS não retornou um objeto JSON válido. Código de saída: {}.\nstdout: {}\nstderr: {}",
             output.status,
             if stdout_detail.is_empty() { "<vazio>" } else { &stdout_detail },
             if stderr_detail.is_empty() { "<vazio>" } else { &stderr_detail },
@@ -252,7 +252,7 @@ fn run_worker(python: &Path, runner: &Path, model: &Path, profile: &Path, reques
     })?;
 
     if !stdout_warning.is_empty() {
-        eprintln!("Aviso do executor Qwen3-TTS Base: {}", diagnostic_excerpt(&stdout_warning, 2000));
+        eprintln!("Aviso do executor Qwen3-TTS: {}", diagnostic_excerpt(&stdout_warning, 2000));
     }
 
     let response_status = response.get("status").and_then(Value::as_str).unwrap_or("desconhecido");
@@ -263,7 +263,7 @@ fn run_worker(python: &Path, runner: &Path, model: &Path, profile: &Path, reques
         let error = response.get("error").and_then(Value::as_str).unwrap_or("O worker não informou a causa.");
         let traceback = response.get("traceback").and_then(Value::as_str).unwrap_or("");
         let mut detail = format!(
-            "Falha no executor Qwen3-TTS Base. Etapa: {stage}. Operação: {operation}. Tipo: {error_type}. Código de saída: {}.\nCausa: {error}",
+            "Falha no executor Qwen3-TTS. Etapa: {stage}. Operação: {operation}. Tipo: {error_type}. Código de saída: {}.\nCausa: {error}",
             output.status
         );
         if !traceback.trim().is_empty() {
@@ -410,13 +410,10 @@ pub fn create_voice_design_profile(name: &str, instruct: &str) -> Result<Value> 
     fs::create_dir_all(&profile)?;
     let mut profile_guard = ProfileDirectoryGuard::new(profile.clone());
 
-    super::dependency_queue::report_install_progress(94, "Carregando Qwen3-TTS VoiceDesign para preparar o perfil")?;
-    let prepared = run_worker(&python, &runner, &model, &profile,
-        json!({"operation":"prepare_voice_design","instruct":instruct}))?;
-    if prepared.get("status").and_then(Value::as_str) != Some("completed") {
-        bail!("O VoiceDesign não conseguiu preparar a voz: {}",
-            prepared.get("error").and_then(Value::as_str).unwrap_or("erro desconhecido"));
-    }
+    // VoiceDesign profiles are prompt-only. Do not load the 1.7B model just
+    // to save an instruction; the model is loaded once when audio is synthesized.
+    fs::write(profile.join("voice_design_instruct.txt"), instruct)
+        .context("Não foi possível salvar a descrição do perfil VoiceDesign")?;
 
     let voice = VoiceProfile {
         id: id.clone(), name: name.to_owned(), profile_path: profile.display().to_string(),
