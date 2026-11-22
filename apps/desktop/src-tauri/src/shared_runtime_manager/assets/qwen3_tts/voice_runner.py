@@ -265,6 +265,10 @@ def main() -> int:
                 "traceback": traceback.format_exc(),
             }
         print(json.dumps(response, ensure_ascii=False), flush=True)
+        # A failed card invalidates the current batch. Stop immediately instead
+        # of spending CPU synthesizing cards whose results cannot be committed.
+        if response.get("status") == "error":
+            break
 
     return 0
 
