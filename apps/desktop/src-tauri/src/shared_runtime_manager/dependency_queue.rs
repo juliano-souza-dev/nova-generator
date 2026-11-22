@@ -6,6 +6,42 @@ static QUEUE_LOCK: Mutex<()> = Mutex::new(());
 static CANCEL_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 pub fn begin_operation() { CANCEL_REQUESTED.store(false, Ordering::SeqCst); }
+
+/// Starts a durable, named operation that can be observed by the desktop Task Center.
+pub fn begin_tracked_operation(title: &str) -> Result<()> {
+    CANCEL_REQUESTED.store(false, Ordering::SeqCst);
+    let root = root()?;
+    write_json(&status_path(&root), &json!({
+        "status": "running",
+        "operationTitle": title,
+        "progress": null,
+        "progressMode": "indeterminate",
+        "current": "Preparando operação...",
+        "completed": 0,
+        "total": 1,
+        "results": []
+    }))
+}
+
+/// Marks a named operation as completed and stores it in processing history.
+pub fn complete_operation(message: &str) -> Result<()> {
+    let root = root()?;
+    let path = status_path(&root);
+    let mut status = read_json(&path)?;
+    status["status"] = json!("completed");
+    status["progress"] = json!(100);
+    status["progressMode"] = json!("determinate");
+    status["current"] = json!(message);
+    status["completed"] = json!(1);
+    status["total"] = json!(1);
+    status.as_object_mut().map(|object| {
+        object.remove("downloadedBytes");
+        object.remove("speedBytesPerSecond");
+        object.remove("error");
+    });
+    write_json(&path, &status)?;
+    record_history()
+}
 pub fn cancel_requested() -> bool { CANCEL_REQUESTED.load(Ordering::SeqCst) }
 pub fn request_cancel() -> Result<()> {
     CANCEL_REQUESTED.store(true, Ordering::SeqCst);
@@ -316,13 +352,13 @@ pub fn record_history() -> Result<()> {
 }
 
 /// Update the visible progress while a single shared resource is being provisioned.
-pub(crate) fn report_install_progress(_progress: u32, current: &str) -> Result<()> {
+pub(crate) fn report_install_progress(progress: u32, current: &str) -> Result<()> {
     let root = root()?;
     let path = status_path(&root);
     let mut status = read_json(&path)?;
     status["status"] = json!("installing");
-    status["progress"] = Value::Null;
-    status["progressMode"] = json!("indeterminate");
+    status["progress"] = json!(progress.min(99));
+    status["progressMode"] = json!("determinate");
     status["current"] = json!(current);
     status["completed"] = json!(0);
     status["total"] = json!(1);
@@ -358,10 +394,16 @@ pub fn remove_application(app_id: &str) -> Result<()> {
 
 pub fn set_failure(message: &str) -> Result<()> {
     let root = root()?;
-    write_json(&status_path(&root), &json!({
-        "status":"error","progress":0,"progressMode":"indeterminate","current":"Falha no processamento da fila",
-        "error":message,"results":[]
-    }))?;
+    let path = status_path(&root);
+    let mut status = read_json(&path)?;
+    status["status"] = json!("error");
+    status["progress"] = json!(0);
+    status["progressMode"] = json!("indeterminate");
+    status["current"] = json!("Falha na preparação");
+    status["error"] = json!(message);
+    status["results"] = status.get("results").filter(|value| value.is_array()).cloned().unwrap_or_else(|| json!([]));
+    status.as_object_mut().map(|object| { object.remove("downloadedBytes"); object.remove("speedBytesPerSecond"); });
+    write_json(&path, &status)?;
     record_history()
 }
 
