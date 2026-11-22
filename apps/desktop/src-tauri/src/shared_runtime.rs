@@ -135,11 +135,25 @@ pub fn create_shared_voice_design_profile(name: String, instruct: String) -> Res
     if DEPENDENCY_SYNC_RUNNING.swap(true, Ordering::SeqCst) {
         return Err("Já existe uma operação do ambiente em andamento.".into());
     }
-    shared_runtime_manager::dependency_queue::begin_operation();
+    if let Err(error) = shared_runtime_manager::dependency_queue::begin_tracked_operation("Preparação da voz VoiceDesign") {
+        DEPENDENCY_SYNC_RUNNING.store(false, Ordering::SeqCst);
+        return Err(format!("Não foi possível registrar o processamento: {error:#}"));
+    }
     std::thread::spawn(move || {
         let result = shared_runtime_manager::voices::create_voice_design_profile(&name, &instruct);
-        if let Err(error) = result {
-            let _ = shared_runtime_manager::dependency_queue::set_failure(&format!("{error:#}"));
+        match result {
+            Ok(_) => {
+                if let Err(error) = shared_runtime_manager::dependency_queue::complete_operation("Perfil VoiceDesign preparado e salvo na biblioteca") {
+                    let _ = shared_runtime_manager::dependency_queue::set_failure(&format!("O perfil foi preparado, mas não foi possível concluir o registro do processamento: {error:#}"));
+                }
+            }
+            Err(error) => {
+                if shared_runtime_manager::dependency_queue::cancel_requested() {
+                    let _ = shared_runtime_manager::dependency_queue::mark_cancelled();
+                } else {
+                    let _ = shared_runtime_manager::dependency_queue::set_failure(&format!("{error:#}"));
+                }
+            }
         }
         DEPENDENCY_SYNC_RUNNING.store(false, Ordering::SeqCst);
     });
