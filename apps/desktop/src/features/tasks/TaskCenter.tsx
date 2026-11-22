@@ -70,12 +70,12 @@ export default function TaskCenter() {
     const status:TaskStatus=state==="completed"?"completed":state==="error"?"failed":state==="cancelled"?"cancelled":"running";
     const progress=typeof queue.progress==="number"?Math.max(0,Math.min(100,queue.progress)):null;
     const now=Date.now();
+    const logLines:string[]=[];
+    if(message!==lastMessage)logLines.push(clock()+"  "+message);
+    if(error&&error!==lastMessage)logLines.push(clock()+"  ERRO: "+error);
+    lastMessage=message;
     setTasks(current=>{
      const index=current.findIndex(task=>task.id===id);
-     const logLines:string[]=[];
-     if(message!==lastMessage)logLines.push(clock()+"  "+message);
-     if(error&&error!==lastMessage)logLines.push(clock()+"  ERRO: "+error);
-     lastMessage=message;
      if(index<0){
       const created:TaskRecord={id,kind:"installation",title,status,progress,message: error?message+" · "+error:message,logs:logLines.length?logLines:[clock()+"  "+message],updatedAt:now};
       return [created,...current].slice(0,15);
