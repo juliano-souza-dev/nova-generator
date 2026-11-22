@@ -2,11 +2,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     fs,
-    io::Write,
+    io::{BufRead, BufReader, Write},
     path::PathBuf,
     process::Stdio,
+    thread,
 };
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 fn materials_file(app: &AppHandle, project_id: &str, asset_id: &str) -> Result<PathBuf, String> {
     let _ = crate::media::load_project_subtitles(app.clone(), project_id.to_string(), asset_id.to_string())?;
@@ -163,8 +164,73 @@ fn generate_audio_batch(
         .spawn()
         .map_err(|e| format!("Não foi possível iniciar o executor da voz '{voice_name}' no Shared Runtime: {e}"))?;
 
+    let total_requests = requests.len();
+    let card_positions: std::collections::HashMap<String, usize> = requests.iter()
+        .enumerate().map(|(index, request)| (request.card_id.clone(), index + 1)).collect();
+    let progress_app = app.clone();
+    let progress_project_id = project_id.to_owned();
+    let stdout_pipe = child.stdout.take().ok_or("Não foi possível abrir a saída do executor de voz.")?;
+    let stderr_pipe = child.stderr.take().ok_or("Não foi possível abrir o diagnóstico do executor de voz.")?;
+
+    // Drain both pipes concurrently. Otherwise a full stdout/stderr pipe can block
+    // the Python worker while Rust is still sending the batch through stdin.
+    let stdout_reader = thread::spawn(move || {
+        let mut output = String::new();
+        let mut completed = 0usize;
+        for line in BufReader::new(stdout_pipe).lines() {
+            let Ok(line) = line else { continue; };
+            if let Ok(value) = serde_json::from_str::<Value>(&line) {
+                if value.get("type").and_then(Value::as_str) == Some("progress") {
+                    let stage = value.get("stage").and_then(Value::as_str).unwrap_or("processando");
+                    let stage_label = match stage {
+                        "runtime_initialization" => "Preparando o runtime",
+                        "model_loading" => "Carregando o modelo",
+                        "voice_prompt_loading" => "Carregando o perfil de voz",
+                        "reference_audio_encoding" => "Codificando o áudio de referência",
+                        "voice_prompt_saving" => "Salvando o perfil de voz",
+                        "voice_generation" => "Sintetizando a fala",
+                        "audio_pacing" => "Ajustando o ritmo da fala",
+                        "audio_file_writing" => "Gravando o arquivo de áudio",
+                        _ => stage,
+                    };
+                    let card_id = value.get("id").and_then(Value::as_str).unwrap_or("");
+                    let card_index = card_positions.get(card_id).copied().unwrap_or(completed.saturating_add(1));
+                    let _ = progress_app.emit("materials-audio-progress", json!({
+                        "projectId": progress_project_id,
+                        "status": "running",
+                        "message": format!("Card {card_index}/{total_requests}: {stage_label}")
+                    }));
+                } else if value.get("status").and_then(Value::as_str) == Some("completed") {
+                    completed += 1;
+                    let percent = ((completed * 100) / total_requests).min(100);
+                    let _ = progress_app.emit("materials-audio-progress", json!({
+                        "projectId": progress_project_id,
+                        "status": "running",
+                        "percent": percent,
+                        "message": format!("Card {completed}/{total_requests}: áudio concluído")
+                    }));
+                } else if value.get("status").and_then(Value::as_str) == Some("error") {
+                    let error = value.get("error").and_then(Value::as_str).unwrap_or("Falha não especificada pelo executor.");
+                    let _ = progress_app.emit("materials-audio-progress", json!({
+                        "projectId": progress_project_id,
+                        "status": "failed",
+                        "message": format!("Falha na síntese: {error}")
+                    }));
+                }
+            }
+            output.push_str(&line);
+            output.push('\n');
+        }
+        output
+    });
+    let stderr_reader = thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = std::io::Read::read_to_end(&mut std::io::BufReader::new(stderr_pipe), &mut bytes);
+        bytes
+    });
+
     {
-        let stdin = child.stdin.as_mut().ok_or("Não foi possível abrir a entrada do executor de voz.")?;
+        let mut stdin = child.stdin.take().ok_or("Não foi possível abrir a entrada do executor de voz.")?;
         for request in &requests {
             let output_path = audio_dir.join(format!("{}.wav", request.card_id));
             let payload = json!({
@@ -176,16 +242,22 @@ fn generate_audio_batch(
                 "voice_mode": voice.mode,
                 "instruct": voice.instruct
             });
-            serde_json::to_writer(&mut *stdin, &payload)
+            serde_json::to_writer(&mut stdin, &payload)
                 .map_err(|e| format!("Não foi possível preparar a solicitação de áudio: {e}"))?;
             stdin.write_all(b"\n")
                 .map_err(|e| format!("Não foi possível enviar a solicitação ao executor de voz: {e}"))?;
         }
     }
-    drop(child.stdin.take());
 
-    let output = child.wait_with_output()
+    let status = child.wait()
         .map_err(|e| format!("Não foi possível finalizar a síntese da voz '{voice_name}': {e}"))?;
+    let stdout = stdout_reader.join().unwrap_or_default();
+    let stderr = String::from_utf8_lossy(&stderr_reader.join().unwrap_or_default()).to_string();
+    let output = std::process::Output {
+        status,
+        stdout: stdout.into_bytes(),
+        stderr: stderr.into_bytes(),
+    };
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let mut responses = Vec::with_capacity(requests.len());
@@ -195,6 +267,9 @@ fn generate_audio_batch(
     for (line_number, line) in stdout.lines().map(str::trim).filter(|line| !line.is_empty()).enumerate() {
         match serde_json::from_str::<Value>(line) {
             Ok(response) => {
+                if response.get("type").and_then(Value::as_str) == Some("progress") {
+                    continue;
+                }
                 if response.get("status").and_then(Value::as_str) == Some("completed") {
                     responses.push(response);
                 } else {
