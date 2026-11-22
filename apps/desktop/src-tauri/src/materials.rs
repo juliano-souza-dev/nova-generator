@@ -207,7 +207,7 @@ fn generate_audio_batch(
                     }));
                 } else if value.get("status").and_then(Value::as_str) == Some("completed") {
                     completed += 1;
-                    let percent = ((completed * 100) / total_requests).min(100);
+                    let percent = ((completed * 100) / total_requests).min(99);
                     let _ = progress_app.emit("materials-audio-progress", json!({
                         "projectId": progress_project_id.clone(),
                         "status": "running",
