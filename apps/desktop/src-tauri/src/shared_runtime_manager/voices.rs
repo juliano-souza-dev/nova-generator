@@ -80,6 +80,29 @@ struct VoiceRegistry {
     voices: Vec<VoiceProfile>,
 }
 
+struct ProfileDirectoryGuard {
+    path: PathBuf,
+    committed: bool,
+}
+
+impl ProfileDirectoryGuard {
+    fn new(path: PathBuf) -> Self {
+        Self { path, committed: false }
+    }
+
+    fn commit(&mut self) {
+        self.committed = true;
+    }
+}
+
+impl Drop for ProfileDirectoryGuard {
+    fn drop(&mut self) {
+        if !self.committed {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+}
+
 fn root() -> Result<PathBuf> { super::manager::root() }
 fn registry_path(root: &Path) -> PathBuf { root.join("registry/voices.json") }
 
@@ -283,6 +306,7 @@ pub fn create_profile(name: &str, filename: &str, audio_base64: &str, reference_
     let id = format!("{}-{}", if slug.is_empty() { "voice" } else { &slug }, unique_stamp);
     let profile = root.join("voices").join(&id);
     fs::create_dir_all(&profile)?;
+    let mut profile_guard = ProfileDirectoryGuard::new(profile.clone());
     let source = profile.join(format!("reference.{extension}"));
     fs::write(&source, bytes)?;
     let duration_output = silent_command(&ffprobe).args([
@@ -344,6 +368,7 @@ pub fn create_profile(name: &str, filename: &str, audio_base64: &str, reference_
     if registry.default_voice_id.is_none() { registry.default_voice_id = Some(id.clone()); }
     registry.voices.push(voice.clone());
     write_registry(&root, &registry)?;
+    profile_guard.commit();
     super::manager::refresh_application_configs(&root)?;
     Ok(serde_json::to_value(voice)?)
 }
@@ -369,6 +394,7 @@ pub fn create_voice_design_profile(name: &str, instruct: &str) -> Result<Value> 
     let id = format!("{}-{}", if slug.is_empty() { "voice" } else { &slug }, clock.as_millis());
     let profile = root.join("voices").join(&id);
     fs::create_dir_all(&profile)?;
+    let mut profile_guard = ProfileDirectoryGuard::new(profile.clone());
     let prepared = run_worker(&python, &runner, &model, &profile, json!({"operation":"prepare_voice_design","instruct":instruct}))?;
     if prepared.get("status").and_then(Value::as_str) != Some("completed") {
         let _ = fs::remove_dir_all(&profile);
@@ -386,6 +412,7 @@ pub fn create_voice_design_profile(name: &str, instruct: &str) -> Result<Value> 
     if registry.default_voice_id.is_none() { registry.default_voice_id = Some(id); }
     registry.voices.push(voice.clone());
     write_registry(&root, &registry)?;
+    profile_guard.commit();
     super::manager::refresh_application_configs(&root)?;
     Ok(serde_json::to_value(voice)?)
 }
