@@ -212,9 +212,17 @@ def main() -> int:
                 raise TypeError("A solicitação recebida precisa ser um objeto JSON.")
             operation = str(request.get("operation") or "unknown")
             stage = "voice_prompt_loading" if operation == "synthesize" else "voice_prompt_preparation"
+            request_id = request.get("id")
             def set_stage(value):
                 nonlocal stage
                 stage = value
+                print(json.dumps({
+                    "type": "progress",
+                    "id": request_id,
+                    "operation": operation,
+                    "stage": value,
+                }, ensure_ascii=False), flush=True)
+            set_stage(stage)
             response = handle_request(model, profile_path, request, set_stage, prompt_cache)
             response.update({
                 "id": request.get("id"),
