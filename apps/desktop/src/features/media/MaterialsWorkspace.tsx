@@ -235,7 +235,7 @@ export default function MaterialsWorkspace({ projectId, projectName, initialAsse
   const includedPedagogicalCount = pedagogicalContent?.items.filter(item => item.include_in_hub !== false).length ?? 0;
   const approvedCards = useMemo(() => cards.filter(card => card.status === "approved"), [cards]);
   const approvedCount = approvedCards.length;
-  const pendingAudioCount = approvedCards.filter(card => !card.audioPath || (card.audioSource === "tts" && card.audioVoiceId !== selectedVoiceId)).length;
+  const pendingAudioCount = approvedCards.filter(card => !card.audioPath || (card.audioSource !== "video" && card.audioVoiceId !== selectedVoiceId)).length;
   const refreshAssets = useCallback(async () => {
     const items = await invoke<Asset[]>("list_project_media", { projectId });
     const videos = items.filter(item => item.kind === "video");
@@ -802,7 +802,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   }
 
   async function generatePendingAudio() {
-    const pending = approvedCards.filter(card => !card.audioPath || (card.audioSource === "tts" && card.audioVoiceId !== selectedVoiceId));
+    const pending = approvedCards.filter(card => !card.audioPath || (card.audioSource !== "video" && card.audioVoiceId !== selectedVoiceId));
     if (!assetId || !voiceCloningReady || !selectedVoiceId || !pending.length || audioBusy.length) return;
     const invalid = pending.find(card => !(card.audioText.trim() || card.focus.trim()));
     if (invalid) { setError("O card " + invalid.id + " não possui texto para sintetização."); return; }
