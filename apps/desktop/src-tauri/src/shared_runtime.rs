@@ -115,6 +115,11 @@ pub fn set_shared_default_voice(voice_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn preview_shared_voice(voice_id: String, text: String, language: String) -> Result<String, String> {
+    shared_runtime_manager::voices::preview(&voice_id, &text, &language).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
 pub fn create_shared_voice_profile(name: String, filename: String, audio_base64: String, reference_text: String) -> Result<(), String> {
     if DEPENDENCY_SYNC_RUNNING.swap(true, Ordering::SeqCst) {
         return Err("Já existe uma operação do ambiente em andamento.".into());
