@@ -103,10 +103,15 @@ def handle_request(model, profile_path: Path, request: dict, set_stage, prompt_c
         with contextlib.redirect_stdout(sys.stderr):
             if voice_mode == "voice_design":
                 segment_instruct = instruct
-                if language.lower() == "english":
-                    suffix = "Keep the same speaker identity and vocal timbre; use clear, natural American English pronunciation."
-                    if suffix.lower() not in segment_instruct.lower() and len(segment_instruct) + len(suffix) + 2 <= 800:
-                        segment_instruct = segment_instruct.rstrip(". ") + ". " + suffix
+                language_key = language.casefold()
+                if language_key == "english":
+                    suffix = "Keep the same speaker identity and vocal timbre; use clear, natural General American English pronunciation and intonation."
+                elif language_key == "portuguese":
+                    suffix = "Keep the same speaker identity and vocal timbre; use fluent, natural Brazilian Portuguese pronunciation and intonation."
+                else:
+                    suffix = "Keep the same speaker identity and vocal timbre; use natural pronunciation and intonation for the requested language."
+                if suffix.casefold() not in segment_instruct.casefold() and len(segment_instruct) + len(suffix) + 2 <= 800:
+                    segment_instruct = segment_instruct.rstrip(". ") + ". " + suffix
                 wavs, sample_rate = model.generate_voice_design(
                     text=text, language=language, instruct=segment_instruct, do_sample=True
                 )
