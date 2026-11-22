@@ -456,15 +456,21 @@ pub fn set_default(id: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn preview(id: &str, text: &str) -> Result<String> {
+pub fn preview(id: &str, text: &str, language: &str) -> Result<String> {
+    let language = match language {
+        "Portuguese" | "English" => language,
+        _ => bail!("Idioma de prévia não suportado: {language}"),
+    };
+    let text = text.trim();
+    if text.is_empty() { bail!("Informe o texto da amostra de voz."); }
     let root = root()?;
     let registry = read_registry(&root)?;
     let voice = registry.voices.iter().find(|voice| voice.id == id)
         .ok_or_else(|| anyhow!("Voz não encontrada: {id}"))?;
-    let output = PathBuf::from(&voice.profile_path).join("preview.wav");
+    let output = PathBuf::from(&voice.profile_path).join(format!("preview-{}.wav", language.to_ascii_lowercase()));
     let is_design = voice.model_id == VOICE_DESIGN_MODEL_ID;
     let request = json!({
-        "operation": "synthesize", "text": text, "language": "English", "output_path": output,
+        "operation": "synthesize", "text": text, "language": language, "output_path": output,
         "voice_mode": if is_design { "voice_design" } else { "voice_clone" },
         "instruct": voice.instruct, "reference_audio": PathBuf::from(&voice.profile_path).join("reference.wav"),
         "reference_text": voice.reference_text
