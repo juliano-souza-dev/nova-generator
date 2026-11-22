@@ -94,7 +94,7 @@ async function run(command, args, label) {
       settled = true;
       await stderrLogQueue;
       if (code === 0) {
-        resolve();
+        resolve({ output });
         return;
       }
       const error = new Error(
@@ -109,10 +109,39 @@ async function run(command, args, label) {
 async function main() {
   try {
     await access(path.join(root, "package.json"));
-    await run("git", ["switch", "main"], "1/4 · Selecionando a branch principal");
-    await run("git", ["pull", "--ff-only", "origin", "main"], "2/4 · Atualizando o código do GitHub");
-    await run("npm", ["install", "--no-audit", "--no-fund", "--no-package-lock"], "3/4 · Preparando dependências");
-    await run("npm", ["run", "build-web"], "4/4 · Validando TypeScript e compilando a interface");
+
+    const localDevelopment = await run(
+      "git",
+      ["branch", "--list", "development"],
+      "1/5 · Verificando a branch development local"
+    );
+
+    if (localDevelopment.output.trim()) {
+      await run(
+        "git",
+        ["switch", "development"],
+        "2/5 · Selecionando a branch development"
+      );
+    } else {
+      await run(
+        "git",
+        ["fetch", "origin", "development"],
+        "2/5 · Buscando development no GitHub"
+      );
+      await run(
+        "git",
+        ["switch", "--track", "-c", "development", "origin/development"],
+        "3/5 · Criando a branch local acompanhando origin/development"
+      );
+    }
+
+    await run(
+      "git",
+      ["pull", "--ff-only", "origin", "development"],
+      "3/5 · Atualizando o código de development"
+    );
+    await run("npm", ["install", "--no-audit", "--no-fund", "--no-package-lock"], "4/5 · Preparando dependências");
+    await run("npm", ["run", "build-web"], "5/5 · Validando TypeScript e compilando a interface");
 
     console.log("\nBuild concluído. Abrindo o Nova Generator em modo de desenvolvimento...\n");
     await run(
