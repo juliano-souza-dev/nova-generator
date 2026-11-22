@@ -7,7 +7,7 @@ use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    io::Write,
+    io::{Read, Write},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -17,16 +17,29 @@ const VOICE_DESIGN_MODEL_ID: &str = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign";
 
 fn run_cancellable(command: &mut Command, description: &str) -> Result<()> {
     if super::dependency_queue::cancel_requested() { bail!("Operação cancelada pelo usuário."); }
+    command.stdout(Stdio::null()).stderr(Stdio::piped());
     let mut child = command.spawn().with_context(|| format!("Não foi possível iniciar {description}"))?;
+    let stderr = child.stderr.take();
+    let stderr_reader = thread::spawn(move || {
+        let mut output = String::new();
+        if let Some(mut stream) = stderr { let _ = stream.read_to_string(&mut output); }
+        output
+    });
     loop {
         if super::dependency_queue::cancel_requested() {
             let _ = child.kill();
             let _ = child.wait();
+            let _ = stderr_reader.join();
             bail!("Operação cancelada pelo usuário.");
         }
         if let Some(status) = child.try_wait()? {
+            let detail = stderr_reader.join().unwrap_or_default();
             if status.success() { return Ok(()); }
-            bail!("{description} terminou com código de saída {status}.");
+            let detail = detail.lines().rev().take(12).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\\n");
+            if detail.trim().is_empty() {
+                bail!("{description} terminou com código de saída {status}, sem detalhes adicionais.");
+            }
+            bail!("{description} terminou com código de saída {status}. Detalhes: {detail}");
         }
         thread::sleep(Duration::from_millis(250));
     }
@@ -551,18 +564,32 @@ pub(crate) fn ensure_voice_design_runtime(root: &Path) -> Result<PathBuf> {
         super::dependency_queue::report_install_progress(65, "Baixando Qwen3-TTS 1.7B VoiceDesign")?;
         let script = "import sys; from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign', local_dir=sys.argv[1], cache_dir=sys.argv[2])";
         let mut child = silent_command(&python).arg("-c").arg(script).arg(&model).arg(&cache)
-            .env("HF_HUB_DISABLE_TELEMETRY", "1").stdout(Stdio::null()).stderr(Stdio::null())
+            .env("HF_HUB_DISABLE_TELEMETRY", "1").stdout(Stdio::null()).stderr(Stdio::piped())
             .spawn().context("Não foi possível iniciar o download do Qwen3-TTS VoiceDesign")?;
+        let stderr = child.stderr.take();
+        let stderr_reader = thread::spawn(move || {
+            let mut output = String::new();
+            if let Some(mut stream) = stderr { let _ = stream.read_to_string(&mut output); }
+            output
+        });
         let mut previous_bytes = directory_size(&model);
         let mut previous_at = Instant::now();
         loop {
             if super::dependency_queue::cancel_requested() {
                 let _ = child.kill();
                 let _ = child.wait();
+                let _ = stderr_reader.join();
                 bail!("Operação cancelada pelo usuário.");
             }
             if let Some(status) = child.try_wait()? {
-                if !status.success() { bail!("Falha ao baixar o modelo Qwen3-TTS VoiceDesign (código {status})."); }
+                let detail = stderr_reader.join().unwrap_or_default();
+                if !status.success() {
+                    let detail = detail.lines().rev().take(12).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\\n");
+                    if detail.trim().is_empty() {
+                        bail!("Falha ao baixar o modelo Qwen3-TTS VoiceDesign (código {status}), sem detalhes adicionais.");
+                    }
+                    bail!("Falha ao baixar o modelo Qwen3-TTS VoiceDesign (código {status}). Detalhes: {detail}");
+                }
                 break;
             }
             thread::sleep(Duration::from_secs(1));
