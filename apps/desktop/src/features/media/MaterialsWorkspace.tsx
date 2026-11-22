@@ -46,6 +46,7 @@ type AnkiCard = {
   audioText: string;
   audioPath?: string;
   audioSource?: "tts" | "video";
+  audioVoiceId?: string;
   sourceStartMs?: number;
   sourceEndMs?: number;
   status: "draft" | "approved";
@@ -144,6 +145,7 @@ const normalizeStoredCard = (raw: any): AnkiCard => {
     audioText: text(raw?.audioText) || focus,
     audioPath: text(raw?.audioPath) || undefined,
     audioSource: raw?.audioSource === "video" ? "video" : raw?.audioSource === "tts" ? "tts" : undefined,
+    audioVoiceId: text(raw?.audioVoiceId) || undefined,
     sourceStartMs: Number.isFinite(raw?.sourceStartMs) ? Number(raw.sourceStartMs) : undefined,
     sourceEndMs: Number.isFinite(raw?.sourceEndMs) ? Number(raw.sourceEndMs) : undefined,
     status: raw?.status === "approved" ? "approved" : "draft"
@@ -233,7 +235,7 @@ export default function MaterialsWorkspace({ projectId, projectName, initialAsse
   const includedPedagogicalCount = pedagogicalContent?.items.filter(item => item.include_in_hub !== false).length ?? 0;
   const approvedCards = useMemo(() => cards.filter(card => card.status === "approved"), [cards]);
   const approvedCount = approvedCards.length;
-  const pendingAudioCount = approvedCards.filter(card => !card.audioPath).length;
+  const pendingAudioCount = approvedCards.filter(card => !card.audioPath || (card.audioSource === "tts" && card.audioVoiceId !== selectedVoiceId)).length;
   const refreshAssets = useCallback(async () => {
     const items = await invoke<Asset[]>("list_project_media", { projectId });
     const videos = items.filter(item => item.kind === "video");
@@ -394,6 +396,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         ...card,
         ...patch,
         audioPath: audioTextChanged ? undefined : (patch.audioPath ?? card.audioPath),
+        audioVoiceId: audioTextChanged ? undefined : (patch.audioVoiceId ?? card.audioVoiceId),
         status: patch.status ?? (Object.keys(patch).some(key => key !== "audioPath") ? "draft" : card.status)
       };
     }));
@@ -781,7 +784,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         if (!generated?.audioPath) throw new Error("O sintetizador não retornou o arquivo de áudio.");
         return generated;
       });
-      setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath: audio.audioPath, audioSource: "tts", speaker: audio.speaker } : item));
+      setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath: audio.audioPath, audioSource: "tts", audioVoiceId: selectedVoiceId, speaker: audio.speaker } : item));
       
     } catch { /* A Central de Processamento registra a falha. */ }
     finally { setAudioBusy(current => current.filter(id => id !== card.id)); }
@@ -792,14 +795,14 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
     setAudioBusy(current => [...current, card.id]); setError(""); setNotice("");
     try {
       const audioPath = await runTrackedTask("materials", "Extrair áudio original do card", () => invoke<string>("extract_material_source_audio", { projectId, assetId, cardId: card.id, startMs: card.sourceStartMs!, endMs: card.sourceEndMs! }));
-      setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath, audioSource: "video" } : item));
+      setCards(current => current.map(item => item.id === card.id ? { ...item, audioPath, audioSource: "video", audioVoiceId: undefined } : item));
       
     } catch { /* A Central de Processamento registra a falha. */ }
     finally { setAudioBusy(current => current.filter(id => id !== card.id)); }
   }
 
   async function generatePendingAudio() {
-    const pending = approvedCards.filter(card => !card.audioPath);
+    const pending = approvedCards.filter(card => !card.audioPath || (card.audioSource === "tts" && card.audioVoiceId !== selectedVoiceId));
     if (!assetId || !voiceCloningReady || !selectedVoiceId || !pending.length || audioBusy.length) return;
     const invalid = pending.find(card => !(card.audioText.trim() || card.focus.trim()));
     if (invalid) { setError("O card " + invalid.id + " não possui texto para sintetização."); return; }
@@ -814,7 +817,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
       const byId = new Map(result.map(item => [item.cardId, item]));
       setCards(current => current.map(card => {
         const generated = byId.get(card.id);
-        return generated ? { ...card, audioPath: generated.audioPath, audioSource: "tts", speaker: generated.speaker } : card;
+        return generated ? { ...card, audioPath: generated.audioPath, audioSource: "tts", audioVoiceId: selectedVoiceId, speaker: generated.speaker } : card;
       }));
       
     } catch { /* A Central de Processamento registra a falha. */ }
