@@ -4,7 +4,7 @@ use std::{
     fs,
     io::{BufRead, BufReader, Write},
     path::PathBuf,
-    process::Stdio,
+    process::{Child, Stdio},
     thread,
 };
 use tauri::{AppHandle, Emitter, Manager};
@@ -107,6 +107,21 @@ fn normalize_qwen_language(language: &str) -> Result<&'static str, String> {
     }
 }
 
+/// Guarantees that an early return never leaves the synthesis worker running.
+struct ChildProcessGuard {
+    child: Child,
+    finished: bool,
+}
+
+impl Drop for ChildProcessGuard {
+    fn drop(&mut self) {
+        if !self.finished {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioResult {
@@ -154,7 +169,7 @@ fn generate_audio_batch(
     let audio_dir = target.parent().ok_or("Pasta de Materiais inválida.")?.join("audio");
     fs::create_dir_all(&audio_dir).map_err(|e| format!("Não foi possível preparar a pasta de áudios: {e}"))?;
 
-    let mut child = crate::process::hidden_command(&python)
+    let child = crate::process::hidden_command(&python)
         .arg(&runner)
         .arg(&model)
         .arg(&profile)
@@ -163,14 +178,15 @@ fn generate_audio_batch(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Não foi possível iniciar o executor da voz '{voice_name}' no Shared Runtime: {e}"))?;
+    let mut child_guard = ChildProcessGuard { child, finished: false };
 
     let total_requests = requests.len();
     let card_positions: std::collections::HashMap<String, usize> = requests.iter()
         .enumerate().map(|(index, request)| (request.card_id.clone(), index + 1)).collect();
     let progress_app = app.clone();
     let progress_project_id = project_id.to_owned();
-    let stdout_pipe = child.stdout.take().ok_or("Não foi possível abrir a saída do executor de voz.")?;
-    let stderr_pipe = child.stderr.take().ok_or("Não foi possível abrir o diagnóstico do executor de voz.")?;
+    let stdout_pipe = child_guard.child.stdout.take().ok_or("Não foi possível abrir a saída do executor de voz.")?;
+    let stderr_pipe = child_guard.child.stderr.take().ok_or("Não foi possível abrir o diagnóstico do executor de voz.")?;
 
     // Drain both pipes concurrently. Otherwise a full stdout/stderr pipe can block
     // the Python worker while Rust is still sending the batch through stdin.
@@ -235,7 +251,7 @@ fn generate_audio_batch(
     });
 
     {
-        let mut stdin = child.stdin.take().ok_or("Não foi possível abrir a entrada do executor de voz.")?;
+        let mut stdin = child_guard.child.stdin.take().ok_or("Não foi possível abrir a entrada do executor de voz.")?;
         for request in &requests {
             let output_path = audio_dir.join(format!("{}.wav", request.card_id));
             let payload = json!({
@@ -254,8 +270,9 @@ fn generate_audio_batch(
         }
     }
 
-    let status = child.wait()
+    let status = child_guard.child.wait()
         .map_err(|e| format!("Não foi possível finalizar a síntese da voz '{voice_name}': {e}"))?;
+    child_guard.finished = true;
     let stdout = stdout_reader.join().unwrap_or_default();
     let stderr = String::from_utf8_lossy(&stderr_reader.join().unwrap_or_default()).to_string();
     let output = std::process::Output {
