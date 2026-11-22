@@ -212,6 +212,7 @@ pub fn run() {
             shared_runtime::shared_dependency_queue_status,
             shared_runtime::list_shared_voices,
             shared_runtime::set_shared_default_voice,
+            shared_runtime::preview_shared_voice,
             shared_runtime::create_shared_voice_profile,
             shared_runtime::create_shared_voice_design_profile,
             shared_runtime::shared_provider_catalog,
