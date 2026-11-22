@@ -385,15 +385,23 @@ pub fn create_voice_design_profile(name: &str, instruct: &str) -> Result<Value> 
     let instruct = instruct.trim();
     if name.is_empty() { bail!("Informe um nome para a voz."); }
     if !(10..=800).contains(&instruct.chars().count()) { bail!("A descrição da voz precisa ter entre 10 e 800 caracteres."); }
+
     let root = root()?;
-    let runtime = root.join("runtimes/qwen3-tts-clone");
-    let manifest: Value = serde_json::from_slice(&fs::read(runtime.join("runtime.json")).context("Instale primeiro Qwen3-TTS Base · Voice Cloning.")?)?;
-    let python = PathBuf::from(manifest.get("python").and_then(Value::as_str).ok_or_else(|| anyhow!("Runtime sem Python"))?);
-    let runner = runtime.join("voice_runner.py");
-    let source = include_str!("assets/qwen3_tts/voice_runner.py");
-    if !runner.is_file() || fs::read_to_string(&runner).ok().as_deref() != Some(source) { fs::write(&runner, source)?; }
-    let model = root.join("models/qwen3-tts-voice-design/1.7B-VoiceDesign");
-    if !model.join("config.json").is_file() { bail!("O modelo VoiceDesign não está instalado. Instale Qwen3-TTS VoiceDesign na Biblioteca de dependências."); }
+    // Provision VoiceDesign on demand. It shares the isolated Qwen Python environment
+    // with Base, but keeps its model, runner and manifest separate.
+    let runtime = ensure_voice_design_runtime(&root)?;
+    let manifest: Value = serde_json::from_slice(&fs::read(runtime.join("runtime.json"))
+        .context("O manifesto do runtime Qwen3-TTS VoiceDesign não foi criado.")?)?;
+    let python = PathBuf::from(manifest.get("python").and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("Runtime VoiceDesign sem Python"))?);
+    let runner = PathBuf::from(manifest.get("runner").and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("Runtime VoiceDesign sem executor"))?);
+    let model = PathBuf::from(manifest.get("model").and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("Runtime VoiceDesign sem modelo"))?);
+    if !model.join("config.json").is_file() {
+        bail!("O modelo Qwen3-TTS VoiceDesign não passou pela validação dos arquivos.");
+    }
+
     let clock = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
     let slug = name.to_ascii_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>();
     let slug = slug.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
@@ -401,11 +409,15 @@ pub fn create_voice_design_profile(name: &str, instruct: &str) -> Result<Value> 
     let profile = root.join("voices").join(&id);
     fs::create_dir_all(&profile)?;
     let mut profile_guard = ProfileDirectoryGuard::new(profile.clone());
-    let prepared = run_worker(&python, &runner, &model, &profile, json!({"operation":"prepare_voice_design","instruct":instruct}))?;
+
+    super::dependency_queue::report_install_progress(94, "Carregando Qwen3-TTS VoiceDesign para preparar o perfil")?;
+    let prepared = run_worker(&python, &runner, &model, &profile,
+        json!({"operation":"prepare_voice_design","instruct":instruct}))?;
     if prepared.get("status").and_then(Value::as_str) != Some("completed") {
-        let _ = fs::remove_dir_all(&profile);
-        bail!("O VoiceDesign não conseguiu preparar a voz: {}", prepared.get("error").and_then(Value::as_str).unwrap_or("erro desconhecido"));
+        bail!("O VoiceDesign não conseguiu preparar a voz: {}",
+            prepared.get("error").and_then(Value::as_str).unwrap_or("erro desconhecido"));
     }
+
     let voice = VoiceProfile {
         id: id.clone(), name: name.to_owned(), profile_path: profile.display().to_string(),
         source_audio: String::new(), reference_text: String::new(), instruct: instruct.to_owned(),
@@ -420,6 +432,7 @@ pub fn create_voice_design_profile(name: &str, instruct: &str) -> Result<Value> 
     write_registry(&root, &registry)?;
     profile_guard.commit();
     super::manager::refresh_application_configs(&root)?;
+    super::dependency_queue::report_install_progress(100, "Perfil VoiceDesign pronto para síntese")?;
     Ok(serde_json::to_value(voice)?)
 }
 
@@ -465,71 +478,140 @@ pub(crate) fn config_for_consumers(root: &Path) -> Result<Value> {
 }
 
 
-pub(crate) fn ensure_voice_design_runtime(root: &Path) -> Result<PathBuf> {
-    let runtime = ensure_runtime(root)?;
-    let manifest: Value = serde_json::from_slice(&fs::read(runtime.join("runtime.json"))?)?;
-    let python = PathBuf::from(manifest.get("python").and_then(Value::as_str).ok_or_else(|| anyhow!("Runtime sem Python"))?);
-    let model = root.join("models/qwen3-tts-voice-design/1.7B-VoiceDesign");
-    let cache = root.join("cache/huggingface");
-    fs::create_dir_all(&model)?;
-    fs::create_dir_all(&cache)?;
-    if !model.join("config.json").is_file() {
-        super::dependency_queue::report_install_progress(5, "Baixando Qwen3-TTS 1.7B VoiceDesign")?;
-        let script = "import sys; from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign', local_dir=sys.argv[1], cache_dir=sys.argv[2])";
-        let mut child = silent_command(&python).arg("-c").arg(script).arg(&model).arg(&cache)
-            .env("HF_HUB_DISABLE_TELEMETRY", "1").stdout(Stdio::null()).stderr(Stdio::null())
-            .spawn().context("Não foi possível iniciar o download do Qwen3-TTS VoiceDesign")?;
-        loop {
-            if super::dependency_queue::cancel_requested() { let _ = child.kill(); let _ = child.wait(); bail!("Operação cancelada pelo usuário."); }
-            if let Some(status) = child.try_wait()? {
-                if !status.success() { bail!("Falha ao baixar o modelo Qwen3-TTS VoiceDesign (código {status})."); }
-                break;
-            }
-            thread::sleep(Duration::from_secs(1));
-            super::dependency_queue::report_install_activity("Baixando Qwen3-TTS 1.7B VoiceDesign", directory_size(&model), 0)?;
-        }
-    }
-    if !model.join("config.json").is_file() { bail!("O download do VoiceDesign terminou sem config.json."); }
-    super::dependency_queue::report_install_progress(100, "Qwen3-TTS VoiceDesign pronto")?;
-    Ok(model)
-}
-
-pub(crate) fn ensure_runtime(root: &Path) -> Result<PathBuf> {
-    super::dependency_queue::report_install_progress(5, "Preparando o runtime Qwen3-TTS Base para clonagem")?;
+fn ensure_qwen3_tts_environment(root: &Path) -> Result<(PathBuf, PathBuf)> {
     let runtime = root.join("runtimes/qwen3-tts-clone");
-    let model = root.join("models/qwen3-tts-clone/1.7B-Base");
-    let cache = root.join("cache/huggingface");
-    fs::create_dir_all(&runtime)?; fs::create_dir_all(&model)?; fs::create_dir_all(&cache)?;
+    fs::create_dir_all(&runtime)?;
     let venv = runtime.join("venv");
     let python = if cfg!(windows) { venv.join("Scripts/python.exe") } else { venv.join("bin/python") };
+
     if !python.is_file() {
         let base = if cfg!(windows) { "py" } else { "python3" };
         let mut command = silent_command(base);
         if cfg!(windows) { command.arg("-3"); }
         command.args(["-m", "venv"]).arg(&venv);
-        run_cancellable(&mut command, "criação do ambiente Python do Qwen3-TTS Base")
-            .context("Não foi possível criar o ambiente Python do Qwen3-TTS Base.")?;
+        run_cancellable(&mut command, "criação do ambiente Python do Qwen3-TTS")
+            .context("Não foi possível criar o ambiente Python do Qwen3-TTS.")?;
     }
+
     let cpu_check = "import torch; assert torch.version.cuda is None and not torch.cuda.is_available()";
     let check = silent_command(&python).args(["-c", cpu_check]).status().map(|s| s.success()).unwrap_or(false);
     if !check {
         run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--upgrade", "pip"]), "preparação do pip")
-            .context("Falha ao preparar pip para Qwen3-TTS Base.")?;
+            .context("Falha ao preparar pip para Qwen3-TTS.")?;
         run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--force-reinstall", "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cpu"]), "instalação do PyTorch CPU")
-            .context("Falha ao instalar PyTorch CPU para Qwen3-TTS Base.")?;
+            .context("Falha ao instalar PyTorch CPU para Qwen3-TTS.")?;
     }
+
     let package_check = silent_command(&python).args(["-c", "import qwen_tts, soundfile"]).status().map(|s| s.success()).unwrap_or(false);
     if !package_check {
-        super::dependency_queue::report_install_progress(42, "Instalando Qwen3-TTS Base e dependências de áudio")?;
+        super::dependency_queue::report_install_progress(38, "Instalando Qwen3-TTS e dependências de áudio")?;
         run_cancellable(silent_command(&python).args(["-m", "pip", "install", "qwen-tts", "soundfile"]), "instalação do Qwen3-TTS e dependências")
             .context("Falha ao instalar qwen-tts e soundfile.")?;
     }
+
     let cpu_still_valid = silent_command(&python).args(["-c", cpu_check]).status().map(|s| s.success()).unwrap_or(false);
     if !cpu_still_valid {
-        super::dependency_queue::report_install_progress(58, "Restaurando PyTorch CPU após instalar o Qwen3-TTS")?;
+        super::dependency_queue::report_install_progress(52, "Restaurando PyTorch CPU após instalar Qwen3-TTS")?;
         run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--force-reinstall", "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cpu"]), "restauração do PyTorch CPU")
             .context("Falha ao restaurar PyTorch CPU.")?;
     }
+
+    // Older qwen-tts packages may not expose VoiceDesign. Upgrade only when
+    // the required API is missing, then revalidate the CPU-only Torch build.
+    let design_api_check = "from qwen_tts import Qwen3TTSModel; assert callable(getattr(Qwen3TTSModel, 'generate_voice_design', None))";
+    let design_api_ready = silent_command(&python).args(["-c", design_api_check]).status().map(|s| s.success()).unwrap_or(false);
+    if !design_api_ready {
+        super::dependency_queue::report_install_progress(58, "Atualizando qwen-tts para habilitar VoiceDesign")?;
+        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--upgrade", "qwen-tts"]), "atualização do qwen-tts para VoiceDesign")
+            .context("Falha ao atualizar qwen-tts para VoiceDesign.")?;
+        let cpu_after_upgrade = silent_command(&python).args(["-c", cpu_check]).status().map(|s| s.success()).unwrap_or(false);
+        if !cpu_after_upgrade {
+            run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--force-reinstall", "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cpu"]), "restauração do PyTorch CPU após atualizar qwen-tts")
+                .context("Falha ao restaurar PyTorch CPU após atualizar qwen-tts.")?;
+        }
+        if !silent_command(&python).args(["-c", design_api_check]).status().map(|s| s.success()).unwrap_or(false) {
+            bail!("A versão instalada de qwen-tts não disponibiliza a API generate_voice_design.");
+        }
+    }
+
+    Ok((runtime, python))
+}
+
+pub(crate) fn ensure_voice_design_runtime(root: &Path) -> Result<PathBuf> {
+    super::dependency_queue::report_install_progress(5, "Preparando ambiente isolado para Qwen3-TTS VoiceDesign")?;
+    let (_base_runtime, python) = ensure_qwen3_tts_environment(root)?;
+    let runtime = root.join("runtimes/qwen3-tts-voice-design");
+    let model = root.join("models/qwen3-tts-voice-design/1.7B-VoiceDesign");
+    let cache = root.join("cache/huggingface");
+    fs::create_dir_all(&runtime)?;
+    fs::create_dir_all(&model)?;
+    fs::create_dir_all(&cache)?;
+
+    let model_config = model.join("config.json");
+    let model_weights = model.join("model.safetensors");
+    let model_index = model.join("model.safetensors.index.json");
+    if !model_config.is_file() || !(model_weights.is_file() || model_index.is_file()) {
+        super::dependency_queue::report_install_progress(65, "Baixando Qwen3-TTS 1.7B VoiceDesign")?;
+        let script = "import sys; from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign', local_dir=sys.argv[1], cache_dir=sys.argv[2])";
+        let mut child = silent_command(&python).arg("-c").arg(script).arg(&model).arg(&cache)
+            .env("HF_HUB_DISABLE_TELEMETRY", "1").stdout(Stdio::null()).stderr(Stdio::null())
+            .spawn().context("Não foi possível iniciar o download do Qwen3-TTS VoiceDesign")?;
+        let mut previous_bytes = directory_size(&model);
+        let mut previous_at = Instant::now();
+        loop {
+            if super::dependency_queue::cancel_requested() {
+                let _ = child.kill();
+                let _ = child.wait();
+                bail!("Operação cancelada pelo usuário.");
+            }
+            if let Some(status) = child.try_wait()? {
+                if !status.success() { bail!("Falha ao baixar o modelo Qwen3-TTS VoiceDesign (código {status})."); }
+                break;
+            }
+            thread::sleep(Duration::from_secs(1));
+            let now = Instant::now();
+            let downloaded = directory_size(&model);
+            let elapsed = now.duration_since(previous_at).as_secs_f64().max(0.001);
+            let speed = (downloaded.saturating_sub(previous_bytes) as f64 / elapsed) as u64;
+            super::dependency_queue::report_install_activity("Baixando Qwen3-TTS 1.7B VoiceDesign", downloaded, speed)?;
+            previous_bytes = downloaded;
+            previous_at = now;
+        }
+    }
+
+    if !model_config.is_file() || !(model_weights.is_file() || model_index.is_file()) {
+        bail!("O download do Qwen3-TTS VoiceDesign terminou sem todos os arquivos do modelo.");
+    }
+
+    let runner = runtime.join("voice_runner.py");
+    let source = include_str!("assets/qwen3_tts/voice_runner.py");
+    if !runner.is_file() || fs::read_to_string(&runner).ok().as_deref() != Some(source) {
+        fs::write(&runner, source)?;
+    }
+    let manifest = json!({
+        "schemaVersion": "1.0",
+        "runtime": "qwen3-tts-voice-design",
+        "python": python,
+        "runner": runner,
+        "device": "cpu",
+        "dtype": "float32",
+        "modelId": VOICE_DESIGN_MODEL_ID,
+        "model": model,
+        "supportsVoiceDesign": true
+    });
+    fs::write(runtime.join("runtime.json"), serde_json::to_vec_pretty(&manifest)?)?;
+    super::dependency_queue::report_install_progress(90, "Qwen3-TTS VoiceDesign baixado e validado")?;
+    Ok(runtime)
+}
+
+pub(crate) fn ensure_runtime(root: &Path) -> Result<PathBuf> {
+    super::dependency_queue::report_install_progress(5, "Preparando o runtime Qwen3-TTS Base para clonagem")?;
+    let (runtime, python) = ensure_qwen3_tts_environment(root)?;
+    let model = root.join("models/qwen3-tts-clone/1.7B-Base");
+    let cache = root.join("cache/huggingface");
+    fs::create_dir_all(&model)?;
+    fs::create_dir_all(&cache)?;
+
     let model_config = model.join("config.json");
     let model_weights = model.join("model.safetensors");
     let model_index = model.join("model.safetensors.index.json");
@@ -538,8 +620,7 @@ pub(crate) fn ensure_runtime(root: &Path) -> Result<PathBuf> {
         let script = "import sys; from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-TTS-12Hz-1.7B-Base', local_dir=sys.argv[1], cache_dir=sys.argv[2])";
         let mut child = silent_command(&python)
             .arg("-c").arg(script).arg(&model).arg(&cache)
-            .env("HF_HUB_DISABLE_TELEMETRY", "1")
-            .stdout(Stdio::null()).stderr(Stdio::null())
+            .env("HF_HUB_DISABLE_TELEMETRY", "1").stdout(Stdio::null()).stderr(Stdio::null())
             .spawn().context("Não foi possível iniciar o download do modelo Qwen3-TTS Base")?;
         let mut previous_bytes = directory_size(&model);
         let mut previous_at = Instant::now();
@@ -550,7 +631,7 @@ pub(crate) fn ensure_runtime(root: &Path) -> Result<PathBuf> {
                 bail!("Operação cancelada pelo usuário.");
             }
             if let Some(status) = child.try_wait()? {
-                if !status.success() { bail!("Falha ao baixar o modelo Qwen3-TTS 1.7B Base (código {status})."); }
+                if !status.success() { bail!("Falha ao baixar o modelo Qwen3-TTS Base (código {status})."); }
                 break;
             }
             thread::sleep(Duration::from_secs(1));
@@ -558,11 +639,7 @@ pub(crate) fn ensure_runtime(root: &Path) -> Result<PathBuf> {
             let downloaded = directory_size(&model);
             let elapsed = now.duration_since(previous_at).as_secs_f64().max(0.001);
             let speed = (downloaded.saturating_sub(previous_bytes) as f64 / elapsed) as u64;
-            super::dependency_queue::report_install_activity(
-                "Baixando o modelo oficial Qwen3-TTS 1.7B Base",
-                downloaded,
-                speed,
-            )?;
+            super::dependency_queue::report_install_activity("Baixando Qwen3-TTS 1.7B Base", downloaded, speed)?;
             previous_bytes = downloaded;
             previous_at = now;
         }
@@ -570,11 +647,16 @@ pub(crate) fn ensure_runtime(root: &Path) -> Result<PathBuf> {
     if !model_config.is_file() || !(model_weights.is_file() || model_index.is_file()) {
         bail!("O download do Qwen3-TTS Base terminou sem todos os arquivos do modelo.");
     }
+
     super::dependency_queue::report_install_progress(94, "Preparando o executor de clonagem de voz")?;
     let runner = runtime.join("voice_runner.py");
     let source = include_str!("assets/qwen3_tts/voice_runner.py");
     fs::write(&runner, source)?;
-    let manifest = json!({"schemaVersion":"1.0","runtime":"qwen3-tts-clone","python":python,"runner":runner,"device":"cpu","dtype":"float32","modelId":MODEL_ID,"model":model,"supportsVoiceCloning":true});
+    let manifest = json!({
+        "schemaVersion": "1.0", "runtime": "qwen3-tts-clone", "python": python,
+        "runner": runner, "device": "cpu", "dtype": "float32", "modelId": MODEL_ID,
+        "model": model, "supportsVoiceCloning": true
+    });
     fs::write(runtime.join("runtime.json"), serde_json::to_vec_pretty(&manifest)?)?;
     super::dependency_queue::report_install_progress(100, "Qwen3-TTS Base pronto para criar perfis de voz")?;
     Ok(runtime)
