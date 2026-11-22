@@ -134,7 +134,20 @@ def handle_request(model, profile_path: Path, request: dict, set_stage, prompt_c
         set_stage("audio_file_writing")
         output = Path(request["output_path"]).resolve()
         output.parent.mkdir(parents=True, exist_ok=True)
-        sf.write(str(output), waveform, sample_rate)
+        # Keep the previous valid audio untouched until the replacement is complete.
+        temporary_output = output.with_name(
+            f".{output.stem}.{os.getpid()}.partial{output.suffix}"
+        )
+        try:
+            sf.write(str(temporary_output), waveform, sample_rate)
+            if not temporary_output.is_file() or temporary_output.stat().st_size <= 44:
+                raise RuntimeError("O arquivo de áudio temporário está vazio ou inválido.")
+            os.replace(temporary_output, output)
+        finally:
+            try:
+                temporary_output.unlink()
+            except FileNotFoundError:
+                pass
         return {
             "status": "completed",
             "output_path": str(output),
