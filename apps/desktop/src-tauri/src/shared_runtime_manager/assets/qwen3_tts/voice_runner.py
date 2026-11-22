@@ -186,6 +186,24 @@ def main() -> int:
                 )
                 print("voice_loader=optimized", file=sys.stderr, flush=True)
             except Exception as optimized_error:
+                oom_type = getattr(torch, "OutOfMemoryError", None)
+                error_message = str(optimized_error).lower()
+                memory_pressure = isinstance(optimized_error, MemoryError) or (
+                    oom_type is not None and isinstance(optimized_error, oom_type)
+                ) or any(marker in error_message for marker in (
+                    "out of memory",
+                    "can't allocate memory",
+                    "cannot allocate memory",
+                    "defaultcpuallocator",
+                    "not enough memory",
+                ))
+                if memory_pressure:
+                    print(
+                        f"voice_loader=fallback_skipped_memory_pressure reason={type(optimized_error).__name__}: {optimized_error}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    raise
                 print(f"voice_loader=legacy_fallback reason={type(optimized_error).__name__}: {optimized_error}", file=sys.stderr, flush=True)
                 model = Qwen3TTSModel.from_pretrained(
                     str(model_path), device_map={"": "cpu"}, dtype=torch.float32,
