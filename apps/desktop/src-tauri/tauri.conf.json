@@ -25,7 +25,8 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "$APPDATA/**"
+          "$APPDATA/**",
+          "$LOCALDATA/JulianoDev/SharedRuntime/voices/**"
         ]
       },
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' asset: http://asset.localhost data: blob: https://i.ytimg.com https://*.ytimg.com; media-src 'self' asset: http://asset.localhost blob:; connect-src ipc: http://ipc.localhost"
