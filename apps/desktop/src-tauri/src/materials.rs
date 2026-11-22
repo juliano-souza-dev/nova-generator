@@ -194,11 +194,16 @@ fn generate_audio_batch(
                         _ => stage,
                     };
                     let card_id = value.get("id").and_then(Value::as_str).unwrap_or("");
-                    let card_index = card_positions.get(card_id).copied().unwrap_or(completed.saturating_add(1));
+                    let message = if stage == "model_loading" {
+                        "Carregando o modelo de voz".to_owned()
+                    } else {
+                        let card_index = card_positions.get(card_id).copied().unwrap_or(completed.saturating_add(1));
+                        format!("Card {card_index}/{total_requests}: {stage_label}")
+                    };
                     let _ = progress_app.emit("materials-audio-progress", json!({
                         "projectId": progress_project_id.clone(),
                         "status": "running",
-                        "message": format!("Card {card_index}/{total_requests}: {stage_label}")
+                        "message": message
                     }));
                 } else if value.get("status").and_then(Value::as_str) == Some("completed") {
                     completed += 1;
