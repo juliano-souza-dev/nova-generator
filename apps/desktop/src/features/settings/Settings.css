@@ -100,3 +100,12 @@
  .voice-copy{flex-basis:calc(100% - 60px)}
  .voice-row .text-action,.voice-row .default-voice{margin-left:53px}
 }
+
+.voice-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.voice-preview-player{display:flex;align-items:center;gap:12px;flex:1 0 100%;padding:10px 0 0 53px}
+.voice-preview-player span{font-size:10px;color:#aaa3b2;white-space:nowrap}
+.voice-preview-player audio{width:min(100%,360px);height:34px}
+.voice-actions .text-action{cursor:pointer}
+.voice-actions .text-action:disabled{opacity:.45;cursor:wait}
+@media(max-width:850px){.voice-actions{justify-content:flex-start;flex:1 0 100%;padding-left:53px}}
+@media(max-width:650px){.voice-preview-player{padding-left:0;flex-direction:column;align-items:flex-start}.voice-preview-player audio{width:100%}}
