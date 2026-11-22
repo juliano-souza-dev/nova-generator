@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Activity, CheckCircle2, ChevronDown, CircleAlert, Clock3, LoaderCircle, Terminal, X } from "lucide-react";
 
 type TaskKind = "download" | "import" | "trim" | "transcription" | "translation" | "export" | "installation" | "materials";
-type TaskStatus = "running" | "completed" | "failed";
+type TaskStatus = "running" | "completed" | "failed" | "cancelled";
 type TaskEvent = { type:"started"|"completed"|"failed"; id:string; kind:TaskKind; title:string; message:string; timestamp:number };
 type TaskRecord = { id:string; kind:TaskKind; title:string; status:TaskStatus; progress:number|null; message:string; logs:string[]; updatedAt:number };
 type ProgressPayload = { projectId:string; status?:string; stage?:string; percent?:number; message:string };
+type SharedQueueStatus = {
+ status?:string; operationTitle?:string; current?:string; progress?:number|null;
+ progressMode?:string; downloadedBytes?:number; speedBytesPerSecond?:number; error?:string;
+};
 
 const EVENT = "nova:task-center";
 const clock = () => new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
@@ -36,6 +41,60 @@ export default function TaskCenter() {
    if(event.type==="started")setOpen(true);
   };
   window.addEventListener(EVENT,handle);return()=>window.removeEventListener(EVENT,handle);
+ },[]);
+ useEffect(()=>{
+  let disposed=false;
+  let activeTaskId:string|null=null;
+  let lastMessage="";
+  const formatBytes=(value:number)=>value<1024*1024
+   ? (value/1024).toFixed(0)+" KB"
+   : (value/1024/1024).toFixed(1)+" MB";
+  const poll=async()=>{
+   try {
+    const queue=await invoke<SharedQueueStatus>("shared_dependency_queue_status");
+    if(disposed)return;
+    const state=queue.status??"idle";
+    const active=["queued","installing","running","cancelling"].includes(state);
+    const terminal=["completed","error","cancelled"].includes(state);
+    if(!active&&!terminal)return;
+    if(!active&&!activeTaskId)return;
+    if(active&&!activeTaskId){activeTaskId="shared-processing-"+Date.now();lastMessage="";}
+    const id=activeTaskId;
+    if(!id)return;
+    const title=queue.operationTitle||"Preparação de dependências";
+    const details=[queue.current||"Processando..."];
+    if(typeof queue.downloadedBytes==="number")details.push("Baixado: "+formatBytes(queue.downloadedBytes));
+    if(typeof queue.speedBytesPerSecond==="number"&&queue.speedBytesPerSecond>0)details.push(formatBytes(queue.speedBytesPerSecond)+"/s");
+    const message=details.join(" · ");
+    const error=queue.error?.trim();
+    const status:TaskStatus=state==="completed"?"completed":state==="error"?"failed":state==="cancelled"?"cancelled":"running";
+    const progress=typeof queue.progress==="number"?Math.max(0,Math.min(100,queue.progress)):null;
+    const now=Date.now();
+    setTasks(current=>{
+     const index=current.findIndex(task=>task.id===id);
+     const logLines:string[]=[];
+     if(message!==lastMessage)logLines.push(clock()+"  "+message);
+     if(error&&error!==lastMessage)logLines.push(clock()+"  ERRO: "+error);
+     lastMessage=message;
+     if(index<0){
+      const created:TaskRecord={id,kind:"installation",title,status,progress,message: error?message+" · "+error:message,logs:logLines.length?logLines:[clock()+"  "+message],updatedAt:now};
+      return [created,...current].slice(0,15);
+     }
+     return current.map((task,i)=>i!==index?task:{
+      ...task,title,status,progress:status==="completed"?100:progress,
+      message:error?message+" · "+error:message,updatedAt:now,
+      logs:[...task.logs,...logLines].slice(-80)
+     });
+    });
+    if(active)setOpen(true);
+    if(terminal)activeTaskId=null;
+   } catch(error) {
+    if(!disposed)console.error("Falha ao acompanhar a fila de processamento:",error);
+   }
+  };
+  void poll();
+  const timer=window.setInterval(()=>void poll(),900);
+  return()=>{disposed=true;window.clearInterval(timer);};
  },[]);
  useEffect(()=>{
   let disposed=false;let unlisteners:Array<()=>void>=[];
@@ -71,9 +130,9 @@ export default function TaskCenter() {
   </button>
   {open&&<section className="nova-task-panel" role="dialog" aria-label="Central de processamento">
    <header className="nova-task-header"><div><span className="nova-task-kicker">NOVA GENERATOR</span><h3>Central de processamento</h3><small>{activeCount?activeCount+" tarefa(s) em andamento":"Acompanhe suas tarefas recentes"}</small></div><button className="nova-task-close" onClick={()=>setOpen(false)} title="Fechar"><X size={17}/></button></header>
-   <div className="nova-task-list">{tasks.length===0?<div className="nova-task-empty"><Clock3 size={24}/><b>Nenhuma tarefa recente</b><span>Downloads, transcrições, traduções, Materiais e exportações aparecerão aqui.</span></div>:
+   <div className="nova-task-list">{tasks.length===0?<div className="nova-task-empty"><Clock3 size={24}/><b>Nenhuma tarefa recente</b><span>Downloads, instalações, criação de vozes, transcrições, Materiais e exportações aparecerão aqui.</span></div>:
     tasks.map(task=><article className={"nova-task-card task-"+task.status} key={task.id}>
-     <div className="nova-task-card-head"><span className="nova-task-icon">{task.status==="running"?<LoaderCircle className="nova-spin" size={15}/>:task.status==="completed"?<CheckCircle2 size={15}/>:<CircleAlert size={15}/>}</span><div><b>{task.title}</b><small>{labels[task.kind]} · {task.status==="running"?"Em andamento":task.status==="completed"?"Concluída":"Falhou"}</small></div>{task.progress!=null&&<strong>{Math.round(task.progress)}%</strong>}</div>
+     <div className="nova-task-card-head"><span className="nova-task-icon">{task.status==="running"?<LoaderCircle className="nova-spin" size={15}/>:task.status==="completed"?<CheckCircle2 size={15}/>:<CircleAlert size={15}/>}</span><div><b>{task.title}</b><small>{labels[task.kind]} · {task.status==="running"?"Em andamento":task.status==="completed"?"Concluída":task.status==="cancelled"?"Cancelada":"Falhou"}</small></div>{task.progress!=null&&<strong>{Math.round(task.progress)}%</strong>}</div>
      <div className="nova-task-track"><i className={task.progress==null&&task.status==="running"?"indeterminate":""} style={{width:task.progress==null?(task.status==="completed"?"100%":"28%"):task.progress+"%"}}/></div>
      <p className="nova-task-message">{task.message}</p>
      <details className="nova-task-logs" open={task.status!=="completed"}><summary><Terminal size={13}/> Detalhes e diagnóstico <span>{task.logs.length}</span><ChevronDown className="nova-task-chevron" size={13}/></summary><div>{task.logs.map((line,i)=><p key={task.id+"-"+i}>{line}</p>)}</div></details>
