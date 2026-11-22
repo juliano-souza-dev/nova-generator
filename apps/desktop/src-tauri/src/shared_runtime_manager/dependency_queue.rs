@@ -399,9 +399,13 @@ pub fn set_failure(message: &str) -> Result<()> {
     status["status"] = json!("error");
     status["progress"] = json!(0);
     status["progressMode"] = json!("indeterminate");
-    status["current"] = json!("Falha na preparação");
+    let failed_stage = status.get("current").and_then(Value::as_str)
+        .unwrap_or("etapa não identificada").to_owned();
+    let results = status.get("results").filter(|value| value.is_array())
+        .cloned().unwrap_or_else(|| json!([]));
+    status["current"] = json!(format!("Falha durante: {failed_stage}"));
     status["error"] = json!(message);
-    status["results"] = status.get("results").filter(|value| value.is_array()).cloned().unwrap_or_else(|| json!([]));
+    status["results"] = results;
     status.as_object_mut().map(|object| { object.remove("downloadedBytes"); object.remove("speedBytesPerSecond"); });
     write_json(&path, &status)?;
     record_history()
