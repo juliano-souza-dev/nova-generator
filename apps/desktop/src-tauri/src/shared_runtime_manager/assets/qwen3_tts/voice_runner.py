@@ -172,6 +172,12 @@ def main() -> int:
         torch.set_num_threads(max(1, min(cpu_count, 8)))
         torch.set_num_interop_threads(1)
         stage = "model_loading"
+        print(json.dumps({
+            "type": "progress",
+            "id": None,
+            "operation": "startup",
+            "stage": stage,
+        }), flush=True)
         with contextlib.redirect_stdout(sys.stderr):
             try:
                 model = Qwen3TTSModel.from_pretrained(
