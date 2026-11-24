@@ -155,13 +155,27 @@ fn ensure_python() -> Result<String> {
 }
 
 fn run_python(python: &str, args: &[&str]) -> Result<()> {
-    let status = if python == "py" {
-        silent_command(python).arg("-3").args(args).status()?
+    let output = if python == "py" {
+        silent_command(python).arg("-3").args(args).output()?
     } else {
-        silent_command(python).args(args).status()?
+        silent_command(python).args(args).output()?
     };
-    if !status.success() {
-        bail!("Python dependency command failed: {}", args.join(" "));
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = if !stderr.trim().is_empty() { stderr.trim() } else { stdout.trim() };
+        let detail = if detail.is_empty() {
+            "O processo terminou sem fornecer detalhes em stdout ou stderr.".to_owned()
+        } else {
+            let tail = detail.chars().rev().take(8000).collect::<String>();
+            tail.chars().rev().collect::<String>()
+        };
+        bail!(
+            "Falha ao executar Python: {} (código de saída: {}).\nDetalhes do processo:\n{}",
+            args.join(" "),
+            output.status.code().map(|code| code.to_string()).unwrap_or_else(|| "desconhecido".to_owned()),
+            detail
+        );
     }
     Ok(())
 }
