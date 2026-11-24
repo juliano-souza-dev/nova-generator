@@ -8,7 +8,7 @@ type TaskStatus = "running" | "completed" | "failed" | "cancelled";
 type TaskEvent = { type:"started"|"completed"|"failed"; id:string; kind:TaskKind; title:string; message:string; timestamp:number };
 type TaskRecord = { id:string; kind:TaskKind; title:string; status:TaskStatus; progress:number|null; message:string; logs:string[]; updatedAt:number };
 type ProgressPayload = { projectId:string; status?:string; stage?:string; percent?:number; message:string };
-type DependencyQueuePayload = { status?:string; progress?:number|null; current?:string; completed?:number; total?:number; downloadedBytes?:number; speedBytesPerSecond?:number };
+type DependencyQueuePayload = { status?:string; progress?:number|null; current?:string; completed?:number; total?:number; downloadedBytes?:number; speedBytesPerSecond?:number; error?:string|null; failedDependencies?:string[]; results?:Array<{id?:string;status?:string;message?:string;path?:string}> };
 const formatBytes = (bytes:number) => { if(bytes < 1024) return `${bytes} B`; const units=["KB","MB","GB","TB"]; let value=bytes/1024; let index=0; while(value>=1024 && index<units.length-1){value/=1024;index++;} return `${value.toFixed(1)} ${units[index]}`; };
 
 const EVENT = "nova:task-center";
@@ -94,7 +94,13 @@ export default function TaskCenter() {
      const id="shared-dependencies";
      const previous=current.find(task=>task.id===id);
      const logs=previous?.logs??[];
-     const nextLogs=logs[logs.length-1]?.endsWith(message)?logs:[...logs,clock()+"  "+message].slice(-80);
+     const progressLog=logs[logs.length-1]?.endsWith(message)?[]:[clock()+"  "+message];
+     const resultLogs=(payload.results??[])
+      .filter(result=>result.status==="error")
+      .map(result=>`FALHA [${result.id??"dependência desconhecida}]\\n${result.message??"O instalador não forneceu detalhes do erro."}`);
+     const failureLog=payload.error?.trim()?[`DIAGNÓSTICO COMPLETO\\n${payload.error.trim()}`]:[];
+     const additions=[...progressLog,...resultLogs,...failureLog].filter(line=>!logs.includes(line));
+     const nextLogs=[...logs,...additions].slice(-80);
      const task:TaskRecord={id,kind:"dependencies",title:"Biblioteca de dependências",status,progress,message,logs:nextLogs,updatedAt:now};
      return [task,...current.filter(item=>item.id!==id)].slice(0,15);
     });
