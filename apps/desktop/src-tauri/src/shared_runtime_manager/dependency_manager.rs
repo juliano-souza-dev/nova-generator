@@ -163,11 +163,11 @@ fn run_python(python: &str, args: &[&str]) -> Result<()> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let detail = if !stderr.trim().is_empty() { stderr.trim() } else { stdout.trim() };
-        let detail = if detail.is_empty() {
+        let combined = format!("STDERR:\\n{}\\nSTDOUT:\\n{}", stderr.trim(), stdout.trim());
+        let detail = if stderr.trim().is_empty() && stdout.trim().is_empty() {
             "O processo terminou sem fornecer detalhes em stdout ou stderr.".to_owned()
         } else {
-            let tail = detail.chars().rev().take(8000).collect::<String>();
+            let tail = combined.chars().rev().take(8000).collect::<String>();
             tail.chars().rev().collect::<String>()
         };
         bail!(
