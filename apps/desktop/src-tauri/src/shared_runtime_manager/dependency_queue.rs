@@ -179,7 +179,8 @@ pub fn process_queue() -> Result<()> {
                 refresh_registered_configs(&root, &resolved)?;
             }
             Err(error) => {
-                results.push(json!({"id":id,"status":"error","message":format!("{error:#}")}));
+                let detail = format!("{error:#}");
+                results.push(json!({"id":id,"status":"error","message":detail}));
             }
         }
         if cancel_requested() { bail!("Operação cancelada pelo usuário."); }
@@ -190,11 +191,31 @@ pub fn process_queue() -> Result<()> {
         }))?;
     }
     refresh_registered_configs(&root, &resolved)?;
-    let failed = results.iter().any(|item| item.get("status").and_then(Value::as_str) == Some("error"));
+    let failed_items: Vec<&Value> = results.iter()
+        .filter(|item| item.get("status").and_then(Value::as_str) == Some("error"))
+        .collect();
+    let failed = !failed_items.is_empty();
+    let failed_ids = failed_items.iter()
+        .filter_map(|item| item.get("id").and_then(Value::as_str))
+        .collect::<Vec<_>>();
+    let failure_detail = failed_items.iter()
+        .filter_map(|item| {
+            let id = item.get("id").and_then(Value::as_str).unwrap_or("dependência desconhecida");
+            let message = item.get("message").and_then(Value::as_str).unwrap_or("Erro sem detalhes.");
+            Some(format!("{id}: {message}"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
     if !failed { write_json(&queue_path(&root), &json!({"items":[]}))?; }
     write_json(&status_path(&root), &json!({
-        "status":if failed { "error" } else { "completed" },"progress":if failed { 0 } else { 100 },"progressMode":"determinate",
-        "current":if failed { "Processamento concluído com falhas. Você pode reiniciar." } else { "Processamento concluído" },
+        "status":if failed { "error" } else { "completed" },
+        "progress":if failed { 0 } else { 100 },
+        "progressMode":"determinate",
+        "current":if failed {
+            format!("Falha na instalação: {}", failed_ids.join(", "))
+        } else { "Processamento concluído".to_owned() },
+        "failedDependencies":failed_ids,
+        "error":if failed { Value::String(failure_detail) } else { Value::Null },
         "completed":total,"total":total,"results":results
     }))?;
     record_history()?;
