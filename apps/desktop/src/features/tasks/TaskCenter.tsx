@@ -98,7 +98,7 @@ export default function TaskCenter() {
      const resultLogs=(payload.results??[])
       .filter(result=>result.status==="error")
       .map(result=>`FALHA [${result.id??"dependência desconhecida}]\n${result.message??"O instalador não forneceu detalhes do erro."}`);
-     const failureLog=payload.error?.trim()?[`DIAGNÓSTICO COMPLETO\\n${payload.error.trim()}`]:[];
+     const failureLog=payload.error?.trim()?[`DIAGNÓSTICO COMPLETO\n${payload.error.trim()}`]:[];
      const additions=[...progressLog,...resultLogs,...failureLog].filter(line=>!logs.includes(line));
      const nextLogs=[...logs,...additions].slice(-80);
      const task:TaskRecord={id,kind:"dependencies",title:"Biblioteca de dependências",status,progress,message,logs:nextLogs,updatedAt:now};
