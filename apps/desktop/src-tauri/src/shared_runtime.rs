@@ -306,29 +306,37 @@ pub(crate) fn resolve_media_runtime(
     let media = resolve_media_shared_directory(app)?;
     let (_, config) = load_config(app)?;
 
-    fn executable(config: &Value, id: &str) -> Result<PathBuf, String> {
-        let raw = config.pointer(&format!("/shared/resolvedDependencies/{id}"))
-            .or_else(|| config.pointer(&format!("/shared/resources/{id}")))
-            .and_then(Value::as_str)
-            .ok_or_else(|| format!("A dependência '{id}' ainda não foi instalada. Acesse Configurações > Biblioteca de dependências e sincronize o ambiente."))?;
-        let path = PathBuf::from(raw);
-        if !path.is_absolute() {
-            return Err(format!("O caminho da dependência '{id}' precisa ser absoluto."));
-        }
-        if path.is_file() {
-            return Ok(path);
-        }
-        let names = if cfg!(windows) {
-            vec![format!("{id}.exe"), format!("{id}.cmd"), format!("{id}.bat")]
-        } else {
-            vec![id.to_owned()]
-        };
-        names.into_iter().map(|name| path.join(name))
-            .find(|candidate| candidate.is_file())
-            .ok_or_else(|| format!("Executável '{id}' não encontrado em {}. Sincronize novamente as dependências.", path.display()))
-    }
+    Ok((media, resolve_media_tool_from_config(&config, "yt-dlp")?, resolve_media_tool_from_config(&config, "ffmpeg")?))
+}
 
-    Ok((media, executable(&config, "yt-dlp")?, executable(&config, "ffmpeg")?))
+/// Resolve um executável pelo caminho registrado no libs.json do Shared Runtime.
+pub(crate) fn resolve_media_tool(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+    ensure_nova_registration(app)?;
+    let (_, config) = load_config(app)?;
+    resolve_media_tool_from_config(&config, id)
+}
+
+fn resolve_media_tool_from_config(config: &Value, id: &str) -> Result<PathBuf, String> {
+    let raw = config.pointer(&format!("/shared/resolvedDependencies/{id}"))
+        .or_else(|| config.pointer(&format!("/shared/resources/{id}")))
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("A dependência '{id}' ainda não foi instalada. Acesse Configurações > Biblioteca de dependências e sincronize o ambiente."))?;
+    let path = PathBuf::from(raw);
+    if !path.is_absolute() {
+        return Err(format!("O caminho da dependência '{id}' precisa ser absoluto."));
+    }
+    if path.is_file() {
+        return Ok(path);
+    }
+    let names = if cfg!(windows) {
+        vec![format!("{id}.exe"), format!("{id}.cmd"), format!("{id}.bat")]
+    } else {
+        vec![id.to_owned()]
+    };
+    names.into_iter().map(|name| path.join(name))
+        .find(|candidate| candidate.is_file())
+        .ok_or_else(|| format!("Executável '{id}' não encontrado em {}. Sincronize novamente as dependências.", path.display()))
+}
 }
 
 fn provider_settings(
