@@ -187,6 +187,8 @@ def handle_request(model, profile_path: Path, request: dict, set_stage) -> dict:
         if voice_mode == "voice_clone" and (not isinstance(prompt, (list, tuple)) or not prompt):
             raise ValueError("O perfil de voz contém um prompt Qwen inválido ou vazio.")
         text = str(request["text"]).strip()
+        if not text:
+            raise ValueError("O texto para sintetização não pode estar vazio.")
         language = str(request.get("language", "English")).strip() or "English"
         # A terminal punctuation mark gives the model a clearer prosodic boundary
         # when an Anki expression arrives as a bare phrase.
@@ -200,6 +202,7 @@ def handle_request(model, profile_path: Path, request: dict, set_stage) -> dict:
         crossfade_ms = min(250, max(0, crossfade_ms))
         chunks = split_text_into_chunks(text, max_chunk_chars)
         generated_chunks = []
+        generated_sample_rate = None
         for chunk_index, chunk_text in enumerate(chunks):
             chunk_text = chunk_text.strip()
             if chunk_text and chunk_text[-1] not in ".!?…;:":
@@ -224,8 +227,9 @@ def handle_request(model, profile_path: Path, request: dict, set_stage) -> dict:
                     )
             if int(chunk_sample_rate) <= 0:
                 raise RuntimeError("O motor TTS retornou uma taxa de amostragem inválida.")
-            if generated_chunks and int(chunk_sample_rate) != int(sample_rate):
+            if generated_sample_rate is not None and int(chunk_sample_rate) != int(generated_sample_rate):
                 raise RuntimeError("O motor TTS retornou taxas de amostragem diferentes entre trechos.")
+            generated_sample_rate = int(chunk_sample_rate)
             generated_chunks.append(np.asarray(wavs[0], dtype=np.float32))
             set_stage(f"voice_generation_chunk_{chunk_index + 1}_of_{len(chunks)}")
         waveform = concatenate_chunks(generated_chunks, int(chunk_sample_rate), crossfade_ms)
@@ -249,7 +253,7 @@ def handle_request(model, profile_path: Path, request: dict, set_stage) -> dict:
         set_stage("audio_file_writing")
         output = Path(request["output_path"]).resolve()
         output.parent.mkdir(parents=True, exist_ok=True)
-        sf.write(str(output), waveform, sample_rate)
+        sf.write(str(output), waveform, chunk_sample_rate)
         return {
             "status": "completed",
             "output_path": str(output),
