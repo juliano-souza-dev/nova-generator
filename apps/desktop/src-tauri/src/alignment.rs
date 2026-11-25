@@ -57,7 +57,10 @@ struct AlignmentWorker {
 
 impl AlignmentWorker {
     fn start(python: &Path, runner: &Path) -> Result<Self, String> {
-        let mut child = crate::process::hidden_command(python)
+        let mut command = crate::process::hidden_command(python);
+        crate::shared_runtime_manager::manager::configure_huggingface_command(&mut command)
+            .map_err(|error| format!("Não foi possível configurar o cache Hugging Face: {error}"))?;
+        let mut child = command
             .arg("-u")
             .arg(runner)
             .stdin(Stdio::piped())
