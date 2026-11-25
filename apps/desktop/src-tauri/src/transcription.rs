@@ -1,4 +1,5 @@
 use reqwest::blocking::{multipart, Client};
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use std::{path::{Path, PathBuf}, time::Duration};
 use tauri::{AppHandle, Emitter};
@@ -150,4 +151,74 @@ pub async fn nova_transcribe_media(app:AppHandle,project_id:String,asset_id:Stri
    result.duration_ms=dur;emit(&app2,&project_id,"completed",100.0,1,1,"Transcrição concluída");Ok(result)
   })();let _=std::fs::remove_dir_all(temp);result
  }).await.map_err(|e|format!("A transcrição foi interrompida: {e}"))?
+}
+
+
+/// Transcribes a user-selected voice-reference file without importing it into a project
+/// or installing a local ASR model. The Groq provider must already be configured.
+#[tauri::command]
+pub async fn nova_transcribe_voice_reference(
+    app: AppHandle,
+    audio_base64: String,
+    filename: String,
+) -> Result<String, String> {
+    if audio_base64.len() > 140 * 1024 * 1024 {
+        return Err("O áudio excede o limite de 100 MB.".into());
+    }
+    let extension = Path::new(&filename)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !["mp3", "wav", "m4a", "flac", "ogg", "aac", "wma"].contains(&extension.as_str()) {
+        return Err("Formato de áudio não suportado para transcrição.".into());
+    }
+
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(audio_base64)
+            .map_err(|_| "Não foi possível decodificar o áudio selecionado.".to_string())?;
+        if bytes.is_empty() || bytes.len() > 100 * 1024 * 1024 {
+            return Err("O áudio está vazio ou excede o limite de 100 MB.".into());
+        }
+
+        let temp = std::env::temp_dir().join(format!("nova-voice-reference-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp).map_err(|e| format!("Não foi possível preparar a transcrição: {e}"))?;
+        let result = (|| {
+            let source = temp.join(format!("reference.{extension}"));
+            let normalized = temp.join("reference.flac");
+            std::fs::write(&source, bytes).map_err(|e| format!("Não foi possível salvar o áudio temporário: {e}"))?;
+
+            let ff = ffmpeg(&app_handle)?;
+            let probe = ffprobe(&ff)?;
+            extract_audio(&ff, &source, &normalized)?;
+            let duration_ms = duration(&probe, &normalized)?;
+            if duration_ms == 0 {
+                return Err("Não foi possível identificar áudio válido no arquivo.".into());
+            }
+
+            let transcript = cloud(
+                &app_handle,
+                "voice-reference",
+                &normalized,
+                &temp,
+                duration_ms,
+                None,
+            )?;
+            let text = transcript.cues.into_iter()
+                .map(|cue| cue.text.trim().to_string())
+                .filter(|cue| !cue.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            if text.is_empty() {
+                return Err("A transcrição não identificou fala no áudio.".into());
+            }
+            Ok(text)
+        })();
+        let _ = std::fs::remove_dir_all(&temp);
+        result
+    })
+    .await
+    .map_err(|e| format!("A transcrição foi interrompida: {e}"))?
 }
