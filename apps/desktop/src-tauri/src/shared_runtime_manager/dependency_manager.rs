@@ -4,7 +4,11 @@ use std::{
     collections::BTreeMap,
     ffi::OsStr,
     fs::{self, File},
-    io::Write,
+    io::{BufRead, BufReader, Write},
+    process::Stdio,
+    sync::mpsc,
+    thread,
+    time::Duration,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -334,16 +338,66 @@ const QWEN3_TTS_MODEL_ID: &str = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice";
 const PIPER_DEFAULT_VOICE: &str = "en_US-mike-medium";
 
 fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<()> {
-    let output = silent_command(python)
+    let mut child = silent_command(python)
         .args(args)
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .with_context(|| format!("Could not start {description}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let combined = format!("STDERR:\n{}\nSTDOUT:\n{}", stderr.trim(), stdout.trim());
-        let detail: String = combined.chars().rev().take(8000).collect::<String>().chars().rev().collect();
-        bail!("{description} failed. Full installer diagnostics:\n{detail}");
+    let stdout = child.stdout.take().context("Could not capture installer stdout")?;
+    let stderr = child.stderr.take().context("Could not capture installer stderr")?;
+    let (sender, receiver) = mpsc::channel::<(&'static str, String)>();
+    let out_sender = sender.clone();
+    let stdout_thread = thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().flatten() {
+            if out_sender.send(("stdout", line)).is_err() { break; }
+        }
+    });
+    let stderr_thread = thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().flatten() {
+            if sender.send(("stderr", line)).is_err() { break; }
+        }
+    });
+
+    let mut diagnostics = std::collections::VecDeque::<String>::new();
+    let status = loop {
+        while let Ok((channel, line)) = receiver.try_recv() {
+            let _ = super::dependency_queue::report_install_log(channel, &line);
+            diagnostics.push_back(format!("{channel}: {line}"));
+            if diagnostics.len() > 100 { diagnostics.pop_front(); }
+        }
+        if super::dependency_queue::cancel_requested() {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = stdout_thread.join();
+            let _ = stderr_thread.join();
+            bail!("{description} cancelled by user.");
+        }
+        if let Some(status) = child.try_wait().context("Could not monitor installer process")? {
+            break status;
+        }
+        match receiver.recv_timeout(Duration::from_millis(250)) {
+            Ok((channel, line)) => {
+                let _ = super::dependency_queue::report_install_log(channel, &line);
+                diagnostics.push_back(format!("{channel}: {line}"));
+                if diagnostics.len() > 100 { diagnostics.pop_front(); }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => {}
+        }
+    };
+    let _ = stdout_thread.join();
+    let _ = stderr_thread.join();
+    while let Ok((channel, line)) = receiver.try_recv() {
+        let _ = super::dependency_queue::report_install_log(channel, &line);
+        diagnostics.push_back(format!("{channel}: {line}"));
+        if diagnostics.len() > 100 { diagnostics.pop_front(); }
+    }
+    if !status.success() {
+        let detail = diagnostics.into_iter().collect::<Vec<_>>().join("\n");
+        bail!("{description} failed (exit code: {}). Last installer output:\n{}",
+            status.code().map(|code| code.to_string()).unwrap_or_else(|| "unknown".to_owned()),
+            if detail.is_empty() { "The process returned no output.".to_owned() } else { detail });
     }
     Ok(())
 }
@@ -589,7 +643,7 @@ fn ensure_forced_alignment(root: &Path) -> Result<PathBuf> {
         }
         super::dependency_queue::report_install_progress(50, "Baixando e instalando WhisperX e dependências de alinhamento")?;
         let output = silent_command(&interpreter)
-            .args(["-m", "pip", "install", "whisperx==3.8.6"])
+            .args(["-m", "pip", "install", "--progress-bar", "on", "whisperx==3.8.6"])
             .output()
             .context("Não foi possível iniciar o pip no ambiente isolado do Shared Runtime")?;
         if !output.status.success() {
