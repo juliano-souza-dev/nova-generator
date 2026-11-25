@@ -112,16 +112,18 @@ fn find_existing_binary(directory: &Path, filename: &str) -> Result<Option<PathB
 }
 
 fn find_python() -> Option<String> {
-    for candidate in ["python", "python3", "py"] {
-        if command_exists(candidate) {
-            let check = if candidate == "py" {
-                silent_command(candidate).args(["-3", "--version"]).output()
-            } else {
-                silent_command(candidate).arg("--version").output()
-            };
-            if check.map(|out| out.status.success()).unwrap_or(false) {
-                return Some(candidate.to_owned());
-            }
+    const CHECK: &str = "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)";
+    for candidate in ["python", "python3", "python3.12", "py"] {
+        if !command_exists(candidate) {
+            continue;
+        }
+        let check = if candidate == "py" {
+            silent_command(candidate).args(["-3.12", "-c", CHECK]).output()
+        } else {
+            silent_command(candidate).args(["-c", CHECK]).output()
+        };
+        if check.map(|output| output.status.success()).unwrap_or(false) {
+            return Some(candidate.to_owned());
         }
     }
     None
@@ -156,7 +158,7 @@ fn ensure_python() -> Result<String> {
 
 fn run_python(python: &str, args: &[&str]) -> Result<()> {
     let output = if python == "py" {
-        silent_command(python).arg("-3").args(args).output()?
+        silent_command(python).arg("-3.12").args(args).output()?
     } else {
         silent_command(python).args(args).output()?
     };
@@ -183,7 +185,7 @@ fn run_python(python: &str, args: &[&str]) -> Result<()> {
 fn python_import_exists(python: &str, module: &str) -> bool {
     let script = format!("import {module}");
     let output = if python == "py" {
-        silent_command(python).args(["-3", "-c", &script]).output()
+        silent_command(python).args(["-3.12", "-c", &script]).output()
     } else {
         silent_command(python).args(["-c", &script]).output()
     };
@@ -289,12 +291,12 @@ fn ensure_yt_dlp(root: &Path) -> Result<PathBuf> {
 
 fn python_command(python: &str, args: &[&str]) -> Result<()> {
     let status = if python == "py" {
-        silent_command(python).arg("-3").args(args).status()?
+        silent_command(python).arg("-3.12").args(args).status()?
     } else {
         silent_command(python).args(args).status()?
     };
     if !status.success() {
-        bail!("Python command failed: {}", args.join(" "));
+        bail!("Python 3.12 command failed: {}", args.join(" "));
     }
     Ok(())
 }
@@ -346,20 +348,43 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
     Ok(())
 }
 
-fn ensure_shared_venv(runtime: &Path) -> Result<PathBuf> {
+pub(crate) fn ensure_runtime_venv(runtime: &Path) -> Result<PathBuf> {
     let venv = runtime.join("venv");
     let interpreter = venv_python(&venv);
+    let is_python_312 = |python: &Path| {
+        python_script_succeeds(
+            python,
+            "import sys; assert sys.version_info[:2] == (3, 12), f'Expected Python 3.12, found {sys.version.split()[0]}'",
+        )
+    };
+
+    if interpreter.is_file() && !is_python_312(&interpreter) {
+        println!(
+            "Recreating incompatible Python environment at {} (models and caches will be preserved).",
+            venv.display()
+        );
+        fs::remove_dir_all(&venv)
+            .with_context(|| format!("Could not recreate incompatible virtual environment {}", venv.display()))?;
+    } else if !interpreter.is_file() && venv.exists() {
+        fs::remove_dir_all(&venv)
+            .with_context(|| format!("Could not remove incomplete virtual environment {}", venv.display()))?;
+    }
+
     if !interpreter.is_file() {
         let base_python = ensure_python()?;
         let venv_path = venv.to_string_lossy().into_owned();
         if base_python == "py" {
-            python_command(&base_python, &["-3", "-m", "venv", &venv_path])?;
+            python_command(&base_python, &["-m", "venv", &venv_path])?;
         } else {
             python_command(&base_python, &["-m", "venv", &venv_path])?;
         }
     }
-    if !interpreter.is_file() {
-        bail!("The isolated Shared Python environment was not created: {}", interpreter.display());
+
+    if !interpreter.is_file() || !is_python_312(&interpreter) {
+        bail!(
+            "The isolated Python 3.12 environment could not be created or validated: {}",
+            interpreter.display()
+        );
     }
     Ok(interpreter)
 }
@@ -378,7 +403,7 @@ fn ensure_piper_tts(root: &Path) -> Result<PathBuf> {
     fs::create_dir_all(&voices)?;
     super::dependency_queue::report_install_progress(5, "Preparando o ambiente isolado do Piper TTS")?;
 
-    let interpreter = ensure_shared_venv(&runtime)?;
+    let interpreter = ensure_runtime_venv(&runtime)?;
     if !python_module_exists(&interpreter, "piper") {
         super::dependency_queue::report_install_progress(25, "Instalando Piper TTS e o mecanismo ONNX para CPU")?;
         run_venv_command(
@@ -442,7 +467,7 @@ fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
     fs::create_dir_all(&cache)?;
     super::dependency_queue::report_install_progress(5, "Preparando o ambiente isolado do Qwen3-TTS 1.7B")?;
 
-    let interpreter = ensure_shared_venv(&runtime)?;
+    let interpreter = ensure_runtime_venv(&runtime)?;
     let cpu_torch_check = "import torch; assert torch.version.cuda is None; assert torch.cuda.is_available() is False";
     if !python_script_succeeds(&interpreter, cpu_torch_check) {
         super::dependency_queue::report_install_progress(20, "Instalando PyTorch exclusivamente para CPU, sem CUDA")?;
@@ -454,18 +479,19 @@ fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
         run_venv_command(
             &interpreter,
             &[
-                "-m", "pip", "install", "--force-reinstall", "torch", "torchaudio",
+                "-m", "pip", "install", "--force-reinstall", "torch==2.8.0", "torchaudio==2.8.0",
                 "--index-url", "https://download.pytorch.org/whl/cpu",
             ],
             "PyTorch CPU installation",
         )?;
     }
 
-    if !python_module_exists(&interpreter, "qwen_tts") {
+    let qwen_version_check = "import importlib.metadata as m; import qwen_tts; assert m.version('qwen-tts') == '0.1.1'";
+    if !python_script_succeeds(&interpreter, qwen_version_check) {
         super::dependency_queue::report_install_progress(45, "Instalando Qwen3-TTS e dependências de síntese")?;
         run_venv_command(
             &interpreter,
-            &["-m", "pip", "install", "qwen-tts"],
+            &["-m", "pip", "install", "qwen-tts==0.1.1"],
             "Qwen3-TTS package installation",
         )?;
     }
@@ -476,7 +502,7 @@ fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
         run_venv_command(
             &interpreter,
             &[
-                "-m", "pip", "install", "--force-reinstall", "torch", "torchaudio",
+                "-m", "pip", "install", "--force-reinstall", "torch==2.8.0", "torchaudio==2.8.0",
                 "--index-url", "https://download.pytorch.org/whl/cpu",
             ],
             "PyTorch CPU-only restoration",
@@ -550,20 +576,12 @@ fn ensure_forced_alignment(root: &Path) -> Result<PathBuf> {
     fs::create_dir_all(root.join("models/forced-alignment"))?;
 
     super::dependency_queue::report_install_progress(5, "Preparando o ambiente isolado do WhisperX")?;
-    if !interpreter.is_file() {
-        super::dependency_queue::report_install_progress(10, "Localizando Python para criar o ambiente do WhisperX")?;
-        let base_python = ensure_python()?;
-        super::dependency_queue::report_install_progress(20, "Criando ambiente virtual exclusivo do Shared Runtime")?;
-        let venv_path = venv.to_string_lossy().into_owned();
-        if base_python == "py" {
-            python_command(&base_python, &["-3", "-m", "venv", &venv_path])?;
-        } else {
-            python_command(&base_python, &["-m", "venv", &venv_path])?;
-        }
-    }
+    let interpreter = ensure_runtime_venv(&runtime)
+        .context("Não foi possível preparar o ambiente Python 3.12 do WhisperX")?;
 
-    super::dependency_queue::report_install_progress(35, "Verificando se WhisperX já está instalado")?;
-    if !python_module_exists(&interpreter, "whisperx") {
+    super::dependency_queue::report_install_progress(35, "Verificando a versão instalada do WhisperX")?;
+    let whisperx_version_check = "import importlib.metadata as m; import whisperx; assert m.version('whisperx') == '3.8.6'";
+    if !python_script_succeeds(&interpreter, whisperx_version_check) {
         super::dependency_queue::report_install_progress(40, "Instalando WhisperX, PyTorch e dependências. Esta etapa pode demorar.")?;
         let output = silent_command(&interpreter)
             .args(["-m", "pip", "install", "--upgrade", "pip"])
@@ -575,15 +593,15 @@ fn ensure_forced_alignment(root: &Path) -> Result<PathBuf> {
         }
         super::dependency_queue::report_install_progress(50, "Baixando e instalando WhisperX e dependências de alinhamento")?;
         let output = silent_command(&interpreter)
-            .args(["-m", "pip", "install", "whisperx"])
+            .args(["-m", "pip", "install", "whisperx==3.8.6"])
             .output()
             .context("Não foi possível iniciar o pip no ambiente isolado do Shared Runtime")?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            let detail = if !stderr.trim().is_empty() { stderr.trim() } else { stdout.trim() };
-            let detail: String = detail.chars().rev().take(3500).collect::<String>().chars().rev().collect();
-            bail!("A instalação do WhisperX falhou. Detalhes do pip: {detail}");
+            let combined = format!("STDERR:\n{}\nSTDOUT:\n{}", stderr.trim(), stdout.trim());
+            let detail: String = combined.chars().rev().take(8000).collect::<String>().chars().rev().collect();
+            bail!("A instalação do WhisperX 3.8.6 falhou. Diagnóstico do pip:\n{detail}");
         }
     }
 
