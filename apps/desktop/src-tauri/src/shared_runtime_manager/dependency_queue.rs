@@ -338,6 +338,11 @@ pub fn record_history() -> Result<()> {
 }
 
 /// Update the visible progress while a single shared resource is being provisioned.
+fn unix_timestamp() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+}
+
 pub(crate) fn report_install_progress(_progress: u32, current: &str) -> Result<()> {
     let root = root()?;
     let path = status_path(&root);
@@ -348,7 +353,31 @@ pub(crate) fn report_install_progress(_progress: u32, current: &str) -> Result<(
     status["current"] = json!(current);
     status["completed"] = Value::Null;
     status["total"] = Value::Null;
+    status["activityState"] = json!("active");
+    status["activitySource"] = json!("stage");
+    status["lastActivityAt"] = json!(unix_timestamp());
+    status["processAlive"] = json!(true);
     status.as_object_mut().map(|object| { object.remove("downloadedBytes"); object.remove("speedBytesPerSecond"); });
+    write_json(&path, &status)
+}
+
+pub(crate) fn report_process_activity(source: &str, inactive_seconds: u64) -> Result<()> {
+    let root = root()?;
+    let path = status_path(&root);
+    let mut status = read_json(&path)?;
+    status["processAlive"] = json!(true);
+    status["inactiveSeconds"] = json!(inactive_seconds);
+    status["activityState"] = json!(if inactive_seconds >= 120 { "possible_stall" } else if inactive_seconds >= 20 { "waiting" } else { "active" });
+    status["activitySource"] = json!(source);
+    write_json(&path, &status)
+}
+
+pub(crate) fn report_process_finished() -> Result<()> {
+    let root = root()?;
+    let path = status_path(&root);
+    let mut status = read_json(&path)?;
+    status["processAlive"] = json!(false);
+    status["activityState"] = json!("finished");
     write_json(&path, &status)
 }
 
@@ -385,6 +414,9 @@ pub(crate) fn report_install_log(channel: &str, line: &str) -> Result<()> {
     }
     let logs = status["logs"].as_array_mut().expect("logs array initialized");
     logs.push(json!({"channel": channel, "message": line}));
+    status["lastActivityAt"] = json!(unix_timestamp());
+    status["activityState"] = json!("active");
+    status["activitySource"] = json!("installer-output");
     if logs.len() > 120 {
         let excess = logs.len() - 120;
         logs.drain(0..excess);
