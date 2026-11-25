@@ -14,7 +14,7 @@ const RELEASE_VERSION_URL: &str = "https://www.gyan.dev/ffmpeg/builds/release-ve
 const ARCHIVE_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
 const CHECKSUM_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip.sha256";
 const USER_AGENT: &str = "JulianoDev-NovaGenerator/1.0";
-const LOCK_WAIT: Duration = Duration::from_secs(600);
+const LOCK_WAIT: Duration = Duration::from_secs(1800);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,9 +76,10 @@ fn read_manifest(root: &Path) -> Option<ResourceManifest> {
     let ffmpeg = PathBuf::from(&manifest.ffmpeg_path);
     let ffprobe = PathBuf::from(&manifest.ffprobe_path);
     let managed_root = root.join("tools").join("ffmpeg");
+    let install_path = PathBuf::from(&manifest.install_path);
     if manifest.schema_version != 1 || manifest.id != "ffmpeg" ||
-        !Path::new(&manifest.install_path).starts_with(&managed_root) ||
-        !ffmpeg.starts_with(&managed_root) || !ffprobe.starts_with(&managed_root) ||
+        !install_path.starts_with(&managed_root) ||
+        !ffmpeg.starts_with(&install_path) || !ffprobe.starts_with(&install_path) ||
         ffmpeg.parent() != ffprobe.parent() ||
         valid_executable(&ffmpeg).is_none() || valid_executable(&ffprobe).is_none() {
         return None;
@@ -96,6 +97,13 @@ fn acquire_lock(root: &Path) -> Result<InstallLock, String> {
                 return Ok(InstallLock(lock_path));
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                let stale = fs::metadata(&lock_path).and_then(|metadata| metadata.modified())
+                    .ok().and_then(|modified| modified.elapsed().ok())
+                    .is_some_and(|age| age >= LOCK_WAIT);
+                if stale {
+                    let _ = fs::remove_file(&lock_path);
+                    continue;
+                }
                 if started.elapsed() >= LOCK_WAIT {
                     return Err("A instalação do FFmpeg continua ocupada. Feche outra tarefa que esteja preparando recursos e tente novamente.".into());
                 }
