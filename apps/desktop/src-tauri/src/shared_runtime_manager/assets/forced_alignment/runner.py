@@ -23,10 +23,17 @@ os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 _models = {}
 _device = None
 
+# Keep a dedicated UTF-8 protocol stream. Native libraries (PyTorch,
+# torchaudio, tokenizers, etc.) may write arbitrary diagnostics directly to
+# file descriptor 1; redirect that descriptor to stderr before importing them.
+_PROTOCOL = os.fdopen(os.dup(sys.stdout.fileno()), "w", encoding="utf-8", buffering=1)
+os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
+sys.stdout = sys.stderr
+
 
 def emit(payload):
-    sys.stdout.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
-    sys.stdout.flush()
+    _PROTOCOL.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\\n")
+    _PROTOCOL.flush()
 
 
 def get_device():
