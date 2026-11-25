@@ -410,14 +410,8 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
         let path = shared_root()?.join("cache/pip");
         fs::create_dir_all(&path)?;
         command.env("PIP_CACHE_DIR", &path);
-        if args.get(2) == Some(&"install") {
-            command
-                .args(&args[..3])
-                .args(["--progress-bar", "on"])
-                .args(&args[3..]);
-        } else {
-            command.args(args);
-        }
+        command.env("PIP_PROGRESS_BAR", "on");
+        command.args(args);
         Some(path)
     } else {
         command.args(args);
@@ -767,7 +761,7 @@ fn ensure_forced_alignment(root: &Path) -> Result<PathBuf> {
         super::dependency_queue::report_install_progress(50, "Baixando e instalando WhisperX e dependências de alinhamento")?;
         run_venv_command(
             &interpreter,
-            &["-m", "pip", "install", "--progress-bar", "on", "whisperx==3.8.6"],
+            &["-m", "pip", "install", "whisperx==3.8.6"],
             "Instalação do WhisperX 3.8.6",
         ).context("A instalação do WhisperX 3.8.6 falhou")?;
     }
