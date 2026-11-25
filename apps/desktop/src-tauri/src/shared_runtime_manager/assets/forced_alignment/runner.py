@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Persistent JSON-lines worker for word-level forced alignment.
 
-The Shared Runtime Manager owns this script, its virtual environment and model cache.
+Nova Generator's centralized dependency manager owns this script, its virtual environment and model cache.
 One process can serve multiple transcript blocks so acoustic models stay loaded.
 """
 import contextlib
