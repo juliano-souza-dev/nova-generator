@@ -153,7 +153,7 @@ fn ensure_python() -> Result<String> {
             }
         }
     }
-    bail!("Python was not found and could not be provisioned automatically. Install Python 3 and run registration again.")
+    bail!("Python 3.12 was not found and could not be provisioned automatically. Install Python 3.12 and run dependency registration again.")
 }
 
 fn run_python(python: &str, args: &[&str]) -> Result<()> {
@@ -341,9 +341,9 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let detail = if !stderr.trim().is_empty() { stderr.trim() } else { stdout.trim() };
-        let detail: String = detail.chars().rev().take(4000).collect::<String>().chars().rev().collect();
-        bail!("{description} failed: {detail}");
+        let combined = format!("STDERR:\n{}\nSTDOUT:\n{}", stderr.trim(), stdout.trim());
+        let detail: String = combined.chars().rev().take(8000).collect::<String>().chars().rev().collect();
+        bail!("{description} failed. Full installer diagnostics:\n{detail}");
     }
     Ok(())
 }
@@ -484,7 +484,7 @@ fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
         )?;
     }
 
-    let qwen_version_check = "import importlib.metadata as m; import qwen_tts; assert m.version('qwen-tts') == '0.1.1'";
+    let qwen_version_check = "import importlib.metadata as m; assert m.version('qwen-tts') == '0.1.1'";
     if !python_script_succeeds(&interpreter, qwen_version_check) {
         super::dependency_queue::report_install_progress(45, "Instalando Qwen3-TTS e dependências de síntese")?;
         run_venv_command(
