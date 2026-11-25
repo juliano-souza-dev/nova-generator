@@ -107,3 +107,11 @@
 .installer-log-line{display:flex;align-items:flex-start;gap:9px;min-width:0;font:10px/1.5 'DM Mono',monospace}
 .installer-log-line span{flex:none;color:#8e82a4;font-size:9px}
 .installer-log-line code{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap;color:#c4bdce}
+
+
+.installer-activity{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;color:#bdb5c8;font-size:10px;line-height:1.5}
+.installer-activity-dot{width:7px;height:7px;flex:none;border-radius:50%;background:#7d8795}
+.installer-activity.active .installer-activity-dot{background:#00c98a;box-shadow:0 0 0 3px #00c98a20}
+.installer-activity.waiting .installer-activity-dot{background:#e0aa48}
+.installer-activity.possible_stall .installer-activity-dot{background:#ef6b6b}
+.installer-activity small{margin-left:auto;color:#81798c;font-size:9px}
