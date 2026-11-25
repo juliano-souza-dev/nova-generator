@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { runTrackedTask } from "../tasks/TaskCenter";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { Check, FileJson, FileText, PlayCircle, RefreshCw, RotateCcw, Save, X } from "lucide-react";
@@ -212,21 +213,23 @@ export default function PredictionListening({
     if (busy || loading) return;
     setBusy(true); setError(""); setNotice("");
     try {
-      const pkg = await invoke<Package>("prepare_prediction_listening_package", {
-        projectId, assetId, cues, selectedCueIds, sourceSignature
-      });
-      const content = pkg.files["prediction-listening-entrada.txt"];
-      if (!content) throw new Error("O TXT de entrada não foi gerado.");
-      const path = await save({
-        title: "Salvar entrada do Prediction Listening",
-        defaultPath: "prediction-listening-entrada.txt",
-        filters: [{ name: "Arquivo de texto", extensions: ["txt"] }]
-      });
-      if (!path) return;
-      await invoke("save_external_translation_package", {
-        path,
-        bytes: Array.from(new TextEncoder().encode(content))
-      });
+      await runTrackedTask("materials", "Preparar entrada do Prediction Listening", async () => {
+        const pkg = await invoke<Package>("prepare_prediction_listening_package", {
+          projectId, assetId, cues, selectedCueIds, sourceSignature
+        });
+        const content = pkg.files["prediction-listening-entrada.txt"];
+        if (!content) throw new Error("O TXT de entrada não foi gerado.");
+        const path = await save({
+          title: "Salvar entrada do Prediction Listening",
+          defaultPath: "prediction-listening-entrada.txt",
+          filters: [{ name: "Arquivo de texto", extensions: ["txt"] }]
+        });
+        if (!path) return;
+        await invoke("save_external_translation_package", {
+          path,
+          bytes: Array.from(new TextEncoder().encode(content))
+        });
+        });
       setSourceHash(pkg.sourceHash);
       setNotice("TXT salvo. Envie o arquivo à IA externa e importe o JSON retornado.");
     } catch (e) {
