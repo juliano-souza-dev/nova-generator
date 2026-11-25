@@ -1242,7 +1242,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
                 </button>
                 <button className="secondary-action" type="button" disabled={!transcriptionTargetClip||!transcriptionTargetAsset||(transcriptionTargetAsset.kind!=="video"&&transcriptionTargetAsset.kind!=="audio")||transcription.transcriptionBusy} onClick={()=>{if(transcriptionTargetClip&&transcriptionTargetAsset)onStartTranscription?.(transcriptionTargetAsset.id,{clipId:transcriptionTargetClip.id,timelineStartMs:transcriptionTargetClip.timelineStartMs,sourceStartMs:transcriptionTargetClip.sourceStartMs,sourceEndMs:transcriptionTargetClip.sourceEndMs});}}>Trocar clipe</button>
               </>}
-              {!transcription.transcriptionResult&&<small>{transcription.localAsrInstalled?"Faster-Whisper pronto":"O mecanismo será preparado automaticamente no primeiro uso"}</small>}
+              {!transcription.transcriptionResult&&<small>O mecanismo será preparado automaticamente no primeiro uso</small>}
             </div>
           </div>
           {transcription.transcriptionBusy&&transcription.transcriptionProgress&&<div className="transcription-progress"><div className="progress-heading"><b>{transcription.transcriptionProgress.message}</b><span>{Math.round(transcription.transcriptionProgress.percent)}%</span></div><div className="progress-track"><i style={{width:Math.max(0,Math.min(100,transcription.transcriptionProgress.percent))+"%"}}/></div><small>Blocos concluídos: {transcription.transcriptionProgress.completedChunks} de {transcription.transcriptionProgress.totalChunks}</small></div>}
