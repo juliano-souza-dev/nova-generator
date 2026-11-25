@@ -4,7 +4,14 @@ use local::run_local_python;
 pub use local::{check_local_asr, install_local_asr};
 
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::{
+    io::{BufRead, BufReader},
+    path::{Path, PathBuf},
+    process::Stdio,
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
 use tauri::{AppHandle, Emitter};
 use crate::{application::services::MediaService, infrastructure::media_storage::MediaStorage};
 
@@ -113,16 +120,70 @@ fn extract_audio(ffmpeg_path: &Path, source: &Path, destination: &Path) -> Resul
     Ok(())
 }
 
-fn extract_audio_range(ffmpeg_path: &Path, source: &Path, destination: &Path, start_ms: u64, end_ms: u64) -> Result<(), String> {
+fn extract_audio_range(
+    app: &AppHandle,
+    project_id: &str,
+    ffmpeg_path: &Path,
+    source: &Path,
+    destination: &Path,
+    start_ms: u64,
+    end_ms: u64,
+) -> Result<(), String> {
     let start = format!("{:.3}", start_ms as f64 / 1000.0);
-    let duration = format!("{:.3}", end_ms.saturating_sub(start_ms) as f64 / 1000.0);
-    let output = crate::process::hidden_command(ffmpeg_path)
-        .args(["-y", "-hide_banner", "-loglevel", "error", "-ss", &start, "-i"])
+    let duration_ms = end_ms.saturating_sub(start_ms);
+    let duration = format!("{:.3}", duration_ms as f64 / 1000.0);
+    let mut command = crate::process::hidden_command(ffmpeg_path);
+    command.args(["-y", "-hide_banner", "-loglevel", "error", "-progress", "pipe:1", "-nostats", "-ss", &start, "-i"])
         .arg(source).arg("-t").arg(&duration)
         .args(["-vn", "-ac", "1", "-ar", "16000", "-c:a", "flac"])
-        .arg(destination).output().map_err(|e| format!("Não foi possível iniciar o FFmpeg: {e}"))?;
-    if !output.status.success() {
-        return Err(format!("Falha ao preparar o trecho de áudio: {}", String::from_utf8_lossy(&output.stderr).chars().take(600).collect::<String>()));
+        .arg(destination)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().map_err(|e| format!("Não foi possível iniciar o FFmpeg: {e}"))?;
+    let stdout = child.stdout.take().ok_or("Não foi possível acompanhar o progresso do FFmpeg.")?;
+    let (sender, receiver) = mpsc::channel::<String>();
+    let reader = thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            match line {
+                Ok(line) => { if sender.send(line).is_err() { break; } }
+                Err(_) => break,
+            }
+        }
+    });
+    let stderr = child.stderr.take().ok_or("Não foi possível acompanhar os erros do FFmpeg.")?;
+    let stderr_reader = thread::spawn(move || {
+        let mut details = Vec::new();
+        for line in BufReader::new(stderr).lines().flatten() {
+            details.push(line);
+        }
+        details
+    });
+
+    let mut current_time_us = 0_u64;
+    loop {
+        match receiver.recv_timeout(Duration::from_secs(5)) {
+            Ok(line) => {
+                if let Some(value) = line.strip_prefix("out_time_ms=") {
+                    current_time_us = value.parse::<u64>().unwrap_or(current_time_us);
+                    let ratio = current_time_us as f64 / (duration_ms.max(1) as f64 * 1000.0);
+                    let percent = 1.0 + (ratio.clamp(0.0, 1.0) as f32 * 4.0);
+                    emit(app, project_id, "extracting_audio", percent, 0, 0, &format!("Extraindo áudio: {:.1}s de {:.1}s", current_time_us as f64 / 1_000_000.0, duration_ms as f64 / 1000.0));
+                } else if line == "progress=end" {
+                    emit(app, project_id, "extracting_audio", 5.0, 0, 0, "Áudio extraído; preparando reconhecimento");
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                emit(app, project_id, "extracting_audio", 1.0, 0, 0, "FFmpeg continua ativo; extraindo e normalizando o áudio");
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    let status = child.wait().map_err(|e| format!("Falha ao aguardar o FFmpeg: {e}"))?;
+    let _ = reader.join();
+    let errors = stderr_reader.join().unwrap_or_default().join("\n");
+    if !status.success() {
+        return Err(format!("Falha ao preparar o trecho de áudio: {}", errors.chars().take(600).collect::<String>()));
     }
     Ok(())
 }
@@ -140,7 +201,7 @@ pub fn transcribe(app: AppHandle, media: MediaService, storage: MediaStorage, pr
         let start_ms = source_start_ms.unwrap_or(0).min(source_duration);
         let end_ms = source_end_ms.unwrap_or(source_duration).min(source_duration);
         if end_ms <= start_ms { return Err("O trecho selecionado do clipe é inválido.".into()); }
-        extract_audio_range(&ffmpeg_path, &source, &audio, start_ms, end_ms)?;
+        extract_audio_range(&app, &project_id, &ffmpeg_path, &source, &audio, start_ms, end_ms)?;
         let duration = duration_ms(&ffprobe(&ffmpeg_path)?,&audio)?;
         emit(&app,&project_id,"loading_model",5.0,0,0,&format!("Preparando o modelo {} para execução em CPU",local_model));
         let output = run_local_python(
