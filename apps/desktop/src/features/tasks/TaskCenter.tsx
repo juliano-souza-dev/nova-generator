@@ -97,7 +97,7 @@ export default function TaskCenter() {
      const progressLog=logs[logs.length-1]?.endsWith(message)?[]:[clock()+"  "+message];
      const resultLogs=(payload.results??[])
       .filter(result=>result.status==="error")
-      .map(result=>`FALHA [${result.id??"dependência desconhecida}]\n${result.message??"O instalador não forneceu detalhes do erro."}`);
+      .map(result=>{const dependencyId=result.id??"dependência desconhecida";const detail=result.message??"O instalador não forneceu detalhes do erro.";return "FALHA ["+dependencyId+"]\n"+detail;});
      const failureLog=payload.error?.trim()?[`DIAGNÓSTICO COMPLETO\n${payload.error.trim()}`]:[];
      const additions=[...progressLog,...resultLogs,...failureLog].filter(line=>!logs.includes(line));
      const nextLogs=[...logs,...additions].slice(-80);
