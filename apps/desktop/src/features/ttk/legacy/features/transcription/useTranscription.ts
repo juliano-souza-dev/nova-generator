@@ -18,9 +18,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   const [transcriptionModel, setTranscriptionModel] = useState("tiny");
   const [transcriptionBusy, setTranscriptionBusy] = useState(false);
   const [transcriptionProgress, setTranscriptionProgress] = useState<TranscriptionProgress | null>(null);
-  const [localAsrInstalled, setLocalAsrInstalled] = useState(false);
-  const [localAsrChecking, setLocalAsrChecking] = useState(false);
-  const [localAsrInstalling, setLocalAsrInstalling] = useState(false);
   const [transcriptionMessage, setTranscriptionMessage] = useState("");
   const [transcriptionResult, setTranscriptionResult] = useState<TranscriptResult | null>(null);
   const [transcriptionTranslations, setTranscriptionTranslations] = useState<CueTranslation[]>([]);
@@ -28,17 +25,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   const [externalSourceHash, setExternalSourceHash] = useState("");
   const [externalPackageBusy, setExternalPackageBusy] = useState(false);
   const [transcriptionInserted, setTranscriptionInserted] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!project) return;
-    setLocalAsrChecking(true);
-    void desktopApi.checkLocalAsr()
-      .then(ready => { if (!cancelled) setLocalAsrInstalled(ready); })
-      .catch(() => { if (!cancelled) setLocalAsrInstalled(false); })
-      .finally(() => { if (!cancelled) setLocalAsrChecking(false); });
-    return () => { cancelled = true; };
-  }, [project?.id]);
 
   useEffect(() => {
     if (!assets.some(asset => asset.id === transcriptionAssetId && (asset.kind === "video" || asset.kind === "audio"))) {
@@ -70,20 +56,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionInserted(true);
     setExternalSourceHash("");
     setTranscriptionMessage("Transcrição existente carregada da timeline. Você pode importar uma tradução externa ou alinhar as palavras sem reprocessar o áudio e sem inserir outra cópia.");
-  }
-
-  async function installLocalTranscription() {
-    setLocalAsrInstalling(true);
-    setTranscriptionMessage("");
-    try {
-      const message = await runTrackedTask("installation", "Instalando mecanismo de transcrição local", () => desktopApi.installLocalAsr());
-      setLocalAsrInstalled(await desktopApi.checkLocalAsr());
-      setTranscriptionMessage(message);
-    } catch (error) {
-      setTranscriptionMessage("Não foi possível instalar o suporte local: " + String(error));
-    } finally {
-      setLocalAsrInstalling(false);
-    }
   }
 
   async function transcribeSelectedMedia() {
@@ -254,8 +226,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     transcriptionLanguage, setTranscriptionLanguage,
     transcriptionModel, setTranscriptionModel,
     transcriptionBusy, transcriptionProgress, setTranscriptionProgress,
-    localAsrInstalled, localAsrChecking, localAsrInstalling,
     transcriptionMessage, setTranscriptionMessage,
-    installLocalTranscription, transcribeSelectedMedia
+    transcribeSelectedMedia
   };
 }
