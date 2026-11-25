@@ -182,9 +182,8 @@ fn extract_archive(archive: &Path, staging: &Path) -> Result<(PathBuf, PathBuf),
     let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("O pacote FFmpeg não é um ZIP válido: {e}"))?;
     for index in 0..zip.len() {
         let mut entry = zip.by_index(index).map_err(|e| e.to_string())?;
-        let Some(relative) = entry.enclosed_name().map(Path::to_path_buf) else {
-            return Err("O pacote FFmpeg contém um caminho de arquivo inseguro.".into());
-        };
+        let relative = entry.enclosed_name()
+            .ok_or("O pacote FFmpeg contém um caminho de arquivo inseguro.")?;
         let target = staging.join(&relative);
         if entry.is_dir() {
             fs::create_dir_all(&target).map_err(|e| e.to_string())?;
@@ -225,7 +224,17 @@ fn write_manifest(root: &Path, manifest: &ResourceManifest) -> Result<(), String
     let mut file = File::create(&temporary).map_err(|e| e.to_string())?;
     file.write_all(&bytes).map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())?;
-    fs::rename(&temporary, &target).map_err(|e| format!("Não foi possível registrar o FFmpeg: {e}"))
+    let backup = directory.join("ffmpeg.json.previous");
+    if backup.exists() { fs::remove_file(&backup).map_err(|e| e.to_string())?; }
+    if target.exists() {
+        fs::rename(&target, &backup).map_err(|e| format!("Não foi possível preservar o registro anterior do FFmpeg: {e}"))?;
+    }
+    if let Err(error) = fs::rename(&temporary, &target) {
+        if backup.exists() { let _ = fs::rename(&backup, &target); }
+        return Err(format!("Não foi possível registrar o FFmpeg: {error}"));
+    }
+    if backup.exists() { let _ = fs::remove_file(backup); }
+    Ok(())
 }
 
 pub(crate) fn ensure_media_tools(app: &AppHandle) -> Result<MediaTools, String> {
