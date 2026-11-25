@@ -192,6 +192,7 @@ def handle_request(model, profile_path: Path, request: dict, set_stage) -> dict:
         # when an Anki expression arrives as a bare phrase.
         if text and text[-1] not in ".!?…;:":
             text += "."
+        import numpy as np
         set_stage("voice_generation")
         max_chunk_chars = int(request.get("max_chunk_chars", 800))
         max_chunk_chars = min(2000, max(100, max_chunk_chars))
