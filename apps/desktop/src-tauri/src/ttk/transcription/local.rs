@@ -42,6 +42,8 @@ fn run_python(
     });
 
     let mut stderr_lines = Vec::new();
+    let mut last_stage = "loading_model".to_string();
+    let mut last_percent = 8.0_f32;
     loop {
         match receiver.recv_timeout(Duration::from_secs(5)) {
             Ok(line) => {
@@ -52,17 +54,19 @@ fn run_python(
                     let done = parts.next().and_then(|value| value.parse::<usize>().ok()).unwrap_or(0);
                     let total = parts.next().and_then(|value| value.parse::<usize>().ok()).unwrap_or(0);
                     let message = parts.next().unwrap_or("Processando áudio");
+                    last_stage = stage.to_string();
+                    last_percent = percent;
                     on_progress(stage, percent, done, total, message);
                 } else if !line.trim().is_empty() {
                     let visible = line.chars().take(240).collect::<String>();
                     stderr_lines.push(visible.clone());
-                    on_progress("processing", 10.0, 0, 0, &visible);
+                    on_progress(&last_stage, last_percent, 0, 0, &visible);
                 }
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 on_progress(
-                    "loading_model",
-                    8.0,
+                    &last_stage,
+                    last_percent,
                     0,
                     0,
                     "O processo continua ativo; baixando ou carregando o modelo de reconhecimento.",
@@ -125,7 +129,7 @@ sys.stdout.buffer.flush()
     let audio_arg = audio.to_string_lossy().into_owned();
 
     crate::shared_runtime_manager::dependency_queue::begin_operation();
-    on_progress("preparing_runtime", 3.0, 0, 0, "Verificando o ambiente local do Faster-Whisper");
+    on_progress("preparing_runtime", 6.0, 0, 0, "Verificando o ambiente local do Faster-Whisper");
     let python = crate::shared_runtime_manager::dependency_manager::ensure_faster_whisper_runtime()
         .map_err(|error| format!("Não foi possível preparar automaticamente o mecanismo de transcrição local: {error}"))?;
 
