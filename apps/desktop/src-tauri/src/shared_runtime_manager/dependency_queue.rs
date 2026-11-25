@@ -284,7 +284,7 @@ pub fn install_dependency(resource_id: &str, app_id: Option<&str>) -> Result<()>
     let root = root()?;
     let registry = read_json(&root.join("registry/state.json"))?;
     if let Some(id) = app_id {
-        let application = registry.pointer(&format!("/applications/{id}"))
+        registry.pointer(&format!("/applications/{id}"))
             .ok_or_else(|| anyhow::anyhow!("Application '{id}' is not registered in Shared Runtime"))?;
         let config_path = root.join("applications").join(id).join("shared.config.json");
         let config: Value = serde_json::from_slice(&fs::read(&config_path)
@@ -426,15 +426,17 @@ pub(crate) fn report_install_log(channel: &str, line: &str) -> Result<()> {
     if !status["logs"].is_array() {
         status["logs"] = json!([]);
     }
-    let logs = status["logs"].as_array_mut().expect("logs array initialized");
-    logs.push(json!({"channel": channel, "message": line}));
+    {
+        let logs = status["logs"].as_array_mut().expect("logs array initialized");
+        logs.push(json!({"channel": channel, "message": line}));
+        if logs.len() > 120 {
+            let excess = logs.len() - 120;
+            logs.drain(0..excess);
+        }
+    }
     status["lastActivityAt"] = json!(unix_timestamp());
     status["activityState"] = json!("active");
     status["activitySource"] = json!("installer-output");
-    if logs.len() > 120 {
-        let excess = logs.len() - 120;
-        logs.drain(0..excess);
-    }
     write_json(&path, &status)
 }
 
