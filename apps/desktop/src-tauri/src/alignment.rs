@@ -67,7 +67,7 @@ impl AlignmentWorker {
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("Não foi possível iniciar o WhisperX pelo Shared Runtime: {e}"))?;
+            .map_err(|e| format!("Não foi possível iniciar o worker local do WhisperX: {e}"))?;
         let input = child.stdin.take().ok_or("Não foi possível abrir a entrada do WhisperX.")?;
         let output = child.stdout.take().ok_or("Não foi possível abrir a saída do WhisperX.")?;
         Ok(Self { child, input, output: BufReader::new(output) })
