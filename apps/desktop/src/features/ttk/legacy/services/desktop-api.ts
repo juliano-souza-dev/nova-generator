@@ -33,8 +33,8 @@ function toU64Milliseconds(value: number, field: string): number {
 }
 
 export const desktopApi = {
-  transcribeMedia: (projectId: string, assetId: string, mode: "local", language: string, localModel: string, sourceStartMs?: number, sourceEndMs?: number) =>
-    runTrackedTask("transcription", "Transcrição do clipe", () => invoke<TranscriptResult>("transcribe_media", { projectId, assetId, mode, language: language || null, localModel, sourceStartMs: sourceStartMs ?? null, sourceEndMs: sourceEndMs ?? null })),
+  transcribeMedia: (projectId: string, assetId: string, language: string, localModel: string, sourceStartMs?: number, sourceEndMs?: number) =>
+    runTrackedTask("transcription", "Transcrição do clipe", () => invoke<TranscriptResult>("transcribe_media", { projectId, assetId, language: language || null, localModel, sourceStartMs: sourceStartMs ?? null, sourceEndMs: sourceEndMs ?? null })),
   prepareClipExternalTranslationPackage: (projectId: string, clipId: string, cues: TranscriptCue[]) =>
     invoke<ExternalClipTranslationPackage>("prepare_timeline_clip_external_translation_package", { projectId, clipId, cues: cues.map(cue => ({ ...cue, words: cue.words ?? [], wordAlignment: null, wordAlignmentHash: null })) }),
   alignTimelineClip: (projectId: string, assetId: string, sourceStartMs: number, sourceEndMs: number, language: string, cues: Array<{id:string;text:string;startMs:number;endMs:number}>) =>
