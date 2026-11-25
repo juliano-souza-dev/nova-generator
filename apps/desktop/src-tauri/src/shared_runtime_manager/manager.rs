@@ -11,7 +11,6 @@ use std::{
 };
 
 const REGISTRY_FILE: &str = "registry/state.json";
-const FFMPEG_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
 const SOX_URL: &str = "https://sourceforge.net/projects/sox/files/sox/14.4.2/sox-14.4.2-win32.zip/download";
 const SOX_VERSION: &str = "14.4.2";
 const SOX_SHA1: &str = "825b218c275687a38e96bf838dcfdd2e9bd55a25";
