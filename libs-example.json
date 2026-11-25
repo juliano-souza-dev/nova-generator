@@ -46,12 +46,6 @@
         "required": true
       }
     ],
-    "providers": [
-      {
-        "id": "groq",
-        "required": false
-      }
-    ],
     "resources": {}
   }
 }
