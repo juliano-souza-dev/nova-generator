@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, AudioLines, Check, ChevronRight, Cloud, Download, KeyRound, RefreshCw, Settings2, ShieldCheck, Volume2, WandSparkles } from "lucide-react";
+import { ArrowLeft, AudioLines, Check, ChevronRight, Cloud, Download, KeyRound, LoaderCircle, RefreshCw, Settings2, ShieldCheck, Volume2, WandSparkles } from "lucide-react";
 import "./Settings.css";
 
 type Dependency = { id: string; required: boolean; version?: string | null; installed: boolean; path?: string | null };
@@ -28,6 +28,7 @@ export default function Settings({ onBack }: { onBack: () => void }) {
   const [voiceInstruction, setVoiceInstruction] = useState("");
   const [voiceAudio, setVoiceAudio] = useState<File | null>(null);
   const [voiceReferenceText, setVoiceReferenceText] = useState("");
+  const [transcribingReference, setTranscribingReference] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -85,6 +86,32 @@ export default function Settings({ onBack }: { onBack: () => void }) {
       await refresh();
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
+  }
+
+  async function transcribeVoiceReference() {
+    if (!voiceAudio || transcribingReference) return;
+    setTranscribingReference(true);
+    setError("");
+    setNotice("");
+    try {
+      const audioBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+        reader.onerror = () => reject(new Error("Não foi possível ler o áudio selecionado."));
+        reader.readAsDataURL(voiceAudio);
+      });
+      const transcript = await invoke<string>("nova_transcribe_voice_reference", {
+        audioBase64,
+        filename: voiceAudio.name,
+      });
+      if (!transcript.trim()) throw new Error("A transcrição retornou vazia.");
+      setVoiceReferenceText(transcript.trim());
+      setNotice("Transcrição preenchida. Revise o texto antes de preparar o perfil de voz.");
+    } catch (e) {
+      setError("Não foi possível transcrever o áudio: " + String(e));
+    } finally {
+      setTranscribingReference(false);
+    }
   }
 
   async function createVoice() {
@@ -150,7 +177,7 @@ export default function Settings({ onBack }: { onBack: () => void }) {
 
     {tab === "voices" && <section className="settings-panel">
       <div className="settings-panel-head"><div><span className="eyebrow">SÍNTESE DE ÁUDIO</span><h2>Biblioteca de vozes</h2><p>Perfis preparados pelo Qwen3-TTS e disponibilizados aos módulos do Nova.</p></div><span className="settings-count">{voices.length} {voices.length === 1 ? "voz" : "vozes"}</span></div>
-      <div className="voice-create"><div className="voice-create-head"><div><strong>Adicionar perfil de voz</strong><span>Crie uma voz por clonagem de áudio ou por descrição.</span></div><div className="voice-mode-tabs"><button className={voiceMode === "clone" ? "active" : ""} onClick={() => setVoiceMode("clone")}>Clonar voz</button><button className={voiceMode === "design" ? "active" : ""} onClick={() => setVoiceMode("design")}>Voice Design</button></div></div><div className="voice-create-fields"><label>Nome do perfil</label><input value={voiceName} onChange={e => setVoiceName(e.target.value)} placeholder="Ex.: Minha voz em inglês"/>{voiceMode === "clone" ? <><label>Áudio de referência (10 a 200 segundos)</label><input type="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,.wma,audio/*" onChange={e => setVoiceAudio(e.target.files?.[0] ?? null)}/><label>Transcrição exata do áudio</label><textarea rows={3} value={voiceReferenceText} onChange={e => setVoiceReferenceText(e.target.value)} placeholder="Digite exatamente o que é falado no áudio."/></> : <><label>Descrição da voz</label><textarea rows={3} value={voiceInstruction} onChange={e => setVoiceInstruction(e.target.value)} placeholder="Descreva idioma, timbre, ritmo, idade vocal percebida e estilo de fala."/></>}</div><button className="primary-button voice-create-button" onClick={() => void createVoice()} disabled={busy || !voiceName.trim()}><WandSparkles size={15}/>{busy ? "Preparando..." : "Preparar perfil"}</button></div>{voices.length ? <div className="voice-list">{voices.map(voice => <article className="voice-row" key={voice.id}><div className="voice-avatar"><Volume2 size={18}/></div><div className="voice-copy"><strong>{voice.name}</strong><span>{voice.model_id?.includes("VoiceDesign") ? "Voice Design" : "Clonagem de voz"}{voice.duration_seconds ? ` · ${Math.round(voice.duration_seconds)}s de referência` : ""}</span></div>{defaultVoice === voice.id ? <span className="default-voice"><Check size={13}/> Padrão</span> : <button className="text-action" onClick={() => void setDefaultVoice(voice.id)} disabled={busy}>Definir como padrão</button>}</article>)}</div> : <div className="settings-empty"><AudioLines size={24}/><strong>Nenhuma voz preparada</strong><span>Sincronize as dependências de áudio para preparar e adicionar perfis à biblioteca.</span></div>}
+      <div className="voice-create"><div className="voice-create-head"><div><strong>Adicionar perfil de voz</strong><span>Crie uma voz por clonagem de áudio ou por descrição.</span></div><div className="voice-mode-tabs"><button className={voiceMode === "clone" ? "active" : ""} onClick={() => setVoiceMode("clone")}>Clonar voz</button><button className={voiceMode === "design" ? "active" : ""} onClick={() => setVoiceMode("design")}>Voice Design</button></div></div><div className="voice-create-fields"><label>Nome do perfil</label><input value={voiceName} onChange={e => setVoiceName(e.target.value)} placeholder="Ex.: Minha voz em inglês"/>{voiceMode === "clone" ? <><label>Áudio de referência (10 a 200 segundos)</label><input type="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,.wma,audio/*" onChange={e => setVoiceAudio(e.target.files?.[0] ?? null)}/><label>Transcrição exata do áudio</label><textarea rows={3} value={voiceReferenceText} onChange={e => setVoiceReferenceText(e.target.value)} placeholder="A transcrição aparecerá aqui. Revise e corrija o que for necessário."/><button type="button" className="voice-transcribe-button" onClick={() => void transcribeVoiceReference()} disabled={!voiceAudio || transcribingReference || busy}>{transcribingReference ? <><LoaderCircle size={14} className="spin"/> Transcrevendo...</> : <><AudioLines size={14}/> Transcrever áudio</>}</button></> : <><label>Descrição da voz</label><textarea rows={3} value={voiceInstruction} onChange={e => setVoiceInstruction(e.target.value)} placeholder="Descreva idioma, timbre, ritmo, idade vocal percebida e estilo de fala."/></>}</div><button className="primary-button voice-create-button" onClick={() => void createVoice()} disabled={busy || transcribingReference || !voiceName.trim()}><WandSparkles size={15}/>{busy ? "Preparando..." : "Preparar perfil"}</button></div>{voices.length ? <div className="voice-list">{voices.map(voice => <article className="voice-row" key={voice.id}><div className="voice-avatar"><Volume2 size={18}/></div><div className="voice-copy"><strong>{voice.name}</strong><span>{voice.model_id?.includes("VoiceDesign") ? "Voice Design" : "Clonagem de voz"}{voice.duration_seconds ? ` · ${Math.round(voice.duration_seconds)}s de referência` : ""}</span></div>{defaultVoice === voice.id ? <span className="default-voice"><Check size={13}/> Padrão</span> : <button className="text-action" onClick={() => void setDefaultVoice(voice.id)} disabled={busy}>Definir como padrão</button>}</article>)}</div> : <div className="settings-empty"><AudioLines size={24}/><strong>Nenhuma voz preparada</strong><span>Sincronize as dependências de áudio para preparar e adicionar perfis à biblioteca.</span></div>}
     </section>}
 
     {tab === "providers" && <section className="settings-panel">
