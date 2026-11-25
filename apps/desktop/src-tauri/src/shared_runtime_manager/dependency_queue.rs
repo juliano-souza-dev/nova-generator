@@ -140,7 +140,7 @@ pub fn enqueue_application(app_id: &str, installation_path: &str) -> Result<()> 
     write_json(&path, &queue)?;
     write_json(&status_path(&root), &json!({
         "status":"queued","progress":0,"current":"Aguardando instalação das dependências",
-        "application":app_id,"results":[]
+        "application":app_id,"processId":std::process::id(),"results":[]
     }))?;
     Ok(())
 }
@@ -168,7 +168,7 @@ pub fn process_queue() -> Result<()> {
         write_json(&status_path(&root), &json!({
             "status":"installing","progress":((index * 100) / total),"progressMode":"determinate",
             "current":format!("Instalando {id}"),"completed":index,"total":total,
-            "results":results
+            "processId":std::process::id(),"results":results
         }))?;
         match super::dependency_manager::ensure_dependency(&root, id) {
             Ok(path) => {
@@ -313,7 +313,7 @@ pub fn status() -> Result<Value> {
     let root = root()?;
     let status_file = status_path(&root);
     let mut current = read_json(&status_file)?;
-    if current.get("status").and_then(Value::as_str) == Some("installing") {
+    if matches!(current.get("status").and_then(Value::as_str), Some("installing" | "queued")) {
         let owner_pid = current.get("processId").and_then(Value::as_u64);
         if owner_pid != Some(std::process::id() as u64) {
             current["status"] = json!("interrupted");
@@ -379,6 +379,7 @@ pub(crate) fn report_process_activity(source: &str, inactive_seconds: u64) -> Re
     let path = status_path(&root);
     let mut status = read_json(&path)?;
     status["processAlive"] = json!(true);
+    status["processId"] = json!(std::process::id());
     status["inactiveSeconds"] = json!(inactive_seconds);
     status["activityState"] = json!(if inactive_seconds >= 120 { "possible_stall" } else if inactive_seconds >= 20 { "waiting" } else { "active" });
     status["activitySource"] = json!(source);
