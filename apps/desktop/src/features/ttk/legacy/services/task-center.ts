@@ -9,7 +9,7 @@ export type TaskEvent = {
   timestamp: number;
 };
 
-export const TASK_CENTER_EVENT = "framelab:task-center";
+export const TASK_CENTER_EVENT = "nova:task-center";
 
 function publish(event: TaskEvent) {
   if (typeof window !== "undefined") {
