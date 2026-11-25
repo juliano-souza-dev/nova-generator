@@ -6,7 +6,7 @@ use std::{
     fs::{self, File},
     io::{Read, Write},
     process::Stdio,
-    sync::mpsc,
+    sync::{mpsc, Mutex},
     thread,
     time::{Duration, Instant},
     path::{Path, PathBuf},
@@ -14,6 +14,7 @@ use std::{
 };
 
 const USER_AGENT: &str = "JulianoDev-SharedRuntimeManager/0.5";
+static FASTER_WHISPER_INSTALL_LOCK: Mutex<()> = Mutex::new(());
 const YT_DLP_WINDOWS: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
 const YT_DLP_LINUX: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux";
 
@@ -473,6 +474,7 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
 
 /// Prepares the isolated Faster-Whisper runtime only when transcription is requested.
 pub(crate) fn ensure_faster_whisper_runtime() -> Result<PathBuf> {
+    let _guard = FASTER_WHISPER_INSTALL_LOCK.lock().map_err(|_| anyhow!("A preparação do Faster-Whisper já está em andamento."))?;
     let root = nova_resource_root()?;
     let runtime = root.join("runtimes/faster-whisper");
     fs::create_dir_all(&runtime)?;
