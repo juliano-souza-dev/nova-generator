@@ -264,13 +264,33 @@ fn venv_python(venv: &Path) -> PathBuf {
 }
 
 fn python_module_exists(python: &Path, module: &str) -> bool {
-    let script = format!("import {module}");
-    silent_command(python)
+    // Check package discoverability without importing native extensions (CTranslate2,
+    // PyAV, OpenMP), which can take a long time or hang on some Windows machines.
+    let script = format!(
+        "import importlib.util; spec = importlib.util.find_spec({module:?}); assert spec is not None, 'Module not installed: {module}'"
+    );
+    let mut child = match silent_command(python)
         .arg("-c")
         .arg(script)
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(_) => return false,
+    };
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(100)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return false;
+            }
+        }
+    }
 }
 
 fn python_script_succeeds(python: &Path, script: &str) -> bool {
