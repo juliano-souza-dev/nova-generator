@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { Activity, CheckCircle2, ChevronDown, CircleAlert, Clock3, LoaderCircle, Terminal, X, XCircle } from "lucide-react";
@@ -28,6 +28,7 @@ export async function runTrackedTask<T>(kind:TaskKind,title:string,action:()=>Pr
 export default function TaskCenter() {
  const [tasks,setTasks]=useState<TaskRecord[]>([]);
  const [open,setOpen]=useState(false);
+ const activeEventKinds=useRef(new Set<TaskKind>());
  const activeCount=useMemo(()=>tasks.filter(t=>t.status==="running").length,[tasks]);
  useEffect(()=>{
   const handle=(raw:Event)=>{const event=(raw as CustomEvent<TaskEvent>).detail;if(!event)return;
@@ -45,6 +46,8 @@ export default function TaskCenter() {
   const update=(kind:TaskKind,progress:number|null,message:string,status?:string)=>{
    const terminal=status==="completed"||status==="done"||progress===100;
    const failed=status==="failed"||status==="error";
+   if(!activeEventKinds.current.has(kind)&&!terminal&&!failed){activeEventKinds.current.add(kind);setOpen(true);}
+   if(terminal||failed)activeEventKinds.current.delete(kind);
    setTasks(current=>{
     const index=current.findIndex(t=>t.kind===kind&&t.status==="running");
     const now=Date.now();
@@ -55,7 +58,6 @@ export default function TaskCenter() {
     }
     return current.map((t,i)=>i!==index?t:{...t,status:failed?"failed":terminal?"completed":t.status,progress:terminal?100:progress==null?t.progress:Math.max(0,Math.min(100,progress)),message,updatedAt:now,logs:t.logs[t.logs.length-1]?.endsWith(message)?t.logs:[...t.logs,clock()+"  "+message].slice(-80)});
    });
-   setOpen(true);
   };
   Promise.all([
    listen<ProgressPayload>("media-task-progress",e=>{const p=e.payload;update("download",p.percent??null,p.message,p.status);}),
@@ -70,6 +72,7 @@ export default function TaskCenter() {
   let timeout:number|undefined;
   let inFlight=false;
   let terminalHandled=false;
+  let wasActive=false;
   const poll=async()=>{
    if(inFlight||disposed)return;
    inFlight=true;
@@ -78,7 +81,9 @@ export default function TaskCenter() {
     if(disposed)return;
     const rawStatus=payload.status??"idle";
     const active=["queued","installing","cancelling"].includes(rawStatus);
-    if(rawStatus==="idle")return;
+    if(rawStatus==="idle"){wasActive=false;return;}
+    if(active&&!wasActive)setOpen(true);
+    wasActive=active;
     if(!active&&terminalHandled)return;
     if(active)terminalHandled=false;
     else terminalHandled=true;
@@ -104,7 +109,6 @@ export default function TaskCenter() {
      const task:TaskRecord={id,kind:"dependencies",title:"Biblioteca de dependências",status,progress,message,logs:nextLogs,updatedAt:now};
      return [task,...current.filter(item=>item.id!==id)].slice(0,15);
     });
-    if(active)setOpen(true);
    }catch(error){
     console.error("Falha ao consultar a fila de dependências:",error);
    }finally{
