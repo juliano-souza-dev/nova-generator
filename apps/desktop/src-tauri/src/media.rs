@@ -51,15 +51,16 @@ fn append_assets(dir: &Path, added: &[MediaAsset]) -> Result<(), String> {
     save_assets(dir, &all)
 }
 
-struct Shared { media: PathBuf, ytdlp: PathBuf, ffmpeg: PathBuf }
+struct Shared { media: PathBuf, ytdlp: PathBuf, app: AppHandle }
 
 fn shared(app: &AppHandle) -> Result<Shared, String> {
-    let (media, ytdlp, ffmpeg) = crate::shared_runtime::resolve_media_runtime(app)?;
-    Ok(Shared { media, ytdlp, ffmpeg })
+    let media = crate::shared_runtime::resolve_media_shared_directory(app)?;
+    let ytdlp = crate::shared_runtime::resolve_media_tool(app, "yt-dlp")?;
+    Ok(Shared { media, ytdlp, app: app.clone() })
 }
 
 pub fn shared_ffmpeg_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(shared(app)?.ffmpeg)
+    crate::media_tools::ensure_media_tools(app).map(|tools| tools.ffmpeg)
 }
 
 #[tauri::command]
@@ -80,9 +81,17 @@ pub fn nova_authorize_youtube_preview(app: AppHandle, video_id: String) -> Resul
 }
 
 fn run_ytdlp(s: &Shared, args: &[String]) -> Result<std::process::Output, String> {
-    let mut cmd = crate::process::hidden_command(&s.ytdlp); cmd.args(args);
-    if let Some(parent) = s.ffmpeg.parent() { cmd.arg("--ffmpeg-location").arg(parent); }
-    cmd.output().map_err(|e| format!("Não foi possível iniciar o yt-dlp compartilhado: {e}"))
+    let mut cmd = crate::process::hidden_command(&s.ytdlp);
+    cmd.args(args);
+    // Metadata inspection does not require FFmpeg. Download and media-processing
+    // operations provision the complete pair before yt-dlp starts.
+    if !args.iter().any(|argument| argument == "--skip-download") {
+        let tools = crate::media_tools::ensure_media_tools(&s.app)?;
+        if let Some(parent) = tools.ffmpeg.parent() {
+            cmd.arg("--ffmpeg-location").arg(parent);
+        }
+    }
+    cmd.output().map_err(|e| format!("Não foi possível iniciar o yt-dlp: {e}"))
 }
 fn inspect(s: &Shared, raw: &str) -> Result<YoutubeInspection, String> {
     if raw.trim().is_empty() { return Err("Cole um link do YouTube.".into()); }
@@ -401,5 +410,5 @@ pub(crate) fn project_media_root(app: &AppHandle, project_id: &str) -> Result<Pa
 }
 
 pub(crate) fn shared_ffmpeg(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(shared(app)?.ffmpeg)
+    crate::media_tools::ensure_media_tools(app).map(|tools| tools.ffmpeg)
 }
