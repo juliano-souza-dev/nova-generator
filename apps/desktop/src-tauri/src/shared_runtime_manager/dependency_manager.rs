@@ -8,7 +8,7 @@ use std::{
     process::Stdio,
     sync::mpsc,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
     path::{Path, PathBuf},
     process::Command,
 };
@@ -630,6 +630,29 @@ fn ensure_piper_tts(root: &Path) -> Result<PathBuf> {
     Ok(runtime)
 }
 
+fn directory_size(path: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(path) else { return 0; };
+    entries.filter_map(Result::ok).map(|entry| {
+        let entry_path = entry.path();
+        match entry.file_type() {
+            Ok(kind) if kind.is_dir() => directory_size(&entry_path),
+            Ok(kind) if kind.is_file() || kind.is_symlink() => {
+                fs::metadata(&entry_path).map(|metadata| metadata.len()).unwrap_or(0)
+            }
+            _ => 0,
+        }
+    }).sum()
+}
+
+fn format_download_size(bytes: u64) -> String {
+    const GIB: f64 = 1_073_741_824.0;
+    if bytes as f64 >= GIB {
+        format!("{:.2} GB", bytes as f64 / GIB)
+    } else {
+        format!("{:.0} MB", bytes as f64 / 1_048_576.0)
+    }
+}
+
 fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
     let runtime = root.join("runtimes/qwen3-tts");
     let model = root.join("models/qwen3-tts/1.7B-CustomVoice");
@@ -688,21 +711,92 @@ fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
         let model_path = model.to_string_lossy().into_owned();
         let cache_path = cache.to_string_lossy().into_owned();
         let script = "import sys; from huggingface_hub import snapshot_download; snapshot_download(repo_id=sys.argv[1], local_dir=sys.argv[2], cache_dir=sys.argv[3])";
-        let output = silent_command(&interpreter)
+        let model_cache = cache.join("hub/models--Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice/blobs");
+        fs::create_dir_all(&model_cache)?;
+        let mut child = silent_command(&interpreter)
             .arg("-c")
             .arg(script)
             .arg(QWEN3_TTS_MODEL_ID)
             .arg(&model_path)
             .arg(&cache_path)
             .env("HF_HUB_DISABLE_TELEMETRY", "1")
-            .output()
+            .env("HF_HUB_DISABLE_PROGRESS_BARS", "0")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .context("Could not start the Qwen3-TTS model download")?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
+
+        let stdout_reader = child.stdout.take().map(|mut pipe| thread::spawn(move || {
+            let mut output = String::new();
+            let _ = pipe.read_to_string(&mut output);
+            output
+        }));
+        let stderr_reader = child.stderr.take().map(|mut pipe| thread::spawn(move || {
+            let mut output = String::new();
+            let _ = pipe.read_to_string(&mut output);
+            output
+        }));
+
+        let mut last_bytes = directory_size(&model_cache);
+        let mut last_change = Instant::now();
+        let mut last_report = Instant::now();
+        let mut last_speed = 0_u64;
+        let download_started = Instant::now();
+
+        let status = loop {
+            if super::dependency_queue::cancel_requested() {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stdout_reader.and_then(|reader| reader.join().ok());
+                let _ = stderr_reader.and_then(|reader| reader.join().ok());
+                let _ = super::dependency_queue::report_process_finished();
+                bail!("Operação cancelada pelo usuário.");
+            }
+
+            if let Some(status) = child.try_wait()? {
+                break status;
+            }
+
+            thread::sleep(Duration::from_secs(1));
+            let now = Instant::now();
+            let downloaded = directory_size(&model_cache);
+            if downloaded > last_bytes {
+                let elapsed = now.duration_since(last_change).as_secs_f64().max(0.001);
+                last_speed = ((downloaded - last_bytes) as f64 / elapsed) as u64;
+                last_bytes = downloaded;
+                last_change = now;
+            } else if now.duration_since(last_change).as_secs() >= 5 {
+                last_speed = 0;
+            }
+
+            if now.duration_since(last_report).as_secs() >= 1 {
+                let inactive = now.duration_since(last_change).as_secs();
+                let detail = format!(
+                    "Baixando o modelo Qwen3-TTS 1.7B CustomVoice · {} recebidos de aproximadamente 4,5 GB",
+                    format_download_size(downloaded)
+                );
+                super::dependency_queue::report_install_activity(&detail, downloaded, last_speed)?;
+                super::dependency_queue::report_process_activity("arquivos do modelo", inactive)?;
+                last_report = now;
+            }
+
+            // Do not leave a silent, apparently active task if the download has made no
+            // filesystem progress for a prolonged period. Keep waiting, but expose the stall.
+            let _ = download_started;
+        };
+
+        let stdout = stdout_reader.and_then(|reader| reader.join().ok()).unwrap_or_default();
+        let stderr = stderr_reader.and_then(|reader| reader.join().ok()).unwrap_or_default();
+        let _ = super::dependency_queue::report_process_finished();
+
+        if !status.success() {
             let detail = if !stderr.trim().is_empty() { stderr.trim() } else { stdout.trim() };
             let detail: String = detail.chars().rev().take(4000).collect::<String>().chars().rev().collect();
-            bail!("Qwen3-TTS model download failed: {detail}");
+            bail!(
+                "Qwen3-TTS model download failed (exit code {}). {}",
+                status.code().map(|code| code.to_string()).unwrap_or_else(|| "unknown".to_owned()),
+                if detail.is_empty() { "The downloader returned no diagnostic output.".to_owned() } else { detail }
+            );
         }
     }
 
