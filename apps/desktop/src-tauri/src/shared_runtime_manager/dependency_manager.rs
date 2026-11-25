@@ -885,7 +885,9 @@ pub fn provision_application(app_id: &str, installation_path: &str) -> Result<()
         let id = dependency.get("id").and_then(Value::as_str)
             .ok_or_else(|| anyhow!("Every dependency must contain a string id."))?;
         let required = dependency.get("required").and_then(Value::as_bool).unwrap_or(false);
-        if !required {
+        if !required || id == "ffmpeg" || id == "ffprobe" {
+            // Media tools are a single on-demand resource pair owned by Nova.
+            // They are resolved by media_tools::ensure_media_tools at task start.
             continue;
         }
         let path = ensure_dependency(&root, id)
