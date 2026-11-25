@@ -137,7 +137,7 @@ fn ensure_python() -> Result<String> {
     #[cfg(windows)]
     {
         if command_exists("winget") {
-            println!("Python was not found. Installing Python 3.12 through Windows Package Manager...");
+            println!("Compatible Python 3.12 was not found. Installing Python 3.12 through Windows Package Manager...");
             let status = silent_command("winget")
                 .args([
                     "install", "--id", "Python.Python.3.12", "--exact",
