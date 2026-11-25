@@ -24,6 +24,9 @@ pub fn mark_cancelled() -> Result<()> {
     status["progress"] = Value::Null;
     status["progressMode"] = json!("indeterminate");
     status["current"] = json!("Operação cancelada pelo usuário");
+    status["processAlive"] = json!(false);
+    status["activityState"] = json!("cancelled");
+    status["lastActivityAt"] = json!(unix_timestamp());
     status.as_object_mut().map(|object| { object.remove("downloadedBytes"); object.remove("speedBytesPerSecond"); });
     write_json(&path, &status)?;
     record_history()
@@ -217,7 +220,9 @@ pub fn process_queue() -> Result<()> {
         } else { "Processamento concluído".to_owned() },
         "failedDependencies":failed_ids,
         "error":if failed { Value::String(failure_detail) } else { Value::Null },
-        "completed":total,"total":total,"results":results,"logs":final_logs
+        "completed":total,"total":total,"results":results,"logs":final_logs,
+        "processAlive":false,"activityState":if failed { "failed" } else { "finished" },
+        "lastActivityAt":unix_timestamp()
     }))?;
     record_history()?;
     Ok(())
@@ -495,7 +500,7 @@ pub fn set_failure(message: &str) -> Result<()> {
     let root = root()?;
     write_json(&status_path(&root), &json!({
         "status":"error","progress":0,"progressMode":"indeterminate","current":"Falha no processamento da fila",
-        "error":message,"results":[]
+        "error":message,"results":[],"processAlive":false,"activityState":"failed","lastActivityAt":unix_timestamp()
     }))?;
     record_history()
 }
