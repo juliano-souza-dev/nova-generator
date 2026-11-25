@@ -20,6 +20,9 @@ pub fn mark_cancelled() -> Result<()> {
     let root = root()?;
     let path = status_path(&root);
     let mut status = read_json(&path)?;
+    if status.get("status").and_then(Value::as_str) == Some("cancelled") {
+        return Ok(());
+    }
     status["status"] = json!("cancelled");
     status["progress"] = Value::Null;
     status["progressMode"] = json!("indeterminate");
@@ -28,6 +31,25 @@ pub fn mark_cancelled() -> Result<()> {
     status["activityState"] = json!("cancelled");
     status["lastActivityAt"] = json!(unix_timestamp());
     status.as_object_mut().map(|object| { object.remove("downloadedBytes"); object.remove("speedBytesPerSecond"); });
+    write_json(&path, &status)?;
+    record_history()
+}
+
+pub fn mark_operation_completed(message: &str) -> Result<()> {
+    let root = root()?;
+    let path = status_path(&root);
+    let mut status = read_json(&path)?;
+    status["status"] = json!("completed");
+    status["progress"] = json!(100);
+    status["progressMode"] = json!("determinate");
+    status["current"] = json!(message);
+    status["processAlive"] = json!(false);
+    status["activityState"] = json!("finished");
+    status["lastActivityAt"] = json!(unix_timestamp());
+    status.as_object_mut().map(|object| {
+        object.remove("downloadedBytes");
+        object.remove("speedBytesPerSecond");
+    });
     write_json(&path, &status)?;
     record_history()
 }
