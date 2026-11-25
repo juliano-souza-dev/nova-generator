@@ -152,6 +152,7 @@ pub async fn export_timeline(
     let storage = state.media_storage.clone();
     let sound_directory = state.sound_library_directory.clone();
 
+    let runtime_app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         use std::{io::{BufRead, BufReader, Read}, path::PathBuf, process::Stdio, thread};
 
@@ -208,7 +209,7 @@ pub async fn export_timeline(
         if visual_inputs.is_empty() {
             return Err("A timeline precisa conter pelo menos um vídeo ou uma imagem.".into());
         }
-        let (ffmpeg_path, _) = resolve_ffmpeg_executable()?;
+        let (ffmpeg_path, _) = resolve_ffmpeg_executable(&runtime_app)?;
         let mut video_audio_inputs: Vec<(usize, &ExportClip)> = Vec::new();
         for (input_index, clip) in &visual_inputs {
             if clip.kind != "video" || clip.muted.unwrap_or(false) {
@@ -222,7 +223,7 @@ pub async fn export_timeline(
                 .canonicalize().map_err(|error| error.to_string())?;
             let media_path = project_dir.join(relative).canonicalize()
                 .map_err(|error| format!("Arquivo de vídeo não encontrado: {error}"))?;
-            if media_has_audio_stream(&ffmpeg_path, &media_path)? {
+            if media_has_audio_stream(&runtime_app, &ffmpeg_path, &media_path)? {
                 video_audio_inputs.push((*input_index, *clip));
             }
         }
