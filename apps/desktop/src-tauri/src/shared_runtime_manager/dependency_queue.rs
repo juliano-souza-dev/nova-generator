@@ -313,7 +313,7 @@ pub fn status() -> Result<Value> {
     let root = root()?;
     let status_file = status_path(&root);
     let mut current = read_json(&status_file)?;
-    if matches!(current.get("status").and_then(Value::as_str), Some("installing" | "queued")) {
+    if matches!(current.get("status").and_then(Value::as_str), Some("installing" | "queued" | "cancelling")) {
         let owner_pid = current.get("processId").and_then(Value::as_u64);
         if owner_pid != Some(std::process::id() as u64) {
             current["status"] = json!("interrupted");
@@ -322,6 +322,21 @@ pub fn status() -> Result<Value> {
             current["current"] = json!("Instalação interrompida. Os pacotes já armazenados no cache foram preservados; sincronize para continuar.");
             current["error"] = json!("O aplicativo foi fechado antes da conclusão da instalação.");
             write_json(&status_file, &current)?;
+        } else {
+            current["processAlive"] = json!(true);
+            let last = current.get("lastActivityAt").and_then(Value::as_u64).unwrap_or_else(unix_timestamp);
+            let inactive = unix_timestamp().saturating_sub(last);
+            current["inactiveSeconds"] = json!(inactive);
+            let state = if current.get("status").and_then(Value::as_str) == Some("cancelling") {
+                "cancelling"
+            } else if inactive >= 120 {
+                "possible_stall"
+            } else if inactive >= 20 {
+                "waiting"
+            } else {
+                "active"
+            };
+            current["activityState"] = json!(state);
         }
     }
     let path = history_path(&root);
@@ -412,6 +427,11 @@ pub(crate) fn report_package_download_progress(
     status["current"] = json!(current);
     status["downloadedBytes"] = downloaded_bytes.map(Value::from).unwrap_or(Value::Null);
     status["speedBytesPerSecond"] = speed_bytes_per_second.map(Value::from).unwrap_or(Value::Null);
+    status["lastActivityAt"] = json!(unix_timestamp());
+    status["activityState"] = json!("active");
+    status["activitySource"] = json!("download-progress");
+    status["processAlive"] = json!(true);
+    status["processId"] = json!(std::process::id());
     write_json(&path, &status)
 }
 
@@ -452,6 +472,11 @@ pub(crate) fn report_install_activity(current: &str, downloaded_bytes: u64, spee
     status["speedBytesPerSecond"] = json!(speed_bytes_per_second);
     status["completed"] = json!(0);
     status["total"] = json!(1);
+    status["lastActivityAt"] = json!(unix_timestamp());
+    status["activityState"] = json!("active");
+    status["activitySource"] = json!("download-cache");
+    status["processAlive"] = json!(true);
+    status["processId"] = json!(std::process::id());
     write_json(&path, &status)
 }
 
