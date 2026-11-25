@@ -207,6 +207,7 @@ pub fn process_queue() -> Result<()> {
         .collect::<Vec<_>>()
         .join("\n\n");
     if !failed { write_json(&queue_path(&root), &json!({"items":[]}))?; }
+    let final_logs = read_json(&status_path(&root))?.get("logs").cloned().unwrap_or_else(|| json!([]));
     write_json(&status_path(&root), &json!({
         "status":if failed { "error" } else { "completed" },
         "progress":if failed { 0 } else { 100 },
@@ -216,7 +217,7 @@ pub fn process_queue() -> Result<()> {
         } else { "Processamento concluído".to_owned() },
         "failedDependencies":failed_ids,
         "error":if failed { Value::String(failure_detail) } else { Value::Null },
-        "completed":total,"total":total,"results":results
+        "completed":total,"total":total,"results":results,"logs":final_logs
     }))?;
     record_history()?;
     Ok(())
