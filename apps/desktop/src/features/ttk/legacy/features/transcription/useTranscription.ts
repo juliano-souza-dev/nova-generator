@@ -16,7 +16,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   const [transcriptionAssetId, setTranscriptionAssetId] = useState("");
   const [transcriptionContext, setTranscriptionContext] = useState<TranscriptionContext | null>(null);
   const [transcriptionLanguage, setTranscriptionLanguage] = useState("");
-  const [transcriptionModel, setTranscriptionModel] = useState("small");
+  const [transcriptionModel, setTranscriptionModel] = useState("tiny");
   const [transcriptionBusy, setTranscriptionBusy] = useState(false);
   const [transcriptionProgress, setTranscriptionProgress] = useState<TranscriptionProgress | null>(null);
   const [localAsrInstalled, setLocalAsrInstalled] = useState(false);
