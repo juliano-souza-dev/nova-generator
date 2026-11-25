@@ -4,7 +4,7 @@ use std::{
     collections::BTreeMap,
     ffi::OsStr,
     fs::{self, File},
-    io::{BufRead, BufReader, Write},
+    io::{Read, Write},
     process::Stdio,
     sync::mpsc,
     thread,
@@ -349,20 +349,38 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
     let (sender, receiver) = mpsc::channel::<(&'static str, String)>();
     let out_sender = sender.clone();
     let stdout_thread = thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().flatten() {
-            if out_sender.send(("stdout", line)).is_err() { break; }
+        let mut reader = stdout;
+        let mut buffer = [0u8; 2048];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(count) => {
+                    let chunk = String::from_utf8_lossy(&buffer[..count]).into_owned();
+                    if out_sender.send(("stdout", chunk)).is_err() { break; }
+                }
+            }
         }
     });
     let stderr_thread = thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().flatten() {
-            if sender.send(("stderr", line)).is_err() { break; }
+        let mut reader = stderr;
+        let mut buffer = [0u8; 2048];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(count) => {
+                    let chunk = String::from_utf8_lossy(&buffer[..count]).into_owned();
+                    if sender.send(("stderr", chunk)).is_err() { break; }
+                }
+            }
         }
     });
 
     let mut diagnostics = std::collections::VecDeque::<String>::new();
     let status = loop {
         while let Ok((channel, line)) = receiver.try_recv() {
-            let _ = super::dependency_queue::report_install_log(channel, &line);
+            for part in line.split(['\r', '\n']).filter(|part| !part.trim().is_empty()) {
+                let _ = super::dependency_queue::report_install_log(channel, part);
+            }
             diagnostics.push_back(format!("{channel}: {line}"));
             if diagnostics.len() > 100 { diagnostics.pop_front(); }
         }
@@ -378,7 +396,9 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
         }
         match receiver.recv_timeout(Duration::from_millis(250)) {
             Ok((channel, line)) => {
-                let _ = super::dependency_queue::report_install_log(channel, &line);
+                for part in line.split(['\r', '\n']).filter(|part| !part.trim().is_empty()) {
+                    let _ = super::dependency_queue::report_install_log(channel, part);
+                }
                 diagnostics.push_back(format!("{channel}: {line}"));
                 if diagnostics.len() > 100 { diagnostics.pop_front(); }
             }
@@ -389,7 +409,9 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
     let _ = stdout_thread.join();
     let _ = stderr_thread.join();
     while let Ok((channel, line)) = receiver.try_recv() {
-        let _ = super::dependency_queue::report_install_log(channel, &line);
+        for part in line.split(['\r', '\n']).filter(|part| !part.trim().is_empty()) {
+            let _ = super::dependency_queue::report_install_log(channel, part);
+        }
         diagnostics.push_back(format!("{channel}: {line}"));
         if diagnostics.len() > 100 { diagnostics.pop_front(); }
     }
