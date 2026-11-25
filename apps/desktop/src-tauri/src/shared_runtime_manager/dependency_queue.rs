@@ -345,9 +345,34 @@ pub(crate) fn report_install_progress(_progress: u32, current: &str) -> Result<(
     status["progress"] = Value::Null;
     status["progressMode"] = json!("indeterminate");
     status["current"] = json!(current);
-    status["completed"] = json!(0);
-    status["total"] = json!(1);
+    status["completed"] = Value::Null;
+    status["total"] = Value::Null;
     status.as_object_mut().map(|object| { object.remove("downloadedBytes"); object.remove("speedBytesPerSecond"); });
+    write_json(&path, &status)
+}
+
+
+/// Append one installer output line to the live queue status. Keep a bounded tail
+/// so verbose package installers cannot grow the status file or memory indefinitely.
+pub(crate) fn report_install_log(channel: &str, line: &str) -> Result<()> {
+    let line = line.trim();
+    if line.is_empty() { return Ok(()); }
+    let root = root()?;
+    let path = status_path(&root);
+    let mut status = read_json(&path)?;
+    let logs = status["logs"].as_array_mut();
+    let logs = match logs {
+        Some(logs) => logs,
+        None => {
+            status["logs"] = json!([]);
+            status["logs"].as_array_mut().expect("logs array initialized")
+        }
+    };
+    logs.push(json!({"channel": channel, "message": line}));
+    if logs.len() > 120 {
+        let excess = logs.len() - 120;
+        logs.drain(0..excess);
+    }
     write_json(&path, &status)
 }
 
