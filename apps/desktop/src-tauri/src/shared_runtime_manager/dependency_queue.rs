@@ -311,7 +311,19 @@ pub fn install_dependency(resource_id: &str, app_id: Option<&str>) -> Result<()>
 
 pub fn status() -> Result<Value> {
     let root = root()?;
-    let mut current = read_json(&status_path(&root))?;
+    let status_file = status_path(&root);
+    let mut current = read_json(&status_file)?;
+    if current.get("status").and_then(Value::as_str) == Some("installing") {
+        let owner_pid = current.get("processId").and_then(Value::as_u64);
+        if owner_pid != Some(std::process::id() as u64) {
+            current["status"] = json!("interrupted");
+            current["processAlive"] = json!(false);
+            current["activityState"] = json!("interrupted");
+            current["current"] = json!("Instalação interrompida. Os pacotes já armazenados no cache foram preservados; sincronize para continuar.");
+            current["error"] = json!("O aplicativo foi fechado antes da conclusão da instalação.");
+            write_json(&status_file, &current)?;
+        }
+    }
     let path = history_path(&root);
     current["history"] = if path.exists() { serde_json::from_slice(&fs::read(path)?)? } else { json!([]) };
     Ok(current)
@@ -357,6 +369,7 @@ pub(crate) fn report_install_progress(_progress: u32, current: &str) -> Result<(
     status["activitySource"] = json!("stage");
     status["lastActivityAt"] = json!(unix_timestamp());
     status["processAlive"] = json!(true);
+    status["processId"] = json!(std::process::id());
     status.as_object_mut().map(|object| { object.remove("downloadedBytes"); object.remove("speedBytesPerSecond"); });
     write_json(&path, &status)
 }
