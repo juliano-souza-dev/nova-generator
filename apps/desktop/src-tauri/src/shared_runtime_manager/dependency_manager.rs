@@ -410,7 +410,14 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
         let path = shared_root()?.join("cache/pip");
         fs::create_dir_all(&path)?;
         command.env("PIP_CACHE_DIR", &path);
-        command.args(["-m", "pip", "--progress-bar", "on"]).args(&args[2..]);
+        if args.get(2) == Some(&"install") {
+            command
+                .args(&args[..3])
+                .args(["--progress-bar", "on"])
+                .args(&args[3..]);
+        } else {
+            command.args(args);
+        }
         Some(path)
     } else {
         command.args(args);
