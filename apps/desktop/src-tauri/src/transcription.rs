@@ -24,41 +24,11 @@ struct Progress { project_id:String, stage:String, percent:f32, completed_chunks
 fn emit(app:&AppHandle, project_id:&str, stage:&str, percent:f32, done:usize, total:usize, message:&str) {
  let _=app.emit("transcription-progress",Progress{project_id:project_id.into(),stage:stage.into(),percent:percent.clamp(0.0,100.0),completed_chunks:done,total_chunks:total,message:message.into()});
 }
-fn ffmpeg(app:&AppHandle)->Result<PathBuf,String>{
-    // Use the same canonical resolver as export. The media downloader/cache is
-    // unrelated to voice-reference transcription and must not be a prerequisite.
-    crate::ttk::commands::export::resolve_ffmpeg_executable(app).map(|(path, _)| path)
+fn ffmpeg(app: &AppHandle) -> Result<PathBuf, String> {
+    crate::media_tools::ensure_media_tools(app).map(|tools| tools.ffmpeg)
 }
-fn ffprobe(ffmpeg:&Path)->Result<PathBuf,String>{
-    use std::collections::HashSet;
-
-    let name=if cfg!(windows){"ffprobe.exe"}else{"ffprobe"};
-    let mut candidates=Vec::new();
-    if let Some(parent)=ffmpeg.parent(){candidates.push(parent.join(name));}
-    if let Some(path)=std::env::var_os("PATH"){
-        candidates.extend(std::env::split_paths(&path).map(|directory|directory.join(name)));
-    }
-    if cfg!(windows){
-        if let Some(local)=std::env::var_os("LOCALAPPDATA"){
-            candidates.push(PathBuf::from(local).join("Microsoft").join("WinGet").join("Links").join(name));
-        }
-        if let Some(profile)=std::env::var_os("USERPROFILE"){
-            candidates.push(PathBuf::from(profile).join("AppData").join("Local").join("Microsoft").join("WinGet").join("Links").join(name));
-        }
-    }
-
-    let mut checked=HashSet::new();
-    for candidate in candidates{
-        if !checked.insert(candidate.clone())||!candidate.is_file(){continue;}
-        if crate::process::hidden_command(&candidate).arg("-version").output()
-            .is_ok_and(|output|output.status.success()){
-            return Ok(candidate);
-        }
-    }
-    Err(format!(
-        "Não foi possível localizar um ffprobe válido. Procurado ao lado do FFmpeg ({}) e nos diretórios do PATH do sistema. Instale ou repare o pacote completo do FFmpeg gerenciado pelo Nova.",
-        ffmpeg.display()
-    ))
+fn ffprobe(app: &AppHandle) -> Result<PathBuf, String> {
+    crate::media_tools::ensure_media_tools(app).map(|tools| tools.ffprobe)
 }
 fn duration(probe:&Path,input:&Path)->Result<u64,String>{
  let out=crate::process::hidden_command(probe).args(["-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1"]).arg(input).output().map_err(|e|format!("Falha ao consultar duração: {e}"))?;
@@ -174,7 +144,7 @@ pub async fn nova_transcribe_media(app:AppHandle,project_id:String,asset_id:Stri
  let model=local_model.unwrap_or_else(||"small".into());if !["tiny","base","small","medium","large-v3"].contains(&model.as_str()){return Err("Modelo local inválido.".into())}
  let app2=app.clone();
  tauri::async_runtime::spawn_blocking(move||{
-  let source=safe_source(&app2,&project_id,&asset_id)?;let ff=ffmpeg(&app2)?;let probe=ffprobe(&ff)?;
+  let source=safe_source(&app2,&project_id,&asset_id)?;let ff=ffmpeg(&app2)?;let probe=ffprobe(&app2)?;
   let temp=std::env::temp_dir().join(format!("nova-asr-{}",uuid::Uuid::new_v4()));std::fs::create_dir_all(&temp).map_err(|e|e.to_string())?;
   let result=(||{let audio=temp.join("source.flac");emit(&app2,&project_id,"preparing",0.0,0,0,"Extraindo áudio sem modificar o vídeo original");extract_audio(&ff,&source,&audio)?;let dur=duration(&probe,&audio)?;
    let mut result=if mode=="local"{local(&audio,&model,language.as_deref())?}else if mode=="cloud"{cloud(&app2,&project_id,&audio,&temp,dur,language.as_deref())?}else{match cloud(&app2,&project_id,&audio,&temp,dur,language.as_deref()){Ok(r)=>r,Err(cloud_error)=>{emit(&app2,&project_id,"fallback",0.0,0,0,&format!("Groq indisponível. Tentando processamento local. {cloud_error}"));local(&audio,&model,language.as_deref()).map_err(|e|format!("Transcrição na nuvem falhou: {cloud_error}. Processamento local também falhou: {e}"))?}}};
@@ -221,7 +191,7 @@ pub async fn nova_transcribe_voice_reference(
             std::fs::write(&source, bytes).map_err(|e| format!("Não foi possível salvar o áudio temporário: {e}"))?;
 
             let ff = ffmpeg(&app_handle)?;
-            let probe = ffprobe(&ff)?;
+            let probe = ffprobe(&app_handle)?;
             extract_audio(&ff, &source, &normalized)?;
             let duration_ms = duration(&probe, &normalized)?;
             if duration_ms == 0 {
