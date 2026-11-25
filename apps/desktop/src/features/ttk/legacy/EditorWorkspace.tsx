@@ -1229,7 +1229,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
               {transcription.transcriptionContext && <small>Trecho: {timeLabel(transcription.transcriptionContext.sourceStartMs)} – {timeLabel(transcription.transcriptionContext.sourceEndMs)}</small>}
             </div>
             <div className="caption-transcription-config">
-              <label>Processamento<select value={transcription.transcriptionMode} onChange={event=>transcription.setTranscriptionMode(event.target.value as "auto"|"cloud"|"local")}><option value="auto">Automático (Groq + fallback local)</option><option value="cloud">Somente Groq na nuvem</option><option value="local">Somente local (privado)</option></select></label>
+              <label>Processamento<input value="Local · Faster-Whisper" readOnly aria-readonly="true"/></label>
               <label>Idioma<select value={transcription.transcriptionLanguage} onChange={event=>transcription.setTranscriptionLanguage(event.target.value)}><option value="">Detectar automaticamente</option><option value="pt">Português</option><option value="en">Inglês</option><option value="es">Espanhol</option><option value="fr">Francês</option></select></label>
               <label>Modelo local<select value={transcription.transcriptionModel} onChange={event=>transcription.setTranscriptionModel(event.target.value)}><option value="tiny">Tiny · mais rápido</option><option value="base">Base · leve</option><option value="small">Small · equilibrado</option><option value="medium">Medium · mais preciso</option><option value="large-v3">Large v3 · maior qualidade</option></select></label>
             </div>
@@ -1237,7 +1237,7 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
               {!transcription.transcriptionContext ? <button className="primary" type="button" disabled={!transcriptionTargetClip||!transcriptionTargetAsset||(transcriptionTargetAsset.kind!=="video"&&transcriptionTargetAsset.kind!=="audio")||transcription.transcriptionBusy} onClick={()=>{if(transcriptionTargetClip&&transcriptionTargetAsset)onStartTranscription?.(transcriptionTargetAsset.id,{clipId:transcriptionTargetClip.id,timelineStartMs:transcriptionTargetClip.timelineStartMs,sourceStartMs:transcriptionTargetClip.sourceStartMs,sourceEndMs:transcriptionTargetClip.sourceEndMs});}}>
                 <Captions size={14}/> Usar clipe selecionado
               </button> : <>
-                <button className="primary" type="button" disabled={transcription.transcriptionBusy||(!transcription.localAsrInstalled&&transcription.transcriptionMode==="local")} onClick={()=>void transcription.transcribeSelectedMedia()}>
+                <button className="primary" type="button" disabled={transcription.transcriptionBusy||!transcription.localAsrInstalled} onClick={()=>void transcription.transcribeSelectedMedia()}>
                   {transcription.transcriptionBusy?<><LoaderCircle className="spin" size={14}/> Transcrevendo...</>:<><Captions size={14}/> {transcription.transcriptionResult?"Reprocessar transcrição":"Transcrever clipe"}</>}
                 </button>
                 <button className="secondary-action" type="button" disabled={!transcriptionTargetClip||!transcriptionTargetAsset||(transcriptionTargetAsset.kind!=="video"&&transcriptionTargetAsset.kind!=="audio")||transcription.transcriptionBusy} onClick={()=>{if(transcriptionTargetClip&&transcriptionTargetAsset)onStartTranscription?.(transcriptionTargetAsset.id,{clipId:transcriptionTargetClip.id,timelineStartMs:transcriptionTargetClip.timelineStartMs,sourceStartMs:transcriptionTargetClip.sourceStartMs,sourceEndMs:transcriptionTargetClip.sourceEndMs});}}>Trocar clipe</button>
@@ -1256,20 +1256,19 @@ export default function EditorWorkspace({ projectId, assets, onAddMedia, onStart
                 {transcription.transcriptionTranslations.find(item=>item.id===cue.id)&&<p className="transcription-review-translation">{transcription.transcriptionTranslations.find(item=>item.id===cue.id)?.translation}</p>}
               </div>)}
             </div>
-            <button className="primary caption-insert-transcription" type="button" disabled={transcription.transcriptionInserted||transcription.translationBusy||transcription.alignmentBusy||transcription.externalPackageBusy} onClick={()=>transcription.insertTranscription()}><Captions size={14}/> {transcription.transcriptionInserted?"Legendas já inseridas na timeline":"3. Inserir legendas na timeline"}</button>
+            <button className="primary caption-insert-transcription" type="button" disabled={transcription.transcriptionInserted||transcription.alignmentBusy||transcription.externalPackageBusy} onClick={()=>transcription.insertTranscription()}><Captions size={14}/> {transcription.transcriptionInserted?"Legendas já inseridas na timeline":"3. Inserir legendas na timeline"}</button>
           </div>}
           <div className="caption-transcription-section">
             <div className="caption-transcription-title"><b>3. Tradução e alinhamento</b><small>Exporte o TXT para tradução externa, importe o JSON correspondente ou alinhe cada palavra com WhisperX antes de inserir.</small></div>
             <div className="caption-transcription-actions">
-              <button className="secondary-action" type="button" disabled={!transcription.transcriptionResult||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>void transcription.translateTranscription()}>{transcription.translationBusy?<LoaderCircle className="spin" size={14}/>:null} Traduzir para português</button>
-              <button className="secondary-action" type="button" disabled={!transcription.transcriptionResult||!transcription.transcriptionContext||transcription.alignmentBusy||transcription.translationBusy} onClick={()=>void transcription.alignTranscriptionWords()}>{transcription.alignmentBusy?<LoaderCircle className="spin" size={14}/>:null} Word by word · WhisperX</button>
-              <button className="secondary-action" type="button" disabled={!transcription.transcriptionResult||!transcription.transcriptionContext||transcription.externalPackageBusy||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>void transcription.downloadExternalPackage()}>{transcription.externalPackageBusy?<LoaderCircle className="spin" size={14}/>:<Download size={14}/>} Gerar TXT para IA externa</button>
-              <button className="secondary-action" type="button" disabled={!transcription.externalSourceHash||transcription.translationBusy||transcription.alignmentBusy} onClick={()=>transcriptionTranslationInput.current?.click()}><Upload size={14}/> Importar JSON</button>
+              <button className="secondary-action" type="button" disabled={!transcription.transcriptionResult||!transcription.transcriptionContext||transcription.alignmentBusy} onClick={()=>void transcription.alignTranscriptionWords()}>{transcription.alignmentBusy?<LoaderCircle className="spin" size={14}/>:null} Word by word · WhisperX</button>
+              <button className="secondary-action" type="button" disabled={!transcription.transcriptionResult||!transcription.transcriptionContext||transcription.externalPackageBusy||transcription.alignmentBusy} onClick={()=>void transcription.downloadExternalPackage()}>{transcription.externalPackageBusy?<LoaderCircle className="spin" size={14}/>:<Download size={14}/>} Gerar TXT para IA externa</button>
+              <button className="secondary-action" type="button" disabled={!transcription.externalSourceHash||transcription.alignmentBusy} onClick={()=>transcriptionTranslationInput.current?.click()}><Upload size={14}/> Importar JSON</button>
               <input ref={transcriptionTranslationInput} type="file" accept=".json,application/json" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value="";void transcription.importExternalTranslation(file);}}/>
             </div>
           </div>
           {transcription.transcriptionMessage&&<div className="sound-library-message" role="status">{transcription.transcriptionMessage}</div>}
-          <small className="transcription-privacy">Somente o modo local mantém o áudio no computador. Os modos Automático e Groq enviam o áudio à API da Groq. O arquivo original não é modificado.</small>
+          <small className="transcription-privacy">O áudio é processado localmente no computador. O arquivo original não é modificado.</small>
         </div>
       </>}
       {activeTool === "templates" && <>

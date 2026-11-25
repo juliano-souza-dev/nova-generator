@@ -13,6 +13,7 @@ export const isDesktopRuntime =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export type GlobalSound = { id: string; name: string; fileName: string };
+export type CueTranslation = { id: string; translation: string };
 export type TranscriptWord = { text: string; startMs: number; endMs: number };
 export type TranscriptCue = { id: string; text: string; startMs: number; endMs: number; words: TranscriptWord[] };
 export type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: TranscriptCue[] };
@@ -32,7 +33,7 @@ function toU64Milliseconds(value: number, field: string): number {
 }
 
 export const desktopApi = {
-  transcribeMedia: (projectId: string, assetId: string, mode: "auto" | "cloud" | "local", language: string, localModel: string, sourceStartMs?: number, sourceEndMs?: number) =>
+  transcribeMedia: (projectId: string, assetId: string, mode: "local", language: string, localModel: string, sourceStartMs?: number, sourceEndMs?: number) =>
     runTrackedTask("transcription", "Transcrição do clipe", () => invoke<TranscriptResult>("transcribe_media", { projectId, assetId, mode, language: language || null, localModel, sourceStartMs: sourceStartMs ?? null, sourceEndMs: sourceEndMs ?? null })),
   prepareClipExternalTranslationPackage: (projectId: string, clipId: string, cues: TranscriptCue[]) =>
     invoke<ExternalClipTranslationPackage>("prepare_timeline_clip_external_translation_package", { projectId, clipId, cues: cues.map(cue => ({ ...cue, words: cue.words ?? [], wordAlignment: null, wordAlignmentHash: null })) }),

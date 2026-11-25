@@ -1,7 +1,5 @@
-mod cloud;
 mod local;
 
-use cloud::transcribe_cloud;
 use local::run_local_python;
 pub use local::{check_local_asr, install_local_asr};
 
@@ -9,9 +7,6 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter};
 use crate::{application::services::MediaService, infrastructure::media_storage::MediaStorage};
-
-const CHUNK_SECONDS: u64 = 58;
-const OVERLAP_SECONDS: u64 = 2;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -132,31 +127,8 @@ fn extract_audio_range(ffmpeg_path: &Path, source: &Path, destination: &Path, st
     Ok(())
 }
 
-fn chunk_audio(ffmpeg_path: &Path, audio: &Path, directory: &Path, duration_ms: u64) -> Result<Vec<(PathBuf,u64)>, String> {
-    let mut chunks = Vec::new();
-    let step_ms = CHUNK_SECONDS * 1000;
-    let mut start = 0u64;
-    let mut index = 0usize;
-    while start < duration_ms {
-        let actual_start = if index == 0 { 0 } else { start.saturating_sub(OVERLAP_SECONDS * 1000) };
-        let end = (start + step_ms).min(duration_ms);
-        let path = directory.join(format!("chunk-{index:05}.flac"));
-        let seconds = (end.saturating_sub(actual_start)) as f64 / 1000.0;
-        let output = crate::process::hidden_command(ffmpeg_path).args(["-y","-hide_banner","-loglevel","error","-ss"])
-            .arg(format!("{:.3}", actual_start as f64 / 1000.0)).arg("-i").arg(audio)
-            .arg("-t").arg(format!("{seconds:.3}")).args(["-ac","1","-ar","16000","-c:a","flac"])
-            .arg(&path).output().map_err(|e| format!("Falha ao dividir o áudio: {e}"))?;
-        if !output.status.success() { return Err(format!("Falha ao criar bloco de áudio: {}", String::from_utf8_lossy(&output.stderr))); }
-        chunks.push((path, actual_start));
-        if end == duration_ms { break; }
-        start = end;
-        index += 1;
-    }
-    Ok(chunks)
-}
-
 pub fn transcribe(app: AppHandle, media: MediaService, storage: MediaStorage, project_id: String, asset_id: String, mode: String, language: Option<String>, local_model: String, source_start_ms: Option<u64>, source_end_ms: Option<u64>) -> Result<TranscriptResult, String> {
-    if !["auto", "cloud", "local"].contains(&mode.as_str()) { return Err("Modo de transcrição inválido.".into()); }
+    if mode != "local" { return Err("A transcrição está disponível somente no modo local.".into()); }
     if !["tiny", "base", "small", "medium", "large-v3"].contains(&local_model.as_str()) { return Err("Modelo local não reconhecido.".into()); }
     let source = safe_asset_path(&media, &storage, &project_id, &asset_id)?;
     let ffmpeg_path = ffmpeg()?;
@@ -171,20 +143,7 @@ pub fn transcribe(app: AppHandle, media: MediaService, storage: MediaStorage, pr
         if end_ms <= start_ms { return Err("O trecho selecionado do clipe é inválido.".into()); }
         extract_audio_range(&ffmpeg_path, &source, &audio, start_ms, end_ms)?;
         let duration = duration_ms(&ffprobe(&ffmpeg_path)?,&audio)?;
-        let selected = mode.as_str();
-        let output = if selected == "local" {
-            run_local_python(&audio,&local_model,language.as_deref())?
-        } else if selected == "cloud" {
-            transcribe_cloud(&app,&project_id,&audio,&temp,duration,language.as_deref())?
-        } else {
-            match transcribe_cloud(&app,&project_id,&audio,&temp,duration,language.as_deref()) {
-                Ok(result) => result,
-                Err(cloud_error) => {
-                    emit(&app,&project_id,"fallback",0.0,0,0,&format!("Groq indisponível. Tentando processamento local. {cloud_error}"));
-                    run_local_python(&audio,&local_model,language.as_deref()).map_err(|local_error| format!("A transcrição na nuvem falhou: {cloud_error}. O processamento local também não pôde ser concluído: {local_error}"))?
-                }
-            }
-        };
+        let output = run_local_python(&audio,&local_model,language.as_deref())?;
         let mut output = output;
         output.duration_ms = duration;
         for cue in &mut output.cues {

@@ -15,7 +15,6 @@ type TranscriptionContext = {
 export function useTranscription(project: Project | null, assets: MediaAsset[]) {
   const [transcriptionAssetId, setTranscriptionAssetId] = useState("");
   const [transcriptionContext, setTranscriptionContext] = useState<TranscriptionContext | null>(null);
-  const [transcriptionMode, setTranscriptionMode] = useState<"auto" | "cloud" | "local">("auto");
   const [transcriptionLanguage, setTranscriptionLanguage] = useState("");
   const [transcriptionModel, setTranscriptionModel] = useState("small");
   const [transcriptionBusy, setTranscriptionBusy] = useState(false);
@@ -26,7 +25,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
   const [transcriptionMessage, setTranscriptionMessage] = useState("");
   const [transcriptionResult, setTranscriptionResult] = useState<TranscriptResult | null>(null);
   const [transcriptionTranslations, setTranscriptionTranslations] = useState<CueTranslation[]>([]);
-  const [translationBusy, setTranslationBusy] = useState(false);
   const [alignmentBusy, setAlignmentBusy] = useState(false);
   const [externalSourceHash, setExternalSourceHash] = useState("");
   const [externalPackageBusy, setExternalPackageBusy] = useState(false);
@@ -72,7 +70,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionTranslations(translations);
     setTranscriptionInserted(true);
     setExternalSourceHash("");
-    setTranscriptionMessage("Transcrição existente carregada da timeline. Você pode traduzir ou alinhar as palavras sem reprocessar o áudio e sem inserir outra cópia.");
+    setTranscriptionMessage("Transcrição existente carregada da timeline. Você pode importar uma tradução externa ou alinhar as palavras sem reprocessar o áudio e sem inserir outra cópia.");
   }
 
   async function installLocalTranscription() {
@@ -102,7 +100,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
       const result = await runTrackedTask("transcription", "Transcrevendo mídia", () => desktopApi.transcribeMedia(
         project.id,
         transcriptionAssetId,
-        transcriptionMode,
+        "local",
         transcriptionLanguage,
         transcriptionModel,
         transcriptionContext?.sourceStartMs,
@@ -113,7 +111,7 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
         : result.cues;
       setTranscriptionResult({ ...result, cues: scopedCues });
       setTranscriptionMessage(
-        scopedCues.length + " trechos reconhecidos para o clipe selecionado. Revise e traduza antes de inserir na timeline."
+        scopedCues.length + " trechos reconhecidos para o clipe selecionado. Revise o texto antes de inserir na timeline."
       );
       setTranscriptionProgress({
         projectId: project.id,
@@ -156,24 +154,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     if (nextResult) publishTranscriptionUpdate(nextResult, nextTranslations);
     setExternalSourceHash("");
   }
-
-  async function translateTranscription() {
-    if (!transcriptionResult || translationBusy || !transcriptionResult.cues.length) return;
-    setTranslationBusy(true);
-    setTranscriptionMessage("");
-    try {
-      const translated = await desktopApi.translateGroqChunk("Português do Brasil", transcriptionResult.cues.map(cue => ({
-        id: cue.id, text: cue.text, words: cue.words.map(word => word.text)
-      })));
-      setTranscriptionTranslations(translated);
-      publishTranscriptionUpdate(transcriptionResult, translated);
-      setTranscriptionMessage(translated.length + " trechos traduzidos. " + (transcriptionInserted ? "As legendas da timeline também foram atualizadas." : "Revise o resultado antes de inserir."));
-    } catch (error) {
-      setTranscriptionMessage("Falha na tradução: " + (error instanceof Error ? error.message : String(error)));
-    } finally { setTranslationBusy(false); }
-  }
-
-
 
   async function downloadExternalPackage() {
     if (!project || !transcriptionContext || !transcriptionResult || externalPackageBusy) return;
@@ -264,16 +244,15 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
         translations: transcriptionTranslations.map(item => ({ id: item.id, text: item.translation }))
       }
     }));
-    setTranscriptionMessage("Transcrição inserida na timeline. O resultado foi mantido neste painel para permitir tradução, exportação do TXT e alinhamento sem reprocessar o áudio.");
+    setTranscriptionMessage("Transcrição inserida na timeline. O resultado foi mantido neste painel para permitir exportação do TXT e alinhamento sem reprocessar o áudio.");
     setTranscriptionInserted(true);
   }
 
   return {
-    transcriptionResult, transcriptionTranslations, translationBusy, alignmentBusy, externalPackageBusy, externalSourceHash, transcriptionInserted, openTranscriptionForClip, loadExistingTranscript,
-    translateTranscription, alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue,
+    transcriptionResult, transcriptionTranslations, alignmentBusy, externalPackageBusy, externalSourceHash, transcriptionInserted, openTranscriptionForClip, loadExistingTranscript,
+    alignTranscriptionWords, downloadExternalPackage, importExternalTranslation, insertTranscription, updateTranscriptionCue,
     transcriptionAssetId, setTranscriptionAssetId,
     transcriptionContext, setTranscriptionContext,
-    transcriptionMode, setTranscriptionMode,
     transcriptionLanguage, setTranscriptionLanguage,
     transcriptionModel, setTranscriptionModel,
     transcriptionBusy, transcriptionProgress, setTranscriptionProgress,

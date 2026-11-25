@@ -521,21 +521,6 @@
 .lucide-icon-option.selected{border-color:#a98af8;background:#392d50;color:#fff;box-shadow:inset 0 0 0 1px #a98af855}
 .lucide-icon-option small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;color:#aaa2b5}
 
-/* Groq configuration and chunked subtitle translation */
-.groq-settings-trigger{white-space:nowrap}
-.groq-settings-modal{width:min(620px,100%);max-height:min(90vh,820px);overflow:auto;position:relative;border:1px solid #40374d;border-radius:14px;background:linear-gradient(145deg,#211d29,#17171c 65%);padding:28px;box-shadow:0 25px 90px #000b}
-.groq-settings-modal h2{font:600 24px 'Space Grotesk';margin:10px 0 7px}
-.groq-settings-modal>p{font-size:11px;line-height:1.6;color:#9995a1;margin:0 0 19px}
-.groq-settings-modal>input{width:100%;height:39px;background:#111115;border:1px solid #45404e;border-radius:7px;padding:0 11px;color:#fff;outline:0;font-size:11px;margin-bottom:13px}
-.groq-settings-modal>input:focus,.groq-settings-grid input:focus{border-color:#a98af0;box-shadow:0 0 0 3px #a98af01c}
-.groq-configured{color:#8fd0a5;font-size:9px}
-.groq-field-hint{display:block;color:#777480;font-size:9px;margin:-7px 0 15px}
-.groq-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
-.groq-settings-grid label{display:grid;gap:6px;color:#bdb6c8;font-size:9px}
-.groq-settings-grid input{width:100%;height:36px;background:#111115;border:1px solid #45404e;border-radius:7px;padding:0 9px;color:#eee;outline:0;font-size:11px}
-.groq-free-note{display:flex;align-items:flex-start;gap:8px;padding:11px;margin-top:16px;border:1px solid #3b4b40;border-radius:7px;background:#1b2821;color:#a9cdb5;font-size:9px;line-height:1.5}
-.groq-free-note svg{flex:0 0 auto}
-.groq-settings-message{padding:10px 11px;margin-top:13px;border:1px solid #51436a;border-radius:7px;background:#282134;color:#d8c6f7;font-size:10px;line-height:1.5}
 .translation-panel{display:grid;gap:11px;margin-top:17px;padding:13px;border:1px solid #3b3447;border-radius:9px;background:#1a1820}
 .translation-panel-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .translation-panel-heading>div{display:grid;gap:5px}
@@ -547,9 +532,8 @@
 .translation-progress b{color:#d8c8f5;font-family:'DM Mono'}
 .translation-progress .progress-track{margin:0}
 .translation-message{margin:0;color:#bca9df;font-size:9px;line-height:1.5;overflow-wrap:anywhere}
-@media(max-width:650px){.groq-settings-grid{grid-template-columns:1fr}.groq-settings-modal{padding:23px 18px}.groq-settings-trigger{padding:7px 9px}}
 
-/* Live Groq translation feedback: visible state while the API is processing. */
+/* Translation status feedback. */
 .translation-live-status{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid #51436a;border-radius:8px;background:#241e30;color:#d8c6f7}.translation-live-status>svg{flex:0 0 auto;margin-top:1px;color:#c2a5f4}.translation-live-status>div{display:grid;gap:5px;min-width:0}.translation-live-status b{font-size:10px;color:#eee5fa}.translation-live-status span{font-size:9px;line-height:1.5;color:#b7acc8;overflow-wrap:anywhere}.translation-message.is-error{padding:10px;border:1px solid #704348;border-radius:7px;background:#301d21;color:#ffb5b5}.translation-message.is-success{padding:10px;border:1px solid #3b654b;border-radius:7px;background:#1b2a21;color:#a8e0b8}
 
 

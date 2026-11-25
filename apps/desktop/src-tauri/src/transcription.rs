@@ -1,12 +1,7 @@
-use reqwest::blocking::{multipart, Client};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
-use std::{path::{Path, PathBuf}, time::Duration};
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter};
-
-const MODEL: &str = "whisper-large-v3-turbo";
-const CHUNK_MS: u64 = 58_000;
-const OVERLAP_MS: u64 = 2_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -52,58 +47,6 @@ fn extract_audio(ffmpeg:&Path,source:&Path,dest:&Path)->Result<(),String>{
  let out=crate::process::hidden_command(ffmpeg).args(["-y","-hide_banner","-loglevel","error","-i"]).arg(source).args(["-vn","-ac","1","-ar","16000","-c:a","flac"]).arg(dest).output().map_err(|e|format!("Não foi possível iniciar FFmpeg: {e}"))?;
  if !out.status.success(){return Err(format!("Falha ao preparar o áudio: {}",String::from_utf8_lossy(&out.stderr).chars().take(500).collect::<String>()))} Ok(())
 }
-fn chunks(ffmpeg:&Path,audio:&Path,dir:&Path,duration:u64)->Result<Vec<(PathBuf,u64)>,String>{
- let mut out=Vec::new();let mut start=0u64;let mut index=0usize;
- while start<duration {let actual=if index==0{0}else{start.saturating_sub(OVERLAP_MS)};let end=(start+CHUNK_MS).min(duration);let path=dir.join(format!("chunk-{index:05}.flac"));
- let secs=(end-actual) as f64/1000.0;
- let result=crate::process::hidden_command(ffmpeg).args(["-y","-hide_banner","-loglevel","error","-ss"]).arg(format!("{:.3}",actual as f64/1000.0)).arg("-i").arg(audio).arg("-t").arg(format!("{secs:.3}")).args(["-ac","1","-ar","16000","-c:a","flac"]).arg(&path).output().map_err(|e|e.to_string())?;
- if !result.status.success(){return Err(format!("Falha ao dividir o áudio: {}",String::from_utf8_lossy(&result.stderr)))}
- out.push((path,actual));if end==duration{break}start=end;index+=1;
- } Ok(out)
-}
-#[derive(Deserialize)]
-struct GroqResponse{ text:Option<String>, language:Option<String>, segments:Option<Vec<GroqSegment>> }
-#[derive(Deserialize)]
-struct GroqSegment{start:f64,end:f64,text:String,words:Option<Vec<GroqWord>>}
-#[derive(Deserialize)]
-struct GroqWord{start:Option<f64>,end:Option<f64>,word:String}
-fn cloud(app:&AppHandle,project_id:&str,audio:&Path,dir:&Path,duration:u64,language:Option<&str>)->Result<TranscriptResult,String>{
- let ff=ffmpeg(app)?;let parts=chunks(&ff,audio,dir,duration)?;
- let cfg=crate::shared_runtime::resolve_provider_settings(app,"groq")?;
- let key=crate::shared_runtime::resolve_provider_credential(app,"groq")?;
- let endpoint=format!("{}/audio/transcriptions",cfg.endpoint.trim_end_matches('/'));
- let client=Client::builder().timeout(Duration::from_secs(180)).build().map_err(|e|e.to_string())?;
- let total=parts.len();let mut cues=Vec::new();let mut detected=language.map(str::to_string);
- for (index,(path,offset)) in parts.iter().enumerate(){
-  emit(app,project_id,"cloud",index as f32/total.max(1) as f32*100.0,index,total,&format!("Transcrevendo bloco {} de {}",index+1,total));
-  let bytes=std::fs::read(path).map_err(|e|e.to_string())?;
-  if bytes.len()>25*1024*1024{return Err("Um bloco ultrapassou o limite de 25 MB da Groq.".into())}
-  let mut response=None;let mut last=String::new();
-  for attempt in 0..4{
-   let part=multipart::Part::bytes(bytes.clone()).file_name("audio.flac").mime_str("audio/flac").map_err(|e|e.to_string())?;
-   let mut form=multipart::Form::new().text("model",MODEL).text("response_format","verbose_json").text("temperature","0")
-    .text("timestamp_granularities[]","word").text("timestamp_granularities[]","segment").part("file",part);
-   if let Some(lang)=language{if !lang.trim().is_empty(){form=form.text("language",lang.to_string())}}
-   match client.post(&endpoint).bearer_auth(&key).multipart(form).send(){
-    Ok(r) if r.status().is_success()=>{response=Some(r.json::<GroqResponse>().map_err(|e|format!("Resposta da Groq inválida: {e}"))?);break}
-    Ok(r)=>{let status=r.status();last=format!("Groq HTTP {status}: {}",r.text().unwrap_or_default().chars().take(400).collect::<String>());if status.as_u16()!=429&&!status.is_server_error(){return Err(last)}}
-    Err(e)=>last=format!("Falha de conexão com a Groq: {e}")
-   }
-   if attempt<3{std::thread::sleep(Duration::from_secs(2u64.pow(attempt).min(12)))}
-  }
-  let data=response.ok_or(last)?;
-  if detected.is_none(){detected=data.language.clone()}
-  for seg in data.segments.unwrap_or_default(){
-   let start=offset.saturating_add((seg.start.max(0.0)*1000.0) as u64);let end=offset.saturating_add((seg.end.max(seg.start)*1000.0) as u64);
-   let text=seg.text.trim().to_string();if text.is_empty()||end<=start{continue}
-   let words=seg.words.unwrap_or_default().into_iter().filter_map(|w|Some(TranscriptWord{text:w.word,start_ms:offset.saturating_add((w.start?.max(0.0)*1000.0) as u64),end_ms:offset.saturating_add((w.end?.max(w.start?)*1000.0) as u64)})).collect();
-   if !cues.iter().any(|c:&TranscriptCue|c.text.eq_ignore_ascii_case(&text)&&c.start_ms.abs_diff(start)<1800){cues.push(TranscriptCue{id:uuid::Uuid::new_v4().to_string(),text,start_ms:start,end_ms:end,words})}
-  }
-  emit(app,project_id,"cloud",(index+1) as f32/total.max(1) as f32*100.0,index+1,total,&format!("Bloco {} de {} concluído",index+1,total));
- }
- cues.sort_by_key(|c|c.start_ms);
- Ok(TranscriptResult{engine:"groq".into(),model:MODEL.into(),language:detected,duration_ms:duration,cues})
-}
 fn run_python(args:&[&str])->Result<std::process::Output,String>{
  let mut python=crate::process::hidden_command("python");
  crate::shared_runtime_manager::manager::configure_huggingface_command(&mut python).map_err(|e|e.to_string())?;
@@ -140,14 +83,14 @@ pub fn nova_check_local_asr()->Result<bool,String>{Ok(run_python(&["-c","import 
 pub async fn nova_install_local_asr()->Result<String,String>{tauri::async_runtime::spawn_blocking(||run_python(&["-m","pip","install","faster-whisper>=1.1,<2","av>=11,<19"]).map(|_|"Faster-Whisper instalado. O modelo será baixado na primeira transcrição local.".to_string())).await.map_err(|e|e.to_string())?}
 #[tauri::command]
 pub async fn nova_transcribe_media(app:AppHandle,project_id:String,asset_id:String,mode:String,language:Option<String>,local_model:Option<String>)->Result<TranscriptResult,String>{
- if !["auto","cloud","local"].contains(&mode.as_str()){return Err("Modo de transcrição inválido.".into())}
+ if mode != "local" { return Err("A transcrição está disponível somente no modo local.".into()); }
  let model=local_model.unwrap_or_else(||"small".into());if !["tiny","base","small","medium","large-v3"].contains(&model.as_str()){return Err("Modelo local inválido.".into())}
  let app2=app.clone();
  tauri::async_runtime::spawn_blocking(move||{
   let source=safe_source(&app2,&project_id,&asset_id)?;let ff=ffmpeg(&app2)?;let probe=ffprobe(&app2)?;
   let temp=std::env::temp_dir().join(format!("nova-asr-{}",uuid::Uuid::new_v4()));std::fs::create_dir_all(&temp).map_err(|e|e.to_string())?;
   let result=(||{let audio=temp.join("source.flac");emit(&app2,&project_id,"preparing",0.0,0,0,"Extraindo áudio sem modificar o vídeo original");extract_audio(&ff,&source,&audio)?;let dur=duration(&probe,&audio)?;
-   let mut result=if mode=="local"{local(&audio,&model,language.as_deref())?}else if mode=="cloud"{cloud(&app2,&project_id,&audio,&temp,dur,language.as_deref())?}else{match cloud(&app2,&project_id,&audio,&temp,dur,language.as_deref()){Ok(r)=>r,Err(cloud_error)=>{emit(&app2,&project_id,"fallback",0.0,0,0,&format!("Groq indisponível. Tentando processamento local. {cloud_error}"));local(&audio,&model,language.as_deref()).map_err(|e|format!("Transcrição na nuvem falhou: {cloud_error}. Processamento local também falhou: {e}"))?}}};
+   let mut result=local(&audio,&model,language.as_deref())?;
    result.duration_ms=dur;emit(&app2,&project_id,"completed",100.0,1,1,"Transcrição concluída");Ok(result)
   })();let _=std::fs::remove_dir_all(temp);result
  }).await.map_err(|e|format!("A transcrição foi interrompida: {e}"))?
@@ -155,7 +98,7 @@ pub async fn nova_transcribe_media(app:AppHandle,project_id:String,asset_id:Stri
 
 
 /// Transcribes a user-selected voice-reference file without importing it into a project
-/// or installing a local ASR model. The Groq provider must already be configured.
+/// using the locally installed Faster-Whisper engine.
 #[tauri::command]
 pub async fn nova_transcribe_voice_reference(
     app: AppHandle,
@@ -198,14 +141,7 @@ pub async fn nova_transcribe_voice_reference(
                 return Err("Não foi possível identificar áudio válido no arquivo.".into());
             }
 
-            let transcript = cloud(
-                &app_handle,
-                "voice-reference",
-                &normalized,
-                &temp,
-                duration_ms,
-                None,
-            )?;
+            let transcript = local(&normalized, "small", None)?;
             let text = transcript.cues.into_iter()
                 .map(|cue| cue.text.trim().to_string())
                 .filter(|cue| !cue.is_empty())
