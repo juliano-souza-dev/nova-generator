@@ -3,7 +3,6 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { desktopApi, isDesktopRuntime } from "./services/desktop-api";
 import EditorWorkspace, { supportedLucideIconNames } from "./EditorWorkspace";
-import TaskCenter from "./TaskCenter";
 import type { MediaAsset, Project } from "./shared/types";
 import { useTranscription } from "./features/transcription/useTranscription";
 import { useGroqSettings } from "./features/groq/useGroqSettings";
@@ -286,5 +285,5 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
       <div className="modal-footer"><button className="cancel-button" disabled={groqSettingsBusy} onClick={()=>setGroqSettingsOpen(false)}>Fechar</button><button className="primary" disabled={groqSettingsBusy||!groqModel.trim()} onClick={()=>void saveAndTestGroq()}>{groqSettingsBusy?<><LoaderCircle className="spin" size={14}/> Salvando...</>:<><CheckCircle2 size={14}/> Salvar preferências e testar</>}</button></div>
     </section></div>}
     {!isDesktopRuntime&&<div className="browser-warning">Prévia no navegador. Execute pelo Tauri para importar arquivos no computador.</div>}
-  </main><TaskCenter /></>;
+  </main>;
 }
