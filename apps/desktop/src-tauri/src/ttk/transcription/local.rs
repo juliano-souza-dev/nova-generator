@@ -35,6 +35,7 @@ sys.stdout.buffer.flush()
 "#;
     let lang = language.unwrap_or("");
     let audio_arg = audio.to_string_lossy().into_owned();
+    crate::shared_runtime_manager::dependency_queue::begin_operation();
     let python = crate::shared_runtime_manager::dependency_manager::ensure_faster_whisper_runtime()
         .map_err(|error| format!("Não foi possível preparar automaticamente o mecanismo de transcrição local: {}", error))?;
     let output = run_python(&python, &["-c", SCRIPT, model, audio_arg.as_str(), lang])?;
