@@ -406,13 +406,14 @@ fn directory_size(path: &Path) -> u64 {
 
 fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<()> {
     let mut command = silent_command(python);
-    command.args(args);
     let pip_cache = if args.first() == Some(&"-m") && args.get(1) == Some(&"pip") {
         let path = shared_root()?.join("cache/pip");
         fs::create_dir_all(&path)?;
         command.env("PIP_CACHE_DIR", &path);
+        command.args(["-m", "pip", "--progress-bar", "on"]).args(&args[2..]);
         Some(path)
     } else {
+        command.args(args);
         None
     };
     let mut child = command
@@ -505,12 +506,12 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
     };
     let _ = stdout_thread.join();
     let _ = stderr_thread.join();
-    let _ = super::dependency_queue::report_process_finished();
     while let Ok((channel, line)) = receiver.try_recv() {
         report_pip_output(channel, &line, &mut package);
         diagnostics.push_back(format!("{channel}: {line}"));
         if diagnostics.len() > 100 { diagnostics.pop_front(); }
     }
+    let _ = super::dependency_queue::report_process_finished();
     if !status.success() {
         let detail = diagnostics.into_iter().collect::<Vec<_>>().join("\n");
         bail!("{description} failed (exit code: {}). Last installer output:\n{}",
