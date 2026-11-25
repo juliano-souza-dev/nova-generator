@@ -6,10 +6,10 @@ import { Activity, CheckCircle2, ChevronDown, CircleAlert, Clock3, LoaderCircle,
 type TaskKind = "download" | "import" | "trim" | "transcription" | "translation" | "export" | "installation" | "materials" | "dependencies" | "voice";
 type TaskStatus = "running" | "completed" | "failed" | "cancelled";
 type TaskEvent = { type:"started"|"completed"|"failed"; id:string; kind:TaskKind; title:string; message:string; timestamp:number };
-type TaskRecord = { id:string; kind:TaskKind; title:string; status:TaskStatus; progress:number|null; message:string; logs:string[]; updatedAt:number };
+type TaskRecord = { id:string; kind:TaskKind; title:string; status:TaskStatus; progress:number|null; message:string; logs:string[]; updatedAt:number; activityState?:string; inactiveSeconds?:number; processAlive?:boolean };
 type ProgressPayload = { projectId:string; status?:string; stage?:string; percent?:number; message:string };
 type ResourceProgressPayload = { resourceId:string; status?:"running"|"completed"|"failed"; percent?:number; message:string };
-type DependencyQueuePayload = { status?:string; progress?:number|null; current?:string; completed?:number; total?:number; downloadedBytes?:number; speedBytesPerSecond?:number; error?:string|null; failedDependencies?:string[]; results?:Array<{id?:string;status?:string;message?:string;path?:string}> };
+type DependencyQueuePayload = { status?:string; progress?:number|null; current?:string; completed?:number; total?:number; downloadedBytes?:number; speedBytesPerSecond?:number; error?:string|null; failedDependencies?:string[]; results?:Array<{id?:string;status?:string;message?:string;path?:string}>; activityState?:string; activitySource?:string; inactiveSeconds?:number; processAlive?:boolean };
 const formatBytes = (bytes:number) => { if(bytes < 1024) return `${bytes} B`; const units=["KB","MB","GB","TB"]; let value=bytes/1024; let index=0; while(value>=1024 && index<units.length-1){value/=1024;index++;} return `${value.toFixed(1)} ${units[index]}`; };
 
 const EVENT = "nova:task-center";
@@ -29,6 +29,7 @@ export async function runTrackedTask<T>(kind:TaskKind,title:string,action:()=>Pr
 export default function TaskCenter() {
  const [tasks,setTasks]=useState<TaskRecord[]>([]);
  const [open,setOpen]=useState(false);
+ const [cancelBusy,setCancelBusy]=useState(false);
  const activeEventKinds=useRef(new Set<TaskKind>());
  const activeCount=useMemo(()=>tasks.filter(t=>t.status==="running").length,[tasks]);
  useEffect(()=>{
@@ -110,7 +111,7 @@ export default function TaskCenter() {
      const failureLog=payload.error?.trim()?[`DIAGNÓSTICO COMPLETO\n${payload.error.trim()}`]:[];
      const additions=[...progressLog,...resultLogs,...failureLog].filter(line=>!logs.includes(line));
      const nextLogs=[...logs,...additions].slice(-80);
-     const task:TaskRecord={id,kind:"dependencies",title:"Biblioteca de dependências",status,progress,message,logs:nextLogs,updatedAt:now};
+     const task:TaskRecord={id,kind:"dependencies",title:"Biblioteca de dependências",status,progress,message,logs:nextLogs,updatedAt:now,activityState:payload.activityState,inactiveSeconds:payload.inactiveSeconds,processAlive:payload.processAlive};
      return [task,...current.filter(item=>item.id!==id)].slice(0,15);
     });
    }catch(error){
@@ -124,6 +125,16 @@ export default function TaskCenter() {
   return()=>{disposed=true;if(timeout!==undefined)window.clearTimeout(timeout);};
  },[]);
  if(typeof window==="undefined")return null;
+ const cancelDependencyTask=async()=>{
+  if(cancelBusy)return;
+  setCancelBusy(true);
+  try{
+   await invoke("cancel_shared_dependency_queue");
+   setTasks(current=>current.map(task=>task.id!=="shared-dependencies"?task:{...task,message:"Solicitação de cancelamento enviada ao processo...",logs:[...task.logs,clock()+"  Solicitação de cancelamento enviada."].slice(-80),updatedAt:Date.now()}));
+  }catch(error){
+   setTasks(current=>current.map(task=>task.id!=="shared-dependencies"?task:{...task,message:"Não foi possível cancelar: "+String(error),logs:[...task.logs,clock()+"  Falha ao solicitar cancelamento: "+String(error)].slice(-80),updatedAt:Date.now()}));
+  }finally{setCancelBusy(false);}
+ };
  const clear=()=>setTasks(current=>current.filter(t=>t.status==="running"));
  return <div className="nova-task-center">
   <button className={"nova-task-trigger"+(activeCount?" is-active":"")} onClick={()=>setOpen(v=>!v)} aria-expanded={open}>
@@ -136,6 +147,8 @@ export default function TaskCenter() {
      <div className="nova-task-card-head"><span className="nova-task-icon">{task.status==="running"?<LoaderCircle className="nova-spin" size={15}/>:task.status==="completed"?<CheckCircle2 size={15}/>:task.status==="cancelled"?<XCircle size={15}/>:<CircleAlert size={15}/>}</span><div><b>{task.title}</b><small>{labels[task.kind]} · {task.status==="running"?"Em andamento":task.status==="completed"?"Concluída":task.status==="cancelled"?"Cancelada":"Falhou"}</small></div>{task.progress!=null&&<strong>{Math.round(task.progress)}%</strong>}</div>
      <div className="nova-task-track"><i className={task.progress==null&&task.status==="running"?"indeterminate":""} style={{width:task.progress==null?(task.status==="completed"?"100%":"28%"):task.progress+"%"}}/></div>
      <p className="nova-task-message">{task.message}</p>
+     {task.id==="shared-dependencies"&&task.status==="running"&&<div className={"nova-task-activity activity-"+(task.activityState??"unknown")}><span className="nova-task-activity-dot"/><span>{task.activityState==="possible_stall"?"Possível travamento · sem atividade observável":task.activityState==="waiting"?"Aguardando atividade do processo":task.activityState==="cancelling"?"Cancelamento em andamento":task.activityState==="active"?"Processo ativo":task.processAlive===false?"Processo não está ativo":"Monitorando atividade"}</span>{typeof task.inactiveSeconds==="number"&&<small>{task.inactiveSeconds}s sem atividade</small>}</div>}
+     {task.id==="shared-dependencies"&&task.status==="running"&&<button className="nova-task-cancel" onClick={()=>void cancelDependencyTask()} disabled={cancelBusy||task.activityState==="cancelling"}>{cancelBusy||task.activityState==="cancelling"?"Cancelando...":"Cancelar processamento"}</button>}
      <details className="nova-task-logs" open={task.status!=="completed"}><summary><Terminal size={13}/> Detalhes e diagnóstico <span>{task.logs.length}</span><ChevronDown className="nova-task-chevron" size={13}/></summary><div>{task.logs.map((line,i)=><p key={task.id+"-"+i}>{line}</p>)}</div></details>
     </article>)}
    </div>
