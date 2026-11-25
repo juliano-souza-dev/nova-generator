@@ -105,6 +105,15 @@ pub fn shared_dependency_queue_status() -> Result<Value, String> {
 }
 
 #[tauri::command]
+pub fn cancel_shared_dependency_queue() -> Result<(), String> {
+    if !DEPENDENCY_SYNC_RUNNING.load(Ordering::SeqCst) {
+        return Err("Não há processamento cancelável em andamento.".into());
+    }
+    shared_runtime_manager::dependency_queue::request_cancel()
+        .map_err(|e| format!("Não foi possível solicitar o cancelamento: {e:#}"))
+}
+
+#[tauri::command]
 pub fn list_shared_voices() -> Result<Value, String> {
     shared_runtime_manager::voices::list().map_err(|e| format!("{e:#}"))
 }
