@@ -24,11 +24,41 @@ struct Progress { project_id:String, stage:String, percent:f32, completed_chunks
 fn emit(app:&AppHandle, project_id:&str, stage:&str, percent:f32, done:usize, total:usize, message:&str) {
  let _=app.emit("transcription-progress",Progress{project_id:project_id.into(),stage:stage.into(),percent:percent.clamp(0.0,100.0),completed_chunks:done,total_chunks:total,message:message.into()});
 }
-fn ffmpeg(app:&AppHandle)->Result<PathBuf,String>{crate::media::shared_ffmpeg(app)}
+fn ffmpeg(app:&AppHandle)->Result<PathBuf,String>{
+    // Use the same canonical resolver as export. The media downloader/cache is
+    // unrelated to voice-reference transcription and must not be a prerequisite.
+    crate::ttk::commands::export::resolve_ffmpeg_executable(app).map(|(path, _)| path)
+}
 fn ffprobe(ffmpeg:&Path)->Result<PathBuf,String>{
- let name=if cfg!(windows){"ffprobe.exe"}else{"ffprobe"};
- let p=ffmpeg.parent().map(|v|v.join(name)).ok_or("Diretório do FFmpeg inválido.")?;
- if p.is_file(){Ok(p)}else{Err("ffprobe não foi encontrado junto ao FFmpeg compartilhado. Sincronize os recursos pelo Shared Runtime Manager.".into())}
+    use std::collections::HashSet;
+
+    let name=if cfg!(windows){"ffprobe.exe"}else{"ffprobe"};
+    let mut candidates=Vec::new();
+    if let Some(parent)=ffmpeg.parent(){candidates.push(parent.join(name));}
+    if let Some(path)=std::env::var_os("PATH"){
+        candidates.extend(std::env::split_paths(&path).map(|directory|directory.join(name)));
+    }
+    if cfg!(windows){
+        if let Some(local)=std::env::var_os("LOCALAPPDATA"){
+            candidates.push(PathBuf::from(local).join("Microsoft").join("WinGet").join("Links").join(name));
+        }
+        if let Some(profile)=std::env::var_os("USERPROFILE"){
+            candidates.push(PathBuf::from(profile).join("AppData").join("Local").join("Microsoft").join("WinGet").join("Links").join(name));
+        }
+    }
+
+    let mut checked=HashSet::new();
+    for candidate in candidates{
+        if !checked.insert(candidate.clone())||!candidate.is_file(){continue;}
+        if crate::process::hidden_command(&candidate).arg("-version").output()
+            .is_ok_and(|output|output.status.success()){
+            return Ok(candidate);
+        }
+    }
+    Err(format!(
+        "Não foi possível localizar um ffprobe válido. Procurado ao lado do FFmpeg ({}) e nos diretórios do PATH do sistema. Instale ou repare o pacote completo do FFmpeg gerenciado pelo Nova.",
+        ffmpeg.display()
+    ))
 }
 fn duration(probe:&Path,input:&Path)->Result<u64,String>{
  let out=crate::process::hidden_command(probe).args(["-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1"]).arg(input).output().map_err(|e|format!("Falha ao consultar duração: {e}"))?;
