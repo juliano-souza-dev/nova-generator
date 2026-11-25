@@ -57,9 +57,9 @@ fn run_cancellable(command: &mut Command, description: &str) -> Result<()> {
             if status.success() {
                 return Ok(());
             }
-            let combined = format!("STDERR:\\n{}\\nSTDOUT:\\n{}", stderr.trim(), stdout.trim());
+            let combined = format!("STDERR:\n{}\nSTDOUT:\n{}", stderr.trim(), stdout.trim());
             let detail: String = combined.chars().rev().take(8000).collect::<String>().chars().rev().collect();
-            bail!("{description} terminou com código de saída {status}. Diagnóstico:\\n{detail}");
+            bail!("{description} terminou com código de saída {status}. Diagnóstico:\n{detail}");
         }
         thread::sleep(Duration::from_millis(250));
     }
