@@ -298,17 +298,6 @@ pub(crate) fn resolve_media_shared_directory(app: &AppHandle) -> Result<PathBuf,
     Ok(directory)
 }
 
-/// Resolves the shared media directory and executables from Nova's own libs.json.
-/// Registration is performed lazily so media features work even before Settings is opened.
-pub(crate) fn resolve_media_runtime(
-    app: &AppHandle,
-) -> Result<(PathBuf, PathBuf, PathBuf), String> {
-    let media = resolve_media_shared_directory(app)?;
-    let (_, config) = load_config(app)?;
-
-    Ok((media, resolve_media_tool_from_config(&config, "yt-dlp")?, resolve_media_tool_from_config(&config, "ffmpeg")?))
-}
-
 /// Resolve um executável pelo caminho registrado no libs.json do Shared Runtime.
 pub(crate) fn resolve_media_tool(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     ensure_nova_registration(app)?;
