@@ -63,6 +63,7 @@ pub async fn prepare_youtube_cache(
 
 #[tauri::command]
 pub async fn trim_youtube_cache(
+    app: AppHandle,
     state: State<'_, AppState>,
     project_id: String,
     video_id: String,
@@ -87,7 +88,7 @@ pub async fn trim_youtube_cache(
         let media_dir = storage.project_media_directory(&project_id)?;
         let id = uuid::Uuid::new_v4().to_string();
         let output = media_dir.join(format!("{id}.mp4"));
-        let (ffmpeg, _) = resolve_ffmpeg_executable()?;
+        let (ffmpeg, _) = resolve_ffmpeg_executable(&app)?;
         let duration = end_ms - start_ms;
         let (width, height) = match aspect_ratio.as_str() {
             "9:16" => (1080, 1920),
