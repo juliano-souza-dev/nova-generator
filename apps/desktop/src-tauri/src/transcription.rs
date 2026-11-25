@@ -104,9 +104,13 @@ fn cloud(app:&AppHandle,project_id:&str,audio:&Path,dir:&Path,duration:u64,langu
  Ok(TranscriptResult{engine:"groq".into(),model:MODEL.into(),language:detected,duration_ms:duration,cues})
 }
 fn run_python(args:&[&str])->Result<std::process::Output,String>{
- let first=match crate::process::hidden_command("python").args(args).output(){Ok(o) if o.status.success()=>return Ok(o),Ok(o)=>format!("python: {}",String::from_utf8_lossy(&o.stderr).chars().take(400).collect::<String>()),Err(e)=>format!("python: {e}")};
+ let mut python=crate::process::hidden_command("python");
+ crate::shared_runtime_manager::manager::configure_huggingface_command(&mut python).map_err(|e|e.to_string())?;
+ let first=match python.args(args).output(){Ok(o) if o.status.success()=>return Ok(o),Ok(o)=>format!("python: {}",String::from_utf8_lossy(&o.stderr).chars().take(400).collect::<String>()),Err(e)=>format!("python: {e}")};
  let mut a=vec!["-3"];a.extend_from_slice(args);
- match crate::process::hidden_command("py").args(a).output(){Ok(o) if o.status.success()=>Ok(o),Ok(o)=>Err(format!("{first}; py -3: {}",String::from_utf8_lossy(&o.stderr).chars().take(600).collect::<String>())),Err(e)=>Err(format!("{first}; py -3: {e}"))}
+ let mut launcher=crate::process::hidden_command("py");
+ crate::shared_runtime_manager::manager::configure_huggingface_command(&mut launcher).map_err(|e|e.to_string())?;
+ match launcher.args(a).output(){Ok(o) if o.status.success()=>Ok(o),Ok(o)=>Err(format!("{first}; py -3: {}",String::from_utf8_lossy(&o.stderr).chars().take(600).collect::<String>())),Err(e)=>Err(format!("{first}; py -3: {e}"))}
 }
 fn local(audio:&Path,model:&str,language:Option<&str>)->Result<TranscriptResult,String>{
  const SCRIPT:&str=r#"import contextlib,json,sys
