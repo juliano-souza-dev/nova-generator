@@ -2,21 +2,18 @@ use serde::Deserialize;
 use std::path::Path;
 use super::{duration_ms, ffmpeg, ffprobe, TranscriptCue, TranscriptResult};
 
-fn run_python(args: &[&str]) -> Result<std::process::Output, String> {
-    let first_error = match crate::process::hidden_command("python").args(args).output() {
-        Ok(output) if output.status.success() => return Ok(output),
-        Ok(output) => format!("python: {}", String::from_utf8_lossy(&output.stderr).chars().take(500).collect::<String>()),
-        Err(error) => format!("python: {error}"),
-    };
-    let mut py_args = vec!["-3"];
-    py_args.extend_from_slice(args);
-    match crate::process::hidden_command("py").args(py_args).output() {
-        Ok(output) if output.status.success() => Ok(output),
-        Ok(output) => Err(format!("{first_error}; py -3: {}", String::from_utf8_lossy(&output.stderr).chars().take(700).collect::<String>())),
-        Err(error) => Err(format!("{first_error}; py -3: {error}")),
+fn run_python(python: &Path, args: &[&str]) -> Result<std::process::Output, String> {
+    let mut command = crate::process::hidden_command(python);
+    crate::shared_runtime_manager::manager::configure_huggingface_command(&mut command)
+        .map_err(|error| error.to_string())?;
+    let output = command.args(args).output()
+        .map_err(|error| format!("Não foi possível iniciar o ambiente isolado do Faster-Whisper: {}", error))?;
+    if !output.status.success() {
+        return Err(format!("Faster-Whisper encerrou com código {:?}: {}", output.status.code(),
+            String::from_utf8_lossy(&output.stderr).chars().take(1200).collect::<String>()));
     }
+    Ok(output)
 }
-
 pub(super) fn run_local_python(audio: &Path, model: &str, language: Option<&str>) -> Result<TranscriptResult, String> {
     const SCRIPT: &str = r#"import contextlib,json,sys
 from faster_whisper import WhisperModel
@@ -38,8 +35,9 @@ sys.stdout.buffer.flush()
 "#;
     let lang = language.unwrap_or("");
     let audio_arg = audio.to_string_lossy().into_owned();
-    let output = run_python(&["-c", SCRIPT, model, audio_arg.as_str(), lang])
-        .map_err(|error| format!("Falha no Faster-Whisper local. Instale Python 3.10+ e o suporte local: {error}"))?;
+    let python = crate::shared_runtime_manager::dependency_manager::ensure_faster_whisper_runtime()
+        .map_err(|error| format!("Não foi possível preparar automaticamente o mecanismo de transcrição local: {}", error))?;
+    let output = run_python(&python, &["-c", SCRIPT, model, audio_arg.as_str(), lang])?;
     #[derive(Deserialize)] #[serde(rename_all="camelCase")]
     struct LocalOutput { language: Option<String>, cues: Vec<TranscriptCue> }
     const JSON_MARKER: &[u8] = b"FRAMELAB_ASR_JSON\n";
@@ -53,13 +51,10 @@ sys.stdout.buffer.flush()
 }
 
 pub fn check_local_asr() -> Result<bool, String> {
-    match run_python(&["-c","import faster_whisper; print('ready')"]) {
-        Ok(output) => Ok(String::from_utf8_lossy(&output.stdout).contains("ready")),
-        Err(_) => Ok(false),
-    }
+    Ok(crate::shared_runtime_manager::dependency_manager::check_faster_whisper_runtime())
 }
 pub fn install_local_asr() -> Result<String, String> {
-    run_python(&["-m","pip","install","faster-whisper>=1.1,<2","av>=11,<19"])
-        .map_err(|error| format!("Instalação do Faster-Whisper falhou: {error}"))?;
-    Ok("Faster-Whisper instalado. O modelo será baixado automaticamente na primeira transcrição local.".into())
+    crate::shared_runtime_manager::dependency_manager::ensure_faster_whisper_runtime()
+        .map(|_| "Faster-Whisper preparado. O modelo será baixado automaticamente na primeira transcrição de cada modelo.".into())
+        .map_err(|error| format!("{}", error))
 }
