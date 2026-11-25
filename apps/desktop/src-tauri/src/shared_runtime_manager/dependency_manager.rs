@@ -741,7 +741,6 @@ fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
         let mut last_change = Instant::now();
         let mut last_report = Instant::now();
         let mut last_speed = 0_u64;
-        let download_started = Instant::now();
 
         let status = loop {
             if super::dependency_queue::cancel_requested() {
@@ -780,9 +779,6 @@ fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
                 last_report = now;
             }
 
-            // Do not leave a silent, apparently active task if the download has made no
-            // filesystem progress for a prolonged period. Keep waiting, but expose the stall.
-            let _ = download_started;
         };
 
         let stdout = stdout_reader.and_then(|reader| reader.join().ok()).unwrap_or_default();
