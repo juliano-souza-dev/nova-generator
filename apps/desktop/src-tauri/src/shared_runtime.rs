@@ -337,7 +337,6 @@ fn resolve_media_tool_from_config(config: &Value, id: &str) -> Result<PathBuf, S
         .find(|candidate| candidate.is_file())
         .ok_or_else(|| format!("Executável '{id}' não encontrado em {}. Sincronize novamente as dependências.", path.display()))
 }
-}
 
 fn provider_settings(
     path: &Path,
