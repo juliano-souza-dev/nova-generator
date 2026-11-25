@@ -68,6 +68,7 @@ with contextlib.redirect_stdout(sys.stderr):
   out.append({'id':'','text':clean(s.text.strip()),'startMs':round(s.start*1000),'endMs':round(s.end*1000),'words':words})
 sys.stdout.buffer.write(b'NOVA_ASR_JSON\n'+json.dumps({'language':clean(info.language or ''),'cues':out},ensure_ascii=True,separators=(',',':')).encode('ascii'))
 "#;
+ crate::shared_runtime_manager::dependency_queue::begin_operation();
  let python=crate::shared_runtime_manager::dependency_manager::ensure_faster_whisper_runtime().map_err(|e|format!("Não foi possível preparar automaticamente o mecanismo de transcrição local: {e:#}"))?;
  let p=audio.to_string_lossy().into_owned();let output=run_python(&python,&["-c",SCRIPT,model,&p,language.unwrap_or("")])?;
  let marker=b"NOVA_ASR_JSON\n";let at=output.stdout.windows(marker.len()).rposition(|w|w==marker).ok_or("O mecanismo local não retornou o resultado esperado.")?;
