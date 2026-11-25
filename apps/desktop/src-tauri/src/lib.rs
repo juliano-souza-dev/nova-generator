@@ -223,7 +223,7 @@ pub fn run() {
             shared_runtime::authorize_shared_api_provider,
             shared_runtime::revoke_shared_api_provider,
             shared_runtime::shared_available_api_models,
-            nova_transcription::nova_transcribe_media, nova_transcription::nova_check_local_asr, nova_transcription::nova_install_local_asr,
+            nova_transcription::nova_transcribe_media, nova_transcription::nova_transcribe_voice_reference, nova_transcription::nova_check_local_asr, nova_transcription::nova_install_local_asr,
             nova_translation::translate_project_subtitles, nova_translation::load_project_translations, nova_translation::save_project_translations,
             nova_translation::load_project_editorial_result, nova_translation::save_project_editorial_result, nova_translation::clear_project_editorial_result, nova_translation::approve_project_editorial_result,
             translation_contract::prepare_external_translation_package, translation_contract::prepare_timeline_clip_external_translation_package,
