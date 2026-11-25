@@ -351,37 +351,38 @@ fn parse_pip_size(value: &str) -> Option<u64> {
     Some((amount * multiplier) as u64)
 }
 
-fn report_pip_output(channel: &str, chunk: &str, description: &str) {
-    let mut package = description.to_owned();
+fn report_pip_output(channel: &str, chunk: &str, package: &mut String) {
     for raw in chunk.split(['\r', '\n']) {
         let line = raw.trim();
         if line.is_empty() { continue; }
         if let Some(name) = line.strip_prefix("Collecting ") {
-            package = format!("Preparando pacote {}", name.split_whitespace().next().unwrap_or(name));
+            *package = format!("Preparando pacote {}", name.split_whitespace().next().unwrap_or(name));
         } else if let Some(name) = line.strip_prefix("Downloading ") {
-            package = format!("Baixando {}", name.split_whitespace().next().unwrap_or(name));
+            *package = format!("Baixando {}", name.split_whitespace().next().unwrap_or(name));
         } else if line.starts_with("Installing collected packages") {
-            package = "Instalando pacotes baixados".to_owned();
+            *package = "Instalando pacotes baixados".to_owned();
         } else if line.starts_with("Successfully installed") {
-            package = "Pacotes instalados; validando dependências".to_owned();
+            *package = "Pacotes instalados; validando dependências".to_owned();
         }
         let _ = super::dependency_queue::report_install_log(channel, line);
         if let Some(marker) = line.find("%|") {
-            let pct = line[..marker].trim().trim_start_matches(|ch: char| !ch.is_ascii_digit());
-            if let Ok(percent) = pct.parse::<u32>() {
+            let pct = line[..marker].trim().trim_start_matches(|ch: char| !ch.is_ascii_digit() && ch != '.');
+            if let Ok(percent_value) = pct.parse::<f64>() {
+                let percent = percent_value.round().clamp(0.0, 100.0) as u32;
                 let parts: Vec<&str> = line.split('|').collect();
                 let (downloaded, speed) = if parts.len() >= 3 {
                     let metrics: Vec<&str> = parts[2].split_whitespace().collect();
                     let downloaded = metrics.first().and_then(|v| v.split_once('/'))
-                        .and_then(|(done, _)| parse_pip_size(done));
+                        .and_then(|(done, _)| metrics.get(1).map(|unit| format!("{done}{unit}")))
+                        .and_then(|value| parse_pip_size(&value));
                     let speed = metrics.iter().find_map(|v| v.strip_suffix("/s").and_then(parse_pip_size));
                     (downloaded, speed)
                 } else { (None, None) };
-                let _ = super::dependency_queue::report_package_download_progress(percent, &package, downloaded, speed);
+                let _ = super::dependency_queue::report_package_download_progress(percent, package, downloaded, speed);
             }
         } else if line.starts_with("Collecting ") || line.starts_with("Downloading ")
             || line.starts_with("Installing collected packages") || line.starts_with("Successfully installed") {
-            let _ = super::dependency_queue::report_install_progress(0, &package);
+            let _ = super::dependency_queue::report_install_progress(0, package);
         }
     }
 }
@@ -425,9 +426,10 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
     });
 
     let mut diagnostics = std::collections::VecDeque::<String>::new();
+    let mut package = description.to_owned();
     let status = loop {
         while let Ok((channel, line)) = receiver.try_recv() {
-            report_pip_output(channel, &line, description);
+            report_pip_output(channel, &line, &mut package);
             diagnostics.push_back(format!("{channel}: {line}"));
             if diagnostics.len() > 100 { diagnostics.pop_front(); }
         }
