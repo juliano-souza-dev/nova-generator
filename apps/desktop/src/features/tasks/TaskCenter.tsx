@@ -63,6 +63,7 @@ export default function TaskCenter() {
   };
   Promise.all([
    listen<ProgressPayload>("media-task-progress",e=>{const p=e.payload;update("download",p.percent??null,p.message,p.status);}),
+   listen<{percent?:number|null;status?:string;speed?:string;eta?:string}>("youtube-download-progress",e=>{const p=e.payload;const message=[p.status==="completed"?"Download finalizado.":"Baixando vídeo...",p.speed,p.eta?"Restante: "+p.eta:""].filter(Boolean).join(" · ");update("download",p.percent??null,message,p.status==="completed"?"completed":p.status);}),
    listen<ProgressPayload>("transcription-progress",e=>{const p=e.payload;update("transcription",p.percent??null,p.message,p.status);}),
    listen<ProgressPayload>("translation-progress",e=>{const p=e.payload;update("translation",p.percent??null,p.message,p.status);}),
    listen<ProgressPayload>("export-progress",e=>{const p=e.payload;update("export",p.percent??null,p.message||"Renderizando mídia...",p.status);})
