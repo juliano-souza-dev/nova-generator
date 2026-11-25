@@ -14,7 +14,6 @@ use std::{
 };
 
 const USER_AGENT: &str = "JulianoDev-SharedRuntimeManager/0.5";
-const FFMPEG_ARCHIVE: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
 const YT_DLP_WINDOWS: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
 const YT_DLP_LINUX: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux";
 
@@ -203,65 +202,6 @@ fn ensure_python_package(python: &str, module: &str, package: &str) -> Result<()
     println!("Installing missing Python package: {package}");
     run_python(python, &["-m", "pip", "install", package])
         .with_context(|| format!("Could not install missing Python package {package}"))
-}
-
-fn extract_ffmpeg_component(archive: &Path, destination: &Path, executable: &str) -> Result<bool> {
-    let file = File::open(archive)?;
-    let mut zip = zip::ZipArchive::new(file).context("FFmpeg download is not a valid ZIP archive")?;
-    for index in 0..zip.len() {
-        let mut entry = zip.by_index(index)?;
-        let Some(name) = entry.enclosed_name() else { continue };
-        if name.file_name().and_then(|value| value.to_str()) == Some(executable)
-            && name.components().any(|part| part.as_os_str() == "bin")
-        {
-            fs::create_dir_all(destination)?;
-            let target = destination.join(executable);
-            let mut output = File::create(target)?;
-            std::io::copy(&mut entry, &mut output)?;
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-fn ensure_ffmpeg_component(root: &Path, id: &str, executable: &str) -> Result<PathBuf> {
-    let command = executable.trim_end_matches(".exe");
-    if let Some(found) = command_output(command, "path") {
-        let path = PathBuf::from(found);
-        println!("{id} is already available on PATH; keeping the existing installation.");
-        return Ok(path.parent().unwrap_or(Path::new(".")).to_path_buf());
-    }
-
-    if let Some(existing) = find_existing_binary(&root.join("tools"), executable)? {
-        println!("{id} already exists in the Shared tools directory; keeping the existing installation.");
-        return Ok(existing.parent().unwrap_or(Path::new(".")).to_path_buf());
-    }
-
-    let directory = root.join("tools").join(id);
-    let target = directory.join(executable);
-    if target.is_file() {
-        println!("{id} already exists; keeping the existing installation.");
-        return Ok(directory);
-    }
-
-    #[cfg(windows)]
-    {
-        let archive = root.join("cache/ffmpeg-release-essentials.zip");
-        if !archive.is_file() {
-            println!("Downloading the FFmpeg package (it may contain FFmpeg and FFprobe)...");
-            download(FFMPEG_ARCHIVE, &archive)?;
-        }
-        if !extract_ffmpeg_component(&archive, &directory, executable)? {
-            bail!("The downloaded FFmpeg archive does not contain {executable}.");
-        }
-        return Ok(directory);
-    }
-
-    #[cfg(not(windows))]
-    {
-        let _ = (root, id, executable, target, FFMPEG_ARCHIVE);
-        bail!("{id} is not installed. Install it with your operating system package manager, then register the application again.")
-    }
 }
 
 fn ensure_yt_dlp(root: &Path) -> Result<PathBuf> {
