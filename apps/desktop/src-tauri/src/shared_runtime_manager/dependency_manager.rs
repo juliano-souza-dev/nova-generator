@@ -343,10 +343,10 @@ fn parse_pip_size(value: &str) -> Option<u64> {
     let split = value.find(|ch: char| !ch.is_ascii_digit() && ch != '.')?;
     let amount: f64 = value[..split].trim().parse().ok()?;
     let multiplier = match value[split..].trim() {
-        "B" => 1.0, "KB" | "KIB" => 1024.0,
-        "MB" | "MIB" => 1024.0_f64.powi(2),
-        "GB" | "GIB" => 1024.0_f64.powi(3),
-        "TB" | "TIB" => 1024.0_f64.powi(4), _ => return None,
+        "B" => 1.0, "K" | "KB" | "KIB" => 1024.0,
+        "M" | "MB" | "MIB" => 1024.0_f64.powi(2),
+        "G" | "GB" | "GIB" => 1024.0_f64.powi(3),
+        "T" | "TB" | "TIB" => 1024.0_f64.powi(4), _ => return None,
     };
     Some((amount * multiplier) as u64)
 }
@@ -392,9 +392,30 @@ fn report_pip_output(channel: &str, chunk: &str, package: &mut String) {
     }
 }
 
+fn directory_size(path: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(path) else { return 0; };
+    entries.filter_map(std::result::Result::ok).map(|entry| {
+        let path = entry.path();
+        match entry.file_type() {
+            Ok(kind) if kind.is_dir() => directory_size(&path),
+            Ok(kind) if kind.is_file() => entry.metadata().map(|metadata| metadata.len()).unwrap_or(0),
+            _ => 0,
+        }
+    }).sum()
+}
+
 fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<()> {
-    let mut child = silent_command(python)
-        .args(args)
+    let mut command = silent_command(python);
+    command.args(args);
+    let pip_cache = if args.first() == Some(&"-m") && args.get(1) == Some(&"pip") {
+        let path = shared_root()?.join("cache/pip");
+        fs::create_dir_all(&path)?;
+        command.env("PIP_CACHE_DIR", &path);
+        Some(path)
+    } else {
+        None
+    };
+    let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -432,9 +453,15 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
 
     let mut diagnostics = std::collections::VecDeque::<String>::new();
     let mut package = description.to_owned();
+    let mut last_activity = std::time::Instant::now();
+    let mut last_cache_check = std::time::Instant::now();
+    let mut last_cache_size = pip_cache.as_deref().map(directory_size).unwrap_or(0);
+    let mut activity_source = "processo em execução";
     let status = loop {
         while let Ok((channel, line)) = receiver.try_recv() {
             report_pip_output(channel, &line, &mut package);
+            last_activity = std::time::Instant::now();
+            activity_source = "saída do instalador";
             diagnostics.push_back(format!("{channel}: {line}"));
             if diagnostics.len() > 100 { diagnostics.pop_front(); }
         }
@@ -443,7 +470,23 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
             let _ = child.wait();
             let _ = stdout_thread.join();
             let _ = stderr_thread.join();
+            let _ = super::dependency_queue::report_process_finished();
             bail!("{description} cancelled by user.");
+        }
+        if last_cache_check.elapsed() >= Duration::from_secs(5) {
+            if let Some(cache) = pip_cache.as_deref() {
+                let current_size = directory_size(cache);
+                if current_size > last_cache_size {
+                    last_activity = std::time::Instant::now();
+                    activity_source = "gravação no cache persistente do pip";
+                    last_cache_size = current_size;
+                }
+            }
+            let _ = super::dependency_queue::report_process_activity(
+                activity_source,
+                last_activity.elapsed().as_secs(),
+            );
+            last_cache_check = std::time::Instant::now();
         }
         if let Some(status) = child.try_wait().context("Could not monitor installer process")? {
             break status;
@@ -451,6 +494,8 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
         match receiver.recv_timeout(Duration::from_millis(250)) {
             Ok((channel, line)) => {
                 report_pip_output(channel, &line, &mut package);
+                last_activity = std::time::Instant::now();
+                activity_source = "saída do instalador";
                 diagnostics.push_back(format!("{channel}: {line}"));
                 if diagnostics.len() > 100 { diagnostics.pop_front(); }
             }
@@ -460,6 +505,7 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
     };
     let _ = stdout_thread.join();
     let _ = stderr_thread.join();
+    let _ = super::dependency_queue::report_process_finished();
     while let Ok((channel, line)) = receiver.try_recv() {
         report_pip_output(channel, &line, &mut package);
         diagnostics.push_back(format!("{channel}: {line}"));
