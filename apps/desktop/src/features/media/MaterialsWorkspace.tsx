@@ -737,7 +737,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         filters: [{ name: "Arquivo JSON", extensions: ["json"] }]
       });
       if (!path) return;
-      await invoke("save_generated_json", { path, bytes: Array.from(new TextEncoder().encode(JSON.stringify(exportJourney, null, 2))) });
+      await runTrackedTask("export", "Exportar jornada completa", () =>
+        invoke("save_generated_json", { path, bytes: Array.from(new TextEncoder().encode(JSON.stringify(exportJourney, null, 2))) }));
       setNotice(selectedMoment ? "Jornada completa exportada com Smart Learning Moment." : "Jornada completa exportada.");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -1383,7 +1384,8 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         setNotice("Exportação cancelada. O projeto continua salvo.");
         return;
       }
-      await invoke("save_generated_json", { path, bytes: Array.from(new TextEncoder().encode(json)) });
+      await runTrackedTask("export", "Exportar pacote pedagógico completo", () =>
+        invoke("save_generated_json", { path, bytes: Array.from(new TextEncoder().encode(json)) }));
       setNotice("JSON pedagógico completo gerado com " + selectedItems.length + " item(ns) selecionado(s)" + (smartLearningMoments?.final_selection ? " e uma mini aula Smart Learning Moments" : "") +
         (predictionIsCurrent ? ", Prediction Listening aprovado" : "") +
         (journeyIsCurrent ? " e Jornada de aprendizagem" : "") + ".");
@@ -1395,11 +1397,13 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
   }
 
   function exportJson() {
-    const payload = JSON.stringify({ schema: "nova-generator-materials/2.0", projectId, assetId, assetName: selectedAsset?.name, cards, pedagogical_content: pedagogicalContent ?? undefined }, null, 2);
-    const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
-    const anchor = document.createElement("a");
-    anchor.href = url; anchor.download = "materiais-" + assetId + ".json"; anchor.click();
-    URL.revokeObjectURL(url);
+    void runTrackedTask("export", "Exportar cards Anki em JSON", async () => {
+      const payload = JSON.stringify({ schema: "nova-generator-materials/2.0", projectId, assetId, assetName: selectedAsset?.name, cards, pedagogical_content: pedagogicalContent ?? undefined }, null, 2);
+      const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = "materiais-" + assetId + ".json"; anchor.click();
+      URL.revokeObjectURL(url);
+    });
   }
 
   return <section className="materials-workspace">
