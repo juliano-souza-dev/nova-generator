@@ -461,6 +461,49 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
     Ok(())
 }
 
+/// Prepares the isolated Faster-Whisper runtime only when transcription is requested.
+pub(crate) fn ensure_faster_whisper_runtime() -> Result<PathBuf> {
+    let root = shared_root()?;
+    let runtime = root.join("runtimes/faster-whisper");
+    fs::create_dir_all(&runtime)?;
+    super::dependency_queue::report_install_progress(5, "Preparando o ambiente isolado da transcrição local")?;
+    let interpreter = ensure_runtime_venv(&runtime)
+        .context("Não foi possível preparar o ambiente Python da transcrição local")?;
+
+    let ready = python_module_exists(&interpreter, "faster_whisper")
+        && python_module_exists(&interpreter, "av");
+    if !ready {
+        super::dependency_queue::report_install_progress(20, "Baixando Faster-Whisper e dependências de áudio")?;
+        run_venv_command(
+            &interpreter,
+            &["-m", "pip", "install", "--upgrade", "pip"],
+            "Preparação do instalador Faster-Whisper",
+        )?;
+        run_venv_command(
+            &interpreter,
+            &["-m", "pip", "install", "faster-whisper>=1.1,<2", "av>=11,<19"],
+            "Instalação do Faster-Whisper",
+        )?;
+    }
+
+    super::dependency_queue::report_install_progress(95, "Validando o mecanismo de transcrição local")?;
+    if !python_module_exists(&interpreter, "faster_whisper")
+        || !python_module_exists(&interpreter, "av")
+    {
+        bail!("O Faster-Whisper não passou na validação do ambiente isolado.");
+    }
+    Ok(interpreter)
+}
+
+pub(crate) fn check_faster_whisper_runtime() -> bool {
+    let Ok(root) = shared_root() else { return false; };
+    let runtime = root.join("runtimes/faster-whisper");
+    let interpreter = venv_python(&runtime.join("venv"));
+    interpreter.is_file()
+        && python_module_exists(&interpreter, "faster_whisper")
+        && python_module_exists(&interpreter, "av")
+}
+
 pub(crate) fn ensure_runtime_venv(runtime: &Path) -> Result<PathBuf> {
     let venv = runtime.join("venv");
     let interpreter = venv_python(&venv);
