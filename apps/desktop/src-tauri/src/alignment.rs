@@ -85,16 +85,52 @@ impl AlignmentWorker {
         self.input.write_all(b"\n").map_err(|e| format!("Falha ao enviar bloco ao WhisperX: {e}"))?;
         self.input.flush().map_err(|e| format!("Falha ao enviar bloco ao WhisperX: {e}"))?;
 
-        let mut line = String::new();
-        let read = self.output.read_line(&mut line)
-            .map_err(|e| format!("Falha ao receber alinhamento do WhisperX: {e}"))?;
-        if read == 0 {
-            let status = self.child.try_wait().ok().flatten()
-                .map(|s| s.to_string()).unwrap_or_else(|| "processo encerrou sem resposta".into());
-            return Err(format!("O worker do WhisperX encerrou inesperadamente ({status})."));
-        }
-        let response: WorkerResponse = serde_json::from_str(line.trim())
-            .map_err(|e| format!("Resposta inválida do WhisperX: {e}. Retorno: {}", line.chars().take(300).collect::<String>()))?;
+        let mut diagnostics = Vec::new();
+        let response: WorkerResponse = loop {
+            let mut bytes = Vec::new();
+            let read = self.output.read_until(b'\\n', &mut bytes)
+                .map_err(|e| format!("Falha ao receber alinhamento do WhisperX: {e}"))?;
+            if read == 0 {
+                let status = self.child.try_wait().ok().flatten()
+                    .map(|s| s.to_string()).unwrap_or_else(|| "processo encerrou sem resposta".into());
+                let detail = if diagnostics.is_empty() {
+                    String::new()
+                } else {
+                    format!(" Saída não protocolar: {}", diagnostics.join(" | "))
+                };
+                return Err(format!("O worker do WhisperX encerrou inesperadamente ({status}).{detail}"));
+            }
+            if bytes.len() > 1_048_576 {
+                return Err("O WhisperX enviou uma linha de resposta maior que o limite permitido.".into());
+            }
+
+            // Decode lossily only for locating the JSON envelope. The JSON
+            // payload itself is still parsed strictly by serde_json.
+            let line = String::from_utf8_lossy(&bytes);
+            let Some(json_start) = line.find('{') else {
+                if !line.trim().is_empty() && diagnostics.len() < 5 {
+                    diagnostics.push(line.trim().chars().take(160).collect::<String>());
+                }
+                continue;
+            };
+            let Some(json_end) = line.rfind('}') else {
+                if diagnostics.len() < 5 {
+                    diagnostics.push(line.trim().chars().take(160).collect::<String>());
+                }
+                continue;
+            };
+            if json_end < json_start {
+                continue;
+            }
+            match serde_json::from_str::<WorkerResponse>(&line[json_start..=json_end]) {
+                Ok(response) => break response,
+                Err(error) => {
+                    if diagnostics.len() < 5 {
+                        diagnostics.push(format!("{error}: {}", line.chars().take(160).collect::<String>()));
+                    }
+                }
+            }
+        };
         if response.request_id.as_deref() != Some(request_id.as_str()) {
             return Err("O WhisperX retornou uma resposta associada a outro bloco.".into());
         }
