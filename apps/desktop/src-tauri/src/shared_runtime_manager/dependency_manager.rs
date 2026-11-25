@@ -28,6 +28,7 @@ fn silent_command<S: AsRef<OsStr>>(program: S) -> Command {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
+    let _ = super::manager::configure_huggingface_command(&mut command);
     command
 }
 
@@ -642,7 +643,7 @@ fn format_download_size(bytes: u64) -> String {
 fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
     let runtime = root.join("runtimes/qwen3-tts");
     let model = root.join("models/qwen3-tts/1.7B-CustomVoice");
-    let cache = root.join("cache/huggingface");
+    let cache = super::manager::huggingface_hub_cache()?;
     fs::create_dir_all(&runtime)?;
     fs::create_dir_all(&model)?;
     fs::create_dir_all(&cache)?;
@@ -697,7 +698,7 @@ fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
         let model_path = model.to_string_lossy().into_owned();
         let cache_path = cache.to_string_lossy().into_owned();
         let script = "import sys; from huggingface_hub import snapshot_download; snapshot_download(repo_id=sys.argv[1], local_dir=sys.argv[2], cache_dir=sys.argv[3])";
-        let model_cache = cache.join("hub/models--Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice/blobs");
+        let model_cache = cache.join("models--Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice/blobs");
         fs::create_dir_all(&model_cache)?;
         let mut child = silent_command(&interpreter)
             .arg("-c")
