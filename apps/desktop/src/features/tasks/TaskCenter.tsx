@@ -9,7 +9,7 @@ type TaskEvent = { type:"started"|"completed"|"failed"; id:string; kind:TaskKind
 type TaskRecord = { id:string; kind:TaskKind; title:string; status:TaskStatus; progress:number|null; message:string; logs:string[]; updatedAt:number; activityState?:string; inactiveSeconds?:number; processAlive?:boolean };
 type ProgressPayload = { projectId:string; status?:string; stage?:string; percent?:number; message:string };
 type ResourceProgressPayload = { resourceId:string; status?:"running"|"completed"|"failed"; percent?:number; message:string };
-type DependencyQueuePayload = { status?:string; progress?:number|null; current?:string; completed?:number; total?:number; downloadedBytes?:number; speedBytesPerSecond?:number; error?:string|null; failedDependencies?:string[]; results?:Array<{id?:string;status?:string;message?:string;path?:string}>; activityState?:string; activitySource?:string; inactiveSeconds?:number; processAlive?:boolean };
+type DependencyQueuePayload = { status?:string; progress?:number|null; current?:string; completed?:number; total?:number; downloadedBytes?:number; speedBytesPerSecond?:number; error?:string|null; failedDependencies?:string[]; results?:Array<{id?:string;status?:string;message?:string;path?:string}>; logs?:Array<{channel?:string;message?:string}>; activityState?:string; activitySource?:string; inactiveSeconds?:number; processAlive?:boolean };
 const formatBytes = (bytes:number) => { if(bytes < 1024) return `${bytes} B`; const units=["KB","MB","GB","TB"]; let value=bytes/1024; let index=0; while(value>=1024 && index<units.length-1){value/=1024;index++;} return `${value.toFixed(1)} ${units[index]}`; };
 
 const EVENT = "nova:task-center";
@@ -105,11 +105,14 @@ export default function TaskCenter() {
      const previous=current.find(task=>task.id===id);
      const logs=previous?.logs??[];
      const progressLog=logs[logs.length-1]?.endsWith(message)?[]:[clock()+"  "+message];
+     const liveLogs=(payload.logs??[])
+      .filter(entry=>typeof entry.message==="string"&&entry.message.trim().length>0)
+      .map(entry=>(entry.channel==="stderr"?"STDERR: ":"LOG: ")+entry.message!.trim());
      const resultLogs=(payload.results??[])
       .filter(result=>result.status==="error")
       .map(result=>{const dependencyId=result.id??"dependência desconhecida";const detail=result.message??"O instalador não forneceu detalhes do erro.";return "FALHA ["+dependencyId+"]\n"+detail;});
      const failureLog=payload.error?.trim()?[`DIAGNÓSTICO COMPLETO\n${payload.error.trim()}`]:[];
-     const additions=[...progressLog,...resultLogs,...failureLog].filter(line=>!logs.includes(line));
+     const additions=[...progressLog,...liveLogs,...resultLogs,...failureLog].filter(line=>!logs.includes(line));
      const nextLogs=[...logs,...additions].slice(-80);
      const task:TaskRecord={id,kind:"dependencies",title:"Biblioteca de dependências",status,progress,message,logs:nextLogs,updatedAt:now,activityState:payload.activityState,inactiveSeconds:payload.inactiveSeconds,processAlive:payload.processAlive};
      return [task,...current.filter(item=>item.id!==id)].slice(0,15);
