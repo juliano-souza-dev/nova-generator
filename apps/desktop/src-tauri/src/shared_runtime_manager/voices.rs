@@ -7,7 +7,7 @@ use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    io::Write,
+    io::{Read, Write},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -17,16 +17,49 @@ const VOICE_DESIGN_MODEL_ID: &str = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign";
 
 fn run_cancellable(command: &mut Command, description: &str) -> Result<()> {
     if super::dependency_queue::cancel_requested() { bail!("Operação cancelada pelo usuário."); }
-    let mut child = command.spawn().with_context(|| format!("Não foi possível iniciar {description}"))?;
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("Não foi possível iniciar {description}"))?;
+
+    // Drain both pipes while the process runs so pip cannot block on a full output buffer.
+    let stdout_reader = child.stdout.take().map(|mut pipe| {
+        thread::spawn(move || {
+            let mut output = String::new();
+            let _ = pipe.read_to_string(&mut output);
+            output
+        })
+    });
+    let stderr_reader = child.stderr.take().map(|mut pipe| {
+        thread::spawn(move || {
+            let mut output = String::new();
+            let _ = pipe.read_to_string(&mut output);
+            output
+        })
+    });
+
     loop {
         if super::dependency_queue::cancel_requested() {
             let _ = child.kill();
             let _ = child.wait();
+            let _ = stdout_reader.map(|reader| reader.join());
+            let _ = stderr_reader.map(|reader| reader.join());
             bail!("Operação cancelada pelo usuário.");
         }
         if let Some(status) = child.try_wait()? {
-            if status.success() { return Ok(()); }
-            bail!("{description} terminou com código de saída {status}.");
+            let stdout = stdout_reader
+                .and_then(|reader| reader.join().ok())
+                .unwrap_or_default();
+            let stderr = stderr_reader
+                .and_then(|reader| reader.join().ok())
+                .unwrap_or_default();
+            if status.success() {
+                return Ok(());
+            }
+            let combined = format!("STDERR:\\n{}\\nSTDOUT:\\n{}", stderr.trim(), stdout.trim());
+            let detail: String = combined.chars().rev().take(8000).collect::<String>().chars().rev().collect();
+            bail!("{description} terminou com código de saída {status}. Diagnóstico:\\n{detail}");
         }
         thread::sleep(Duration::from_millis(250));
     }
