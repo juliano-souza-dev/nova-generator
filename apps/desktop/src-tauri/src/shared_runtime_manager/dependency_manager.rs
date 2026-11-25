@@ -633,26 +633,17 @@ fn ensure_forced_alignment(root: &Path) -> Result<PathBuf> {
     let whisperx_version_check = "import importlib.metadata as m; import whisperx; assert m.version('whisperx') == '3.8.6'";
     if !python_script_succeeds(&interpreter, whisperx_version_check) {
         super::dependency_queue::report_install_progress(40, "Instalando WhisperX, PyTorch e dependências. Esta etapa pode demorar.")?;
-        let output = silent_command(&interpreter)
-            .args(["-m", "pip", "install", "--upgrade", "pip"])
-            .output()
-            .context("Não foi possível atualizar o pip no ambiente isolado do WhisperX")?;
-        if !output.status.success() {
-            let detail = String::from_utf8_lossy(&output.stderr);
-            bail!("Falha ao preparar o pip do WhisperX: {}", detail.trim());
-        }
+        run_venv_command(
+            &interpreter,
+            &["-m", "pip", "install", "--upgrade", "pip"],
+            "Preparação do pip para WhisperX",
+        ).context("Não foi possível atualizar o pip no ambiente isolado do WhisperX")?;
         super::dependency_queue::report_install_progress(50, "Baixando e instalando WhisperX e dependências de alinhamento")?;
-        let output = silent_command(&interpreter)
-            .args(["-m", "pip", "install", "--progress-bar", "on", "whisperx==3.8.6"])
-            .output()
-            .context("Não foi possível iniciar o pip no ambiente isolado do Shared Runtime")?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let combined = format!("STDERR:\n{}\nSTDOUT:\n{}", stderr.trim(), stdout.trim());
-            let detail: String = combined.chars().rev().take(8000).collect::<String>().chars().rev().collect();
-            bail!("A instalação do WhisperX 3.8.6 falhou. Diagnóstico do pip:\n{detail}");
-        }
+        run_venv_command(
+            &interpreter,
+            &["-m", "pip", "install", "--progress-bar", "on", "whisperx==3.8.6"],
+            "Instalação do WhisperX 3.8.6",
+        ).context("A instalação do WhisperX 3.8.6 falhou")?;
     }
 
     super::dependency_queue::report_install_progress(90, "Preparando o executor de alinhamento do Nova Generator")?;
