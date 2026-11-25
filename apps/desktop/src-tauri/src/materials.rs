@@ -83,6 +83,8 @@ pub struct AudioRequest {
     pub text: String,
     #[serde(default = "default_language")]
     pub language: String,
+    #[serde(default)]
+    pub effects_chain: Option<Vec<Value>>,
 }
 fn default_language() -> String { "English".into() }
 
@@ -174,7 +176,8 @@ fn generate_audio_batch(
                 "language": normalize_qwen_language(&request.language)?,
                 "output_path": output_path,
                 "voice_mode": voice.mode,
-                "instruct": voice.instruct
+                "instruct": voice.instruct,
+                "effects_chain": request.effects_chain.clone().unwrap_or_default()
             });
             serde_json::to_writer(&mut *stdin, &payload)
                 .map_err(|e| format!("Não foi possível preparar a solicitação de áudio: {e}"))?;
