@@ -88,7 +88,7 @@ impl AlignmentWorker {
         let mut diagnostics = Vec::new();
         let response: WorkerResponse = loop {
             let mut bytes = Vec::new();
-            let read = self.output.read_until(b'\\n', &mut bytes)
+            let read = self.output.read_until(b'\n', &mut bytes)
                 .map_err(|e| format!("Falha ao receber alinhamento do WhisperX: {e}"))?;
             if read == 0 {
                 let status = self.child.try_wait().ok().flatten()
