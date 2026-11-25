@@ -66,8 +66,8 @@ export default function TaskCenter() {
    listen<{percent?:number|null;status?:string;speed?:string;eta?:string}>("youtube-download-progress",e=>{const p=e.payload;const message=[p.status==="completed"?"Download finalizado.":"Baixando vídeo...",p.speed,p.eta?"Restante: "+p.eta:""].filter(Boolean).join(" · ");update("download",p.percent??null,message,p.status==="completed"?"completed":p.status);}),
    listen<ProgressPayload>("transcription-progress",e=>{const p=e.payload;update("transcription",p.percent??null,p.message,p.status);}),
    listen<ProgressPayload>("translation-progress",e=>{const p=e.payload;update("translation",p.percent??null,p.message,p.status);}),
-   listen<ProgressPayload>("export-progress",e=>{const p=e.payload;update("export",p.percent??null,p.message||"Renderizando mídia...",p.status);})
-   ,listen<ResourceProgressPayload>("resource-install-progress",e=>{const p=e.payload;update("installation",p.percent??null,(p.resourceId==="ffmpeg"?"FFmpeg + FFprobe":p.resourceId)+": "+p.message,p.status);})
+   listen<ProgressPayload>("export-progress",e=>{const p=e.payload;update("export",p.percent??null,p.message||"Renderizando mídia...",p.status);}),
+   listen<ResourceProgressPayload>("resource-install-progress",e=>{const p=e.payload;update("installation",p.percent??null,(p.resourceId==="ffmpeg"?"FFmpeg + FFprobe":p.resourceId)+": "+p.message,p.status);})
   ]).then(items=>{if(disposed)items.forEach(fn=>fn());else unlisteners=items;}).catch(error=>console.error("Falha ao acompanhar processamentos:",error));
   return()=>{disposed=true;unlisteners.forEach(fn=>fn());};
  },[]);
