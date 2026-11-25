@@ -646,7 +646,7 @@ pub fn install(resource: &str, app_id: Option<&str>) -> Result<()> {
         "ffmpeg" => bail!("FFmpeg e FFprobe são instalados juntos, sob demanda, pelo gerenciador de recursos do Nova. Inicie uma tarefa que utilize mídia para provisioná-los."),
         "sox" => install_sox(app_id),
         "forced-alignment" | "piper-tts" | "qwen3-tts" | "qwen3-tts-base-clone" => super::dependency_queue::install_dependency(resource, app_id),
-        other => bail!("Unknown resource '{other}'. Available resources: ffmpeg, sox, forced-alignment, piper-tts, qwen3-tts."),
+        other => bail!("Unknown resource '{other}'. Available resources: sox, forced-alignment, piper-tts, qwen3-tts."),
     }
 }
 
