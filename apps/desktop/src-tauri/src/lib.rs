@@ -212,6 +212,7 @@ pub fn run() {
             shared_runtime::get_shared_settings,
             shared_runtime::synchronize_shared_dependencies,
             shared_runtime::shared_dependency_queue_status,
+            shared_runtime::cancel_shared_dependency_queue,
             shared_runtime::list_shared_voices,
             shared_runtime::set_shared_default_voice,
             shared_runtime::create_shared_voice_profile,
