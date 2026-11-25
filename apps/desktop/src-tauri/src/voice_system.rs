@@ -2,7 +2,7 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ModelOption {
+pub struct ModelOption {
     id: &'static str,
     repository: &'static str,
     label: &'static str,
@@ -11,7 +11,7 @@ struct ModelOption {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct EngineOption {
+pub struct EngineOption {
     id: &'static str,
     name: &'static str,
     description: &'static str,
@@ -23,7 +23,7 @@ struct EngineOption {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct EffectParameter {
+pub struct EffectParameter {
     id: &'static str,
     label: &'static str,
     default: f32,
@@ -34,7 +34,7 @@ struct EffectParameter {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct EffectOption {
+pub struct EffectOption {
     id: &'static str,
     name: &'static str,
     description: &'static str,
@@ -59,28 +59,6 @@ pub fn list_voice_engines() -> Vec<EngineOption> {
             }],
         },
         EngineOption {
-            id: "qwen3-tts-custom-voice",
-            name: "Qwen3-TTS CustomVoice",
-            description: "Vozes predefinidas com controle de estilo por instruções.",
-            recommended: false,
-            voice_modes: &["preset"],
-            languages: &["zh", "en", "ja", "ko", "de", "fr", "ru", "pt", "es", "it"],
-            models: vec![
-                ModelOption {
-                    id: "qwen3-tts-custom-voice-1.7b",
-                    repository: "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
-                    label: "1.7B CustomVoice",
-                    installation: "on-demand",
-                },
-                ModelOption {
-                    id: "qwen3-tts-custom-voice-0.6b",
-                    repository: "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
-                    label: "0.6B CustomVoice",
-                    installation: "on-demand",
-                },
-            ],
-        },
-        EngineOption {
             id: "qwen3-tts-voice-design",
             name: "Qwen3-TTS VoiceDesign",
             description: "Criação de vozes a partir de descrições textuais.",
@@ -94,15 +72,7 @@ pub fn list_voice_engines() -> Vec<EngineOption> {
                 installation: "on-demand",
             }],
         },
-        EngineOption {
-            id: "piper",
-            name: "Piper",
-            description: "Síntese local leve com vozes baixáveis individualmente.",
-            recommended: true,
-            voice_modes: &["preset"],
-            languages: &["en", "pt", "es", "de", "fr"],
-            models: vec![],
-        },
+,
     ]
 }
 
