@@ -630,20 +630,6 @@ fn ensure_piper_tts(root: &Path) -> Result<PathBuf> {
     Ok(runtime)
 }
 
-fn directory_size(path: &Path) -> u64 {
-    let Ok(entries) = fs::read_dir(path) else { return 0; };
-    entries.filter_map(Result::ok).map(|entry| {
-        let entry_path = entry.path();
-        match entry.file_type() {
-            Ok(kind) if kind.is_dir() => directory_size(&entry_path),
-            Ok(kind) if kind.is_file() || kind.is_symlink() => {
-                fs::metadata(&entry_path).map(|metadata| metadata.len()).unwrap_or(0)
-            }
-            _ => 0,
-        }
-    }).sum()
-}
-
 fn format_download_size(bytes: u64) -> String {
     const GIB: f64 = 1_073_741_824.0;
     if bytes as f64 >= GIB {
