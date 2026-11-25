@@ -358,27 +358,25 @@ pub(crate) fn ensure_runtime_venv(runtime: &Path) -> Result<PathBuf> {
         )
     };
 
-    if interpreter.is_file() && !is_python_312(&interpreter) {
+    if interpreter.is_file() && is_python_312(&interpreter) {
+        return Ok(interpreter);
+    }
+
+    // Resolve a supported base interpreter before touching an existing environment.
+    // If Python 3.12 cannot be provisioned, the old venv remains intact for recovery.
+    let base_python = ensure_python()?;
+
+    if venv.exists() {
         println!(
             "Recreating incompatible Python environment at {} (models and caches will be preserved).",
             venv.display()
         );
         fs::remove_dir_all(&venv)
             .with_context(|| format!("Could not recreate incompatible virtual environment {}", venv.display()))?;
-    } else if !interpreter.is_file() && venv.exists() {
-        fs::remove_dir_all(&venv)
-            .with_context(|| format!("Could not remove incomplete virtual environment {}", venv.display()))?;
     }
 
-    if !interpreter.is_file() {
-        let base_python = ensure_python()?;
-        let venv_path = venv.to_string_lossy().into_owned();
-        if base_python == "py" {
-            python_command(&base_python, &["-m", "venv", &venv_path])?;
-        } else {
-            python_command(&base_python, &["-m", "venv", &venv_path])?;
-        }
-    }
+    let venv_path = venv.to_string_lossy().into_owned();
+    python_command(&base_python, &["-m", "venv", &venv_path])?;
 
     if !interpreter.is_file() || !is_python_312(&interpreter) {
         bail!(
@@ -570,8 +568,6 @@ fn ensure_qwen3_tts(root: &Path) -> Result<PathBuf> {
 
 fn ensure_forced_alignment(root: &Path) -> Result<PathBuf> {
     let runtime = root.join("runtimes/forced-alignment");
-    let venv = runtime.join("venv");
-    let interpreter = venv_python(&venv);
     fs::create_dir_all(&runtime)?;
     fs::create_dir_all(root.join("models/forced-alignment"))?;
 
