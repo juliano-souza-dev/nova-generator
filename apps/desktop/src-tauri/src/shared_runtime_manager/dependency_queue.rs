@@ -353,6 +353,25 @@ pub(crate) fn report_install_progress(_progress: u32, current: &str) -> Result<(
 }
 
 
+
+pub(crate) fn report_package_download_progress(
+    percent: u32,
+    current: &str,
+    downloaded_bytes: Option<u64>,
+    speed_bytes_per_second: Option<u64>,
+) -> Result<()> {
+    let root = root()?;
+    let path = status_path(&root);
+    let mut status = read_json(&path)?;
+    status["status"] = json!("installing");
+    status["progress"] = json!(percent.min(100));
+    status["progressMode"] = json!("determinate");
+    status["current"] = json!(current);
+    status["downloadedBytes"] = downloaded_bytes.map(Value::from).unwrap_or(Value::Null);
+    status["speedBytesPerSecond"] = speed_bytes_per_second.map(Value::from).unwrap_or(Value::Null);
+    write_json(&path, &status)
+}
+
 /// Append one installer output line to the live queue status. Keep a bounded tail
 /// so verbose package installers cannot grow the status file or memory indefinitely.
 pub(crate) fn report_install_log(channel: &str, line: &str) -> Result<()> {
