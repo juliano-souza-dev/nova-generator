@@ -17,6 +17,11 @@ const VOICE_DESIGN_MODEL_ID: &str = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign";
 
 fn run_cancellable(command: &mut Command, description: &str) -> Result<()> {
     if super::dependency_queue::cancel_requested() { bail!("Operação cancelada pelo usuário."); }
+    if command.get_args().any(|argument| argument == "pip") {
+        let cache = root()?.join("cache/pip");
+        fs::create_dir_all(&cache)?;
+        command.env("PIP_CACHE_DIR", cache);
+    }
     let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
