@@ -106,8 +106,14 @@ pub fn shared_dependency_queue_status() -> Result<Value, String> {
 
 #[tauri::command]
 pub fn cancel_shared_dependency_queue() -> Result<(), String> {
-    if !DEPENDENCY_SYNC_RUNNING.load(Ordering::SeqCst) {
-        return Err("Não há processamento cancelável em andamento.".into());
+    let status = shared_runtime_manager::dependency_queue::status()
+        .map_err(|e| format!("Não foi possível consultar o processamento ativo: {e:#}"))?;
+    let state = status.get("status").and_then(Value::as_str).unwrap_or("idle");
+    let owner_pid = status.get("processId").and_then(Value::as_u64);
+    if !matches!(state, "queued" | "installing" | "running" | "cancelling")
+        || owner_pid != Some(std::process::id() as u64)
+    {
+        return Err("Não há processamento ativo que possa ser cancelado.".into());
     }
     shared_runtime_manager::dependency_queue::request_cancel()
         .map_err(|e| format!("Não foi possível solicitar o cancelamento: {e:#}"))
