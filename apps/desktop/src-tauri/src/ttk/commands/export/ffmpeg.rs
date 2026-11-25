@@ -148,7 +148,7 @@ pub(super) fn ensure_ffmpeg_capabilities(
 #[tauri::command]
 
 pub async fn check_ffmpeg(app: tauri::AppHandle) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+    tauri::async_runtime::spawn_blocking(move || {
         let (_, version) = resolve_ffmpeg_executable(&app)?;
         Ok(version)
     }).await.map_err(|error| format!("A verificação do FFmpeg foi interrompida: {error}"))?
