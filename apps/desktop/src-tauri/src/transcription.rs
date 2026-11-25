@@ -47,14 +47,12 @@ fn extract_audio(ffmpeg:&Path,source:&Path,dest:&Path)->Result<(),String>{
  let out=crate::process::hidden_command(ffmpeg).args(["-y","-hide_banner","-loglevel","error","-i"]).arg(source).args(["-vn","-ac","1","-ar","16000","-c:a","flac"]).arg(dest).output().map_err(|e|format!("Não foi possível iniciar FFmpeg: {e}"))?;
  if !out.status.success(){return Err(format!("Falha ao preparar o áudio: {}",String::from_utf8_lossy(&out.stderr).chars().take(500).collect::<String>()))} Ok(())
 }
-fn run_python(args:&[&str])->Result<std::process::Output,String>{
- let mut python=crate::process::hidden_command("python");
- crate::shared_runtime_manager::manager::configure_huggingface_command(&mut python).map_err(|e|e.to_string())?;
- let first=match python.args(args).output(){Ok(o) if o.status.success()=>return Ok(o),Ok(o)=>format!("python: {}",String::from_utf8_lossy(&o.stderr).chars().take(400).collect::<String>()),Err(e)=>format!("python: {e}")};
- let mut a=vec!["-3"];a.extend_from_slice(args);
- let mut launcher=crate::process::hidden_command("py");
- crate::shared_runtime_manager::manager::configure_huggingface_command(&mut launcher).map_err(|e|e.to_string())?;
- match launcher.args(a).output(){Ok(o) if o.status.success()=>Ok(o),Ok(o)=>Err(format!("{first}; py -3: {}",String::from_utf8_lossy(&o.stderr).chars().take(600).collect::<String>())),Err(e)=>Err(format!("{first}; py -3: {e}"))}
+fn run_python(python:&Path,args:&[&str])->Result<std::process::Output,String>{
+ let mut command=crate::process::hidden_command(python);
+ crate::shared_runtime_manager::manager::configure_huggingface_command(&mut command).map_err(|e|e.to_string())?;
+ let output=command.args(args).output().map_err(|e|format!("Não foi possível iniciar o ambiente isolado do Faster-Whisper: {e}"))?;
+ if !output.status.success(){return Err(format!("Faster-Whisper encerrou com código {:?}: {}",output.status.code(),String::from_utf8_lossy(&output.stderr).chars().take(1200).collect::<String>()))}
+ Ok(output)
 }
 fn local(audio:&Path,model:&str,language:Option<&str>)->Result<TranscriptResult,String>{
  const SCRIPT:&str=r#"import contextlib,json,sys
@@ -70,7 +68,8 @@ with contextlib.redirect_stdout(sys.stderr):
   out.append({'id':'','text':clean(s.text.strip()),'startMs':round(s.start*1000),'endMs':round(s.end*1000),'words':words})
 sys.stdout.buffer.write(b'NOVA_ASR_JSON\n'+json.dumps({'language':clean(info.language or ''),'cues':out},ensure_ascii=True,separators=(',',':')).encode('ascii'))
 "#;
- let p=audio.to_string_lossy().into_owned();let output=run_python(&["-c",SCRIPT,model,&p,language.unwrap_or("")]).map_err(|e|format!("Faster-Whisper local indisponível. Instale Python 3.10+ e o mecanismo local: {e}"))?;
+ let python=crate::shared_runtime_manager::dependency_manager::ensure_faster_whisper_runtime().map_err(|e|format!("Não foi possível preparar automaticamente o mecanismo de transcrição local: {e:#}"))?;
+ let p=audio.to_string_lossy().into_owned();let output=run_python(&python,&["-c",SCRIPT,model,&p,language.unwrap_or("")])?;
  let marker=b"NOVA_ASR_JSON\n";let at=output.stdout.windows(marker.len()).rposition(|w|w==marker).ok_or("O mecanismo local não retornou o resultado esperado.")?;
  #[derive(Deserialize)]#[serde(rename_all="camelCase")]struct Data{language:Option<String>,cues:Vec<TranscriptCue>}
  let mut data:Data=serde_json::from_slice(&output.stdout[at+marker.len()..]).map_err(|e|format!("O mecanismo local retornou dados inválidos: {e}"))?;
@@ -78,9 +77,9 @@ sys.stdout.buffer.write(b'NOVA_ASR_JSON\n'+json.dumps({'language':clean(info.lan
  Ok(TranscriptResult{engine:"faster-whisper".into(),model:model.into(),language:data.language,duration_ms:0,cues:data.cues})
 }
 #[tauri::command]
-pub fn nova_check_local_asr()->Result<bool,String>{Ok(run_python(&["-c","import faster_whisper; print('ready')"]).map(|o|String::from_utf8_lossy(&o.stdout).contains("ready")).unwrap_or(false))}
+pub fn nova_check_local_asr()->Result<bool,String>{Ok(crate::shared_runtime_manager::dependency_manager::check_faster_whisper_runtime())}
 #[tauri::command]
-pub async fn nova_install_local_asr()->Result<String,String>{tauri::async_runtime::spawn_blocking(||run_python(&["-m","pip","install","faster-whisper>=1.1,<2","av>=11,<19"]).map(|_|"Faster-Whisper instalado. O modelo será baixado na primeira transcrição local.".to_string())).await.map_err(|e|e.to_string())?}
+pub async fn nova_install_local_asr()->Result<String,String>{tauri::async_runtime::spawn_blocking(||crate::shared_runtime_manager::dependency_manager::ensure_faster_whisper_runtime().map(|_|"Faster-Whisper preparado. O modelo será baixado automaticamente na primeira transcrição de cada modelo.".to_string()).map_err(|e|format!("{e:#}"))).await.map_err(|e|e.to_string())?}
 #[tauri::command]
 pub async fn nova_transcribe_media(app:AppHandle,project_id:String,asset_id:String,mode:String,language:Option<String>,local_model:Option<String>)->Result<TranscriptResult,String>{
  if mode != "local" { return Err("A transcrição está disponível somente no modo local.".into()); }
