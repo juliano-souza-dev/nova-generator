@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { Activity, CheckCircle2, ChevronDown, CircleAlert, Clock3, LoaderCircle, Terminal, X, XCircle } from "lucide-react";
 
-type TaskKind = "download" | "import" | "trim" | "transcription" | "translation" | "export" | "installation" | "materials" | "dependencies";
+type TaskKind = "download" | "import" | "trim" | "transcription" | "translation" | "export" | "installation" | "materials" | "dependencies" | "voice";
 type TaskStatus = "running" | "completed" | "failed" | "cancelled";
 type TaskEvent = { type:"started"|"completed"|"failed"; id:string; kind:TaskKind; title:string; message:string; timestamp:number };
 type TaskRecord = { id:string; kind:TaskKind; title:string; status:TaskStatus; progress:number|null; message:string; logs:string[]; updatedAt:number };
@@ -14,7 +14,7 @@ const formatBytes = (bytes:number) => { if(bytes < 1024) return `${bytes} B`; co
 
 const EVENT = "nova:task-center";
 const clock = () => new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-const labels:Record<TaskKind,string> = {download:"Download",import:"Importação",trim:"Recorte",transcription:"Transcrição",translation:"Tradução",export:"Exportação",installation:"Instalação",materials:"Materiais",dependencies:"Biblioteca de dependências"};
+const labels:Record<TaskKind,string> = {download:"Download",import:"Importação",trim:"Recorte",transcription:"Transcrição",translation:"Tradução",export:"Exportação",installation:"Instalação",materials:"Materiais",dependencies:"Biblioteca de dependências",voice:"Preparação de voz"};
 
 export function publishTaskEvent(event:TaskEvent) {
   window.dispatchEvent(new CustomEvent<TaskEvent>(EVENT,{detail:event}));
@@ -54,7 +54,7 @@ export default function TaskCenter() {
     const index=current.findIndex(t=>t.kind===kind&&t.status==="running");
     const now=Date.now();
     if(index<0){
-     const title:Record<TaskKind,string>={download:"Download de mídia",import:"Importação de mídia",trim:"Recorte de vídeo",transcription:"Transcrição",translation:"Tradução",export:"Exportação",installation:"Instalação de recurso",materials:"Processamento de Materiais",dependencies:"Biblioteca de dependências"};
+     const title:Record<TaskKind,string>={download:"Download de mídia",import:"Importação de mídia",trim:"Recorte de vídeo",transcription:"Transcrição",translation:"Tradução",export:"Exportação",installation:"Instalação de recurso",materials:"Processamento de Materiais",dependencies:"Biblioteca de dependências",voice:"Preparação de voz"};
      const created:TaskRecord={id:crypto.randomUUID(),kind,title:title[kind],status:failed?"failed":terminal?"completed":"running",progress:progress==null?(terminal?100:null):Math.max(0,Math.min(100,progress)),message,logs:[clock()+"  "+message],updatedAt:now};
      return [created,...current].slice(0,15);
     }
