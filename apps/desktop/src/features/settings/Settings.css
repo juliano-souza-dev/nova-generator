@@ -100,3 +100,11 @@
  .voice-copy{flex-basis:calc(100% - 60px)}
  .voice-row .text-action,.voice-row .default-voice{margin-left:53px}
 }
+
+/* Live dependency installer output */
+.sync-progress-track i.indeterminate{width:34%;animation:dependency-progress 1.35s ease-in-out infinite}
+@keyframes dependency-progress{0%{transform:translateX(-110%)}100%{transform:translateX(310%)}}
+.installer-log{display:flex;flex-direction:column;gap:5px;max-height:230px;overflow:auto;margin-top:13px;padding:10px 11px;border:1px solid #34303b;border-radius:7px;background:#100f14}
+.installer-log-line{display:flex;align-items:flex-start;gap:9px;min-width:0;font:10px/1.5 'DM Mono',monospace}
+.installer-log-line span{flex:none;color:#8e82a4;font-size:9px}
+.installer-log-line code{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap;color:#c4bdce}
