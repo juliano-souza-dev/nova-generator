@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowLeft, AudioLines, Check, ChevronRight, Cloud, Download, KeyRound, LoaderCircle, RefreshCw, Settings2, ShieldCheck, Volume2, WandSparkles } from "lucide-react";
+import { runTrackedTask } from "../tasks/TaskCenter";
 import "./Settings.css";
 
 type Dependency = { id: string; required: boolean; version?: string | null; installed: boolean; path?: string | null };
@@ -100,10 +101,11 @@ export default function Settings({ onBack }: { onBack: () => void }) {
         reader.onerror = () => reject(new Error("Não foi possível ler o áudio selecionado."));
         reader.readAsDataURL(voiceAudio);
       });
-      const transcript = await invoke<string>("nova_transcribe_voice_reference", {
-        audioBase64,
-        filename: voiceAudio.name,
-      });
+      const transcript = await runTrackedTask("transcription", "Transcrever áudio de referência", () =>
+        invoke<string>("nova_transcribe_voice_reference", {
+          audioBase64,
+          filename: voiceAudio.name,
+        }));
       if (!transcript.trim()) throw new Error("A transcrição retornou vazia.");
       setVoiceReferenceText(transcript.trim());
       setNotice("Transcrição preenchida. Revise o texto antes de preparar o perfil de voz.");
