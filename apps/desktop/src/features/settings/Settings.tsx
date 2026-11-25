@@ -120,21 +120,23 @@ export default function Settings({ onBack }: { onBack: () => void }) {
     if (!voiceName.trim()) return;
     setBusy(true); setError(""); setNotice("");
     try {
-      if (voiceMode === "design") {
-        if (!voiceInstruction.trim()) throw new Error("Descreva a voz que deseja criar.");
-        await invoke("create_shared_voice_design_profile", { name: voiceName.trim(), instruct: voiceInstruction.trim() });
-      } else {
-        if (!voiceAudio) throw new Error("Selecione um áudio de referência.");
-        if (!voiceReferenceText.trim()) throw new Error("Informe a transcrição exata do áudio.");
-        if (voiceAudio.size > 100 * 1024 * 1024) throw new Error("O áudio excede o limite de 100 MB.");
-        const audioBase64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-          reader.onerror = () => reject(new Error("Não foi possível ler o áudio selecionado."));
-          reader.readAsDataURL(voiceAudio);
+      await runTrackedTask("voice", "Preparar perfil de voz", async () => {
+        if (voiceMode === "design") {
+          if (!voiceInstruction.trim()) throw new Error("Descreva a voz que deseja criar.");
+          await invoke("create_shared_voice_design_profile", { name: voiceName.trim(), instruct: voiceInstruction.trim() });
+        } else {
+          if (!voiceAudio) throw new Error("Selecione um áudio de referência.");
+          if (!voiceReferenceText.trim()) throw new Error("Informe a transcrição exata do áudio.");
+          if (voiceAudio.size > 100 * 1024 * 1024) throw new Error("O áudio excede o limite de 100 MB.");
+          const audioBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+            reader.onerror = () => reject(new Error("Não foi possível ler o áudio selecionado."));
+            reader.readAsDataURL(voiceAudio);
+          });
+          await invoke("create_shared_voice_profile", { name: voiceName.trim(), filename: voiceAudio.name, audioBase64, referenceText: voiceReferenceText.trim() });
+        }
         });
-        await invoke("create_shared_voice_profile", { name: voiceName.trim(), filename: voiceAudio.name, audioBase64, referenceText: voiceReferenceText.trim() });
-      }
       setSnapshot(current => current ? { ...current, queue: { status: "running", current: "Preparando perfil de voz..." } } : current);
       setNotice("Preparação da voz iniciada. O perfil aparecerá na biblioteca quando estiver pronto.");
       setVoiceName(""); setVoiceInstruction(""); setVoiceReferenceText(""); setVoiceAudio(null);
