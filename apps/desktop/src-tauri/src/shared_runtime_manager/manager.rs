@@ -644,7 +644,7 @@ pub fn list_apps() -> Result<()> {
 
 pub fn install(resource: &str, app_id: Option<&str>) -> Result<()> {
     match resource {
-        "ffmpeg" => install_ffmpeg(app_id),
+        "ffmpeg" => bail!("FFmpeg e FFprobe são instalados juntos, sob demanda, pelo gerenciador de recursos do Nova. Inicie uma tarefa que utilize mídia para provisioná-los."),
         "sox" => install_sox(app_id),
         "forced-alignment" | "piper-tts" | "qwen3-tts" | "qwen3-tts-base-clone" => super::dependency_queue::install_dependency(resource, app_id),
         other => bail!("Unknown resource '{other}'. Available resources: ffmpeg, sox, forced-alignment, piper-tts, qwen3-tts."),
@@ -668,62 +668,6 @@ fn link_resource(registry: &mut Registry, resource_id: &str, app_id: Option<&str
             app.resources.push(resource_id.to_owned());
         }
     }
-}
-
-fn install_ffmpeg(app_id: Option<&str>) -> Result<()> {
-    let base = ensure_layout()?;
-    let _lock = lock_registry(&base)?;
-    let mut registry = read_registry(&base)?;
-    validate_app_link(&registry, app_id)?;
-
-    let version = "gyan-release-essentials";
-    let destination = base.join("tools/ffmpeg").join(version);
-    let ffmpeg = destination.join("ffmpeg.exe");
-    let ffprobe = destination.join("ffprobe.exe");
-
-    if !(ffmpeg.exists() && ffprobe.exists()) {
-        let cache = base.join("cache/ffmpeg-release-essentials.zip");
-        if !cache.exists() {
-            println!("Downloading FFmpeg from Gyan.dev...");
-            download(FFMPEG_URL, &cache)?;
-        }
-        let staging = base
-            .join("tools/ffmpeg")
-            .join(format!(".staging-{}", timestamp()));
-        if staging.exists() {
-            fs::remove_dir_all(&staging)?;
-        }
-        fs::create_dir_all(&staging)?;
-        let extraction = extract_ffmpeg_binaries(&cache, &staging);
-        if let Err(error) = extraction {
-            let _ = fs::remove_dir_all(&staging);
-            return Err(error);
-        }
-        replace_directory(&staging, &destination)?;
-    }
-
-    let mut files = BTreeMap::new();
-    files.insert("ffmpeg.exe".to_owned(), sha256_file(&ffmpeg)?);
-    files.insert("ffprobe.exe".to_owned(), sha256_file(&ffprobe)?);
-
-    registry.resources.insert(
-        "ffmpeg".to_owned(),
-        Resource {
-            version: version.to_owned(),
-            install_path: destination.to_string_lossy().into_owned(),
-            installed_at: timestamp(),
-            files,
-            source: FFMPEG_URL.to_owned(),
-        },
-    );
-    link_resource(&mut registry, "ffmpeg", app_id);
-    write_registry(&base, &registry)?;
-    refresh_application_configs(&base)?;
-    println!("FFmpeg is ready: {}", destination.display());
-    if let Some(id) = app_id {
-        println!("Linked resource 'ffmpeg' to application '{id}'.");
-    }
-    Ok(())
 }
 
 fn install_sox(app_id: Option<&str>) -> Result<()> {
