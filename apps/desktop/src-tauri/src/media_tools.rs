@@ -122,7 +122,7 @@ fn emit_progress(app: &AppHandle, percent: f64, message: &str) {
     }));
 }
 
-fn download_to(url: &str, destination: &Path) -> Result<(), String> {
+fn download_to(url: &str, destination: &Path, app: &AppHandle) -> Result<(), String> {
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -134,9 +134,31 @@ fn download_to(url: &str, destination: &Path) -> Result<(), String> {
     let mut response = client.get(url).send()
         .map_err(|e| format!("Falha ao baixar {url}: {e}"))?
         .error_for_status().map_err(|e| format!("Download recusado por {url}: {e}"))?;
+    let total = response.content_length().unwrap_or(0);
     let temporary = destination.with_extension("part");
     let mut output = File::create(&temporary).map_err(|e| e.to_string())?;
-    std::io::copy(&mut response, &mut output).map_err(|e| format!("Download incompleto: {e}"))?;
+    let mut buffer = [0u8; 1024 * 1024];
+    let mut downloaded = 0u64;
+    let mut last_percent = 10u64;
+    loop {
+        let count = response.read(&mut buffer).map_err(|e| format!("Download incompleto: {e}"))?;
+        if count == 0 { break; }
+        output.write_all(&buffer[..count]).map_err(|e| e.to_string())?;
+        downloaded = downloaded.saturating_add(count as u64);
+        if total > 0 {
+            let percent = 10 + downloaded.saturating_mul(55) / total;
+            if percent > last_percent {
+                last_percent = percent;
+                emit_progress(app, percent as f64, &format!(
+                    "Baixando FFmpeg: {:.1} / {:.1} MB",
+                    downloaded as f64 / 1_048_576.0,
+                    total as f64 / 1_048_576.0
+                ));
+            }
+        } else if downloaded > 0 && downloaded % (8 * 1024 * 1024) < buffer.len() as u64 {
+            emit_progress(app, 0.0, &format!("Baixando FFmpeg: {:.1} MB", downloaded as f64 / 1_048_576.0));
+        }
+    }
     output.sync_all().map_err(|e| e.to_string())?;
     fs::rename(&temporary, destination).map_err(|e| format!("Não foi possível concluir o arquivo baixado: {e}"))?;
     Ok(())
@@ -178,7 +200,7 @@ fn download_verified_archive(root: &Path, app: &AppHandle) -> Result<(PathBuf, S
     if !cached_valid {
         if cache.exists() { fs::remove_file(&cache).map_err(|e| e.to_string())?; }
         emit_progress(app, 10.0, "Baixando o pacote completo do FFmpeg");
-        download_to(ARCHIVE_URL, &cache)?;
+        download_to(ARCHIVE_URL, &cache, app)?;
     }
     let actual = sha256(&cache)?;
     if actual != expected {
@@ -250,6 +272,19 @@ fn write_manifest(root: &Path, manifest: &ResourceManifest) -> Result<(), String
 }
 
 pub(crate) fn ensure_media_tools(app: &AppHandle) -> Result<MediaTools, String> {
+    let result = ensure_media_tools_inner(app);
+    if let Err(error) = &result {
+        let _ = app.emit("resource-install-progress", serde_json::json!({
+            "resourceId": "ffmpeg",
+            "status": "failed",
+            "percent": 0.0,
+            "message": error
+        }));
+    }
+    result
+}
+
+fn ensure_media_tools_inner(app: &AppHandle) -> Result<MediaTools, String> {
     let root = resource_root()?;
     for directory in ["registry", "cache", "tools"] {
         fs::create_dir_all(root.join(directory)).map_err(|e| format!("Não foi possível preparar o armazenamento de recursos do Nova: {e}"))?;
@@ -281,7 +316,9 @@ pub(crate) fn ensure_media_tools(app: &AppHandle) -> Result<MediaTools, String> 
     {
         emit_progress(app, 2.0, "Preparando o armazenamento de recursos do Nova");
         let (archive, version) = download_verified_archive(&root, app)?;
-        let destination = root.join("tools").join("ffmpeg").join(&version);
+        let archive_digest = sha256(&archive)?;
+        let install_id = format!("{}-{}-{}", version, &archive_digest[..12], uuid::Uuid::new_v4());
+        let destination = root.join("tools").join("ffmpeg").join(install_id);
         let parent = destination.parent().ok_or("Diretório de instalação inválido.")?;
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         let staging = parent.join(format!(".staging-{}", uuid::Uuid::new_v4()));
@@ -305,21 +342,27 @@ pub(crate) fn ensure_media_tools(app: &AppHandle) -> Result<MediaTools, String> 
         let final_ffmpeg = destination.join(relative_ffmpeg);
         let final_ffprobe = destination.join(relative_ffprobe);
 
-        let backup = parent.join(format!(".backup-{}", uuid::Uuid::new_v4()));
-        if destination.exists() {
-            fs::rename(&destination, &backup).map_err(|e| format!("Não foi possível preservar a instalação anterior do FFmpeg: {e}"))?;
+        // The destination is unique and immutable. Never replace a directory in place:
+        // Windows can deny directory renames when antivirus or another process has a handle.
+        let mut activation_error = None;
+        for attempt in 0..8 {
+            match fs::rename(&staging, &destination) {
+                Ok(()) => { activation_error = None; break; }
+                Err(error) => {
+                    activation_error = Some(error);
+                    thread::sleep(Duration::from_millis(150u64.saturating_mul(1u64 << attempt)));
+                }
+            }
         }
-        if let Err(error) = fs::rename(&staging, &destination) {
-            if backup.exists() { let _ = fs::rename(&backup, &destination); }
+        if let Some(error) = activation_error {
             let _ = fs::remove_dir_all(&staging);
-            return Err(format!("Não foi possível ativar a nova instalação do FFmpeg: {error}"));
+            return Err(format!("Não foi possível ativar a instalação isolada do FFmpeg após 8 tentativas: {error}. O pacote foi mantido no cache para nova tentativa."));
         }
-        if backup.exists() { let _ = fs::remove_dir_all(&backup); }
 
         if valid_executable(&final_ffmpeg).is_none() || valid_executable(&final_ffprobe).is_none() {
             return Err("A instalação ativada do FFmpeg não passou na validação final. A próxima execução tentará reparar o pacote.".into());
         }
-        let checksum = sha256(&archive)?;
+        let checksum = archive_digest;
         let installed_at = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
         let manifest = ResourceManifest {
             schema_version: 1,
