@@ -83,6 +83,34 @@ pub fn root() -> Result<PathBuf> {
     Ok(base.join("JulianoDev").join("SharedRuntime"))
 }
 
+/// Returns the per-user Hugging Face Hub cache without creating or moving its contents.
+pub fn huggingface_hub_cache() -> Result<PathBuf> {
+    #[cfg(windows)]
+    let home = std::env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .or_else(dirs::home_dir)
+        .context("Could not determine the current user's home directory")?;
+
+    #[cfg(not(windows))]
+    let home = dirs::home_dir().context("Could not determine the current user's home directory")?;
+
+    Ok(home.join(".cache").join("huggingface").join("hub"))
+}
+
+/// Applies one consistent Hugging Face cache location to every managed Python process.
+pub fn configure_huggingface_command(command: &mut std::process::Command) -> Result<()> {
+    let hub_cache = huggingface_hub_cache()?;
+    let hf_home = hub_cache
+        .parent()
+        .context("Hugging Face Hub cache has no parent directory")?;
+    command
+        .env("HF_HOME", hf_home)
+        .env("HF_HUB_CACHE", &hub_cache)
+        .env("HUGGINGFACE_HUB_CACHE", &hub_cache)
+        .env("HF_HUB_DISABLE_TELEMETRY", "1");
+    Ok(())
+}
+
 fn ensure_layout() -> Result<PathBuf> {
     let base = root()?;
     for directory in ["registry", "applications", "cache", "tools", "runtimes", "models", "media-shared", "voices"] {
