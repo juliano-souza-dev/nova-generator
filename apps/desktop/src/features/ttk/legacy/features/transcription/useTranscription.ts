@@ -100,7 +100,6 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
       const result = await runTrackedTask("transcription", "Transcrevendo mídia", () => desktopApi.transcribeMedia(
         project.id,
         transcriptionAssetId,
-        "local",
         transcriptionLanguage,
         transcriptionModel,
         transcriptionContext?.sourceStartMs,
