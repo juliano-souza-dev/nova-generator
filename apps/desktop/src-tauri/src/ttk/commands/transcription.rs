@@ -7,7 +7,6 @@ pub async fn transcribe_media(
     state: State<'_, AppState>,
     project_id: String,
     asset_id: String,
-    mode: String,
     language: Option<String>,
     local_model: Option<String>,
     source_start_ms: Option<u64>,
@@ -16,7 +15,7 @@ pub async fn transcribe_media(
     let media = state.media.clone();
     let storage = state.media_storage.clone();
     tauri::async_runtime::spawn_blocking(move || crate::ttk_transcription::transcribe(
-        app, media, storage, project_id, asset_id, mode, language,
+        app, media, storage, project_id, asset_id, language,
         local_model.unwrap_or_else(|| "small".into()), source_start_ms, source_end_ms,
     )).await.map_err(|e| format!("A transcrição foi interrompida: {e}"))?
 }
