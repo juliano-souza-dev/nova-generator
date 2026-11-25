@@ -450,7 +450,7 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
         }
         match receiver.recv_timeout(Duration::from_millis(250)) {
             Ok((channel, line)) => {
-                report_pip_output(channel, &line, description);
+                report_pip_output(channel, &line, &mut package);
                 diagnostics.push_back(format!("{channel}: {line}"));
                 if diagnostics.len() > 100 { diagnostics.pop_front(); }
             }
@@ -461,7 +461,7 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
     let _ = stdout_thread.join();
     let _ = stderr_thread.join();
     while let Ok((channel, line)) = receiver.try_recv() {
-        report_pip_output(channel, &line, description);
+        report_pip_output(channel, &line, &mut package);
         diagnostics.push_back(format!("{channel}: {line}"));
         if diagnostics.len() > 100 { diagnostics.pop_front(); }
     }
