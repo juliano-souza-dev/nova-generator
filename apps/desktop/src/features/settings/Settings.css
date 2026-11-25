@@ -115,3 +115,9 @@
 .installer-activity.waiting .installer-activity-dot{background:#e0aa48}
 .installer-activity.possible_stall .installer-activity-dot{background:#ef6b6b}
 .installer-activity small{margin-left:auto;color:#81798c;font-size:9px}
+
+.voice-transcribe-button{align-self:flex-start;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:0 13px;border:1px solid #51465f;border-radius:7px;background:#292233;color:#dfd1f4;font-size:11px;cursor:pointer;transition:border-color .18s,background .18s}
+.voice-transcribe-button:hover:not(:disabled){border-color:#9e82d1;background:#352a43}
+.voice-transcribe-button:disabled{opacity:.55;cursor:not-allowed}
+.voice-transcribe-button .spin{animation:settings-spin 1s linear infinite}
+@keyframes settings-spin{to{transform:rotate(360deg)}}
