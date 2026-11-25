@@ -37,7 +37,8 @@ export default function TaskCenter() {
     const status:TaskStatus=event.type==="completed"?"completed":"failed";
     return current.map(task=>task.id!==event.id?task:{...task,status,progress:status==="completed"?100:task.progress,message:event.message,updatedAt:event.timestamp,logs:[...task.logs,clock()+"  "+event.message].slice(-80)});
    });
-   if(event.type==="started")setOpen(true);
+   if(event.type==="started"){activeEventKinds.current.add(event.kind);setOpen(true);}
+   else activeEventKinds.current.delete(event.kind);
   };
   window.addEventListener(EVENT,handle);return()=>window.removeEventListener(EVENT,handle);
  },[]);
