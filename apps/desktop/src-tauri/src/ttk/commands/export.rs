@@ -498,7 +498,7 @@ pub async fn export_timeline(
 
         // Valide os recursos reais do binário antes de iniciar a exportação.
         // Builds do FFmpeg podem existir sem filtros opcionais, como drawtext.
-        let (ffmpeg_path, ffmpeg_version) = resolve_ffmpeg_executable()?;
+        let (ffmpeg_path, ffmpeg_version) = resolve_ffmpeg_executable(&runtime_app)?;
         let mut required_filters = vec![
             "color", "scale", "crop", "fps", "setsar", "setpts", "overlay", "format", "fade",
         ];
