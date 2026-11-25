@@ -7,7 +7,6 @@ use std::{
     thread,
     time::Duration,
 };
-use tauri::AppHandle;
 use super::{duration_ms, ffmpeg, ffprobe, TranscriptCue, TranscriptResult};
 
 type ProgressCallback<'a> = dyn FnMut(&str, f32, usize, usize, &str) + 'a;
@@ -91,8 +90,6 @@ fn run_python(
 }
 
 pub(super) fn run_local_python(
-    app: &AppHandle,
-    project_id: &str,
     audio: &Path,
     model: &str,
     language: Option<&str>,
@@ -148,8 +145,6 @@ sys.stdout.buffer.flush()
     }
 
     let duration = duration_ms(&ffprobe(&ffmpeg()?)?, audio)?;
-    let _ = app; // Mantido no contrato para permitir associar a execução ao projeto.
-    let _ = project_id;
     Ok(TranscriptResult {
         engine: "faster-whisper".into(),
         model: model.into(),
