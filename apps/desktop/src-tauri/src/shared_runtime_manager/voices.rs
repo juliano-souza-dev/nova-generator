@@ -89,6 +89,7 @@ fn silent_command<S: AsRef<OsStr>>(program: S) -> Command {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);
     }
+    let _ = super::manager::configure_huggingface_command(&mut command);
     command
 }
 
@@ -475,7 +476,7 @@ pub(crate) fn ensure_voice_design_runtime(root: &Path) -> Result<PathBuf> {
     let manifest: Value = serde_json::from_slice(&fs::read(runtime.join("runtime.json"))?)?;
     let python = PathBuf::from(manifest.get("python").and_then(Value::as_str).ok_or_else(|| anyhow!("Runtime sem Python"))?);
     let model = root.join("models/qwen3-tts-voice-design/1.7B-VoiceDesign");
-    let cache = root.join("cache/huggingface");
+    let cache = super::manager::huggingface_hub_cache()?;
     fs::create_dir_all(&model)?;
     fs::create_dir_all(&cache)?;
     if !model.join("config.json").is_file() {
