@@ -46,6 +46,16 @@ fn shared_root() -> Result<PathBuf> {
     super::manager::root()
 }
 
+fn nova_resource_root() -> Result<PathBuf> {
+    #[cfg(windows)]
+    let base = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .context("LOCALAPPDATA is not defined")?;
+    #[cfg(not(windows))]
+    let base = dirs::data_local_dir().context("Could not determine the local data directory")?;
+    Ok(base.join("JulianoDev").join("NovaGenerator").join("Resources"))
+}
+
 fn download(url: &str, destination: &Path) -> Result<()> {
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent)?;
@@ -346,7 +356,7 @@ fn directory_size(path: &Path) -> u64 {
 fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<()> {
     let mut command = silent_command(python);
     let pip_cache = if args.first() == Some(&"-m") && args.get(1) == Some(&"pip") {
-        let path = shared_root()?.join("cache/pip");
+        let path = nova_resource_root()?.join("cache/pip");
         fs::create_dir_all(&path)?;
         command.env("PIP_CACHE_DIR", &path);
         command.env("PIP_PROGRESS_BAR", "on");
@@ -463,7 +473,7 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
 
 /// Prepares the isolated Faster-Whisper runtime only when transcription is requested.
 pub(crate) fn ensure_faster_whisper_runtime() -> Result<PathBuf> {
-    let root = shared_root()?;
+    let root = nova_resource_root()?;
     let runtime = root.join("runtimes/faster-whisper");
     fs::create_dir_all(&runtime)?;
     super::dependency_queue::report_install_progress(5, "Preparando o ambiente isolado da transcrição local")?;
@@ -496,7 +506,7 @@ pub(crate) fn ensure_faster_whisper_runtime() -> Result<PathBuf> {
 }
 
 pub(crate) fn check_faster_whisper_runtime() -> bool {
-    let Ok(root) = shared_root() else { return false; };
+    let Ok(root) = nova_resource_root() else { return false; };
     let runtime = root.join("runtimes/faster-whisper");
     let interpreter = venv_python(&runtime.join("venv"));
     interpreter.is_file()
