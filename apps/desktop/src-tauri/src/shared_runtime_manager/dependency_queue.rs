@@ -360,14 +360,10 @@ pub(crate) fn report_install_log(channel: &str, line: &str) -> Result<()> {
     let root = root()?;
     let path = status_path(&root);
     let mut status = read_json(&path)?;
-    let logs = status["logs"].as_array_mut();
-    let logs = match logs {
-        Some(logs) => logs,
-        None => {
-            status["logs"] = json!([]);
-            status["logs"].as_array_mut().expect("logs array initialized")
-        }
-    };
+    if !status["logs"].is_array() {
+        status["logs"] = json!([]);
+    }
+    let logs = status["logs"].as_array_mut().expect("logs array initialized");
     logs.push(json!({"channel": channel, "message": line}));
     if logs.len() > 120 {
         let excess = logs.len() - 120;
