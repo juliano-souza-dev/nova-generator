@@ -35,8 +35,6 @@ fn silent_command<S: AsRef<OsStr>>(program: S) -> Command {
 const DEFAULT_DEPENDENCIES: &[(&str, bool)] = &[
     ("piper-tts", false),
     ("qwen3-tts", false),
-    ("ffmpeg", true),
-    ("ffprobe", true),
     ("yt-dlp", true),
     ("python", true),
     ("faster-whisper", true),
@@ -861,8 +859,7 @@ fn ensure_forced_alignment(root: &Path) -> Result<PathBuf> {
 
 pub(crate) fn ensure_dependency(root: &Path, id: &str) -> Result<PathBuf> {
     match id {
-        "ffmpeg" => ensure_ffmpeg_component(root, "ffmpeg", if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" }),
-        "ffprobe" => ensure_ffmpeg_component(root, "ffprobe", if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" }),
+        "ffmpeg" | "ffprobe" => bail!("FFmpeg e FFprobe são provisionados em conjunto pelo gerenciador de recursos do Nova, quando uma tarefa precisar deles."),
         "yt-dlp" => ensure_yt_dlp(root),
         "python" => {
             let python = ensure_python()?;
@@ -979,12 +976,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_contract_has_independent_ffmpeg_components() {
+    fn default_contract_does_not_install_media_tools_eagerly() {
         let dependencies = default_contract()["dependencies"].as_array().unwrap().clone();
         let ids: Vec<&str> = dependencies.iter().filter_map(|item| item["id"].as_str()).collect();
-        assert!(ids.contains(&"ffmpeg"));
-        assert!(ids.contains(&"ffprobe"));
-        assert_ne!(ids.iter().position(|id| *id == "ffmpeg"), ids.iter().position(|id| *id == "ffprobe"));
+        assert!(!ids.contains(&"ffmpeg"));
+        assert!(!ids.contains(&"ffprobe"));
     }
 
     #[test]
