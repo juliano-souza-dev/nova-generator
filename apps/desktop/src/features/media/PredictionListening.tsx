@@ -229,8 +229,8 @@ export default function PredictionListening({
           path,
           bytes: Array.from(new TextEncoder().encode(content))
         });
-        });
-      setSourceHash(pkg.sourceHash);
+        setSourceHash(pkg.sourceHash);
+      });
       setNotice("TXT salvo. Envie o arquivo à IA externa e importe o JSON retornado.");
     } catch (e) {
       setError(String(e));
