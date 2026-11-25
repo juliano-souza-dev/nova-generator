@@ -525,6 +525,19 @@ pub(crate) fn ensure_runtime(root: &Path) -> Result<PathBuf> {
         run_cancellable(silent_command(&python).args(["-m", "pip", "install", "qwen-tts==0.1.1", "soundfile"]), "instalação do Qwen3-TTS e dependências")
             .context("Falha ao instalar qwen-tts e soundfile.")?;
     }
+    let pedalboard_available = silent_command(&python)
+        .args(["-c", "import pedalboard"])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    if !pedalboard_available {
+        super::dependency_queue::report_install_progress(48, "Instalando o processador de efeitos de áudio")?;
+        run_cancellable(
+            silent_command(&python).args(["-m", "pip", "install", "pedalboard>=0.9,<1"]),
+            "instalação do processador de efeitos",
+        )
+        .context("Falha ao instalar o processador de efeitos de áudio.")?;
+    }
     let cpu_still_valid = silent_command(&python).args(["-c", cpu_check]).status().map(|s| s.success()).unwrap_or(false);
     if !cpu_still_valid {
         super::dependency_queue::report_install_progress(58, "Restaurando PyTorch CPU após instalar o Qwen3-TTS")?;
