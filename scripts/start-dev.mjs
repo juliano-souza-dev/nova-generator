@@ -8,7 +8,7 @@ const errorLog = path.join(root, "error.log");
 const maxCapturedOutput = 2 * 1024 * 1024;
 
 async function recordFailure(command, label, exitCode, output, error) {
-  const timestamp = new Date().toISOString();
+  const timestamp = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "medium" });
   const entry = [
     "",
     "=".repeat(90),
@@ -66,7 +66,7 @@ async function run(command, args, label) {
       const header = stderrLogStarted ? "" : [
         "",
         "=".repeat(90),
-        "DATA: " + new Date().toISOString(),
+        "DATA: " + new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "medium" }),
         "ETAPA: " + label,
         "COMANDO: " + printable,
         "SAÍDA DE ERRO (stderr):",
