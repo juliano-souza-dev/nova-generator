@@ -7,6 +7,7 @@ mod shared_runtime_manager;
 mod translation_contract;
 mod prediction_listening;
 mod materials;
+mod voice_system;
 pub(crate) mod process;
 pub mod ttk;
 pub use ttk::{application, commands, domain, infrastructure, logging, state};
@@ -202,6 +203,7 @@ pub fn run() {
         .setup(|app| { ttk::setup(app)?; Ok(()) })
         .invoke_handler(tauri::generate_handler![
             list_projects, create_project, duplicate_project, delete_project, update_project_status, update_project_stage, save_external_translation_package, save_generated_json,
+            voice_system::list_voice_engines, voice_system::list_voice_effects,
             media::nova_inspect_youtube, media::nova_prepare_youtube_cache, media::nova_authorize_youtube_preview, media::list_project_media,
             media::nova_import_media_files, media::nova_trim_youtube_cache,
             media::open_project_media, media::load_project_subtitles, media::save_project_subtitles, media::load_shadowing_selection, media::save_shadowing_selection,
