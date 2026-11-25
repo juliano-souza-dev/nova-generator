@@ -8,6 +8,7 @@ type TaskStatus = "running" | "completed" | "failed" | "cancelled";
 type TaskEvent = { type:"started"|"completed"|"failed"; id:string; kind:TaskKind; title:string; message:string; timestamp:number };
 type TaskRecord = { id:string; kind:TaskKind; title:string; status:TaskStatus; progress:number|null; message:string; logs:string[]; updatedAt:number };
 type ProgressPayload = { projectId:string; status?:string; stage?:string; percent?:number; message:string };
+type ResourceProgressPayload = { resourceId:string; status?:"running"|"completed"|"failed"; percent?:number; message:string };
 type DependencyQueuePayload = { status?:string; progress?:number|null; current?:string; completed?:number; total?:number; downloadedBytes?:number; speedBytesPerSecond?:number; error?:string|null; failedDependencies?:string[]; results?:Array<{id?:string;status?:string;message?:string;path?:string}> };
 const formatBytes = (bytes:number) => { if(bytes < 1024) return `${bytes} B`; const units=["KB","MB","GB","TB"]; let value=bytes/1024; let index=0; while(value>=1024 && index<units.length-1){value/=1024;index++;} return `${value.toFixed(1)} ${units[index]}`; };
 
@@ -65,6 +66,7 @@ export default function TaskCenter() {
    listen<ProgressPayload>("transcription-progress",e=>{const p=e.payload;update("transcription",p.percent??null,p.message,p.status);}),
    listen<ProgressPayload>("translation-progress",e=>{const p=e.payload;update("translation",p.percent??null,p.message,p.status);}),
    listen<ProgressPayload>("export-progress",e=>{const p=e.payload;update("export",p.percent??null,p.message||"Renderizando mídia...",p.status);})
+   ,listen<ResourceProgressPayload>("resource-install-progress",e=>{const p=e.payload;update("installation",p.percent??null,(p.resourceId==="ffmpeg"?"FFmpeg + FFprobe":p.resourceId)+": "+p.message,p.status);})
   ]).then(items=>{if(disposed)items.forEach(fn=>fn());else unlisteners=items;}).catch(error=>console.error("Falha ao acompanhar processamentos:",error));
   return()=>{disposed=true;unlisteners.forEach(fn=>fn());};
  },[]);
