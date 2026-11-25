@@ -443,6 +443,7 @@ fn run_venv_command(python: &Path, args: &[&str], description: &str) -> Result<(
             let _ = stdout_thread.join();
             let _ = stderr_thread.join();
             let _ = super::dependency_queue::report_process_finished();
+            let _ = super::dependency_queue::mark_cancelled();
             bail!("{description} cancelled by user.");
         }
         if last_cache_check.elapsed() >= Duration::from_secs(5) {
@@ -524,6 +525,11 @@ pub(crate) fn ensure_faster_whisper_runtime() -> Result<PathBuf> {
     {
         bail!("O Faster-Whisper não passou na validação do ambiente isolado.");
     }
+    if super::dependency_queue::cancel_requested() {
+        super::dependency_queue::mark_cancelled()?;
+        bail!("Preparação do Faster-Whisper cancelada pelo usuário.");
+    }
+    super::dependency_queue::mark_operation_completed("Mecanismo de transcrição local preparado")?;
     Ok(interpreter)
 }
 
