@@ -5,11 +5,10 @@ import { desktopApi, isDesktopRuntime } from "./services/desktop-api";
 import EditorWorkspace, { supportedLucideIconNames } from "./EditorWorkspace";
 import type { MediaAsset, Project } from "./shared/types";
 import { useTranscription } from "./features/transcription/useTranscription";
-import { useGroqSettings } from "./features/groq/useGroqSettings";
 import { useYoutubeImport } from "./features/youtube/useYoutubeImport";
 import { validateSceneSpec, type SceneSpec } from "./shared/scene-spec";
 import { buildSceneSpecProjectData, getSceneSpecMediaSources } from "./features/scene-spec/project-import";
-import { Clapperboard, LayoutGrid, Film, GraduationCap, Settings2, Plus, Search, FolderOpen, FolderPlus, Clock3, Video, Sparkles, Play, X, ArrowUpRight, Upload, Youtube, CheckCircle2, LoaderCircle, ShieldCheck, Link2, Download, Undo2, Redo2, ArrowLeft, FileJson, Info } from "lucide-react"
+import { Clapperboard, LayoutGrid, Film, GraduationCap, Plus, Search, FolderOpen, FolderPlus, Clock3, Video, Sparkles, Play, X, ArrowUpRight, Upload, Youtube, CheckCircle2, LoaderCircle, Link2, Download, Undo2, Redo2, ArrowLeft, FileJson, Info } from "lucide-react"
 
 const formatDuration = (n?:number|null) => !n ? "Duração não informada" : Math.floor(n/60000)+":"+String(Math.floor(n/1000)%60).padStart(2,"0");
 const formatTimecode = (n:number) => Math.floor(n/60000)+":"+String(Math.floor(n/1000)%60).padStart(2,"0")+"."+String(Math.floor(n%1000)).padStart(3,"0");
@@ -34,12 +33,6 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
     inspectYoutube, downloadYoutube, confirmYoutubeTrim
   } = useYoutubeImport({ project: activeProject, setAssets, setBusy, setError, setNotice, setMediaModal });
   const sceneSpecProjectInput = useRef<HTMLInputElement|null>(null);
-  const {
-    groqSettingsOpen, setGroqSettingsOpen,
-    groqModel, groqMaxChars, setGroqMaxChars, groqMaxCues, setGroqMaxCues,
-    groqDelay, setGroqDelay, groqLanguage, setGroqLanguage, groqSettingsBusy,
-    groqSettingsMessage, openGroqSettings, saveAndTestGroq
-  } = useGroqSettings();
   const {
     transcriptionAssetId, setTranscriptionAssetId,
     transcriptionContext, setTranscriptionContext,
@@ -193,7 +186,7 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
       <div className="profile"><div className="avatar">J</div><div><b>Seu estúdio</b><small>Ambiente local</small></div><Settings2 size={17}/></div>
     </aside>
     <section className="main">
-      <header className="topbar"><div className="topbar-location">{embeddedProjectId ? <button className="secondary-action back-to-projects ttk-home-back" onClick={onBack} title="Voltar para a página inicial do Nova Generator" aria-label="Voltar para a página inicial do Nova Generator"><ArrowLeft size={17}/></button> : <>{view==="project"&&<button className="secondary-action back-to-projects" onClick={returnToWorkspace} title="Voltar para a página de projetos"><ArrowLeft size={15}/> Projetos</button>}<span>Workspace</span> <span>/</span> <b>{view==="project"&&activeProject?activeProject.name:"Visão geral"}</b></>}</div><div className="top-right"><button className="secondary-action" disabled={busy} onClick={()=>sceneSpecProjectInput.current?.click()} title="Criar um projeto novo a partir de um Scene Spec JSON"><FileJson size={14}/> Criar via JSON</button><input ref={sceneSpecProjectInput} type="file" accept=".json,application/json" style={{display:"none"}} onChange={event=>void importSceneSpecProject(event)}/><button className="secondary-action groq-settings-trigger" onClick={()=>void openGroqSettings()}><Settings2 size={14}/> Groq</button><small><i/> Salvamento automático ativo</small>{view==="project"&&<><button className="secondary-action" disabled title="Histórico de desfazer ainda não disponível"><Undo2 size={15}/> Desfazer</button><button className="secondary-action" disabled title="Histórico de refazer ainda não disponível"><Redo2 size={15}/> Refazer</button></>}</div></header>
+      <header className="topbar"><div className="topbar-location">{embeddedProjectId ? <button className="secondary-action back-to-projects ttk-home-back" onClick={onBack} title="Voltar para a página inicial do Nova Generator" aria-label="Voltar para a página inicial do Nova Generator"><ArrowLeft size={17}/></button> : <>{view==="project"&&<button className="secondary-action back-to-projects" onClick={returnToWorkspace} title="Voltar para a página de projetos"><ArrowLeft size={15}/> Projetos</button>}<span>Workspace</span> <span>/</span> <b>{view==="project"&&activeProject?activeProject.name:"Visão geral"}</b></>}</div><div className="top-right"><button className="secondary-action" disabled={busy} onClick={()=>sceneSpecProjectInput.current?.click()} title="Criar um projeto novo a partir de um Scene Spec JSON"><FileJson size={14}/> Criar via JSON</button><input ref={sceneSpecProjectInput} type="file" accept=".json,application/json" style={{display:"none"}} onChange={event=>void importSceneSpecProject(event)}/><small><i/> Salvamento automático ativo</small>{view==="project"&&<><button className="secondary-action" disabled title="Histórico de desfazer ainda não disponível"><Undo2 size={15}/> Desfazer</button><button className="secondary-action" disabled title="Histórico de refazer ainda não disponível"><Redo2 size={15}/> Refazer</button></>}</div></header>
       <div className={"content " + (view === "project" ? "project-content" : "")}>
         {view==="workspace" ? <>
         <section className="hero"><div><label className="eyebrow"><Sparkles size={13}/> SEU PRÓXIMO VÍDEO COMEÇA AQUI</label><h1>Boas ideias merecem<br/><em>uma boa edição.</em></h1><p>Seu espaço para transformar ideias em vídeos que prendem a atenção.</p></div><div className="hero-visual"><div className="preview-art"><div className="rec">REC <i/></div><div className="play"><Play size={22} fill="currentColor"/></div><strong>IDEIA <span>EM MOVIMENTO.</span></strong><div className="scrub">00:18 <div><i/><i/><i/><i/><i/></div> 00:55</div></div><div className="float-tag"><Sparkles size={13}/> MAKE IT MATTER</div></div></section>
@@ -269,21 +262,6 @@ export default function App({ embeddedProjectId, onBack }: { embeddedProjectId: 
         <div className="modal-footer"><button className="cancel-button" disabled={trimBusy} onClick={()=>setYoutubeCache(null)}>Deixar para depois</button><button className="primary" disabled={trimBusy||trimEndMs-trimStartMs<300} onClick={()=>void confirmYoutubeTrim()}>{trimBusy?<><LoaderCircle className="spin" size={15}/> Preparando vídeo...</>:<><CheckCircle2 size={15}/> Confirmar e preparar vídeo</>}</button></div>
       </section>
     </div>}
-    {groqSettingsOpen&&<div className="backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!groqSettingsBusy)setGroqSettingsOpen(false);}}><section className="groq-settings-modal">
-      <button type="button" className="close" onClick={()=>!groqSettingsBusy&&setGroqSettingsOpen(false)}><X size={18}/></button>
-      <label className="eyebrow muted"><Settings2 size={13}/> INTELIGÊNCIA ARTIFICIAL</label><h2>Configurações da Groq</h2>
-      <p>A credencial e o modelo são gerenciados pelo Shared Runtime Manager. O TTK utiliza a configuração local autorizada e não precisa manter o Shared aberto.</p>
-      <label className="field-label" htmlFor="groq-model">Modelo Groq · definido no Shared Runtime</label><input id="groq-model" value={groqModel} readOnly aria-readonly="true" placeholder="Aguardando configuração do Shared Runtime"/>
-      <div className="groq-settings-grid">
-        <label><span>Máx. caracteres por lote</span><input type="number" min={1000} max={18000} value={groqMaxChars} onChange={e=>setGroqMaxChars(Number(e.target.value))}/></label>
-        <label><span>Máx. legendas por lote</span><input type="number" min={1} max={60} value={groqMaxCues} onChange={e=>setGroqMaxCues(Number(e.target.value))}/></label>
-        <label><span>Intervalo entre lotes (ms)</span><input type="number" min={0} max={15000} step={100} value={groqDelay} onChange={e=>setGroqDelay(Number(e.target.value))}/></label>
-        <label><span>Idioma de destino</span><input value={groqLanguage} onChange={e=>setGroqLanguage(e.target.value)}/></label>
-      </div>
-      <div className="groq-free-note"><ShieldCheck size={15}/> Perfil conservador recomendado para conta gratuita: 7.000 caracteres, 25 legendas e 1,8 segundo entre lotes. A API ainda pode aplicar limites variáveis por modelo.</div>
-      {groqSettingsMessage&&<div className="groq-settings-message" role="status">{groqSettingsMessage}</div>}
-      <div className="modal-footer"><button className="cancel-button" disabled={groqSettingsBusy} onClick={()=>setGroqSettingsOpen(false)}>Fechar</button><button className="primary" disabled={groqSettingsBusy||!groqModel.trim()} onClick={()=>void saveAndTestGroq()}>{groqSettingsBusy?<><LoaderCircle className="spin" size={14}/> Salvando...</>:<><CheckCircle2 size={14}/> Salvar preferências e testar</>}</button></div>
-    </section></div>}
     {!isDesktopRuntime&&<div className="browser-warning">Prévia no navegador. Execute pelo Tauri para importar arquivos no computador.</div>}
   </main>
   </>;

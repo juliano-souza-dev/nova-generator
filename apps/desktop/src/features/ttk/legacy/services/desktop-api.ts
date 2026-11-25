@@ -13,10 +13,6 @@ export const isDesktopRuntime =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export type GlobalSound = { id: string; name: string; fileName: string };
-export type GroqSettings = { configured: boolean; model: string; maxChunkChars: number; maxCuesPerChunk: number; delayMs: number; targetLanguage: string };
-export type TranslationCue = { id: string; text: string; contextBefore?: string; contextAfter?: string; words?: string[] };
-export type TranslationWordGroup = { startWord: number; endWord: number; pt: string };
-export type CueTranslation = { id: string; translation: string; wordGroups?: TranslationWordGroup[] };
 export type TranscriptWord = { text: string; startMs: number; endMs: number };
 export type TranscriptCue = { id: string; text: string; startMs: number; endMs: number; words: TranscriptWord[] };
 export type TranscriptResult = { engine: string; model: string; language?: string | null; durationMs: number; cues: TranscriptCue[] };
@@ -36,7 +32,6 @@ function toU64Milliseconds(value: number, field: string): number {
 }
 
 export const desktopApi = {
-  getGroqSettings: () => invoke<GroqSettings>("get_groq_settings"),
   transcribeMedia: (projectId: string, assetId: string, mode: "auto" | "cloud" | "local", language: string, localModel: string, sourceStartMs?: number, sourceEndMs?: number) =>
     runTrackedTask("transcription", "Transcrição do clipe", () => invoke<TranscriptResult>("transcribe_media", { projectId, assetId, mode, language: language || null, localModel, sourceStartMs: sourceStartMs ?? null, sourceEndMs: sourceEndMs ?? null })),
   prepareClipExternalTranslationPackage: (projectId: string, clipId: string, cues: TranscriptCue[]) =>
@@ -70,11 +65,6 @@ export const desktopApi = {
     }),
   checkLocalAsr: () => invoke<boolean>("check_local_asr"),
   installLocalAsr: () => runTrackedTask("installation", "Instalação do suporte de transcrição local", () => invoke<string>("install_local_asr")),
-  saveGroqSettings: (settings: { maxChunkChars: number; maxCuesPerChunk: number; delayMs: number; targetLanguage: string }) =>
-    invoke<GroqSettings>("save_groq_settings", settings),
-  testGroqConnection: () => invoke<string>("test_groq_connection"),
-  translateGroqChunk: (targetLanguage: string, cues: TranslationCue[]) =>
-    invoke<CueTranslation[]>("translate_groq_chunk", { targetLanguage, cues }),
   listGlobalSounds: () => invoke<GlobalSound[]>("list_global_sounds"),
   importGlobalSound: (sourcePath: string, name: string) => invoke<GlobalSound>("import_global_sound", { sourcePath, name }),
   getGlobalSoundPath: (soundId: string) => invoke<string>("get_global_sound_path", { soundId }),

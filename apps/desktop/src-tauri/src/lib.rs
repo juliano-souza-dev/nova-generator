@@ -12,7 +12,6 @@ mod voice_system;
 pub(crate) mod process;
 pub mod ttk;
 pub use ttk::{application, commands, domain, infrastructure, logging, state};
-pub use ttk::translation as ttk_translation;
 pub use ttk::transcription as ttk_transcription;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
@@ -251,10 +250,6 @@ pub fn run() {
             ttk::commands::transcription::check_local_asr,
             ttk::commands::transcription::install_local_asr,
             ttk::commands::export::export_timeline,
-            ttk::translation::settings::get_groq_settings,
-            ttk::translation::settings::save_groq_settings,
-            ttk::translation::groq::test_groq_connection,
-            ttk::translation::groq::translate_groq_chunk
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Nova Generator");

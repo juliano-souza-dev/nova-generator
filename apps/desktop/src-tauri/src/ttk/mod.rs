@@ -4,7 +4,6 @@ pub mod domain;
 pub mod infrastructure;
 pub mod logging;
 pub mod state;
-pub mod translation;
 pub mod transcription;
 
 use std::{fs, path::{Path, PathBuf}, sync::{Arc, Mutex}};
