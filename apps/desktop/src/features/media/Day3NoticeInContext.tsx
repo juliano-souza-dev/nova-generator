@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { runTrackedTask } from "../tasks/TaskCenter";
 import { save as saveFile } from "@tauri-apps/plugin-dialog";
 import { Check, FileText, LoaderCircle, Upload } from "lucide-react";
 import type { MicroLesson } from "./learning-journey-contract";
@@ -67,7 +68,8 @@ export default function Day3NoticeInContext({ projectId, assetId, sourceSignatur
       ].join("\r\n");
       const path = await saveFile({ title: "Salvar instruções do Dia " + day, defaultPath: "day-" + day + "-notice-in-context-" + assetId + ".txt", filters: [{ name: "Instruções para IA externa", extensions: ["txt"] }] });
       if (!path) return;
-      await invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode("\uFEFF" + instructions)) });
+      await runTrackedTask("export", "Exportar instruções do Dia " + day, () =>
+        invoke("save_external_translation_package", { path, bytes: Array.from(new TextEncoder().encode("\uFEFF" + instructions)) }));
       setNotice("Instruções do Dia " + day + " exportadas com fonte, materiais aprovados e mini aula selecionada.");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
