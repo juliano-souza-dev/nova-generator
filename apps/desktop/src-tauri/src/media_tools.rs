@@ -75,7 +75,11 @@ fn read_manifest(root: &Path) -> Option<ResourceManifest> {
     let manifest: ResourceManifest = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
     let ffmpeg = PathBuf::from(&manifest.ffmpeg_path);
     let ffprobe = PathBuf::from(&manifest.ffprobe_path);
+    let managed_root = root.join("tools").join("ffmpeg");
     if manifest.schema_version != 1 || manifest.id != "ffmpeg" ||
+        !Path::new(&manifest.install_path).starts_with(&managed_root) ||
+        !ffmpeg.starts_with(&managed_root) || !ffprobe.starts_with(&managed_root) ||
+        ffmpeg.parent() != ffprobe.parent() ||
         valid_executable(&ffmpeg).is_none() || valid_executable(&ffprobe).is_none() {
         return None;
     }
@@ -280,8 +284,10 @@ pub(crate) fn ensure_media_tools(app: &AppHandle) -> Result<MediaTools, String> 
             Ok(paths) => paths,
             Err(error) => { let _ = fs::remove_dir_all(&staging); return Err(error); }
         };
-        let staged_version = valid_executable(&staged_ffmpeg)
-            .ok_or("O FFmpeg extraído não passou na validação de inicialização.")?;
+        let Some(staged_version) = valid_executable(&staged_ffmpeg) else {
+            let _ = fs::remove_dir_all(&staging);
+            return Err("O FFmpeg extraído não passou na validação de inicialização.".into());
+        };
         if valid_executable(&staged_ffprobe).is_none() {
             let _ = fs::remove_dir_all(&staging);
             return Err("O FFprobe extraído não passou na validação de inicialização.".into());
