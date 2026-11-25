@@ -127,8 +127,7 @@ fn extract_audio_range(ffmpeg_path: &Path, source: &Path, destination: &Path, st
     Ok(())
 }
 
-pub fn transcribe(app: AppHandle, media: MediaService, storage: MediaStorage, project_id: String, asset_id: String, mode: String, language: Option<String>, local_model: String, source_start_ms: Option<u64>, source_end_ms: Option<u64>) -> Result<TranscriptResult, String> {
-    if mode != "local" { return Err("A transcrição está disponível somente no modo local.".into()); }
+pub fn transcribe(app: AppHandle, media: MediaService, storage: MediaStorage, project_id: String, asset_id: String, language: Option<String>, local_model: String, source_start_ms: Option<u64>, source_end_ms: Option<u64>) -> Result<TranscriptResult, String> {
     if !["tiny", "base", "small", "medium", "large-v3"].contains(&local_model.as_str()) { return Err("Modelo local não reconhecido.".into()); }
     let source = safe_asset_path(&media, &storage, &project_id, &asset_id)?;
     let ffmpeg_path = ffmpeg()?;
