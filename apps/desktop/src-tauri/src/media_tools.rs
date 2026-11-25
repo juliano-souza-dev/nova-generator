@@ -337,3 +337,24 @@ pub(crate) fn ensure_media_tools(app: &AppHandle) -> Result<MediaTools, String> 
         Ok(MediaTools { ffmpeg: final_ffmpeg, ffprobe: final_ffprobe, version: manifest.version })
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::expected_sha256;
+
+    #[test]
+    fn parses_sha256_from_publisher_checksum_file() {
+        let digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        assert_eq!(
+            expected_sha256(&format!("{digest}  ffmpeg-release-essentials.zip")).unwrap(),
+            digest
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_publisher_checksum() {
+        assert!(expected_sha256("not-a-checksum").is_err());
+        assert!(expected_sha256("0123456789abcdef").is_err());
+    }
+}
