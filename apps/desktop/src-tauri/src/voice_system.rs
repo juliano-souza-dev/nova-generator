@@ -72,7 +72,6 @@ pub fn list_voice_engines() -> Vec<EngineOption> {
                 installation: "on-demand",
             }],
         },
-,
     ]
 }
 
