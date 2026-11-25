@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type { MediaAsset, Project } from "../../shared/types";
 import type { TranscriptionProgress, TranscriptResult, CueTranslation } from "../../services/desktop-api";
 import { desktopApi } from "../../services/desktop-api";
-import { runTrackedTask } from "../../services/task-center";
 import { downloadExternalTranslationPackage } from "../../../../media/translationPackage";
 
 type TranscriptionContext = {
@@ -97,14 +96,14 @@ export function useTranscription(project: Project | null, assets: MediaAsset[]) 
     setTranscriptionMessage("");
     setTranscriptionProgress(null);
     try {
-      const result = await runTrackedTask("transcription", "Transcrevendo mídia", () => desktopApi.transcribeMedia(
+      const result = await desktopApi.transcribeMedia(
         project.id,
         transcriptionAssetId,
         transcriptionLanguage,
         transcriptionModel,
         transcriptionContext?.sourceStartMs,
         transcriptionContext?.sourceEndMs
-      ));
+      );
       const scopedCues = transcriptionContext
         ? result.cues.filter(cue => cue.endMs > transcriptionContext.sourceStartMs && cue.startMs < transcriptionContext.sourceEndMs)
         : result.cues;
