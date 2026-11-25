@@ -373,9 +373,14 @@ fn report_pip_output(channel: &str, chunk: &str, package: &mut String) {
                 let (downloaded, speed) = if parts.len() >= 3 {
                     let metrics: Vec<&str> = parts[2].split_whitespace().collect();
                     let downloaded = metrics.first().and_then(|v| v.split_once('/'))
-                        .and_then(|(done, _)| metrics.get(1).map(|unit| format!("{done}{unit}")))
-                        .and_then(|value| parse_pip_size(&value));
-                    let speed = metrics.iter().find_map(|v| v.strip_suffix("/s").and_then(parse_pip_size));
+                        .and_then(|(done, total)| {
+                            let unit_start = total.find(|ch: char| !ch.is_ascii_digit() && ch != '.')?;
+                            parse_pip_size(&format!("{done}{}", &total[unit_start..]))
+                        });
+                    let speed = metrics.iter().find_map(|v| {
+                        let value = v.trim_end_matches(|ch: char| ch == ']' || ch == ')');
+                        value.strip_suffix("/s").and_then(parse_pip_size)
+                    });
                     (downloaded, speed)
                 } else { (None, None) };
                 let _ = super::dependency_queue::report_package_download_progress(percent, package, downloaded, speed);
