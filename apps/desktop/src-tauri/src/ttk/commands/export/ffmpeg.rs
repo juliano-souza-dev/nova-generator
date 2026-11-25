@@ -1,10 +1,15 @@
-pub(crate) fn resolve_ffmpeg_executable() -> Result<(std::path::PathBuf, String), String> {
+pub(crate) fn resolve_ffmpeg_executable(app: &tauri::AppHandle) -> Result<(std::path::PathBuf, String), String> {
     use std::{collections::HashSet, path::PathBuf};
 
     let executable_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
     let mut candidates: Vec<PathBuf> = Vec::new();
 
-    // Primeiro, respeita o PATH recebido pelo processo do FrameLab.
+    // A biblioteca central é a fonte de verdade; PATH é apenas fallback legado.
+    if let Ok(shared_ffmpeg) = crate::shared_runtime::resolve_media_tool(app, "ffmpeg") {
+        candidates.push(shared_ffmpeg);
+    }
+
+    // Primeiro, respeita o PATH recebido pelo processo do Nova Generator.
     if let Some(path_value) = std::env::var_os("PATH") {
         candidates.extend(std::env::split_paths(&path_value).map(|directory| directory.join(executable_name)));
     }
@@ -57,10 +62,13 @@ pub(crate) fn resolve_ffmpeg_executable() -> Result<(std::path::PathBuf, String)
     ))
 }
 
-pub(super) fn media_has_audio_stream(ffmpeg_path: &std::path::Path, media_path: &std::path::Path) -> Result<bool, String> {
+pub(super) fn media_has_audio_stream(app: &tauri::AppHandle, ffmpeg_path: &std::path::Path, media_path: &std::path::Path) -> Result<bool, String> {
     let probe_name = if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" };
     let sibling = ffmpeg_path.parent().map(|directory| directory.join(probe_name));
     let mut candidates = Vec::new();
+    if let Ok(shared_ffprobe) = crate::shared_runtime::resolve_media_tool(app, "ffprobe") {
+        candidates.push(shared_ffprobe);
+    }
     if let Some(path) = sibling { candidates.push(path); }
     if let Some(path_value) = std::env::var_os("PATH") {
         candidates.extend(std::env::split_paths(&path_value).map(|directory| directory.join(probe_name)));
@@ -139,9 +147,9 @@ pub(super) fn ensure_ffmpeg_capabilities(
 
 #[tauri::command]
 
-pub async fn check_ffmpeg() -> Result<String, String> {
+pub async fn check_ffmpeg(app: tauri::AppHandle) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(|| {
-        let (_, version) = resolve_ffmpeg_executable()?;
+        let (_, version) = resolve_ffmpeg_executable(&app)?;
         Ok(version)
     }).await.map_err(|error| format!("A verificação do FFmpeg foi interrompida: {error}"))?
 }
