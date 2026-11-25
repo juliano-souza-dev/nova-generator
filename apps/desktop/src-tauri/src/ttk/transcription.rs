@@ -142,7 +142,15 @@ pub fn transcribe(app: AppHandle, media: MediaService, storage: MediaStorage, pr
         if end_ms <= start_ms { return Err("O trecho selecionado do clipe é inválido.".into()); }
         extract_audio_range(&ffmpeg_path, &source, &audio, start_ms, end_ms)?;
         let duration = duration_ms(&ffprobe(&ffmpeg_path)?,&audio)?;
-        let output = run_local_python(&audio,&local_model,language.as_deref())?;
+        emit(&app,&project_id,"loading_model",5.0,0,0,&format!("Preparando o modelo {} para execução em CPU",local_model));
+        let output = run_local_python(
+            &audio,
+            &local_model,
+            language.as_deref(),
+            &mut |stage, percent, done, total, message| {
+                emit(&app,&project_id,stage,percent,done,total,message);
+            },
+        )?;
         let mut output = output;
         output.duration_ms = duration;
         for cue in &mut output.cues {
