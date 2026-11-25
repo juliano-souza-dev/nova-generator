@@ -19,10 +19,10 @@ export default function Settings({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [providerId, setProviderId] = useState("groq");
-  const [providerName, setProviderName] = useState("Groq");
-  const [endpoint, setEndpoint] = useState("https://api.groq.com/openai/v1");
-  const [model, setModel] = useState("llama-3.3-70b-versatile");
+  const [providerId, setProviderId] = useState("");
+  const [providerName, setProviderName] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [voiceMode, setVoiceMode] = useState<"clone" | "design">("clone");
   const [voiceName, setVoiceName] = useState("");
@@ -40,6 +40,11 @@ export default function Settings({ onBack }: { onBack: () => void }) {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (providerId || !snapshot?.providerCatalog.providers.length) return;
+    selectProvider(snapshot.providerCatalog.providers[0].id);
+  }, [snapshot, providerId]);
 
   const queue = snapshot?.queue;
   const queueActive = queue?.status === "queued" || queue?.status === "installing" || queue?.status === "running" || queue?.status === "cancelling";
