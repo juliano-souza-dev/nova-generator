@@ -82,8 +82,7 @@ pub fn nova_check_local_asr()->Result<bool,String>{Ok(crate::shared_runtime_mana
 #[tauri::command]
 pub async fn nova_install_local_asr()->Result<String,String>{tauri::async_runtime::spawn_blocking(||crate::shared_runtime_manager::dependency_manager::ensure_faster_whisper_runtime().map(|_|"Faster-Whisper preparado. O modelo será baixado automaticamente na primeira transcrição de cada modelo.".to_string()).map_err(|e|format!("{e:#}"))).await.map_err(|e|e.to_string())?}
 #[tauri::command]
-pub async fn nova_transcribe_media(app:AppHandle,project_id:String,asset_id:String,mode:String,language:Option<String>,local_model:Option<String>)->Result<TranscriptResult,String>{
- if mode != "local" { return Err("A transcrição está disponível somente no modo local.".into()); }
+pub async fn nova_transcribe_media(app:AppHandle,project_id:String,asset_id:String,language:Option<String>,local_model:Option<String>)->Result<TranscriptResult,String>{
  let model=local_model.unwrap_or_else(||"small".into());if !["tiny","base","small","medium","large-v3"].contains(&model.as_str()){return Err("Modelo local inválido.".into())}
  let app2=app.clone();
  tauri::async_runtime::spawn_blocking(move||{
