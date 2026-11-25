@@ -467,34 +467,29 @@ pub(crate) fn ensure_runtime(root: &Path) -> Result<PathBuf> {
     let model = root.join("models/qwen3-tts-clone/1.7B-Base");
     let cache = root.join("cache/huggingface");
     fs::create_dir_all(&runtime)?; fs::create_dir_all(&model)?; fs::create_dir_all(&cache)?;
-    let venv = runtime.join("venv");
-    let python = if cfg!(windows) { venv.join("Scripts/python.exe") } else { venv.join("bin/python") };
-    if !python.is_file() {
-        let base = if cfg!(windows) { "py" } else { "python3" };
-        let mut command = silent_command(base);
-        if cfg!(windows) { command.arg("-3"); }
-        command.args(["-m", "venv"]).arg(&venv);
-        run_cancellable(&mut command, "criação do ambiente Python do Qwen3-TTS Base")
-            .context("Não foi possível criar o ambiente Python do Qwen3-TTS Base.")?;
-    }
+    let python = super::dependency_manager::ensure_runtime_venv(&runtime)
+        .context("Não foi possível preparar o ambiente Python 3.12 do Qwen3-TTS Base")?;
     let cpu_check = "import torch; assert torch.version.cuda is None and not torch.cuda.is_available()";
     let check = silent_command(&python).args(["-c", cpu_check]).status().map(|s| s.success()).unwrap_or(false);
     if !check {
         run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--upgrade", "pip"]), "preparação do pip")
             .context("Falha ao preparar pip para Qwen3-TTS Base.")?;
-        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--force-reinstall", "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cpu"]), "instalação do PyTorch CPU")
+        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--force-reinstall", "torch==2.8.0", "torchaudio==2.8.0", "--index-url", "https://download.pytorch.org/whl/cpu"]), "instalação do PyTorch CPU")
             .context("Falha ao instalar PyTorch CPU para Qwen3-TTS Base.")?;
     }
-    let package_check = silent_command(&python).args(["-c", "import qwen_tts, soundfile"]).status().map(|s| s.success()).unwrap_or(false);
+    let package_check = silent_command(&python).args([
+        "-c",
+        "import importlib.metadata as m; import qwen_tts, soundfile; assert m.version('qwen-tts') == '0.1.1'",
+    ]).status().map(|s| s.success()).unwrap_or(false);
     if !package_check {
         super::dependency_queue::report_install_progress(42, "Instalando Qwen3-TTS Base e dependências de áudio")?;
-        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "qwen-tts", "soundfile"]), "instalação do Qwen3-TTS e dependências")
+        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "qwen-tts==0.1.1", "soundfile"]), "instalação do Qwen3-TTS e dependências")
             .context("Falha ao instalar qwen-tts e soundfile.")?;
     }
     let cpu_still_valid = silent_command(&python).args(["-c", cpu_check]).status().map(|s| s.success()).unwrap_or(false);
     if !cpu_still_valid {
         super::dependency_queue::report_install_progress(58, "Restaurando PyTorch CPU após instalar o Qwen3-TTS")?;
-        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--force-reinstall", "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cpu"]), "restauração do PyTorch CPU")
+        run_cancellable(silent_command(&python).args(["-m", "pip", "install", "--force-reinstall", "torch==2.8.0", "torchaudio==2.8.0", "--index-url", "https://download.pytorch.org/whl/cpu"]), "restauração do PyTorch CPU")
             .context("Falha ao restaurar PyTorch CPU.")?;
     }
     let model_config = model.join("config.json");
