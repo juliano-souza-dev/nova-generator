@@ -1612,7 +1612,7 @@ setPedagogicalContent(savedPedagogicalContent?.contract === "ihub-pedagogical-co
         </> : <div className="materials-anki-content">
         <div className="materials-runtime">
           <div className="materials-runtime-icon"><AudioLines size={18}/></div>
-          <div className="materials-runtime-copy"><strong>Vozes compartilhadas</strong><p>{voiceCloningReady ? "A síntese utiliza o perfil selecionado na Biblioteca de vozes do Shared Runtime Manager." : "Nenhum perfil de voz pronto foi encontrado. Prepare uma voz no Shared Runtime Manager e sincronize o Nova Generator."}</p>
+          <div className="materials-runtime-copy"><strong>Biblioteca de vozes</strong><p>{voiceCloningReady ? "A síntese utiliza o perfil selecionado na biblioteca local de vozes do Nova Generator." : "Nenhum perfil de voz está pronto. Prepare uma voz na área de Vozes do Nova Generator."}</p>
             <label className="materials-voice-select"><span className="materials-voice-select-head">Voz para os novos áudios<button type="button" className="materials-voice-refresh" onClick={() => void refreshVoices().catch(error => setError(String(error)))} title="Atualizar a lista de vozes"><RefreshCw size={12}/> Atualizar</button></span>
               <select value={selectedVoiceId} onChange={event => setSelectedVoiceId(event.target.value)} disabled={!voiceCloningReady}>{!voices.length && <option value="">Nenhuma voz disponível</option>}{voices.map(voice => <option key={voice.id} value={voice.id}>{voice.name} · {voice.mode === "voice_design" ? "VoiceDesign" : "Base · Clonagem"}</option>)}</select>
             </label>
