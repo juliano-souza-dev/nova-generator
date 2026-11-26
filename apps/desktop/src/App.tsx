@@ -122,7 +122,8 @@ export default function App() {
 
   if (view === "project" && activeProject) {
     const currentStage = Math.max(0, stages.indexOf(stageLabel(activeProject.stage)));
-    return <div className="workspace-shell">\n      <TaskCenter />
+    return <div className="workspace-shell">
+      <TaskCenter />
       <header className="workspace-topbar">
         <button className="back-button" onClick={() => { setView("home"); setActiveProject(null); }}><ArrowLeft size={17}/> <span>Projetos</span></button>
         <div className="workspace-crumb"><span className="crumb-dot"/>{activeProject.name}</div>
@@ -146,7 +147,8 @@ export default function App() {
     </div>;
   }
 
-  return <div className="home-shell">\n    <TaskCenter />
+  return <div className="home-shell">
+    <TaskCenter />
     <header className="home-topbar">
       <div className="brand"><div className="brand-mark"><Sparkles size={18}/></div><div><strong>NOVA<span>GENERATOR</span></strong><small>ESTÚDIO DE CRIAÇÃO</small></div></div>
       <div className="home-top-actions"><span className="local-status"><i/> Ambiente local</span><button className="secondary-button" onClick={() => setView("settings")}><Settings2 size={15}/> Configurações</button><button className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={17}/> Novo projeto</button></div>
