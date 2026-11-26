@@ -56,8 +56,20 @@ struct AlignmentWorker {
 }
 
 impl AlignmentWorker {
-    fn start(python: &Path, runner: &Path) -> Result<Self, String> {
+    fn start(python: &Path, runner: &Path, ffmpeg: &Path) -> Result<Self, String> {
         let mut command = crate::process::hidden_command(python);
+
+        // WhisperX loads each FLAC through its own subprocess and invokes
+        // "ffmpeg" by executable name. Make Nova's managed FFmpeg available
+        // to that child process without depending on a system-wide install.
+        let ffmpeg_directory = ffmpeg.parent()
+            .ok_or("Não foi possível localizar a pasta do FFmpeg gerenciado.")?;
+        let current_path = std::env::var_os("PATH").unwrap_or_default();
+        let runtime_path = std::env::join_paths(
+            std::iter::once(ffmpeg_directory.to_path_buf())
+                .chain(std::env::split_paths(&current_path))
+        ).map_err(|error| format!("Não foi possível preparar o PATH do WhisperX: {error}"))?;
+        command.env("PATH", runtime_path);
         crate::shared_runtime_manager::manager::configure_huggingface_command(&mut command)
             .map_err(|error| format!("Não foi possível configurar o cache Hugging Face: {error}"))?;
         let mut child = command
@@ -351,7 +363,7 @@ pub async fn align_timeline_clip_cues(
                 let block_end = cue.end_ms.saturating_add(PADDING_MS).min(source_end_ms);
                 let audio = temp.join(format!("clip-cue-{index:05}.flac"));
                 extract_block(&ffmpeg, &source, &audio, block_start, block_end)?;
-                if worker.is_none() { worker = Some(AlignmentWorker::start(&python, &runner)?); }
+                if worker.is_none() { worker = Some(AlignmentWorker::start(&python, &runner, &ffmpeg)?); }
                 let words = worker.as_mut().expect("worker inicializado").align(&audio, &cue.text, &lang)?;
                 if words.is_empty() { return Err(format!("O WhisperX não encontrou palavras alinháveis na legenda {}.", index + 1)); }
                 let mapped = words.into_iter().filter_map(|word| {
@@ -459,7 +471,7 @@ pub async fn align_project_subtitles(
                     }
 
                     if worker.is_none() {
-                        worker = Some(AlignmentWorker::start(&python, &runner)?);
+                        worker = Some(AlignmentWorker::start(&python, &runner, &ffmpeg)?);
                     }
                     let words = worker.as_mut().expect("worker initialized")
                         .align(&clip, &cues[index].text, &lang)?;
