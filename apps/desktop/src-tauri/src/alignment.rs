@@ -82,7 +82,7 @@ impl AlignmentWorker {
             "language": language
         });
         serde_json::to_writer(&mut self.input, &request).map_err(|e| e.to_string())?;
-        self.input.write_all(b"\n").map_err(|e| format!("Falha ao enviar bloco ao WhisperX: {e}"))?;
+        writeln!(self.input).map_err(|e| format!("Falha ao enviar bloco ao WhisperX: {e}"))?;
         self.input.flush().map_err(|e| format!("Falha ao enviar bloco ao WhisperX: {e}"))?;
 
         let mut diagnostics = Vec::new();
