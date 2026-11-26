@@ -32,8 +32,7 @@ sys.stdout = sys.stderr
 
 
 def emit(payload):
-    _PROTOCOL.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
-    _PROTOCOL.flush()
+    print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), file=_PROTOCOL, flush=True)
 
 
 def get_device():
