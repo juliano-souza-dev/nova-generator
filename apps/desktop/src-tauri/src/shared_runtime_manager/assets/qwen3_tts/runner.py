@@ -72,7 +72,7 @@ def main() -> int:
                 "error": str(error),
                 "traceback": traceback.format_exc(),
             }
-        sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
+        print(json.dumps(response, ensure_ascii=False), flush=True)
         sys.stdout.flush()
 
     return 0
